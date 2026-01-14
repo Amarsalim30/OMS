@@ -1,0 +1,85 @@
+package com.zeynbakers.order_management_system.customer.ui
+
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.viewModelScope
+import com.zeynbakers.order_management_system.accounting.data.AccountEntryEntity
+import com.zeynbakers.order_management_system.accounting.data.AccountingDao
+import com.zeynbakers.order_management_system.accounting.data.CustomerAccountSummary
+import com.zeynbakers.order_management_system.accounting.data.EntryType
+import com.zeynbakers.order_management_system.accounting.data.PaymentMethod
+import com.zeynbakers.order_management_system.core.db.AppDatabase
+import com.zeynbakers.order_management_system.customer.data.CustomerEntity
+import com.zeynbakers.order_management_system.order.data.OrderEntity
+import java.math.BigDecimal
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
+import kotlinx.datetime.Clock
+
+class CustomerAccountsViewModel(private val database: AppDatabase) : ViewModel() {
+    private val accountingDao: AccountingDao = database.accountingDao()
+    private val customerDao = database.customerDao()
+    private val orderDao = database.orderDao()
+
+    private val _summaries = MutableStateFlow<List<CustomerAccountSummary>>(emptyList())
+    val summaries = _summaries.asStateFlow()
+
+    private val _customer = MutableStateFlow<CustomerEntity?>(null)
+    val customer = _customer.asStateFlow()
+
+    private val _ledger = MutableStateFlow<List<AccountEntryEntity>>(emptyList())
+    val ledger = _ledger.asStateFlow()
+
+    private val _balance = MutableStateFlow(BigDecimal.ZERO)
+    val balance = _balance.asStateFlow()
+
+    private val _orders = MutableStateFlow<List<OrderEntity>>(emptyList())
+    val orders = _orders.asStateFlow()
+
+    fun searchCustomers(query: String) {
+        viewModelScope.launch {
+            val pattern = "%${query.trim()}%"
+            _summaries.value = accountingDao.getCustomerAccountSummaries(pattern)
+        }
+    }
+
+    fun loadCustomer(customerId: Long) {
+        viewModelScope.launch {
+            _customer.value = customerDao.getById(customerId)
+            _ledger.value = accountingDao.getLedgerForCustomer(customerId)
+            _balance.value = accountingDao.getCustomerBalance(customerId)
+            _orders.value = orderDao.getOrdersByCustomer(customerId).sortedByDescending { it.orderDate }
+        }
+    }
+
+    fun recordPayment(
+        customerId: Long,
+        amount: BigDecimal,
+        method: PaymentMethod,
+        note: String,
+        orderId: Long?
+    ) {
+        viewModelScope.launch {
+            val description = buildString {
+                append("Payment (")
+                append(method.name)
+                append(")")
+                if (note.isNotBlank()) {
+                    append(": ")
+                    append(note.trim())
+                }
+            }
+            accountingDao.insertAccountEntry(
+                AccountEntryEntity(
+                    orderId = orderId,
+                    customerId = customerId,
+                    type = EntryType.CREDIT,
+                    amount = amount,
+                    date = Clock.System.now().toEpochMilliseconds(),
+                    description = description
+                )
+            )
+            loadCustomer(customerId)
+        }
+    }
+}

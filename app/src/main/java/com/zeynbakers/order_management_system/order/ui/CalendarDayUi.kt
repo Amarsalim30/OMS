@@ -1,9 +1,11 @@
 package com.zeynbakers.order_management_system.order.ui
 
 import kotlinx.datetime.LocalDate
+import java.math.BigDecimal
 
 data class CalendarDayUi(
     val date: LocalDate,
-    val hasOrders: Boolean,
-    val orderCount: Int
+    val orderCount: Int,
+    val totalAmount: BigDecimal,
+    val isToday: Boolean
 )

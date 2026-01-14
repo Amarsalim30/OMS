@@ -11,6 +11,8 @@ import com.zeynbakers.order_management_system.order.data.*
 import kotlinx.datetime.LocalDate
 import java.math.BigDecimal
 
+@OptIn(ExperimentalMaterial3Api::class)
+@Suppress("unused")
 @Composable
 fun OrderEditorSheet(
     date: LocalDate,
@@ -23,7 +25,7 @@ fun OrderEditorSheet(
         Column(modifier = Modifier.padding(16.dp)) {
 
             Text(
-                text = "Orders for ${date}",
+                text = "Orders for $date",
                 style = MaterialTheme.typography.titleLarge
             )
 
@@ -33,7 +35,7 @@ fun OrderEditorSheet(
                 OrderCard(order, onSave)
             }
 
-            Divider()
+            HorizontalDivider()
 
             Text(
                 text = "New Order",

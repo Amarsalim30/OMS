@@ -1,8 +1,9 @@
+@Suppress("UnstableApiUsage")
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
-    id("org.jetbrains.kotlin.kapt") // Fix: apply kapt plugin
+    alias(libs.plugins.ksp)
 }
 
 android {
@@ -44,27 +45,35 @@ android {
 }
 
 dependencies {
-    // Room
-    implementation "androidx.room:room-runtime:2.6.0"
-    kapt "androidx.room:room-compiler:2.6.0"
-    implementation "androidx.room:room-ktx:2.6.0"
+    // Room components
+    implementation(libs.androidx.room.runtime)
+    ksp(libs.androidx.room.compiler)
+
+    // Kotlin Extensions and Coroutines support for Room
+    implementation(libs.androidx.room.ktx)
+
+    // AndroidX Core
+    implementation(libs.androidx.core.ktx)
 
     // Lifecycle & ViewModel
-    implementation "androidx.lifecycle:lifecycle-viewmodel-ktx:2.6.2"
-    implementation "androidx.lifecycle:lifecycle-runtime-ktx:2.6.2"
+    implementation(libs.androidx.lifecycle.viewmodel.ktx)
+    implementation(libs.androidx.lifecycle.runtime.ktx)
+
+    // Coroutines
+    implementation(libs.kotlinx.coroutines.android)
 
     // Kotlinx DateTime
-    implementation "org.jetbrains.kotlinx:kotlinx-datetime:0.4.1"
+    implementation(libs.kotlinx.datetime)
 
-    // BigDecimal support (standard library suffices)
-    implementation(libs.androidx.core.ktx)
-    implementation(libs.androidx.lifecycle.runtime.ktx)
+    // Compose
     implementation(libs.androidx.activity.compose)
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.ui)
     implementation(libs.androidx.ui.graphics)
     implementation(libs.androidx.ui.tooling.preview)
     implementation(libs.androidx.material3)
+
+    // Testing
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)

@@ -2,141 +2,210 @@ package com.zeynbakers.order_management_system.order.ui
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.zeynbakers.order_management_system.core.db.DatabaseProvider
-import com.zeynbakers.order_management_system.order.data.*
-import com.zeynbakers.order_management_system.accounting.data.*
-import kotlinx.coroutines.launch
+import com.zeynbakers.order_management_system.accounting.data.AccountEntryEntity
+import com.zeynbakers.order_management_system.accounting.data.AccountingDao
+import com.zeynbakers.order_management_system.accounting.data.EntryType
+import com.zeynbakers.order_management_system.core.db.AppDatabase
+import com.zeynbakers.order_management_system.customer.data.CustomerEntity
+import com.zeynbakers.order_management_system.order.data.OrderDao
+import com.zeynbakers.order_management_system.order.data.OrderEntity
 import java.math.BigDecimal
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import kotlinx.datetime.Clock
+import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.LocalDate
+import kotlinx.datetime.Month
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.atStartOfDayIn
 import kotlinx.datetime.plus
-import kotlinx.datetime.toEpochDays
+import kotlinx.datetime.toLocalDateTime
 
-class OrderViewModel(
-    private val db: DatabaseProvider
-) : ViewModel() {
+class OrderViewModel(private val database: AppDatabase) : ViewModel() {
 
-    private val orderDao = db.getDatabase().orderDao()
-    private val accountingDao = db.getDatabase().accountingDao()
+    private val orderDao: OrderDao = database.orderDao()
+    private val accountingDao: AccountingDao = database.accountingDao()
+    private val customerDao = database.customerDao()
 
-    /* ---------------- CREATE / UPDATE ORDER ---------------- */
+    private val _calendarDays = MutableStateFlow<List<CalendarDayUi>>(emptyList())
+    val calendarDays = _calendarDays.asStateFlow()
+
+    private val _ordersForDate = MutableStateFlow<List<OrderEntity>>(emptyList())
+    val ordersForDate = _ordersForDate.asStateFlow()
+
+    private val _dayTotal = MutableStateFlow(BigDecimal.ZERO)
+    val dayTotal = _dayTotal.asStateFlow()
+
+    private val _monthTotal = MutableStateFlow(BigDecimal.ZERO)
+    val monthTotal = _monthTotal.asStateFlow()
+
+    private val _orderCustomerNames = MutableStateFlow<Map<Long, String>>(emptyMap())
+    val orderCustomerNames = _orderCustomerNames.asStateFlow()
+
+    private val _orderPaidAmounts = MutableStateFlow<Map<Long, BigDecimal>>(emptyMap())
+    val orderPaidAmounts = _orderPaidAmounts.asStateFlow()
+
+    private var lastMonth: Int? = null
+    private var lastYear: Int? = null
 
     fun saveOrder(
-        order: OrderEntity
+        date: LocalDate,
+        notes: String,
+        totalAmount: BigDecimal,
+        customerName: String,
+        customerPhone: String,
+        existingOrderId: Long?
     ) {
         viewModelScope.launch {
             val now = Clock.System.now().toEpochMilliseconds()
+            val cleanNotes = notes.trim()
+            val customerId = resolveCustomerId(customerName, customerPhone)
+            val existingOrder =
+                if (existingOrderId != null && existingOrderId != 0L) {
+                    orderDao.getOrderById(existingOrderId)
+                } else {
+                    null
+                }
 
-            val updatedOrder = order.copy(updatedAt = now)
+            val updatedOrder =
+                (existingOrder
+                        ?: OrderEntity(
+                            orderDate = date,
+                            notes = cleanNotes,
+                            totalAmount = totalAmount,
+                            customerId = customerId
+                        ))
+                    .copy(
+                        orderDate = date,
+                        notes = cleanNotes,
+                        totalAmount = totalAmount,
+                        customerId = customerId,
+                        updatedAt = now
+                    )
 
-            val orderId = if (order.id == 0L) {
-                orderDao.insert(updatedOrder)
-            } else {
-                orderDao.update(updatedOrder)
-                order.id
-            }
+            val orderId =
+                if (updatedOrder.id == 0L) {
+                    orderDao.insert(updatedOrder)
+                } else {
+                    orderDao.update(updatedOrder)
+                    updatedOrder.id
+                }
 
-            handleAccounting(updatedOrder.copy(id = orderId))
+            upsertAccountingEntry(updatedOrder.copy(id = orderId))
+
+            loadOrdersForDate(date)
+            refreshMonthTotals()
         }
     }
 
-    /* ---------------- ORDER STATUS LOGIC ---------------- */
-
-    private suspend fun handleAccounting(order: OrderEntity) {
-
-        if (order.status != OrderStatus.COMPLETED) return
-
-        val existingEntries =
-            accountingDao.getEntriesForOrder(order.id)
-
-        if (existingEntries.isNotEmpty()) return
-
-        val incomeEntry = AccountEntryEntity(
-            orderId = order.id,
-            type = EntryType.INCOME,
-            amount = order.totalAmount,
-            date = order.orderDate.toEpochDays().toLong(),
-            description = "Order #${order.id}"
-        )
+    private suspend fun upsertAccountingEntry(order: OrderEntity) {
+        accountingDao.deleteDebitEntriesForOrder(order.id)
+        val incomeEntry =
+            AccountEntryEntity(
+                orderId = order.id,
+                type = EntryType.DEBIT,
+                amount = order.totalAmount,
+                date = order.orderDate.atStartOfDayIn(TimeZone.currentSystemDefault()).toEpochMilliseconds(),
+                customerId = order.customerId,
+                description = "Order #${order.id}"
+            )
 
         accountingDao.insertAccountEntry(incomeEntry)
     }
 
-    /* ---------------- PAYMENTS ---------------- */
-
-    fun addPayment(
-        order: OrderEntity,
-        amount: BigDecimal,
-        method: PaymentMethod
-    ) {
+    fun loadOrdersForDate(date: LocalDate) {
         viewModelScope.launch {
+            val orders = orderDao.getOrdersByDate(date.toString())
+            _ordersForDate.value = orders
+            _dayTotal.value = orderDao.getTotalForDate(date.toString())
 
-            require(amount > BigDecimal.ZERO)
+            val customerIds = orders.mapNotNull { it.customerId }.distinct()
+            _orderCustomerNames.value =
+                if (customerIds.isEmpty()) {
+                    emptyMap()
+                } else {
+                    customerDao.getByIds(customerIds).associate { it.id to it.name }
+                }
 
-            val payment = PaymentEntity(
-                orderId = order.id,
-                amount = amount,
-                method = method,
-                paidAt = Clock.System.now().toEpochMilliseconds()
-            )
-
-            accountingDao.insertPayment(payment)
-
-            val newPaid = order.amountPaid + amount
-
-            val updatedOrder = order.copy(
-                amountPaid = newPaid
-            )
-
-            orderDao.update(updatedOrder)
+            val orderIds = orders.map { it.id }.filter { it != 0L }
+            _orderPaidAmounts.value =
+                if (orderIds.isEmpty()) {
+                    emptyMap()
+                } else {
+                    accountingDao.getPaidForOrders(orderIds).associate {
+                        it.orderId to it.paid
+                    }
+                }
         }
     }
-    fun loadMonth(
-    month: Int,
-    year: Int,
-    onResult: (List<CalendarDayUi>) -> Unit
-) {
-    viewModelScope.launch {
-        val start = LocalDate(year, month, 1)
-        val end = start.plus(1, DateTimeUnit.MONTH)
 
-        val orders = orderDao.getOrdersBetween(
-            start.toString(),
-            end.toString()
-        )
+    fun loadMonth(month: Int, year: Int) {
+        viewModelScope.launch {
+            lastMonth = month
+            lastYear = year
+            val start = LocalDate(year, month, 1)
+            val end = start.plus(1, DateTimeUnit.MONTH)
 
-        val grouped = orders.groupBy { it.orderDate }
+            val orders = orderDao.getOrdersBetween(start.toString(), end.toString())
+            val grouped = orders.groupBy { it.orderDate }
+            val totals =
+                orders.groupBy { it.orderDate }
+                    .mapValues { entry ->
+                        entry.value.fold(BigDecimal.ZERO) { acc, order -> acc + order.totalAmount }
+                    }
 
-        val days = (1..start.lengthOfMonth()).map { day ->
-            val date = LocalDate(year, month, day)
-            val dayOrders = grouped[date] ?: emptyList()
+            val today = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date
+            val daysInMonth = Month(month).length(isLeapYear(year))
+            _calendarDays.value =
+                (1..daysInMonth).map { day ->
+                    val date = LocalDate(year, month, day)
+                    val dayOrders = grouped[date] ?: emptyList()
+                    CalendarDayUi(
+                        date = date,
+                        orderCount = dayOrders.size,
+                        totalAmount = totals[date] ?: BigDecimal.ZERO,
+                        isToday = date == today
+                    )
+                }
 
-            CalendarDayUi(
-                date = date,
-                hasOrders = dayOrders.isNotEmpty(),
-                orderCount = dayOrders.size
-            )
+            _monthTotal.value = orderDao.getTotalBetween(start.toString(), end.toString())
         }
-
-        onResult(days)
     }
-}
-fun loadOrdersForDate(
-    date: LocalDate,
-    onResult: (List<OrderEntity>) -> Unit
-) {
-    viewModelScope.launch {
-        val orders = orderDao.getOrdersByDate(date.toString())
-        onResult(orders)
+
+    suspend fun getCustomerById(id: Long): CustomerEntity? {
+        return customerDao.getById(id)
     }
-}
 
-fun newOrder(date: LocalDate): OrderEntity {
-    return OrderEntity(
-        orderDate = date,
-        notes = "",
-        totalAmount = BigDecimal.ZERO
-    )
-}
+    suspend fun searchCustomers(query: String): List<CustomerEntity> {
+        val trimmed = query.trim()
+        if (trimmed.isEmpty()) return emptyList()
+        val pattern = "%$trimmed%"
+        return customerDao.searchCustomers(pattern)
+    }
 
+    private suspend fun resolveCustomerId(name: String, phone: String): Long? {
+        if (name.isBlank() && phone.isBlank()) return null
+        if (name.isBlank() || phone.isBlank()) return null
+
+        val existing = customerDao.getByPhone(phone)
+        return if (existing != null) {
+            if (existing.name != name) {
+                customerDao.update(existing.copy(name = name))
+            }
+            existing.id
+        } else {
+            customerDao.insert(CustomerEntity(name = name, phone = phone))
+        }
+    }
+
+    private fun refreshMonthTotals() {
+        val month = lastMonth ?: return
+        val year = lastYear ?: return
+        loadMonth(month, year)
+    }
+
+    private fun isLeapYear(year: Int): Boolean {
+        return (year % 4 == 0 && year % 100 != 0) || (year % 400 == 0)
+    }
 }
