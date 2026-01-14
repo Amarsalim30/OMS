@@ -22,6 +22,14 @@ import kotlinx.datetime.atStartOfDayIn
 import kotlinx.datetime.plus
 import kotlinx.datetime.toLocalDateTime
 
+data class MonthKey(val year: Int, val month: Int)
+
+data class MonthSnapshot(
+    val days: List<CalendarDayUi>,
+    val total: BigDecimal,
+    val badgeCount: Int
+)
+
 class OrderViewModel(private val database: AppDatabase) : ViewModel() {
 
     private val orderDao: OrderDao = database.orderDao()
@@ -42,6 +50,9 @@ class OrderViewModel(private val database: AppDatabase) : ViewModel() {
 
     private val _monthBadgeCount = MutableStateFlow(0)
     val monthBadgeCount = _monthBadgeCount.asStateFlow()
+
+    private val _monthSnapshots = MutableStateFlow<Map<MonthKey, MonthSnapshot>>(emptyMap())
+    val monthSnapshots = _monthSnapshots.asStateFlow()
 
     private val _orderCustomerNames = MutableStateFlow<Map<Long, String>>(emptyMap())
     val orderCustomerNames = _orderCustomerNames.asStateFlow()
@@ -145,78 +156,105 @@ class OrderViewModel(private val database: AppDatabase) : ViewModel() {
 
     fun loadMonth(month: Int, year: Int) {
         viewModelScope.launch {
+            loadMonth(month = month, year = year, setAsCurrent = true)
+        }
+    }
+
+    fun prefetchAdjacentMonths(year: Int, month: Int) {
+        viewModelScope.launch {
+            val (prevYear, prevMonth) = shiftMonth(year, month, -1)
+            val (nextYear, nextMonth) = shiftMonth(year, month, 1)
+            loadMonth(month = prevMonth, year = prevYear, setAsCurrent = false)
+            loadMonth(month = nextMonth, year = nextYear, setAsCurrent = false)
+        }
+    }
+
+    private suspend fun loadMonth(month: Int, year: Int, setAsCurrent: Boolean) {
+        if (setAsCurrent) {
             lastMonth = month
             lastYear = year
-            val start = LocalDate(year, month, 1)
-            val daysInMonth = Month(month).length(isLeapYear(year))
-            val endOfMonth = LocalDate(year, month, daysInMonth)
-            val leadingDays = start.dayOfWeek.ordinal
-            val trailingDays = 6 - endOfMonth.dayOfWeek.ordinal
-            val gridStart = start.plus(-leadingDays, DateTimeUnit.DAY)
-            val gridEndExclusive = endOfMonth.plus(trailingDays + 1, DateTimeUnit.DAY)
+        }
+        val start = LocalDate(year, month, 1)
+        val daysInMonth = Month(month).length(isLeapYear(year))
+        val endOfMonth = LocalDate(year, month, daysInMonth)
+        val leadingDays = start.dayOfWeek.ordinal
+        val trailingDays = 6 - endOfMonth.dayOfWeek.ordinal
+        val gridStart = start.plus(-leadingDays, DateTimeUnit.DAY)
+        val gridEndExclusive = endOfMonth.plus(trailingDays + 1, DateTimeUnit.DAY)
 
-            val orders = orderDao.getOrdersBetween(gridStart.toString(), gridEndExclusive.toString())
-            val grouped = orders.groupBy { it.orderDate }
-            val totals =
-                orders.groupBy { it.orderDate }
-                    .mapValues { entry ->
-                        entry.value.fold(BigDecimal.ZERO) { acc, order -> acc + order.totalAmount }
-                    }
-            val orderIds = orders.map { it.id }.filter { it != 0L }
-            val paidByOrder =
-                if (orderIds.isEmpty()) {
-                    emptyMap()
-                } else {
-                    accountingDao.getPaidForOrders(orderIds).associate { it.orderId to it.paid }
+        val orders = orderDao.getOrdersBetween(gridStart.toString(), gridEndExclusive.toString())
+        val grouped = orders.groupBy { it.orderDate }
+        val totals =
+            orders.groupBy { it.orderDate }
+                .mapValues { entry ->
+                    entry.value.fold(BigDecimal.ZERO) { acc, order -> acc + order.totalAmount }
                 }
-            val paidTotals =
-                orders.groupBy { it.orderDate }
-                    .mapValues { entry ->
-                        entry.value.fold(BigDecimal.ZERO) { acc, order ->
-                            acc + (paidByOrder[order.id] ?: BigDecimal.ZERO)
-                        }
+        val orderIds = orders.map { it.id }.filter { it != 0L }
+        val paidByOrder =
+            if (orderIds.isEmpty()) {
+                emptyMap()
+            } else {
+                accountingDao.getPaidForOrders(orderIds).associate { it.orderId to it.paid }
+            }
+        val paidTotals =
+            orders.groupBy { it.orderDate }
+                .mapValues { entry ->
+                    entry.value.fold(BigDecimal.ZERO) { acc, order ->
+                        acc + (paidByOrder[order.id] ?: BigDecimal.ZERO)
                     }
-            val unpaidCount =
-                orders.count { order ->
-                    if (order.orderDate.monthNumber != month || order.orderDate.year != year) {
-                        false
-                    } else {
+                }
+        val unpaidCount =
+            orders.count { order ->
+                if (order.orderDate.monthNumber != month || order.orderDate.year != year) {
+                    false
+                } else {
                     val paid = paidByOrder[order.id] ?: BigDecimal.ZERO
                     paid < order.totalAmount
-                    }
                 }
+            }
 
-            val today = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date
-            _calendarDays.value =
-                (0 until (leadingDays + daysInMonth + trailingDays)).map { offset ->
-                    val date = gridStart.plus(offset, DateTimeUnit.DAY)
-                    val dayOrders = grouped[date] ?: emptyList()
-                    val dayTotal = totals[date] ?: BigDecimal.ZERO
-                    val dayPaid = paidTotals[date] ?: BigDecimal.ZERO
-                    val paymentState =
-                        if (dayTotal <= BigDecimal.ZERO) {
-                            null
-                        } else {
-                            val balance = dayTotal - dayPaid
-                            when {
-                                dayPaid <= BigDecimal.ZERO -> PaymentState.UNPAID
-                                balance > BigDecimal.ZERO -> PaymentState.PARTIAL
-                                balance == BigDecimal.ZERO -> PaymentState.PAID
-                                else -> PaymentState.OVERPAID
-                            }
+        val today = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date
+        val calendarDays =
+            (0 until (leadingDays + daysInMonth + trailingDays)).map { offset ->
+                val date = gridStart.plus(offset, DateTimeUnit.DAY)
+                val dayOrders = grouped[date] ?: emptyList()
+                val dayTotal = totals[date] ?: BigDecimal.ZERO
+                val dayPaid = paidTotals[date] ?: BigDecimal.ZERO
+                val paymentState =
+                    if (dayTotal <= BigDecimal.ZERO) {
+                        null
+                    } else {
+                        val balance = dayTotal - dayPaid
+                        when {
+                            dayPaid <= BigDecimal.ZERO -> PaymentState.UNPAID
+                            balance > BigDecimal.ZERO -> PaymentState.PARTIAL
+                            balance == BigDecimal.ZERO -> PaymentState.PAID
+                            else -> PaymentState.OVERPAID
                         }
-                    CalendarDayUi(
-                        date = date,
-                        orderCount = dayOrders.size,
-                        totalAmount = dayTotal,
-                        isToday = date == today,
-                        isInCurrentMonth = date.monthNumber == month,
-                        paymentState = paymentState
-                    )
-                }
+                    }
+                CalendarDayUi(
+                    date = date,
+                    orderCount = dayOrders.size,
+                    totalAmount = dayTotal,
+                    isToday = date == today,
+                    isInCurrentMonth = date.monthNumber == month,
+                    paymentState = paymentState
+                )
+            }
 
-            _monthTotal.value = orderDao.getTotalBetween(start.toString(), endOfMonth.plus(1, DateTimeUnit.DAY).toString())
-            _monthBadgeCount.value = unpaidCount
+        val monthTotal =
+            orderDao.getTotalBetween(
+                start.toString(),
+                endOfMonth.plus(1, DateTimeUnit.DAY).toString()
+            )
+        val badgeCount = unpaidCount
+        val key = MonthKey(year, month)
+        _monthSnapshots.value = _monthSnapshots.value + (key to MonthSnapshot(calendarDays, monthTotal, badgeCount))
+
+        if (setAsCurrent) {
+            _calendarDays.value = calendarDays
+            _monthTotal.value = monthTotal
+            _monthBadgeCount.value = badgeCount
         }
     }
 
@@ -249,10 +287,17 @@ class OrderViewModel(private val database: AppDatabase) : ViewModel() {
     private fun refreshMonthTotals() {
         val month = lastMonth ?: return
         val year = lastYear ?: return
-        loadMonth(month, year)
+        loadMonth(month = month, year = year)
     }
 
     private fun isLeapYear(year: Int): Boolean {
         return (year % 4 == 0 && year % 100 != 0) || (year % 400 == 0)
+    }
+
+    private fun shiftMonth(year: Int, month: Int, delta: Int): Pair<Int, Int> {
+        val total = (year * 12) + (month - 1) + delta
+        val newYear = total / 12
+        val newMonth = (total % 12) + 1
+        return Pair(newYear, newMonth)
     }
 }

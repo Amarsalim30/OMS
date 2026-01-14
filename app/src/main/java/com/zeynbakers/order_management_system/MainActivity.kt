@@ -33,6 +33,8 @@ class MainActivity : ComponentActivity() {
 
                 var currentMonth by remember { mutableStateOf(0) }
                 var currentYear by remember { mutableStateOf(0) }
+                var baseMonth by remember { mutableStateOf(0) }
+                var baseYear by remember { mutableStateOf(0) }
                 var screen by remember { mutableStateOf<Screen>(Screen.Calendar) }
                 var customerQuery by remember { mutableStateOf("") }
 
@@ -43,6 +45,7 @@ class MainActivity : ComponentActivity() {
                 val dayTotal by viewModel.dayTotal.collectAsState()
                 val orderCustomerNames by viewModel.orderCustomerNames.collectAsState()
                 val orderPaidAmounts by viewModel.orderPaidAmounts.collectAsState()
+                val monthSnapshots by viewModel.monthSnapshots.collectAsState()
 
                 val customerSummaries by customerViewModel.summaries.collectAsState()
                 val customerDetail by customerViewModel.customer.collectAsState()
@@ -57,11 +60,16 @@ class MainActivity : ComponentActivity() {
                     currentMonth = now.monthNumber
                     currentYear = now.year
                     selectedDate = now.date
+                    if (baseMonth == 0 && baseYear == 0) {
+                        baseMonth = now.monthNumber
+                        baseYear = now.year
+                    }
                 }
 
                 LaunchedEffect(currentMonth, currentYear) {
                     if (currentMonth > 0 && currentYear > 0) {
                         viewModel.loadMonth(month = currentMonth, year = currentYear)
+                        viewModel.prefetchAdjacentMonths(year = currentYear, month = currentMonth)
                     }
                 }
 
@@ -83,8 +91,11 @@ class MainActivity : ComponentActivity() {
                     Screen.Calendar -> {
                         CalendarScreen(
                             days = calendarDays,
-                            monthLabel = monthLabel(currentYear, currentMonth),
-                            monthKey = (currentYear * 12) + currentMonth,
+                            currentYear = currentYear,
+                            currentMonth = currentMonth,
+                            baseYear = baseYear,
+                            baseMonth = baseMonth,
+                            monthSnapshots = monthSnapshots,
                             monthTotal = monthTotal,
                             monthBadgeCount = monthBadgeCount,
                             selectedDate = selectedDate,
@@ -100,17 +111,11 @@ class MainActivity : ComponentActivity() {
                                 )
                             },
                             searchCustomers = { query -> viewModel.searchCustomers(query) },
-                            onMenuClick = { screen = Screen.CustomerList },
+                            onCustomersClick = { screen = Screen.CustomerList },
                             onSummaryClick = { screen = Screen.Summary },
-                            onPrevMonth = {
-                                val (y, m) = shiftMonth(currentYear, currentMonth, -1)
-                                currentYear = y
-                                currentMonth = m
-                            },
-                            onNextMonth = {
-                                val (y, m) = shiftMonth(currentYear, currentMonth, 1)
-                                currentYear = y
-                                currentMonth = m
+                            onMonthSettled = { year, month ->
+                                currentYear = year
+                                currentMonth = month
                             },
                             onOpenDay = { date ->
                                 viewModel.loadOrdersForDate(date)
@@ -192,14 +197,6 @@ private sealed class Screen {
     data object Summary : Screen()
     data object CustomerList : Screen()
     data class CustomerDetail(val customerId: Long) : Screen()
-}
-
-private fun shiftMonth(year: Int, month: Int, delta: Int): Pair<Int, Int> {
-    if (month == 0 || year == 0) return Pair(year, month)
-    val total = (year * 12) + (month - 1) + delta
-    val newYear = total / 12
-    val newMonth = (total % 12) + 1
-    return Pair(newYear, newMonth)
 }
 
 private fun monthLabel(year: Int, month: Int): String {

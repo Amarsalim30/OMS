@@ -74,11 +74,13 @@ fun CustomerDetailScreen(
 
         Row(modifier = Modifier.fillMaxWidth()) {
             TextButton(onClick = { selectedMethod = PaymentMethod.CASH }) {
-                Text(text = if (selectedMethod == PaymentMethod.CASH) "CASH ✓" else "CASH")
+                val label = if (selectedMethod == PaymentMethod.CASH) "CASH (selected)" else "CASH"
+                Text(text = label)
             }
             Spacer(Modifier.weight(1f))
             TextButton(onClick = { selectedMethod = PaymentMethod.MPESA }) {
-                Text(text = if (selectedMethod == PaymentMethod.MPESA) "MPESA ✓" else "MPESA")
+                val label = if (selectedMethod == PaymentMethod.MPESA) "MPESA (selected)" else "MPESA"
+                Text(text = label)
             }
         }
 
@@ -94,12 +96,14 @@ fun CustomerDetailScreen(
         Spacer(Modifier.height(8.dp))
         Text(text = "Apply to order (optional)", style = MaterialTheme.typography.bodyMedium)
         TextButton(onClick = { selectedOrderId = null }) {
-            Text(text = if (selectedOrderId == null) "No order ✓" else "No order")
+            val label = if (selectedOrderId == null) "No order (selected)" else "No order"
+            Text(text = label)
         }
         orders.take(10).forEach { order ->
             TextButton(onClick = { selectedOrderId = order.id }) {
-                val label = "Order #${order.id} • ${formatKes(order.totalAmount)}"
-                Text(text = if (selectedOrderId == order.id) "$label ✓" else label)
+                val label = "Order #${order.id} - ${formatKes(order.totalAmount)}"
+                val selectedLabel = "$label (selected)"
+                Text(text = if (selectedOrderId == order.id) selectedLabel else label)
             }
         }
 

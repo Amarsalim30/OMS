@@ -1,36 +1,28 @@
 package com.zeynbakers.order_management_system.order.ui
 
-import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.ExperimentalAnimationApi
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.togetherWith
-import androidx.compose.animation.slideInHorizontally
-import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Search
@@ -54,24 +46,36 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.zeynbakers.order_management_system.core.util.formatKes
 import com.zeynbakers.order_management_system.customer.data.CustomerEntity
+import java.math.BigDecimal
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.datetime.Clock
+import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.LocalDate
+import kotlinx.datetime.Month
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.plus
+import kotlinx.datetime.toLocalDateTime
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalAnimationApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CalendarScreen(
     days: List<CalendarDayUi>,
-    monthLabel: String,
-    monthKey: Int,
+    currentYear: Int,
+    currentMonth: Int,
+    baseYear: Int,
+    baseMonth: Int,
+    monthSnapshots: Map<MonthKey, MonthSnapshot>,
     monthTotal: java.math.BigDecimal,
     monthBadgeCount: Int,
     selectedDate: LocalDate?,
@@ -79,14 +83,10 @@ fun CalendarScreen(
     onOpenDay: (LocalDate) -> Unit,
     onSaveOrder: (LocalDate, String, java.math.BigDecimal, String, String) -> Unit,
     searchCustomers: suspend (String) -> List<CustomerEntity>,
-    onMenuClick: () -> Unit,
+    onCustomersClick: () -> Unit,
     onSummaryClick: () -> Unit,
-    onPrevMonth: () -> Unit,
-    onNextMonth: () -> Unit
+    onMonthSettled: (Int, Int) -> Unit
 ) {
-    val dragAmount = remember { mutableStateOf(0f) }
-    val monthTitle = monthLabel
-
     var isQuickAddOpen by remember { mutableStateOf(false) }
     var notes by remember { mutableStateOf("") }
     var totalText by remember { mutableStateOf("") }
@@ -107,14 +107,47 @@ fun CalendarScreen(
     }
 
     val activeDate = selectedDate
+    val baseIndex = remember { 10_000 }
+    val pageCount = remember { baseIndex * 2 }
+    val pagerState = rememberPagerState(initialPage = baseIndex, pageCount = { pageCount })
+    val today = remember {
+        Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date
+    }
+    val anchorYear =
+        when {
+            baseYear > 0 -> baseYear
+            currentYear > 0 -> currentYear
+            else -> today.year
+        }
+    val anchorMonth =
+        when {
+            baseMonth > 0 -> baseMonth
+            currentMonth > 0 -> currentMonth
+            else -> today.monthNumber
+        }
+    val activeDaysByDate = remember(days) { days.associateBy { it.date } }
+
+    LaunchedEffect(pagerState, anchorYear, anchorMonth) {
+        snapshotFlow { pagerState.settledPage }
+            .distinctUntilChanged()
+            .collect { settledPage ->
+                val (year, month) = shiftMonth(anchorYear, anchorMonth, settledPage - baseIndex)
+                if (year != currentYear || month != currentMonth) {
+                    onMonthSettled(year, month)
+                }
+            }
+    }
+    val titleMonth = remember(pagerState.settledPage, anchorYear, anchorMonth) {
+        shiftMonth(anchorYear, anchorMonth, pagerState.settledPage - baseIndex)
+    }
+    val monthTitle = formatMonthTitle(titleMonth.first, titleMonth.second)
 
     Scaffold(
-        contentWindowInsets = WindowInsets.safeDrawing,
         topBar = {
             CalendarTopBar(
                 monthTitle = monthTitle,
                 badgeCount = monthBadgeCount,
-                onMenuClick = onMenuClick,
+                onCustomersClick = onCustomersClick,
                 onSummaryClick = onSummaryClick
             )
         },
@@ -154,36 +187,41 @@ fun CalendarScreen(
 
             WeekdayHeaderRow()
 
-            AnimatedContent(
-                targetState = monthKey,
-                transitionSpec = {
-                    val isForward = targetState > initialState
-                    val direction = if (isForward) -1 else 1
-                    slideInHorizontally(
-                        animationSpec = tween(200),
-                        initialOffsetX = { it * direction }
-                    ) + fadeIn(animationSpec = tween(200)) togetherWith
-                        slideOutHorizontally(
-                            animationSpec = tween(200),
-                            targetOffsetX = { it * -direction }
-                        ) + fadeOut(animationSpec = tween(200))
-                },
-                label = "monthTransition"
-            ) {
+            HorizontalPager(
+                state = pagerState,
+                beyondViewportPageCount = 1
+            ) { page ->
+                val (pageYear, pageMonth) =
+                    remember(page, anchorYear, anchorMonth) {
+                        shiftMonth(anchorYear, anchorMonth, page - baseIndex)
+                    }
+                val snapshot = monthSnapshots[MonthKey(pageYear, pageMonth)]
+                val orderData = remember(snapshot, activeDaysByDate, pageYear, pageMonth, currentYear, currentMonth) {
+                    when {
+                        snapshot != null -> snapshot.days.associateBy { it.date }
+                        pageYear == currentYear && pageMonth == currentMonth -> activeDaysByDate
+                        else -> emptyMap()
+                    }
+                }
+                val monthDays = remember(pageYear, pageMonth, snapshot, orderData, today) {
+                    snapshot?.days
+                        ?: buildMonthGrid(
+                            year = pageYear,
+                            month = pageMonth,
+                            today = today,
+                            orderData = orderData
+                        )
+                }
+
                 CalendarMonthGrid(
-                    days = days,
+                    days = monthDays,
                     selectedDate = selectedDate,
-                    onSelectDate = {
-                        onSelectDate(it)
-                    },
+                    onSelectDate = onSelectDate,
                     onOpenDay = onOpenDay,
                     onQuickAdd = {
                         onSelectDate(it)
                         isQuickAddOpen = true
-                    },
-                    onPrevMonth = onPrevMonth,
-                    onNextMonth = onNextMonth,
-                    dragAmount = dragAmount
+                    }
                 )
             }
         }
@@ -353,8 +391,8 @@ fun CalendarScreen(
 private fun CalendarTopBar(
     monthTitle: String,
     badgeCount: Int,
-    onMenuClick: () -> Unit,
-    onSummaryClick: () -> Unit
+    onSummaryClick: () -> Unit,
+    onCustomersClick: () -> Unit
 ) {
     CenterAlignedTopAppBar(
         title = {
@@ -365,17 +403,17 @@ private fun CalendarTopBar(
             )
         },
         navigationIcon = {
-            TextButton(onClick = onMenuClick) {
-                Icon(imageVector = Icons.Filled.Menu, contentDescription = "Customers")
+            TextButton(onClick = onSummaryClick) {
+                Icon(imageVector = Icons.Filled.Menu, contentDescription = "Summary")
                 Spacer(Modifier.width(6.dp))
-                Text("Customers")
+                Text("Summary")
             }
         },
         actions = {
-            TextButton(onClick = onSummaryClick) {
-                Icon(imageVector = Icons.Filled.Search, contentDescription = "Summary")
+            TextButton(onClick = onCustomersClick) {
+                Icon(imageVector = Icons.Filled.Search, contentDescription = "Customers")
                 Spacer(Modifier.width(6.dp))
-                Text("Summary")
+                Text("Customers")
             }
             if (badgeCount > 0) {
                 Surface(
@@ -427,32 +465,12 @@ private fun CalendarMonthGrid(
     selectedDate: LocalDate?,
     onSelectDate: (LocalDate) -> Unit,
     onOpenDay: (LocalDate) -> Unit,
-    onQuickAdd: (LocalDate) -> Unit,
-    onPrevMonth: () -> Unit,
-    onNextMonth: () -> Unit,
-    dragAmount: androidx.compose.runtime.MutableState<Float>
+    onQuickAdd: (LocalDate) -> Unit
 ) {
-    val weeks = days.chunked(7)
+    val weeks = remember(days) { days.chunked(7) }
     Column(
         modifier = Modifier
             .padding(horizontal = 8.dp, vertical = 4.dp)
-            .pointerInput(Unit) {
-                detectHorizontalDragGestures(
-                    onHorizontalDrag = { change, drag ->
-                        dragAmount.value += drag
-                        change.consume()
-                    },
-                    onDragEnd = {
-                        val threshold = 80f
-                        when {
-                            dragAmount.value > threshold -> onPrevMonth()
-                            dragAmount.value < -threshold -> onNextMonth()
-                        }
-                        dragAmount.value = 0f
-                    },
-                    onDragCancel = { dragAmount.value = 0f }
-                )
-            }
     ) {
         weeks.forEachIndexed { index, week ->
             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
@@ -480,14 +498,16 @@ private fun WeekBandRow(
 ) {
     Row(modifier = Modifier.fillMaxWidth().height(96.dp)) {
         week.forEach { day ->
-            DayColumnCell(
-                day = day,
-                isSelected = selectedDate == day.date,
-                onSelectDate = onSelectDate,
-                onOpenDay = onOpenDay,
-                onQuickAdd = onQuickAdd,
-                modifier = Modifier.weight(1f)
-            )
+            key(day.date) {
+                DayColumnCell(
+                    day = day,
+                    isSelected = selectedDate == day.date,
+                    onSelectDate = onSelectDate,
+                    onOpenDay = onOpenDay,
+                    onQuickAdd = onQuickAdd,
+                    modifier = Modifier.weight(1f)
+                )
+            }
         }
     }
 }
@@ -691,15 +711,80 @@ private fun BottomQuickAddBar(
 
 private fun buildChipLines(day: CalendarDayUi): List<String> {
     if (day.orderCount == 0) return emptyList()
-    val totalLine = "${formatKes(day.totalAmount)} ? ${if (day.orderCount == 1) "1 order" else "${day.orderCount} orders"}"
+    val totalLine = "${formatKes(day.totalAmount)} - ${if (day.orderCount == 1) "1 order" else "${day.orderCount} orders"}"
     val statusLine =
         when (day.paymentState) {
-            PaymentState.UNPAID -> "Unpaid ? ${formatKes(day.totalAmount)}"
-            PaymentState.PARTIAL -> "Partial ? ${formatKes(day.totalAmount)}"
-            PaymentState.PAID -> "Paid ? ${formatKes(day.totalAmount)}"
-            PaymentState.OVERPAID -> "Overpaid ? ${formatKes(day.totalAmount)}"
+            PaymentState.UNPAID -> "Unpaid - ${formatKes(day.totalAmount)}"
+            PaymentState.PARTIAL -> "Partial - ${formatKes(day.totalAmount)}"
+            PaymentState.PAID -> "Paid - ${formatKes(day.totalAmount)}"
+            PaymentState.OVERPAID -> "Overpaid - ${formatKes(day.totalAmount)}"
             null -> totalLine
         }
     return listOf(statusLine, totalLine).distinct()
+}
+
+private fun buildMonthGrid(
+    year: Int,
+    month: Int,
+    today: LocalDate,
+    orderData: Map<LocalDate, CalendarDayUi>
+): List<CalendarDayUi> {
+    val start = LocalDate(year, month, 1)
+    val daysInMonth = Month(month).length(isLeapYear(year))
+    val endOfMonth = LocalDate(year, month, daysInMonth)
+    val leadingDays = start.dayOfWeek.ordinal
+    val trailingDays = 6 - endOfMonth.dayOfWeek.ordinal
+    val gridStart = start.plus(-leadingDays, DateTimeUnit.DAY)
+
+    val totalDays = leadingDays + daysInMonth + trailingDays
+    return (0 until totalDays).map { offset ->
+        val date = gridStart.plus(offset, DateTimeUnit.DAY)
+        val existing = orderData[date]
+        if (existing != null) {
+            existing.copy(isToday = date == today, isInCurrentMonth = date.monthNumber == month)
+        } else {
+            CalendarDayUi(
+                date = date,
+                orderCount = 0,
+                totalAmount = BigDecimal.ZERO,
+                isToday = date == today,
+                isInCurrentMonth = date.monthNumber == month,
+                paymentState = null
+            )
+        }
+    }
+}
+
+private fun shiftMonth(year: Int, month: Int, delta: Int): Pair<Int, Int> {
+    if (month == 0 || year == 0) return Pair(year, month)
+    val total = (year * 12) + (month - 1) + delta
+    val newYear = total / 12
+    val newMonth = (total % 12) + 1
+    return Pair(newYear, newMonth)
+}
+
+private fun isLeapYear(year: Int): Boolean {
+    return (year % 4 == 0 && year % 100 != 0) || (year % 400 == 0)
+}
+
+private fun formatMonthTitle(year: Int, month: Int): String {
+    if (month !in 1..12 || year <= 0) return "Loading..."
+    val monthName =
+        when (month) {
+            1 -> "January"
+            2 -> "February"
+            3 -> "March"
+            4 -> "April"
+            5 -> "May"
+            6 -> "June"
+            7 -> "July"
+            8 -> "August"
+            9 -> "September"
+            10 -> "October"
+            11 -> "November"
+            12 -> "December"
+            else -> "Month"
+        }
+    return "$monthName $year"
 }
 

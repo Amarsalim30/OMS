@@ -7,10 +7,16 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -21,18 +27,25 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.zeynbakers.order_management_system.core.util.formatKes
 import com.zeynbakers.order_management_system.customer.data.CustomerEntity
 import com.zeynbakers.order_management_system.order.data.OrderEntity
 import java.math.BigDecimal
+import java.math.RoundingMode
+import java.text.NumberFormat
+import java.util.Locale
 import kotlinx.datetime.LocalDate
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -48,16 +61,22 @@ fun DayDetailScreen(
     loadCustomerById: suspend (Long) -> CustomerEntity?,
     searchCustomers: suspend (String) -> List<CustomerEntity>
 ) {
-    var notes by remember { mutableStateOf("") }
-    var totalText by remember { mutableStateOf("") }
-    var customerName by remember { mutableStateOf("") }
-    var customerPhone by remember { mutableStateOf("") }
+    var notes by rememberSaveable { mutableStateOf("") }
+    var totalText by rememberSaveable { mutableStateOf("") }
+    var customerName by rememberSaveable { mutableStateOf("") }
+    var customerPhone by rememberSaveable { mutableStateOf("") }
     var editingOrderId by remember { mutableStateOf<Long?>(null) }
     var isEditorOpen by remember { mutableStateOf(false) }
     var notesError by remember { mutableStateOf<String?>(null) }
     var totalError by remember { mutableStateOf<String?>(null) }
     var customerError by remember { mutableStateOf<String?>(null) }
     var suggestions by remember { mutableStateOf<List<CustomerEntity>>(emptyList()) }
+    val formatter = remember {
+        NumberFormat.getNumberInstance(Locale.forLanguageTag("en-KE")).apply {
+            minimumFractionDigits = 2
+            maximumFractionDigits = 2
+        }
+    }
 
     LaunchedEffect(editingOrderId) {
         if (editingOrderId == null) {
@@ -145,11 +164,30 @@ fun DayDetailScreen(
 
     if (isEditorOpen) {
         val paidAmount = editingOrderId?.let { orderPaidAmounts[it] } ?: BigDecimal.ZERO
-        val currentTotal = totalText.trim().toBigDecimalOrNull() ?: BigDecimal.ZERO
+        val trimmedTotal = totalText.trim()
+        val parsedTotal = trimmedTotal.toBigDecimalOrNull()
+        val currentTotal = parsedTotal ?: BigDecimal.ZERO
         val statusText = if (paidAmount >= currentTotal && currentTotal > BigDecimal.ZERO) "Paid" else "Unpaid"
+        val formattedTotal = parsedTotal?.let { formatter.format(it) }
+        val isTotalInvalid = trimmedTotal.isNotEmpty() && parsedTotal == null
+        val hasCustomerMismatch = (customerName.isBlank() xor customerPhone.isBlank())
+        val canSave =
+            notes.trim().isNotEmpty() && parsedTotal != null && parsedTotal > BigDecimal.ZERO && !hasCustomerMismatch
 
-        ModalBottomSheet(onDismissRequest = { isEditorOpen = false }) {
-            Column(modifier = Modifier.padding(16.dp)) {
+        val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        ModalBottomSheet(
+            onDismissRequest = { isEditorOpen = false },
+            sheetState = sheetState
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .fillMaxHeight(0.9f)
+                    .imePadding()
+                    .navigationBarsPadding()
+                    .verticalScroll(rememberScrollState())
+                    .padding(16.dp)
+            ) {
                 Text(
                     text = if (editingOrderId == null) "New Order" else "Edit Order",
                     style = MaterialTheme.typography.titleLarge
@@ -163,6 +201,9 @@ fun DayDetailScreen(
                         notesError = null
                     },
                     label = { Text("Notes (required)") },
+                    placeholder = { Text("Customer details, delivery time, etc.") },
+                    minLines = 2,
+                    maxLines = 3,
                     modifier = Modifier.fillMaxWidth()
                 )
 
@@ -175,10 +216,26 @@ fun DayDetailScreen(
                 OutlinedTextField(
                     value = totalText,
                     onValueChange = {
-                        totalText = it
-                        totalError = null
+                        val filtered = it.filter { ch -> ch.isDigit() || ch == '.' }
+                        if (filtered.count { ch -> ch == '.' } <= 1) {
+                            totalText = filtered
+                            totalError = null
+                        }
                     },
-                    label = { Text("Total amount (KES)") },
+                    label = { Text("Total amount") },
+                    placeholder = { Text("KSh 0.00") },
+                    leadingIcon = { Text("KSh") },
+                    isError = isTotalInvalid,
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Decimal,
+                        imeAction = ImeAction.Next
+                    ),
+                    supportingText = {
+                        when {
+                            isTotalInvalid -> Text("Enter a valid amount.")
+                            formattedTotal != null -> Text("Total: KSh $formattedTotal")
+                        }
+                    },
                     modifier = Modifier.fillMaxWidth()
                 )
 
@@ -199,6 +256,7 @@ fun DayDetailScreen(
                         customerError = null
                     },
                     label = { Text("Customer name") },
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
                     modifier = Modifier.fillMaxWidth()
                 )
 
@@ -211,6 +269,10 @@ fun DayDetailScreen(
                         customerError = null
                     },
                     label = { Text("Customer phone") },
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Phone,
+                        imeAction = ImeAction.Done
+                    ),
                     modifier = Modifier.fillMaxWidth()
                 )
 
@@ -255,9 +317,8 @@ fun DayDetailScreen(
                     Button(
                         onClick = {
                             val trimmedNotes = notes.trim()
-                            val parsedTotal = totalText.trim().takeIf { it.isNotEmpty() }?.let {
-                                runCatching { BigDecimal(it) }.getOrNull()
-                            }
+                            val finalTotal =
+                                trimmedTotal.toBigDecimalOrNull()?.setScale(2, RoundingMode.HALF_UP)
 
                             when {
                                 trimmedNotes.isEmpty() -> {
@@ -265,12 +326,12 @@ fun DayDetailScreen(
                                     totalError = null
                                     customerError = null
                                 }
-                                parsedTotal == null || parsedTotal <= BigDecimal.ZERO -> {
+                                finalTotal == null || finalTotal <= BigDecimal.ZERO -> {
                                     notesError = null
                                     totalError = "Enter a valid total"
                                     customerError = null
                                 }
-                                (customerName.isBlank() xor customerPhone.isBlank()) -> {
+                                hasCustomerMismatch -> {
                                     notesError = null
                                     totalError = null
                                     customerError = "Enter both name and phone, or leave both blank"
@@ -278,7 +339,7 @@ fun DayDetailScreen(
                                 else -> {
                                     onSaveOrder(
                                         trimmedNotes,
-                                        parsedTotal,
+                                        finalTotal,
                                         customerName.trim(),
                                         customerPhone.trim(),
                                         editingOrderId
@@ -295,6 +356,8 @@ fun DayDetailScreen(
                                 }
                             }
                         }
+                        ,
+                        enabled = canSave
                     ) {
                         Text("Save")
                     }
