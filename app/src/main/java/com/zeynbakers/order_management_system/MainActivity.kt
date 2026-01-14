@@ -38,6 +38,7 @@ class MainActivity : ComponentActivity() {
 
                 val calendarDays by viewModel.calendarDays.collectAsState()
                 val monthTotal by viewModel.monthTotal.collectAsState()
+                val monthBadgeCount by viewModel.monthBadgeCount.collectAsState()
                 val ordersForDate by viewModel.ordersForDate.collectAsState()
                 val dayTotal by viewModel.dayTotal.collectAsState()
                 val orderCustomerNames by viewModel.orderCustomerNames.collectAsState()
@@ -49,10 +50,13 @@ class MainActivity : ComponentActivity() {
                 val customerBalance by customerViewModel.balance.collectAsState()
                 val customerOrders by customerViewModel.orders.collectAsState()
 
+                var selectedDate by remember { mutableStateOf<LocalDate?>(null) }
+
                 LaunchedEffect(Unit) {
                     val now = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault())
                     currentMonth = now.monthNumber
                     currentYear = now.year
+                    selectedDate = now.date
                 }
 
                 LaunchedEffect(currentMonth, currentYear) {
@@ -80,9 +84,24 @@ class MainActivity : ComponentActivity() {
                         CalendarScreen(
                             days = calendarDays,
                             monthLabel = monthLabel(currentYear, currentMonth),
+                            monthKey = (currentYear * 12) + currentMonth,
                             monthTotal = monthTotal,
-                            onSummary = { screen = Screen.Summary },
-                            onCustomers = { screen = Screen.CustomerList },
+                            monthBadgeCount = monthBadgeCount,
+                            selectedDate = selectedDate,
+                            onSelectDate = { selectedDate = it },
+                            onSaveOrder = { date, notes, total, name, phone ->
+                                viewModel.saveOrder(
+                                    date = date,
+                                    notes = notes,
+                                    totalAmount = total,
+                                    customerName = name,
+                                    customerPhone = phone,
+                                    existingOrderId = null
+                                )
+                            },
+                            searchCustomers = { query -> viewModel.searchCustomers(query) },
+                            onMenuClick = { screen = Screen.CustomerList },
+                            onSearchClick = { screen = Screen.Summary },
                             onPrevMonth = {
                                 val (y, m) = shiftMonth(currentYear, currentMonth, -1)
                                 currentYear = y
@@ -93,7 +112,7 @@ class MainActivity : ComponentActivity() {
                                 currentYear = y
                                 currentMonth = m
                             },
-                            onDateClick = { date ->
+                            onOpenDay = { date ->
                                 viewModel.loadOrdersForDate(date)
                                 screen = Screen.Day(date)
                             }
