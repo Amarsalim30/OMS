@@ -101,7 +101,7 @@ class MainActivity : ComponentActivity() {
                             },
                             searchCustomers = { query -> viewModel.searchCustomers(query) },
                             onMenuClick = { screen = Screen.CustomerList },
-                            onSearchClick = { screen = Screen.Summary },
+                            onSummaryClick = { screen = Screen.Summary },
                             onPrevMonth = {
                                 val (y, m) = shiftMonth(currentYear, currentMonth, -1)
                                 currentYear = y

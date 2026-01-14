@@ -1,8 +1,9 @@
 package com.zeynbakers.order_management_system.order.ui
 
 
-import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.*
@@ -20,9 +21,21 @@ fun OrderEditorSheet(
     onSave: (OrderEntity) -> Unit,
     onDismiss: () -> Unit
 ) {
-    ModalBottomSheet(onDismissRequest = onDismiss) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
-        Column(modifier = Modifier.padding(16.dp)) {
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState
+    ) {
+
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .fillMaxHeight(0.9f)
+                .imePadding()
+                .navigationBarsPadding()
+                .padding(16.dp)
+        ) {
 
             Text(
                 text = "Orders for $date",
@@ -31,8 +44,23 @@ fun OrderEditorSheet(
 
             Spacer(Modifier.height(8.dp))
 
-            orders.forEach { order ->
-                OrderCard(order, onSave)
+            if (orders.isEmpty()) {
+                Text(
+                    text = "No orders yet.",
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            } else {
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    contentPadding = PaddingValues(bottom = 12.dp)
+                ) {
+                    items(orders) { order ->
+                        OrderCard(order, onSave)
+                    }
+                }
             }
 
             HorizontalDivider()
@@ -41,6 +69,8 @@ fun OrderEditorSheet(
                 text = "New Order",
                 style = MaterialTheme.typography.titleMedium
             )
+
+            Spacer(Modifier.height(8.dp))
 
             OrderEditor(
                 order = OrderEntity(

@@ -8,6 +8,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
@@ -16,14 +17,20 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Search
@@ -40,6 +47,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
@@ -72,12 +80,12 @@ fun CalendarScreen(
     onSaveOrder: (LocalDate, String, java.math.BigDecimal, String, String) -> Unit,
     searchCustomers: suspend (String) -> List<CustomerEntity>,
     onMenuClick: () -> Unit,
-    onSearchClick: () -> Unit,
+    onSummaryClick: () -> Unit,
     onPrevMonth: () -> Unit,
     onNextMonth: () -> Unit
 ) {
     val dragAmount = remember { mutableStateOf(0f) }
-        val monthTitle = monthLabel.split(" ").firstOrNull()?.take(3)?.uppercase() ?: "MON"
+    val monthTitle = monthLabel
 
     var isQuickAddOpen by remember { mutableStateOf(false) }
     var notes by remember { mutableStateOf("") }
@@ -101,20 +109,20 @@ fun CalendarScreen(
     val activeDate = selectedDate
 
     Scaffold(
+        contentWindowInsets = WindowInsets.safeDrawing,
         topBar = {
             CalendarTopBar(
                 monthTitle = monthTitle,
                 badgeCount = monthBadgeCount,
                 onMenuClick = onMenuClick,
-                onSearchClick = onSearchClick
+                onSummaryClick = onSummaryClick
             )
         },
         bottomBar = {
             BottomQuickAddBar(
                 selectedDate = selectedDate,
-                onClick = { _ ->
-                    isQuickAddOpen = true
-                }
+                onClick = { _ -> isQuickAddOpen = true },
+                modifier = Modifier.navigationBarsPadding()
             )
         },
         floatingActionButton = {
@@ -178,12 +186,24 @@ fun CalendarScreen(
                     dragAmount = dragAmount
                 )
             }
-                    }
+        }
     }
 
     if (isQuickAddOpen && activeDate != null) {
-        ModalBottomSheet(onDismissRequest = { isQuickAddOpen = false }) {
-            Column(modifier = Modifier.padding(16.dp)) {
+        val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        ModalBottomSheet(
+            onDismissRequest = { isQuickAddOpen = false },
+            sheetState = sheetState
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .fillMaxHeight(0.9f)
+                    .imePadding()
+                    .navigationBarsPadding()
+                    .verticalScroll(rememberScrollState())
+                    .padding(16.dp)
+            ) {
                 Text(
                     text = "Add order on ${activeDate.dayOfMonth} ${activeDate.month.name.lowercase().replaceFirstChar { it.uppercase() }}",
                     style = MaterialTheme.typography.titleMedium
@@ -334,7 +354,7 @@ private fun CalendarTopBar(
     monthTitle: String,
     badgeCount: Int,
     onMenuClick: () -> Unit,
-    onSearchClick: () -> Unit
+    onSummaryClick: () -> Unit
 ) {
     CenterAlignedTopAppBar(
         title = {
@@ -345,13 +365,17 @@ private fun CalendarTopBar(
             )
         },
         navigationIcon = {
-            IconButton(onClick = onMenuClick) {
-                Icon(imageVector = Icons.Filled.Menu, contentDescription = "Menu")
+            TextButton(onClick = onMenuClick) {
+                Icon(imageVector = Icons.Filled.Menu, contentDescription = "Customers")
+                Spacer(Modifier.width(6.dp))
+                Text("Customers")
             }
         },
         actions = {
-            IconButton(onClick = onSearchClick) {
-                Icon(imageVector = Icons.Filled.Search, contentDescription = "Search")
+            TextButton(onClick = onSummaryClick) {
+                Icon(imageVector = Icons.Filled.Search, contentDescription = "Summary")
+                Spacer(Modifier.width(6.dp))
+                Text("Summary")
             }
             if (badgeCount > 0) {
                 Surface(
@@ -468,6 +492,7 @@ private fun WeekBandRow(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 private fun DayColumnCell(
     day: CalendarDayUi,
@@ -637,11 +662,15 @@ private fun OrderChip(label: String, state: PaymentState?, onClick: () -> Unit) 
 }
 
 @Composable
-private fun BottomQuickAddBar(selectedDate: LocalDate?, onClick: (LocalDate) -> Unit) {
+private fun BottomQuickAddBar(
+    selectedDate: LocalDate?,
+    onClick: (LocalDate) -> Unit,
+    modifier: Modifier = Modifier
+) {
     val dateLabel = selectedDate?.let { "${it.dayOfMonth} ${it.month.name.lowercase().replaceFirstChar { c -> c.uppercase() }}" }
         ?: "Select a day"
     Surface(
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .padding(16.dp)
             .clickable(enabled = selectedDate != null) {
