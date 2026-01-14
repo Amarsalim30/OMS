@@ -145,9 +145,14 @@ class OrderViewModel(private val database: AppDatabase) : ViewModel() {
             lastMonth = month
             lastYear = year
             val start = LocalDate(year, month, 1)
-            val end = start.plus(1, DateTimeUnit.MONTH)
+            val daysInMonth = Month(month).length(isLeapYear(year))
+            val endOfMonth = LocalDate(year, month, daysInMonth)
+            val leadingDays = start.dayOfWeek.ordinal
+            val trailingDays = 6 - endOfMonth.dayOfWeek.ordinal
+            val gridStart = start.plus(-leadingDays, DateTimeUnit.DAY)
+            val gridEndExclusive = endOfMonth.plus(trailingDays + 1, DateTimeUnit.DAY)
 
-            val orders = orderDao.getOrdersBetween(start.toString(), end.toString())
+            val orders = orderDao.getOrdersBetween(gridStart.toString(), gridEndExclusive.toString())
             val grouped = orders.groupBy { it.orderDate }
             val totals =
                 orders.groupBy { it.orderDate }
@@ -156,20 +161,20 @@ class OrderViewModel(private val database: AppDatabase) : ViewModel() {
                     }
 
             val today = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date
-            val daysInMonth = Month(month).length(isLeapYear(year))
             _calendarDays.value =
-                (1..daysInMonth).map { day ->
-                    val date = LocalDate(year, month, day)
+                (0 until (leadingDays + daysInMonth + trailingDays)).map { offset ->
+                    val date = gridStart.plus(offset, DateTimeUnit.DAY)
                     val dayOrders = grouped[date] ?: emptyList()
                     CalendarDayUi(
                         date = date,
                         orderCount = dayOrders.size,
                         totalAmount = totals[date] ?: BigDecimal.ZERO,
-                        isToday = date == today
+                        isToday = date == today,
+                        isInCurrentMonth = date.monthNumber == month
                     )
                 }
 
-            _monthTotal.value = orderDao.getTotalBetween(start.toString(), end.toString())
+            _monthTotal.value = orderDao.getTotalBetween(start.toString(), endOfMonth.plus(1, DateTimeUnit.DAY).toString())
         }
     }
 

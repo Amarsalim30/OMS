@@ -7,5 +7,6 @@ data class CalendarDayUi(
     val date: LocalDate,
     val orderCount: Int,
     val totalAmount: BigDecimal,
-    val isToday: Boolean
+    val isToday: Boolean,
+    val isInCurrentMonth: Boolean
 )

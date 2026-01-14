@@ -81,6 +81,8 @@ class MainActivity : ComponentActivity() {
                             days = calendarDays,
                             monthLabel = monthLabel(currentYear, currentMonth),
                             monthTotal = monthTotal,
+                            onSummary = { screen = Screen.Summary },
+                            onCustomers = { screen = Screen.CustomerList },
                             onPrevMonth = {
                                 val (y, m) = shiftMonth(currentYear, currentMonth, -1)
                                 currentYear = y
@@ -91,8 +93,6 @@ class MainActivity : ComponentActivity() {
                                 currentYear = y
                                 currentMonth = m
                             },
-                            onSummary = { screen = Screen.Summary },
-                            onCustomers = { screen = Screen.CustomerList },
                             onDateClick = { date ->
                                 viewModel.loadOrdersForDate(date)
                                 screen = Screen.Day(date)
