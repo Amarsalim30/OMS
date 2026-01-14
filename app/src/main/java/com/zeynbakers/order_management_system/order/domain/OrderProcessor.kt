@@ -2,9 +2,7 @@
 
 package com.zeynbakers.order_management_system.order.domain
 
-import com.zeynbakers.order_management_system.accounting.data.AccountEntryEntity
 import com.zeynbakers.order_management_system.accounting.data.AccountingDao
-import com.zeynbakers.order_management_system.accounting.data.EntryType
 import com.zeynbakers.order_management_system.order.data.OrderDao
 import com.zeynbakers.order_management_system.order.data.OrderStatus
 import kotlinx.datetime.TimeZone
@@ -23,15 +21,12 @@ class OrderProcessor(
 
         orderDao.markCompleted(orderId)
 
-        accountingDao.insertAccountEntry(
-            AccountEntryEntity(
-                orderId = orderId,
-                customerId = order.customerId,
-                amount = order.totalAmount,
-                type = EntryType.DEBIT,
-                date = order.orderDate.atStartOfDayIn(TimeZone.currentSystemDefault()).toEpochMilliseconds(),
-                description = "Order #$orderId"
-            )
+        accountingDao.upsertDebitForOrder(
+            orderId = orderId,
+            customerId = order.customerId,
+            amount = order.totalAmount,
+            date = order.orderDate.atStartOfDayIn(TimeZone.currentSystemDefault()).toEpochMilliseconds(),
+            description = "Charge: Order #$orderId"
         )
     }
 }

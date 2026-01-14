@@ -2,9 +2,7 @@ package com.zeynbakers.order_management_system.order.ui
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.zeynbakers.order_management_system.accounting.data.AccountEntryEntity
 import com.zeynbakers.order_management_system.accounting.data.AccountingDao
-import com.zeynbakers.order_management_system.accounting.data.EntryType
 import com.zeynbakers.order_management_system.core.db.AppDatabase
 import com.zeynbakers.order_management_system.customer.data.CustomerEntity
 import com.zeynbakers.order_management_system.order.data.OrderDao
@@ -114,18 +112,13 @@ class OrderViewModel(private val database: AppDatabase) : ViewModel() {
     }
 
     private suspend fun upsertAccountingEntry(order: OrderEntity) {
-        accountingDao.deleteDebitEntriesForOrder(order.id)
-        val incomeEntry =
-            AccountEntryEntity(
-                orderId = order.id,
-                type = EntryType.DEBIT,
-                amount = order.totalAmount,
-                date = order.orderDate.atStartOfDayIn(TimeZone.currentSystemDefault()).toEpochMilliseconds(),
-                customerId = order.customerId,
-                description = "Order #${order.id}"
-            )
-
-        accountingDao.insertAccountEntry(incomeEntry)
+        accountingDao.upsertDebitForOrder(
+            orderId = order.id,
+            customerId = order.customerId,
+            amount = order.totalAmount,
+            date = order.orderDate.atStartOfDayIn(TimeZone.currentSystemDefault()).toEpochMilliseconds(),
+            description = "Charge: Order #${order.id}"
+        )
     }
 
     fun loadOrdersForDate(date: LocalDate) {

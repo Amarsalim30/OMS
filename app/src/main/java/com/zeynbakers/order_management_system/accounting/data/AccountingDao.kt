@@ -23,6 +23,36 @@ interface AccountingDao {
     @Query("DELETE FROM account_entries WHERE orderId = :orderId AND type = 'DEBIT'")
     suspend fun deleteDebitEntriesForOrder(orderId: Long)
 
+    @Transaction
+    suspend fun upsertDebitForOrder(
+        orderId: Long,
+        customerId: Long?,
+        amount: BigDecimal,
+        date: Long,
+        description: String
+    ) {
+        deleteDebitEntriesForOrder(orderId)
+        insertAccountEntry(
+            AccountEntryEntity(
+                orderId = orderId,
+                customerId = customerId,
+                type = EntryType.DEBIT,
+                amount = amount,
+                date = date,
+                description = description
+            )
+        )
+    }
+
+    @Query(
+        """
+        SELECT IFNULL(SUM(CASE WHEN type = 'CREDIT' THEN amount ELSE 0 END), 0)
+        FROM account_entries
+        WHERE orderId = :orderId
+        """
+    )
+    suspend fun getPaidForOrder(orderId: Long): BigDecimal
+
     @Query("SELECT * FROM account_entries WHERE customerId = :customerId ORDER BY date DESC")
     suspend fun getLedgerForCustomer(customerId: Long): List<AccountEntryEntity>
 

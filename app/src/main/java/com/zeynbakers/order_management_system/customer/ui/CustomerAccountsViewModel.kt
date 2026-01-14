@@ -60,26 +60,86 @@ class CustomerAccountsViewModel(private val database: AppDatabase) : ViewModel()
         orderId: Long?
     ) {
         viewModelScope.launch {
-            val description = buildString {
-                append("Payment (")
-                append(method.name)
-                append(")")
-                if (note.isNotBlank()) {
-                    append(": ")
-                    append(note.trim())
-                }
+            recordPaymentInternal(customerId, amount, method, note, orderId)
+            loadCustomer(customerId)
+        }
+    }
+
+    internal suspend fun recordPaymentInternal(
+        customerId: Long,
+        amount: BigDecimal,
+        method: PaymentMethod,
+        note: String,
+        orderId: Long?
+    ) {
+        if (amount <= BigDecimal.ZERO) return
+
+        val baseDescription = buildString {
+            append("Payment (")
+            append(method.name)
+            append(")")
+            if (note.isNotBlank()) {
+                append(": ")
+                append(note.trim())
             }
+        }
+
+        if (orderId == null) {
             accountingDao.insertAccountEntry(
                 AccountEntryEntity(
-                    orderId = orderId,
+                    orderId = null,
                     customerId = customerId,
                     type = EntryType.CREDIT,
                     amount = amount,
                     date = Clock.System.now().toEpochMilliseconds(),
-                    description = description
+                    description = baseDescription
                 )
             )
-            loadCustomer(customerId)
+            return
+        }
+
+        val order = orderDao.getOrderById(orderId) ?: return
+        val paidSoFar = accountingDao.getPaidForOrder(orderId)
+        val remaining = order.totalAmount - paidSoFar
+
+        if (remaining <= BigDecimal.ZERO) {
+            accountingDao.insertAccountEntry(
+                AccountEntryEntity(
+                    orderId = null,
+                    customerId = customerId,
+                    type = EntryType.CREDIT,
+                    amount = amount,
+                    date = Clock.System.now().toEpochMilliseconds(),
+                    description = "Extra payment for Order #$orderId"
+                )
+            )
+            return
+        }
+
+        val appliedToOrder = if (amount > remaining) remaining else amount
+        accountingDao.insertAccountEntry(
+            AccountEntryEntity(
+                orderId = orderId,
+                customerId = customerId,
+                type = EntryType.CREDIT,
+                amount = appliedToOrder,
+                date = Clock.System.now().toEpochMilliseconds(),
+                description = baseDescription
+            )
+        )
+
+        val excess = amount - appliedToOrder
+        if (excess > BigDecimal.ZERO) {
+            accountingDao.insertAccountEntry(
+                AccountEntryEntity(
+                    orderId = null,
+                    customerId = customerId,
+                    type = EntryType.CREDIT,
+                    amount = excess,
+                    date = Clock.System.now().toEpochMilliseconds(),
+                    description = "Extra payment for Order #$orderId"
+                )
+            )
         }
     }
 }
