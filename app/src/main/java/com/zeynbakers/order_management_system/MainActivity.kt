@@ -113,6 +113,10 @@ class MainActivity : ComponentActivity() {
                 val customerOrders by customerViewModel.orders.collectAsState()
 
                 var selectedDate by remember { mutableStateOf<LocalDate?>(null) }
+                var summaryDate by remember { mutableStateOf<LocalDate?>(null) }
+                val today = remember {
+                    Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date
+                }
 
                 LaunchedEffect(Unit) {
                     val now = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault())
@@ -201,7 +205,11 @@ class MainActivity : ComponentActivity() {
                                     },
                                     searchCustomers = { query -> viewModel.searchCustomers(query) },
                                     onCustomersClick = { screen = Screen.CustomerList },
-                                    onSummaryClick = { screen = Screen.Summary },
+                                    onSummaryClick = {
+                                        val date = selectedDate ?: today
+                                        summaryDate = date
+                                        screen = Screen.Summary
+                                    },
                                     onMonthSettled = { year, month ->
                                         currentYear = year
                                         currentMonth = month
@@ -250,6 +258,14 @@ class MainActivity : ComponentActivity() {
                                 SummaryScreen(
                                     monthLabel = monthLabel(currentYear, currentMonth),
                                     monthTotal = monthTotal,
+                                    date = summaryDate ?: selectedDate ?: today,
+                                    orders = ordersForDate,
+                                    dayTotal = dayTotal,
+                                    customerNames = orderCustomerNames,
+                                    onLoadDate = { viewModel.loadOrdersForDate(it) },
+                                    onDateChange = { newDate ->
+                                        summaryDate = newDate
+                                    },
                                     onBack = { screen = Screen.Calendar }
                                 )
                             }

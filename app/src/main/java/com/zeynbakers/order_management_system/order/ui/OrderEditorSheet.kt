@@ -35,25 +35,36 @@ fun OrderEditorSheet(
     val keyboardController = LocalSoftwareKeyboardController.current
     val imeVisible = WindowInsets.ime.getBottom(density) > 0
 
-    val handleSheetDismiss: () -> Unit = {
+    val dismissSheet = {
+        keyboardController?.hide()
+        focusManager.clearFocus(force = true)
+        onDismiss()
+    }
+    val handleBackPress: () -> Unit = {
         val sheetOpen = true
         if (BuildConfig.DEBUG) {
             Log.d("SheetBack", "back pressed imeVisible=$imeVisible sheetOpen=$sheetOpen")
         }
         if (imeVisible) {
             keyboardController?.hide()
-            focusManager.clearFocus()
+            focusManager.clearFocus(force = true)
         } else {
             onDismiss()
         }
     }
+    val handleDismissRequest: () -> Unit = {
+        if (BuildConfig.DEBUG) {
+            Log.d("SheetBack", "dismiss request imeVisible=$imeVisible sheetOpen=true")
+        }
+        dismissSheet()
+    }
     ModalBottomSheet(
-        onDismissRequest = handleSheetDismiss,
+        onDismissRequest = handleDismissRequest,
         sheetState = sheetState,
         properties = ModalBottomSheetProperties(shouldDismissOnBackPress = false)
     ) {
         BackHandler {
-            handleSheetDismiss()
+            handleBackPress()
         }
 
         Column(
