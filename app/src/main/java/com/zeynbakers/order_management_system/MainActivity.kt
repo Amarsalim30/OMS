@@ -1,16 +1,27 @@
 package com.zeynbakers.order_management_system
 
+import android.Manifest
+import android.content.Context
+import android.content.pm.PackageManager
 import android.os.Bundle
+import android.provider.ContactsContract
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.*
+import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.ContextCompat
 import com.zeynbakers.order_management_system.core.db.DatabaseProvider
 import com.zeynbakers.order_management_system.core.ui.theme.Order_management_systemTheme
 import com.zeynbakers.order_management_system.customer.ui.CustomerAccountsViewModel
 import com.zeynbakers.order_management_system.customer.ui.CustomerDetailScreen
 import com.zeynbakers.order_management_system.customer.ui.CustomerListScreen
+import com.zeynbakers.order_management_system.customer.ui.ImportContact
+import com.zeynbakers.order_management_system.customer.ui.ImportContactsScreen
 import com.zeynbakers.order_management_system.order.ui.CalendarScreen
 import com.zeynbakers.order_management_system.order.ui.DayDetailScreen
 import com.zeynbakers.order_management_system.order.ui.OrderDraft
@@ -20,6 +31,8 @@ import kotlinx.datetime.Clock
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -31,13 +44,30 @@ class MainActivity : ComponentActivity() {
                 val database = remember { DatabaseProvider.getDatabase(applicationContext) }
                 val viewModel = remember { OrderViewModel(database = database) }
                 val customerViewModel = remember { CustomerAccountsViewModel(database = database) }
-
                 var currentMonth by remember { mutableStateOf(0) }
                 var currentYear by remember { mutableStateOf(0) }
                 var baseMonth by remember { mutableStateOf(0) }
                 var baseYear by remember { mutableStateOf(0) }
                 var screen by remember { mutableStateOf<Screen>(Screen.Calendar) }
                 var customerQuery by remember { mutableStateOf("") }
+                val context = LocalContext.current
+                var importContacts by remember { mutableStateOf<List<ImportContact>>(emptyList()) }
+                var selectedContactPhones by remember { mutableStateOf<Set<String>>(emptySet()) }
+                var isContactsLoading by remember { mutableStateOf(false) }
+
+                val contactsPermissionLauncher = rememberLauncherForActivityResult(
+                    ActivityResultContracts.RequestPermission()
+                ) { granted: Boolean ->
+                    if (granted) {
+                        screen = Screen.ImportContacts
+                    } else {
+                        Toast.makeText(
+                            context,
+                            "Contacts permission is required to import customers",
+                            Toast.LENGTH_SHORT
+                        ).show()
+                    }
+                }
                 val dayDrafts = remember { mutableStateMapOf<LocalDate, OrderDraft>() }
 
                 val calendarDays by viewModel.calendarDays.collectAsState()
@@ -86,6 +116,19 @@ class MainActivity : ComponentActivity() {
                     val currentScreen = screen
                     if (currentScreen is Screen.CustomerDetail) {
                         customerViewModel.loadCustomer(currentScreen.customerId)
+                    }
+                }
+
+                LaunchedEffect(screen) {
+                    val currentScreen = screen
+                    if (currentScreen is Screen.ImportContacts) {
+                        isContactsLoading = true
+                        importContacts =
+                            withContext(Dispatchers.IO) {
+                                loadAllContacts(context)
+                            }
+                        selectedContactPhones = emptySet()
+                        isContactsLoading = false
                     }
                 }
 
@@ -175,7 +218,62 @@ class MainActivity : ComponentActivity() {
                             onCustomerClick = { id ->
                                 screen = Screen.CustomerDetail(id)
                             },
+                            onAddCustomer = {
+                                val hasPermission =
+                                    ContextCompat.checkSelfPermission(
+                                        context,
+                                        Manifest.permission.READ_CONTACTS
+                                    ) == PackageManager.PERMISSION_GRANTED
+                                if (hasPermission) {
+                                    screen = Screen.ImportContacts
+                                } else {
+                                    contactsPermissionLauncher.launch(Manifest.permission.READ_CONTACTS)
+                                }
+                            },
                             onBack = { screen = Screen.Calendar }
+                        )
+                    }
+                    Screen.ImportContacts -> {
+                        BackHandler { screen = Screen.CustomerList }
+                        ImportContactsScreen(
+                            contacts = importContacts,
+                            selectedPhones = selectedContactPhones,
+                            isLoading = isContactsLoading,
+                            onBack = { screen = Screen.CustomerList },
+                            onToggleSelect = { phone ->
+                                selectedContactPhones =
+                                    if (selectedContactPhones.contains(phone)) {
+                                        selectedContactPhones - phone
+                                    } else {
+                                        selectedContactPhones + phone
+                                    }
+                            },
+                            onToggleSelectAll = {
+                                val allPhones = importContacts.map { it.phone }.toSet()
+                                selectedContactPhones =
+                                    if (selectedContactPhones.size == allPhones.size) {
+                                        emptySet()
+                                    } else {
+                                        allPhones
+                                    }
+                            },
+                            onImport = {
+                                if (selectedContactPhones.isEmpty()) {
+                                    Toast.makeText(
+                                        context,
+                                        "Select at least one contact to import",
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                } else {
+                                    val contactsByPhone =
+                                        importContacts.associateBy { it.phone }
+                                    selectedContactPhones.forEach { phone ->
+                                        val contact = contactsByPhone[phone] ?: return@forEach
+                                        customerViewModel.importCustomer(contact.name, contact.phone)
+                                    }
+                                    screen = Screen.CustomerList
+                                }
+                            }
                         )
                     }
                     is Screen.CustomerDetail -> {
@@ -208,6 +306,7 @@ private sealed class Screen {
     data class Day(val date: LocalDate) : Screen()
     data object Summary : Screen()
     data object CustomerList : Screen()
+    data object ImportContacts : Screen()
     data class CustomerDetail(val customerId: Long) : Screen()
 }
 
@@ -229,4 +328,43 @@ private fun monthLabel(year: Int, month: Int): String {
         else -> "Month"
     }
     return "$monthName $year"
+}
+
+private fun normalizePhoneNumber(raw: String): String {
+    return raw.filter { it.isDigit() || it == '+' }
+}
+
+private fun loadAllContacts(context: Context): List<ImportContact> {
+    val resolver = context.contentResolver
+    val projection = arrayOf(
+        ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME,
+        ContactsContract.CommonDataKinds.Phone.NUMBER
+    )
+    val cursor =
+        resolver.query(
+            ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
+            projection,
+            null,
+            null,
+            ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME + " ASC"
+        ) ?: return emptyList()
+
+    val results = mutableListOf<ImportContact>()
+    val seen = mutableSetOf<String>()
+    cursor.use { phones ->
+        val nameIndex = phones.getColumnIndex(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME)
+        val numberIndex = phones.getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER)
+        if (nameIndex == -1 || numberIndex == -1) return emptyList()
+
+        while (phones.moveToNext()) {
+            val rawName = phones.getString(nameIndex) ?: ""
+            val rawNumber = phones.getString(numberIndex) ?: ""
+            val cleanNumber = normalizePhoneNumber(rawNumber)
+            if (cleanNumber.isBlank() || !seen.add(cleanNumber)) continue
+            val displayName = rawName.trim().ifBlank { cleanNumber }
+            results.add(ImportContact(name = displayName, phone = cleanNumber))
+        }
+    }
+
+    return results
 }

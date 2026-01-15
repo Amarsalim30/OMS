@@ -36,10 +36,32 @@ class CustomerAccountsViewModel(private val database: AppDatabase) : ViewModel()
 
     private val _orders = MutableStateFlow<List<OrderEntity>>(emptyList())
     val orders = _orders.asStateFlow()
+    private var lastQuery: String = ""
 
     fun searchCustomers(query: String) {
         viewModelScope.launch {
+            lastQuery = query
             val pattern = "%${query.trim()}%"
+            _summaries.value = accountingDao.getCustomerAccountSummaries(pattern)
+        }
+    }
+
+    fun importCustomer(name: String, phone: String) {
+        viewModelScope.launch {
+            val cleanPhone = phone.trim()
+            if (cleanPhone.isBlank()) return@launch
+            val cleanName = name.trim().ifBlank { cleanPhone }
+
+            val existing = customerDao.getByPhone(cleanPhone)
+            if (existing != null) {
+                if (existing.name != cleanName) {
+                    customerDao.update(existing.copy(name = cleanName))
+                }
+            } else {
+                customerDao.insert(CustomerEntity(name = cleanName, phone = cleanPhone))
+            }
+
+            val pattern = "%${lastQuery.trim()}%"
             _summaries.value = accountingDao.getCustomerAccountSummaries(pattern)
         }
     }

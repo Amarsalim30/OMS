@@ -137,16 +137,29 @@ fun CalendarScreen(
                 }
             }
     }
-    val titleMonth = remember(pagerState.settledPage, anchorYear, anchorMonth) {
-        shiftMonth(anchorYear, anchorMonth, pagerState.settledPage - baseIndex)
+    val visibleMonth = remember(pagerState.currentPage, anchorYear, anchorMonth) {
+        shiftMonth(anchorYear, anchorMonth, pagerState.currentPage - baseIndex)
     }
-    val monthTitle = formatMonthTitle(titleMonth.first, titleMonth.second)
+    val monthTitle = formatMonthTitle(visibleMonth.first, visibleMonth.second)
+    val visibleSnapshot = monthSnapshots[MonthKey(visibleMonth.first, visibleMonth.second)]
+    val displayedMonthTotal =
+        when {
+            visibleSnapshot != null -> visibleSnapshot.total
+            visibleMonth.first == currentYear && visibleMonth.second == currentMonth -> monthTotal
+            else -> null
+        }
+    val displayedBadgeCount =
+        when {
+            visibleSnapshot != null -> visibleSnapshot.badgeCount
+            visibleMonth.first == currentYear && visibleMonth.second == currentMonth -> monthBadgeCount
+            else -> 0
+        }
 
     Scaffold(
         topBar = {
             CalendarTopBar(
                 monthTitle = monthTitle,
-                badgeCount = monthBadgeCount,
+                badgeCount = displayedBadgeCount,
                 onCustomersClick = onCustomersClick,
                 onSummaryClick = onSummaryClick
             )
@@ -178,10 +191,9 @@ fun CalendarScreen(
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    Text(
-                        text = formatKes(monthTotal),
-                        style = MaterialTheme.typography.titleLarge
-                    )
+                    val totalLabel =
+                        displayedMonthTotal?.let { formatKes(it) } ?: "Loading..."
+                    Text(text = totalLabel, style = MaterialTheme.typography.titleLarge)
                 }
             }
 

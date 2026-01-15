@@ -279,7 +279,7 @@ private fun CustomersTopBar(
         },
         actions = {
             IconButton(onClick = onAddCustomer) {
-                Icon(imageVector = Icons.Filled.Add, contentDescription = "Add customer")
+                Icon(imageVector = Icons.Filled.Add, contentDescription = "Import contacts")
             }
             IconButton(onClick = onMore) {
                 Icon(imageVector = Icons.Filled.MoreVert, contentDescription = "More")
