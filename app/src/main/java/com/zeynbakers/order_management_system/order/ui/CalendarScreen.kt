@@ -730,7 +730,7 @@ private fun buildMonthGrid(
     orderData: Map<LocalDate, CalendarDayUi>
 ): List<CalendarDayUi> {
     val start = LocalDate(year, month, 1)
-    val daysInMonth = Month(month).length(isLeapYear(year))
+    val daysInMonth = daysInMonth(year, month)
     val endOfMonth = LocalDate(year, month, daysInMonth)
     val leadingDays = start.dayOfWeek.ordinal
     val trailingDays = 6 - endOfMonth.dayOfWeek.ordinal
@@ -765,6 +765,15 @@ private fun shiftMonth(year: Int, month: Int, delta: Int): Pair<Int, Int> {
 
 private fun isLeapYear(year: Int): Boolean {
     return (year % 4 == 0 && year % 100 != 0) || (year % 400 == 0)
+}
+
+private fun daysInMonth(year: Int, month: Int): Int {
+    return when (month) {
+        1, 3, 5, 7, 8, 10, 12 -> 31
+        4, 6, 9, 11 -> 30
+        2 -> if (isLeapYear(year)) 29 else 28
+        else -> 30
+    }
 }
 
 private fun formatMonthTitle(year: Int, month: Int): String {

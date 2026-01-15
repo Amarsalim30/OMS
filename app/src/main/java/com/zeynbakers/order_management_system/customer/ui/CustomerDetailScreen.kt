@@ -12,10 +12,10 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Payments
 import androidx.compose.material.icons.filled.Phone
-import androidx.compose.material.icons.filled.ReceiptLong
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ReceiptLong
 import androidx.compose.material.icons.outlined.AccountBalanceWallet
 import androidx.compose.material3.Button
 import androidx.compose.material3.CenterAlignedTopAppBar
@@ -74,7 +74,7 @@ fun CustomerDetailScreen(
                 },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(imageVector = Icons.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
                 }
             )
@@ -236,7 +236,7 @@ fun CustomerDetailScreen(
                 Column(modifier = Modifier.padding(12.dp)) {
                     Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
                         Icon(
-                            imageVector = Icons.Filled.ReceiptLong,
+                            imageVector = Icons.AutoMirrored.Filled.ReceiptLong,
                             contentDescription = "Ledger",
                             tint = MaterialTheme.colorScheme.primary
                         )

@@ -1,5 +1,6 @@
 package com.zeynbakers.order_management_system.order.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -19,6 +20,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.MaterialTheme
@@ -27,6 +29,8 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -36,9 +40,15 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Delete
 import com.zeynbakers.order_management_system.core.util.formatKes
 import com.zeynbakers.order_management_system.customer.data.CustomerEntity
 import com.zeynbakers.order_management_system.order.data.OrderEntity
@@ -58,23 +68,54 @@ fun DayDetailScreen(
     orderPaidAmounts: Map<Long, BigDecimal>,
     onBack: () -> Unit,
     onSaveOrder: (String, BigDecimal, String, String, Long?) -> Unit,
+    onDeleteOrder: (Long) -> Unit,
     loadCustomerById: suspend (Long) -> CustomerEntity?,
-    searchCustomers: suspend (String) -> List<CustomerEntity>
+    searchCustomers: suspend (String) -> List<CustomerEntity>,
+    draft: OrderDraft?,
+    onDraftChange: (OrderDraft?) -> Unit
 ) {
-    var notes by rememberSaveable { mutableStateOf("") }
-    var totalText by rememberSaveable { mutableStateOf("") }
-    var customerName by rememberSaveable { mutableStateOf("") }
-    var customerPhone by rememberSaveable { mutableStateOf("") }
-    var editingOrderId by remember { mutableStateOf<Long?>(null) }
-    var isEditorOpen by remember { mutableStateOf(false) }
+    var notes by rememberSaveable(date) { mutableStateOf(draft?.notes ?: "") }
+    var totalText by rememberSaveable(date) { mutableStateOf(draft?.totalText ?: "") }
+    var customerName by rememberSaveable(date) { mutableStateOf(draft?.customerName ?: "") }
+    var customerPhone by rememberSaveable(date) { mutableStateOf(draft?.customerPhone ?: "") }
+    var editingOrderId by rememberSaveable(date) { mutableStateOf<Long?>(draft?.editingOrderId) }
+    var isEditorOpen by rememberSaveable(date) { mutableStateOf(false) }
     var notesError by remember { mutableStateOf<String?>(null) }
     var totalError by remember { mutableStateOf<String?>(null) }
     var customerError by remember { mutableStateOf<String?>(null) }
     var suggestions by remember { mutableStateOf<List<CustomerEntity>>(emptyList()) }
+    var pendingDeleteOrder by remember { mutableStateOf<OrderEntity?>(null) }
+    val focusManager = LocalFocusManager.current
+    val notesRequester = remember { FocusRequester() }
+    val totalRequester = remember { FocusRequester() }
+    val nameRequester = remember { FocusRequester() }
+    val phoneRequester = remember { FocusRequester() }
     val formatter = remember {
         NumberFormat.getNumberInstance(Locale.forLanguageTag("en-KE")).apply {
             minimumFractionDigits = 2
             maximumFractionDigits = 2
+        }
+    }
+
+    LaunchedEffect(notes, totalText, customerName, customerPhone, editingOrderId) {
+        val hasDraftContent =
+            notes.isNotBlank() ||
+                totalText.isNotBlank() ||
+                customerName.isNotBlank() ||
+                customerPhone.isNotBlank() ||
+                editingOrderId != null
+        if (hasDraftContent) {
+            onDraftChange(
+                OrderDraft(
+                    notes = notes,
+                    totalText = totalText,
+                    customerName = customerName,
+                    customerPhone = customerPhone,
+                    editingOrderId = editingOrderId
+                )
+            )
+        } else {
+            onDraftChange(null)
         }
     }
 
@@ -84,11 +125,27 @@ fun DayDetailScreen(
             customerPhone = ""
             return@LaunchedEffect
         }
-        val order = orders.firstOrNull { it.id == editingOrderId } ?: return@LaunchedEffect
-        val customerId = order.customerId ?: return@LaunchedEffect
+        val order = orders.firstOrNull { it.id == editingOrderId }
+        if (order == null) {
+            customerName = ""
+            customerPhone = ""
+            return@LaunchedEffect
+        }
+        val customerId = order.customerId
+        if (customerId == null) {
+            customerName = ""
+            customerPhone = ""
+            return@LaunchedEffect
+        }
         val customer = loadCustomerById(customerId) ?: return@LaunchedEffect
         customerName = customer.name
         customerPhone = customer.phone
+    }
+
+    LaunchedEffect(isEditorOpen, editingOrderId) {
+        if (isEditorOpen) {
+            notesRequester.requestFocus()
+        }
     }
 
     LaunchedEffect(customerName, customerPhone) {
@@ -100,14 +157,32 @@ fun DayDetailScreen(
         suggestions = if (query.isBlank()) emptyList() else searchCustomers(query)
     }
 
+    BackHandler {
+        if (isEditorOpen) {
+            isEditorOpen = false
+        } else {
+            onBack()
+        }
+    }
+
     Scaffold(
         floatingActionButton = {
+            val existingDraft = draft
+            val canRestoreDraft = existingDraft?.let { draftValue ->
+                draftValue.editingOrderId == null &&
+                    (draftValue.notes.isNotBlank() ||
+                        draftValue.totalText.isNotBlank() ||
+                        draftValue.customerName.isNotBlank() ||
+                        draftValue.customerPhone.isNotBlank())
+            } ?: false
             FloatingActionButton(onClick = {
                 editingOrderId = null
-                notes = ""
-                totalText = ""
-                customerName = ""
-                customerPhone = ""
+                if (!canRestoreDraft) {
+                    notes = ""
+                    totalText = ""
+                    customerName = ""
+                    customerPhone = ""
+                }
                 notesError = null
                 totalError = null
                 customerError = null
@@ -118,7 +193,17 @@ fun DayDetailScreen(
         }
     ) { padding ->
         Box(modifier = Modifier.padding(padding)) {
-            DaySummaryHeader(date = date, dayTotal = dayTotal, onBack = onBack)
+            DaySummaryHeader(
+                date = date,
+                dayTotal = dayTotal,
+                onBack = {
+                    if (isEditorOpen) {
+                        isEditorOpen = false
+                    } else {
+                        onBack()
+                    }
+                }
+            )
             LazyColumn(modifier = Modifier.padding(top = 88.dp)) {
                 item {
                     Spacer(Modifier.height(8.dp))
@@ -150,6 +235,9 @@ fun DayDetailScreen(
                                 totalError = null
                                 customerError = null
                                 isEditorOpen = true
+                            },
+                            onDelete = {
+                                pendingDeleteOrder = order
                             }
                         )
                     }
@@ -204,7 +292,11 @@ fun DayDetailScreen(
                     placeholder = { Text("Customer details, delivery time, etc.") },
                     minLines = 2,
                     maxLines = 3,
-                    modifier = Modifier.fillMaxWidth()
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                    keyboardActions = KeyboardActions(onNext = { totalRequester.requestFocus() }),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .focusRequester(notesRequester)
                 )
 
                 notesError?.let {
@@ -226,17 +318,21 @@ fun DayDetailScreen(
                     placeholder = { Text("KSh 0.00") },
                     leadingIcon = { Text("KSh") },
                     isError = isTotalInvalid,
+                    singleLine = true,
                     keyboardOptions = KeyboardOptions(
                         keyboardType = KeyboardType.Decimal,
                         imeAction = ImeAction.Next
                     ),
+                    keyboardActions = KeyboardActions(onNext = { nameRequester.requestFocus() }),
                     supportingText = {
                         when {
                             isTotalInvalid -> Text("Enter a valid amount.")
                             formattedTotal != null -> Text("Total: KSh $formattedTotal")
                         }
                     },
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .focusRequester(totalRequester)
                 )
 
                 totalError?.let {
@@ -256,8 +352,12 @@ fun DayDetailScreen(
                         customerError = null
                     },
                     label = { Text("Customer name") },
+                    singleLine = true,
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
-                    modifier = Modifier.fillMaxWidth()
+                    keyboardActions = KeyboardActions(onNext = { phoneRequester.requestFocus() }),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .focusRequester(nameRequester)
                 )
 
                 Spacer(Modifier.height(8.dp))
@@ -269,11 +369,15 @@ fun DayDetailScreen(
                         customerError = null
                     },
                     label = { Text("Customer phone") },
+                    singleLine = true,
                     keyboardOptions = KeyboardOptions(
                         keyboardType = KeyboardType.Phone,
                         imeAction = ImeAction.Done
                     ),
-                    modifier = Modifier.fillMaxWidth()
+                    keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .focusRequester(phoneRequester)
                 )
 
                 if (suggestions.isNotEmpty()) {
@@ -309,6 +413,7 @@ fun DayDetailScreen(
                             notesError = null
                             totalError = null
                             customerError = null
+                            onDraftChange(null)
                         }
                     ) {
                         Text("Clear")
@@ -352,6 +457,7 @@ fun DayDetailScreen(
                                     notesError = null
                                     totalError = null
                                     customerError = null
+                                    onDraftChange(null)
                                     isEditorOpen = false
                                 }
                             }
@@ -367,6 +473,30 @@ fun DayDetailScreen(
             }
         }
     }
+
+    if (pendingDeleteOrder != null) {
+        val order = pendingDeleteOrder!!
+        AlertDialog(
+            onDismissRequest = { pendingDeleteOrder = null },
+            title = { Text("Delete order?") },
+            text = { Text("This will remove the order from the calendar and totals.") },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        onDeleteOrder(order.id)
+                        pendingDeleteOrder = null
+                    }
+                ) {
+                    Text("Delete")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingDeleteOrder = null }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
 }
 
 @Composable
@@ -374,7 +504,8 @@ private fun OrderListItem(
     order: OrderEntity,
     customerLabel: String,
     isPaid: Boolean,
-    onEdit: () -> Unit
+    onEdit: () -> Unit,
+    onDelete: () -> Unit
 ) {
     Card(
         modifier = Modifier
@@ -382,16 +513,26 @@ private fun OrderListItem(
             .padding(horizontal = 16.dp, vertical = 6.dp)
             .clickable { onEdit() }
     ) {
-        Column(modifier = Modifier.padding(12.dp)) {
-            Text(text = order.notes, style = MaterialTheme.typography.bodyLarge)
-            Spacer(Modifier.height(4.dp))
-            Text(text = customerLabel, style = MaterialTheme.typography.bodyMedium)
-            Text(text = formatKes(order.totalAmount), style = MaterialTheme.typography.bodyMedium)
-            Text(
-                text = if (isPaid) "Paid" else "Unpaid",
-                style = MaterialTheme.typography.labelMedium,
-                color = if (isPaid) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
-            )
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(12.dp),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(text = order.notes, style = MaterialTheme.typography.bodyLarge)
+                Spacer(Modifier.height(4.dp))
+                Text(text = customerLabel, style = MaterialTheme.typography.bodyMedium)
+                Text(text = formatKes(order.totalAmount), style = MaterialTheme.typography.bodyMedium)
+                Text(
+                    text = if (isPaid) "Paid" else "Unpaid",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = if (isPaid) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
+                )
+            }
+            IconButton(
+                onClick = onDelete
+            ) {
+                Icon(imageVector = Icons.Filled.Delete, contentDescription = "Delete order")
+            }
         }
     }
 }
@@ -415,3 +556,11 @@ private fun DaySummaryHeader(
         }
     }
 }
+
+data class OrderDraft(
+    val notes: String,
+    val totalText: String,
+    val customerName: String,
+    val customerPhone: String,
+    val editingOrderId: Long?
+)

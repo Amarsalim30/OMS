@@ -13,6 +13,7 @@ import com.zeynbakers.order_management_system.customer.ui.CustomerDetailScreen
 import com.zeynbakers.order_management_system.customer.ui.CustomerListScreen
 import com.zeynbakers.order_management_system.order.ui.CalendarScreen
 import com.zeynbakers.order_management_system.order.ui.DayDetailScreen
+import com.zeynbakers.order_management_system.order.ui.OrderDraft
 import com.zeynbakers.order_management_system.order.ui.OrderViewModel
 import com.zeynbakers.order_management_system.order.ui.SummaryScreen
 import kotlinx.datetime.Clock
@@ -37,6 +38,7 @@ class MainActivity : ComponentActivity() {
                 var baseYear by remember { mutableStateOf(0) }
                 var screen by remember { mutableStateOf<Screen>(Screen.Calendar) }
                 var customerQuery by remember { mutableStateOf("") }
+                val dayDrafts = remember { mutableStateMapOf<LocalDate, OrderDraft>() }
 
                 val calendarDays by viewModel.calendarDays.collectAsState()
                 val monthTotal by viewModel.monthTotal.collectAsState()
@@ -124,7 +126,6 @@ class MainActivity : ComponentActivity() {
                         )
                     }
                     is Screen.Day -> {
-                        BackHandler { screen = Screen.Calendar }
                         DayDetailScreen(
                             date = active.date,
                             orders = ordersForDate,
@@ -142,8 +143,19 @@ class MainActivity : ComponentActivity() {
                                     existingOrderId = orderId
                                 )
                             },
+                            onDeleteOrder = { orderId ->
+                                viewModel.cancelOrder(orderId, active.date)
+                            },
                             loadCustomerById = { id -> viewModel.getCustomerById(id) },
-                            searchCustomers = { query -> viewModel.searchCustomers(query) }
+                            searchCustomers = { query -> viewModel.searchCustomers(query) },
+                            draft = dayDrafts[active.date],
+                            onDraftChange = { updated ->
+                                if (updated == null) {
+                                    dayDrafts.remove(active.date)
+                                } else {
+                                    dayDrafts[active.date] = updated
+                                }
+                            }
                         )
                     }
                     Screen.Summary -> {

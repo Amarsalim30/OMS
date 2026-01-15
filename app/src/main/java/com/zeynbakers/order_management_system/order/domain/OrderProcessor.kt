@@ -5,8 +5,6 @@ package com.zeynbakers.order_management_system.order.domain
 import com.zeynbakers.order_management_system.accounting.data.AccountingDao
 import com.zeynbakers.order_management_system.order.data.OrderDao
 import com.zeynbakers.order_management_system.order.data.OrderStatus
-import kotlinx.datetime.TimeZone
-import kotlinx.datetime.atStartOfDayIn
 
 class OrderProcessor(
     private val orderDao: OrderDao,
@@ -20,14 +18,16 @@ class OrderProcessor(
         if (order.status == OrderStatus.COMPLETED) return
 
         orderDao.markCompleted(orderId)
+    }
 
-        accountingDao.upsertDebitForOrder(
-            orderId = orderId,
-            customerId = order.customerId,
-            amount = order.totalAmount,
-            date = order.orderDate.atStartOfDayIn(TimeZone.currentSystemDefault()).toEpochMilliseconds(),
-            description = "Charge: Order #$orderId"
-        )
+    suspend fun cancelOrder(orderId: Long) {
+        val order = orderDao.getOrderById(orderId)
+            ?: throw IllegalStateException("Order not found")
+
+        if (order.status == OrderStatus.CANCELLED) return
+
+        orderDao.markCancelled(orderId)
+        accountingDao.deleteDebitEntriesForOrder(orderId)
     }
 }
     

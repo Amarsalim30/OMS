@@ -10,6 +10,7 @@ import com.zeynbakers.order_management_system.accounting.data.PaymentMethod
 import com.zeynbakers.order_management_system.core.db.AppDatabase
 import com.zeynbakers.order_management_system.customer.data.CustomerEntity
 import com.zeynbakers.order_management_system.order.data.OrderEntity
+import com.zeynbakers.order_management_system.order.data.OrderStatus
 import java.math.BigDecimal
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -85,16 +86,7 @@ class CustomerAccountsViewModel(private val database: AppDatabase) : ViewModel()
         }
 
         if (orderId == null) {
-            accountingDao.insertAccountEntry(
-                AccountEntryEntity(
-                    orderId = null,
-                    customerId = customerId,
-                    type = EntryType.CREDIT,
-                    amount = amount,
-                    date = Clock.System.now().toEpochMilliseconds(),
-                    description = baseDescription
-                )
-            )
+            allocatePaymentToOldestOrders(customerId, amount, baseDescription)
             return
         }
 
@@ -138,6 +130,52 @@ class CustomerAccountsViewModel(private val database: AppDatabase) : ViewModel()
                     amount = excess,
                     date = Clock.System.now().toEpochMilliseconds(),
                     description = "Extra payment for Order #$orderId"
+                )
+            )
+        }
+    }
+
+    private suspend fun allocatePaymentToOldestOrders(
+        customerId: Long,
+        amount: BigDecimal,
+        description: String
+    ) {
+        var remainingPayment = amount
+        val now = Clock.System.now().toEpochMilliseconds()
+        val orders =
+            orderDao.getOrdersByCustomer(customerId)
+                .filter { it.status != OrderStatus.CANCELLED }
+                .sortedBy { it.orderDate }
+
+        for (order in orders) {
+            if (remainingPayment <= BigDecimal.ZERO) break
+            val paidSoFar = accountingDao.getPaidForOrder(order.id)
+            val remaining = order.totalAmount - paidSoFar
+            if (remaining <= BigDecimal.ZERO) continue
+
+            val applied = if (remainingPayment > remaining) remaining else remainingPayment
+            accountingDao.insertAccountEntry(
+                AccountEntryEntity(
+                    orderId = order.id,
+                    customerId = customerId,
+                    type = EntryType.CREDIT,
+                    amount = applied,
+                    date = now,
+                    description = description
+                )
+            )
+            remainingPayment -= applied
+        }
+
+        if (remainingPayment > BigDecimal.ZERO) {
+            accountingDao.insertAccountEntry(
+                AccountEntryEntity(
+                    orderId = null,
+                    customerId = customerId,
+                    type = EntryType.CREDIT,
+                    amount = remainingPayment,
+                    date = now,
+                    description = "Extra payment"
                 )
             )
         }

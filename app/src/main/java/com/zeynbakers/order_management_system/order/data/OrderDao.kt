@@ -29,6 +29,9 @@ interface OrderDao {
     @Query("UPDATE orders SET status = 'COMPLETED' WHERE id = :orderId")
     suspend fun markCompleted(orderId: Long)
 
+    @Query("UPDATE orders SET status = 'CANCELLED' WHERE id = :orderId")
+    suspend fun markCancelled(orderId: Long)
+
     @Query("SELECT SUM(totalAmount) FROM orders WHERE customerId = :customerId")
     suspend fun getTotalBilled(customerId: Long): BigDecimal?
 

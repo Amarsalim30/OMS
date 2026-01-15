@@ -75,7 +75,7 @@ class AccountingLogicTest {
     }
 
     @Test
-    fun completeOrder_doesNotDuplicateDebit() = runBlocking {
+    fun cancelOrder_removesDebitEntry() = runBlocking {
         val orderDao = db.orderDao()
         val accountingDao = db.accountingDao()
         val processor = OrderProcessor(orderDao, accountingDao)
@@ -101,10 +101,10 @@ class AccountingLogicTest {
             description = "Charge: Order #$orderId"
         )
 
-        processor.completeOrder(orderId)
+        processor.cancelOrder(orderId)
 
         val entries = accountingDao.getEntriesForOrder(orderId).filter { it.type == EntryType.DEBIT }
-        assertEquals(1, entries.size)
+        assertEquals(0, entries.size)
     }
 
     @Test
@@ -147,5 +147,46 @@ class AccountingLogicTest {
 
         assertEquals(BigDecimal("100.00"), paidForOrder)
         assertEquals(BigDecimal("-50.00"), balance)
+    }
+
+    @Test
+    fun recordPayment_autoAllocatesAcrossOldestOrders() = runBlocking {
+        val orderDao = db.orderDao()
+        val accountingDao = db.accountingDao()
+        val viewModel = CustomerAccountsViewModel(db)
+
+        val firstOrderId = orderDao.insert(
+            OrderEntity(
+                orderDate = LocalDate(2026, 4, 1),
+                notes = "Older",
+                totalAmount = BigDecimal("100.00"),
+                customerId = 1L
+            )
+        )
+        val secondOrderId = orderDao.insert(
+            OrderEntity(
+                orderDate = LocalDate(2026, 4, 2),
+                notes = "Newer",
+                totalAmount = BigDecimal("200.00"),
+                customerId = 1L
+            )
+        )
+
+        viewModel.recordPaymentInternal(
+            customerId = 1L,
+            amount = BigDecimal("150.00"),
+            method = com.zeynbakers.order_management_system.accounting.data.PaymentMethod.CASH,
+            note = "",
+            orderId = null
+        )
+
+        val firstPaid = accountingDao.getPaidForOrder(firstOrderId)
+        val secondPaid = accountingDao.getPaidForOrder(secondOrderId)
+        val unallocatedCredits = accountingDao.getLedgerForCustomer(1L)
+            .filter { it.type == EntryType.CREDIT && it.orderId == null }
+
+        assertEquals(BigDecimal("100.00"), firstPaid)
+        assertEquals(BigDecimal("50.00"), secondPaid)
+        assertEquals(0, unallocatedCredits.size)
     }
 }
