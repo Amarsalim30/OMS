@@ -127,7 +127,11 @@ class CustomerAccountsViewModel(private val database: AppDatabase) : ViewModel()
                         statusOverride = order.statusOverride
                     )
                 }
-            _orders.value = uiOrders.sortedByDescending { it.order.createdAt }
+            _orders.value =
+                uiOrders.sortedWith(
+                    compareByDescending<CustomerOrderUi> { it.lastActivityAt }
+                        .thenByDescending { it.order.createdAt }
+                )
         }
     }
 

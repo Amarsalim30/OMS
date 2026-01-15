@@ -20,6 +20,38 @@ interface AccountingDao {
     @Query("SELECT * FROM account_entries WHERE orderId = :orderId")
     suspend fun getEntriesForOrder(orderId: Long): List<AccountEntryEntity>
 
+    @Query("SELECT * FROM account_entries WHERE orderId = :orderId AND type = :type ORDER BY date DESC, id DESC")
+    suspend fun getEntriesForOrderByType(orderId: Long, type: EntryType): List<AccountEntryEntity>
+
+    @Query("UPDATE account_entries SET customerId = :customerId WHERE orderId = :orderId")
+    suspend fun updateCustomerIdForOrderEntries(orderId: Long, customerId: Long?)
+
+    @Query(
+        """
+        SELECT IFNULL(SUM(amount), 0)
+        FROM account_entries
+        WHERE orderId = :orderId
+        AND type = 'CREDIT'
+        """
+    )
+    suspend fun getCreditTotalForOrder(orderId: Long): BigDecimal
+
+    @Query(
+        """
+        SELECT IFNULL(SUM(amount), 0)
+        FROM account_entries
+        WHERE orderId = :orderId
+        AND type = 'WRITE_OFF'
+        """
+    )
+    suspend fun getWriteOffTotalForOrder(orderId: Long): BigDecimal
+
+    @Query("UPDATE account_entries SET amount = :amount WHERE id = :id")
+    suspend fun updateAccountEntryAmount(id: Long, amount: BigDecimal)
+
+    @Query("DELETE FROM account_entries WHERE id = :id")
+    suspend fun deleteAccountEntryById(id: Long)
+
     @Query("DELETE FROM account_entries WHERE orderId = :orderId AND type = 'DEBIT'")
     suspend fun deleteDebitEntriesForOrder(orderId: Long)
 
@@ -42,6 +74,70 @@ interface AccountingDao {
                 description = description
             )
         )
+    }
+
+    /**
+     * Keeps order-level credits/write-offs within the order total after edits.
+     *
+     * Assumption (from UI behavior): if an order total is reduced below already-applied payments,
+     * the excess CREDIT becomes customer-level "extra payment" (orderId = null), while excess
+     * WRITE_OFF is simply reduced (it is not money and should not create customer credit).
+     */
+    @Transaction
+    suspend fun reconcileOrderSettlementToTotal(
+        orderId: Long,
+        customerId: Long?,
+        orderTotal: BigDecimal,
+        now: Long
+    ) {
+        if (orderTotal < BigDecimal.ZERO) return
+
+        val creditTotal = getCreditTotalForOrder(orderId)
+        val targetCredit = if (creditTotal > orderTotal) orderTotal else creditTotal
+        val extraCredit = creditTotal - targetCredit
+        if (extraCredit > BigDecimal.ZERO) {
+            reduceEntriesBy(
+                entries = getEntriesForOrderByType(orderId, EntryType.CREDIT),
+                reduceBy = extraCredit
+            )
+            if (customerId != null) {
+                insertAccountEntry(
+                    AccountEntryEntity(
+                        orderId = null,
+                        customerId = customerId,
+                        type = EntryType.CREDIT,
+                        amount = extraCredit,
+                        date = now,
+                        description = "Extra payment moved from Order #$orderId"
+                    )
+                )
+            }
+        }
+
+        val writeOffTotal = getWriteOffTotalForOrder(orderId)
+        val remainingAfterCredits = orderTotal - targetCredit
+        val targetWriteOff = if (writeOffTotal > remainingAfterCredits) remainingAfterCredits else writeOffTotal
+        val extraWriteOff = writeOffTotal - targetWriteOff
+        if (extraWriteOff > BigDecimal.ZERO) {
+            reduceEntriesBy(
+                entries = getEntriesForOrderByType(orderId, EntryType.WRITE_OFF),
+                reduceBy = extraWriteOff
+            )
+        }
+    }
+
+    private suspend fun reduceEntriesBy(entries: List<AccountEntryEntity>, reduceBy: BigDecimal) {
+        var remaining = reduceBy
+        for (entry in entries) {
+            if (remaining <= BigDecimal.ZERO) break
+            if (entry.amount <= remaining) {
+                deleteAccountEntryById(entry.id)
+                remaining -= entry.amount
+            } else {
+                updateAccountEntryAmount(entry.id, entry.amount - remaining)
+                remaining = BigDecimal.ZERO
+            }
+        }
     }
 
     @Query(

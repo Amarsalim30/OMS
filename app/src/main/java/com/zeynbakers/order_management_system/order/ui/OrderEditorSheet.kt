@@ -1,13 +1,21 @@
 package com.zeynbakers.order_management_system.order.ui
 
 
+import android.util.Log
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.*
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.ime
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.unit.dp
+import androidx.activity.compose.BackHandler
+import com.zeynbakers.order_management_system.BuildConfig
 import com.zeynbakers.order_management_system.order.data.*
 import kotlinx.datetime.LocalDate
 import java.math.BigDecimal
@@ -22,11 +30,31 @@ fun OrderEditorSheet(
     onDismiss: () -> Unit
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val density = LocalDensity.current
+    val focusManager = LocalFocusManager.current
+    val keyboardController = LocalSoftwareKeyboardController.current
+    val imeVisible = WindowInsets.ime.getBottom(density) > 0
 
+    val handleSheetDismiss: () -> Unit = {
+        val sheetOpen = true
+        if (BuildConfig.DEBUG) {
+            Log.d("SheetBack", "back pressed imeVisible=$imeVisible sheetOpen=$sheetOpen")
+        }
+        if (imeVisible) {
+            keyboardController?.hide()
+            focusManager.clearFocus()
+        } else {
+            onDismiss()
+        }
+    }
     ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = sheetState
+        onDismissRequest = handleSheetDismiss,
+        sheetState = sheetState,
+        properties = ModalBottomSheetProperties(shouldDismissOnBackPress = false)
     ) {
+        BackHandler {
+            handleSheetDismiss()
+        }
 
         Column(
             modifier = Modifier

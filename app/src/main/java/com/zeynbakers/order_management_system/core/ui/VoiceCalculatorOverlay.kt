@@ -87,9 +87,14 @@ fun VoiceCalculatorOverlay(
     var lastDockedRight by remember { mutableStateOf(true) }
     var autoHideJob by remember { mutableStateOf<Job?>(null) }
 
-    val speechRecognizer = remember {
-        SpeechRecognizer.createSpeechRecognizer(context)
-    }
+    val speechRecognizer: SpeechRecognizer? =
+        remember {
+            runCatching { SpeechRecognizer.createSpeechRecognizer(context) }
+                .onFailure { t ->
+                    Log.e("VoiceCalc", "createSpeechRecognizer failed: ${t.javaClass.simpleName}: ${t.message}", t)
+                }
+                .getOrNull()
+        }
 
     if (!isVisible || isSuppressed) {
         return
@@ -100,6 +105,13 @@ fun VoiceCalculatorOverlay(
     }
 
     fun startListening() {
+        val recognizer = speechRecognizer
+        if (recognizer == null) {
+            errorText = "Speech recognizer unavailable"
+            mode = VoiceCalcMode.Error
+            vcLog("speechRecognizer is null")
+            return
+        }
         isRevealed = false
         vcLog("startListening: hasPermission=$hasPermission mode=$mode")
         if (!SpeechRecognizer.isRecognitionAvailable(context)) {
@@ -115,7 +127,7 @@ fun VoiceCalculatorOverlay(
         lastPartial = ""
         mode = VoiceCalcMode.Listening
         try {
-            speechRecognizer.cancel()
+            recognizer.cancel()
             vcLog("cancel ok")
         } catch (t: Throwable) {
             vcLog("cancel failed: ${t.javaClass.simpleName}: ${t.message}")
@@ -130,7 +142,7 @@ fun VoiceCalculatorOverlay(
                 putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 1800)
             }
         try {
-            speechRecognizer.startListening(recognizerIntent)
+            recognizer.startListening(recognizerIntent)
             vcLog("startListening ok")
         } catch (t: Throwable) {
             vcLog("startListening failed: ${t.javaClass.simpleName}: ${t.message}")
@@ -144,7 +156,7 @@ fun VoiceCalculatorOverlay(
                 delay(12000)
                 vcLog("listening timeout -> stopListening()")
                 try {
-                    speechRecognizer.stopListening()
+                    recognizer.stopListening()
                 } catch (t: Throwable) {
                     vcLog("stopListening failed: ${t.javaClass.simpleName}: ${t.message}")
                 }
@@ -156,7 +168,7 @@ fun VoiceCalculatorOverlay(
                 if (mode == VoiceCalcMode.Listening) {
                     vcLog("result timeout -> cancel()")
                     try {
-                        speechRecognizer.cancel()
+                        recognizer.cancel()
                     } catch (t: Throwable) {
                         vcLog("cancel failed: ${t.javaClass.simpleName}: ${t.message}")
                     }
@@ -167,90 +179,102 @@ fun VoiceCalculatorOverlay(
     }
 
     DisposableEffect(speechRecognizer) {
-        val listener =
-            object : RecognitionListener {
-                override fun onReadyForSpeech(params: Bundle?) {
-                    mode = VoiceCalcMode.Listening
-                    vcLog("onReadyForSpeech")
-                }
+        val recognizer = speechRecognizer
+        if (recognizer == null) {
+            onDispose {
+                listeningJob?.cancel()
+                resultTimeoutJob?.cancel()
+                autoHideJob?.cancel()
+            }
+        } else {
+            val listener =
+                object : RecognitionListener {
+                    override fun onReadyForSpeech(params: Bundle?) {
+                        mode = VoiceCalcMode.Listening
+                        vcLog("onReadyForSpeech")
+                    }
 
-                override fun onBeginningOfSpeech() {
-                    vcLog("onBeginningOfSpeech")
-                }
-                override fun onRmsChanged(rmsdB: Float) {}
-                override fun onBufferReceived(buffer: ByteArray?) {}
-                override fun onEndOfSpeech() {
-                    vcLog("onEndOfSpeech")
-                }
+                    override fun onBeginningOfSpeech() {
+                        vcLog("onBeginningOfSpeech")
+                    }
+                    override fun onRmsChanged(rmsdB: Float) {}
+                    override fun onBufferReceived(buffer: ByteArray?) {}
+                    override fun onEndOfSpeech() {
+                        vcLog("onEndOfSpeech")
+                    }
 
-                override fun onError(error: Int) {
-                    vcLog("onError=$error")
-                    listeningJob?.cancel()
-                    resultTimeoutJob?.cancel()
-                    val fallbackText = lastPartial
-                    if (fallbackText.isNotBlank()) {
-                        transcript = fallbackText
-                        val parsed = parseVoiceMath(fallbackText)
+                    override fun onError(error: Int) {
+                        vcLog("onError=$error")
+                        listeningJob?.cancel()
+                        resultTimeoutJob?.cancel()
+                        val fallbackText = lastPartial
+                        if (fallbackText.isNotBlank()) {
+                            transcript = fallbackText
+                            val parsed = parseVoiceMath(fallbackText)
+                            if (parsed == null) {
+                                vcLog("parse failed (error fallback)")
+                                errorText = "Didn't catch that"
+                                mode = VoiceCalcMode.Error
+                            } else {
+                                result = parsed.value
+                                mode = VoiceCalcMode.Result
+                                vcLog("parse ok (error fallback): ${parsed.value}")
+                            }
+                        } else {
+                            errorText = "Didn't catch that"
+                            mode = VoiceCalcMode.Error
+                        }
+                    }
+
+                    override fun onResults(resultsBundle: Bundle?) {
+                        vcLog("onResults")
+                        listeningJob?.cancel()
+                        resultTimeoutJob?.cancel()
+                        val spokenText =
+                            resultsBundle
+                                ?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+                                ?.firstOrNull()
+                                .orEmpty()
+                        val finalText = if (spokenText.isBlank()) lastPartial else spokenText
+                        transcript = finalText
+                        vcLog("final transcript: $finalText")
+                        val parsed = parseVoiceMath(finalText)
                         if (parsed == null) {
-                            vcLog("parse failed (error fallback)")
+                            vcLog("parse failed")
                             errorText = "Didn't catch that"
                             mode = VoiceCalcMode.Error
                         } else {
                             result = parsed.value
                             mode = VoiceCalcMode.Result
-                            vcLog("parse ok (error fallback): ${parsed.value}")
+                            vcLog("parse ok: ${parsed.value}")
                         }
-                    } else {
-                        errorText = "Didn't catch that"
-                        mode = VoiceCalcMode.Error
                     }
-                }
 
-                override fun onResults(resultsBundle: Bundle?) {
-                    vcLog("onResults")
-                    listeningJob?.cancel()
-                    resultTimeoutJob?.cancel()
-                    val spokenText =
-                        resultsBundle
-                            ?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-                            ?.firstOrNull()
-                            .orEmpty()
-                    val finalText = if (spokenText.isBlank()) lastPartial else spokenText
-                    transcript = finalText
-                    vcLog("final transcript: $finalText")
-                    val parsed = parseVoiceMath(finalText)
-                    if (parsed == null) {
-                        vcLog("parse failed")
-                        errorText = "Didn't catch that"
-                        mode = VoiceCalcMode.Error
-                    } else {
-                        result = parsed.value
-                        mode = VoiceCalcMode.Result
-                        vcLog("parse ok: ${parsed.value}")
+                    override fun onPartialResults(partialResults: Bundle?) {
+                        val spokenText =
+                            partialResults
+                                ?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+                                ?.firstOrNull()
+                                .orEmpty()
+                        transcript = spokenText
+                        if (spokenText.isNotBlank()) {
+                            lastPartial = spokenText
+                            vcLog("partial transcript: $spokenText")
+                        }
                     }
-                }
 
-                override fun onPartialResults(partialResults: Bundle?) {
-                    val spokenText =
-                        partialResults
-                            ?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-                            ?.firstOrNull()
-                            .orEmpty()
-                    transcript = spokenText
-                    if (spokenText.isNotBlank()) {
-                        lastPartial = spokenText
-                        vcLog("partial transcript: $spokenText")
+                    override fun onEvent(eventType: Int, params: Bundle?) {}
+                }
+            recognizer.setRecognitionListener(listener)
+            onDispose {
+                listeningJob?.cancel()
+                resultTimeoutJob?.cancel()
+                autoHideJob?.cancel()
+                runCatching { recognizer.destroy() }
+                    .onFailure { t ->
+                        vcLog("destroy failed: ${t.javaClass.simpleName}: ${t.message}")
                     }
-                }
-
-                override fun onEvent(eventType: Int, params: Bundle?) {}
             }
-        speechRecognizer.setRecognitionListener(listener)
-        onDispose {
-            listeningJob?.cancel()
-            resultTimeoutJob?.cancel()
-            autoHideJob?.cancel()
-            speechRecognizer.destroy()
         }
     }
 
@@ -455,7 +479,10 @@ fun VoiceCalculatorOverlay(
                         transcript = transcript,
                         result = result,
                         onClose = {
-                            speechRecognizer.cancel()
+                            runCatching { speechRecognizer?.cancel() }
+                                .onFailure { t ->
+                                    vcLog("cancel failed: ${t.javaClass.simpleName}: ${t.message}")
+                                }
                             mode = VoiceCalcMode.Idle
                         }
                     )

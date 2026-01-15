@@ -42,13 +42,30 @@ object DatabaseProvider {
         }
     }
 
+    private val migration3To4 = object : Migration(3, 4) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            // Backfill missing order debits so customer balances (DEBIT - CREDIT/WRITE_OFF) remain correct after upgrades.
+            db.execSQL(
+                """
+                INSERT INTO account_entries (orderId, customerId, type, amount, date, description)
+                SELECT o.id, o.customerId, 'DEBIT', o.totalAmount, o.updatedAt, 'Charge: Order #' || o.id
+                FROM orders o
+                WHERE o.status != 'CANCELLED'
+                AND NOT EXISTS (
+                    SELECT 1 FROM account_entries a WHERE a.orderId = o.id AND a.type = 'DEBIT'
+                )
+                """
+            )
+        }
+    }
+
     fun getDatabase(context: Context): AppDatabase {
         return instance ?: synchronized(this) {
             val db = Room.databaseBuilder(
                 context.applicationContext,
                 AppDatabase::class.java,
                 "order_app_db"
-            ).addMigrations(migration1To2, migration2To3).build()
+            ).addMigrations(migration1To2, migration2To3, migration3To4).build()
             instance = db
             db
         }

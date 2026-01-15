@@ -72,12 +72,19 @@ class OrderViewModel(private val database: AppDatabase) : ViewModel() {
         viewModelScope.launch {
             val now = Clock.System.now().toEpochMilliseconds()
             val cleanNotes = notes.trim()
-            val customerId = resolveCustomerId(customerName, customerPhone)
             val existingOrder =
                 if (existingOrderId != null && existingOrderId != 0L) {
                     orderDao.getOrderById(existingOrderId)
                 } else {
                     null
+                }
+            val resolvedCustomerId = resolveCustomerId(customerName.trim(), customerPhone.trim())
+            val customerId =
+                if (existingOrder != null && resolvedCustomerId == null) {
+                    // Avoid corrupting existing ledgers by unassigning the customer on edit.
+                    existingOrder.customerId
+                } else {
+                    resolvedCustomerId
                 }
 
             val updatedOrder =
@@ -104,7 +111,20 @@ class OrderViewModel(private val database: AppDatabase) : ViewModel() {
                     updatedOrder.id
                 }
 
-            upsertAccountingEntry(updatedOrder.copy(id = orderId))
+            if (existingOrder?.customerId != null && customerId != null && existingOrder.customerId != customerId) {
+                accountingDao.updateCustomerIdForOrderEntries(orderId = orderId, customerId = customerId)
+            } else if (existingOrder?.customerId == null && customerId != null) {
+                accountingDao.updateCustomerIdForOrderEntries(orderId = orderId, customerId = customerId)
+            }
+
+            val savedOrder = updatedOrder.copy(id = orderId)
+            upsertAccountingEntry(savedOrder)
+            accountingDao.reconcileOrderSettlementToTotal(
+                orderId = orderId,
+                customerId = customerId,
+                orderTotal = savedOrder.totalAmount,
+                now = now
+            )
 
             loadOrdersForDate(date)
             refreshMonthTotals()

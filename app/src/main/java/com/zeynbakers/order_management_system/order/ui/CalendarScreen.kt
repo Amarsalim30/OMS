@@ -3,11 +3,13 @@ package com.zeynbakers.order_management_system.order.ui
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import android.util.Log
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -21,6 +23,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.pager.HorizontalPager
@@ -36,6 +39,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.ModalBottomSheetProperties
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -52,19 +56,23 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.snapshotFlow
+import androidx.activity.compose.BackHandler
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.zeynbakers.order_management_system.BuildConfig
 import com.zeynbakers.order_management_system.core.util.formatKes
 import com.zeynbakers.order_management_system.core.ui.LocalAmountFieldRegistry
 import com.zeynbakers.order_management_system.core.ui.LocalVoiceCalcAccess
@@ -267,19 +275,38 @@ fun CalendarScreen(
 
     if (isQuickAddOpen && activeDate != null) {
         val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        val density = LocalDensity.current
         val focusManager = LocalFocusManager.current
+        val keyboardController = LocalSoftwareKeyboardController.current
         val amountRegistry = LocalAmountFieldRegistry.current
         val notesRequester = remember { FocusRequester() }
         val totalRequester = remember { FocusRequester() }
         val nameRequester = remember { FocusRequester() }
         val phoneRequester = remember { FocusRequester() }
+        val imeVisible = WindowInsets.ime.getBottom(density) > 0
         LaunchedEffect(activeDate) {
             notesRequester.requestFocus()
         }
+        val handleSheetDismiss: () -> Unit = {
+            val sheetOpen = isQuickAddOpen
+            if (BuildConfig.DEBUG) {
+                Log.d("SheetBack", "back pressed imeVisible=$imeVisible sheetOpen=$sheetOpen")
+            }
+            if (imeVisible) {
+                keyboardController?.hide()
+                focusManager.clearFocus()
+            } else {
+                isQuickAddOpen = false
+            }
+        }
         ModalBottomSheet(
-            onDismissRequest = { isQuickAddOpen = false },
-            sheetState = sheetState
+            onDismissRequest = handleSheetDismiss,
+            sheetState = sheetState,
+            properties = ModalBottomSheetProperties(shouldDismissOnBackPress = false)
         ) {
+            BackHandler {
+                handleSheetDismiss()
+            }
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
