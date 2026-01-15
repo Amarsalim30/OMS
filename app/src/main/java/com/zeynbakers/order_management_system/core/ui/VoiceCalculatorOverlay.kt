@@ -62,14 +62,14 @@ fun VoiceCalculatorOverlay(
     onRequestPermission: () -> Unit,
     onApplyAmount: (BigDecimal) -> Unit,
     isVisible: Boolean = true,
+    isSuppressed: Boolean = false,
     lockToRightOnIdle: Boolean = false,
     lockToTopOnIdle: Boolean = false,
     peekWidthDp: Dp = 24.dp,
-    allowDrag: Boolean = true
+    allowDrag: Boolean = true,
+    autoHideIdleMs: Long = 2000L,
+    defaultIdleYDp: Dp = 96.dp
 ) {
-    if (!isVisible) {
-        return
-    }
     val context = LocalContext.current
     val density = LocalDensity.current
     val coroutineScope = rememberCoroutineScope()
@@ -84,9 +84,15 @@ fun VoiceCalculatorOverlay(
     var resultTimeoutJob by remember { mutableStateOf<Job?>(null) }
     var lastPartial by remember { mutableStateOf("") }
     var isRevealed by remember { mutableStateOf(false) }
+    var lastDockedRight by remember { mutableStateOf(true) }
+    var autoHideJob by remember { mutableStateOf<Job?>(null) }
 
     val speechRecognizer = remember {
         SpeechRecognizer.createSpeechRecognizer(context)
+    }
+
+    if (!isVisible || isSuppressed) {
+        return
     }
 
     fun vcLog(message: String) {
@@ -243,6 +249,7 @@ fun VoiceCalculatorOverlay(
         onDispose {
             listeningJob?.cancel()
             resultTimeoutJob?.cancel()
+            autoHideJob?.cancel()
             speechRecognizer.destroy()
         }
     }
@@ -259,6 +266,23 @@ fun VoiceCalculatorOverlay(
         }
     }
 
+    LaunchedEffect(Unit) {
+        isRevealed = false
+    }
+
+    LaunchedEffect(mode, isRevealed, autoHideIdleMs) {
+        autoHideJob?.cancel()
+        if (mode == VoiceCalcMode.Idle && isRevealed) {
+            autoHideJob =
+                coroutineScope.launch {
+                    delay(autoHideIdleMs)
+                    if (mode == VoiceCalcMode.Idle) {
+                        isRevealed = false
+                    }
+                }
+        }
+    }
+
     val minimizedSize = 48.dp
     val panelWidth = if (mode == VoiceCalcMode.Idle) minimizedSize else 300.dp
     val panelHeight = if (mode == VoiceCalcMode.Idle) minimizedSize else 180.dp
@@ -271,6 +295,7 @@ fun VoiceCalculatorOverlay(
         val topInset = WindowInsets.systemBars.getTop(density).toFloat()
         val marginPx = with(density) { 12.dp.toPx() }
         val peekPx = with(density) { peekWidthDp.toPx() }
+        val defaultIdleYPx = with(density) { defaultIdleYDp.toPx() }
 
         fun clampOffset(offset: IntOffset, allowPeekRight: Boolean, allowPeekLeft: Boolean): IntOffset {
             val minX =
@@ -293,7 +318,7 @@ fun VoiceCalculatorOverlay(
         }
 
         LaunchedEffect(mode, hasUserMoved, maxWidth, maxHeight, isRevealed) {
-            if (mode == VoiceCalcMode.Idle && (!hasUserMoved || !allowDrag)) {
+            if (mode == VoiceCalcMode.Idle && (!allowDrag || lockToRightOnIdle)) {
                 val targetX =
                     if (lockToRightOnIdle) {
                         if (isRevealed) {
@@ -316,6 +341,33 @@ fun VoiceCalculatorOverlay(
                         allowPeekRight = lockToRightOnIdle && !isRevealed,
                         allowPeekLeft = false
                     )
+            } else if (mode == VoiceCalcMode.Idle && allowDrag) {
+                val targetX =
+                    if (lastDockedRight) {
+                        if (isRevealed) {
+                            (maxWidthPx - panelWidthPx - marginPx).toInt()
+                        } else {
+                            (maxWidthPx - peekPx).toInt()
+                        }
+                    } else {
+                        if (isRevealed) {
+                            marginPx.toInt()
+                        } else {
+                            (-(panelWidthPx - peekPx)).toInt()
+                        }
+                    }
+                val targetY =
+                    if (!hasUserMoved) {
+                        (topInset + defaultIdleYPx).toInt()
+                    } else {
+                        dragOffset.y
+                    }
+                dragOffset =
+                    clampOffset(
+                        IntOffset(targetX, targetY),
+                        allowPeekRight = !isRevealed && lastDockedRight,
+                        allowPeekLeft = !isRevealed && !lastDockedRight
+                    )
             } else {
                 dragOffset = clampOffset(dragOffset, allowPeekRight = false, allowPeekLeft = false)
             }
@@ -329,11 +381,13 @@ fun VoiceCalculatorOverlay(
                         detectDragGestures(
                             onDragStart = { hasUserMoved = true },
                             onDragEnd = {
+                                lastDockedRight = dragOffset.x + panelWidthPx / 2 > maxWidthPx / 2
+                                isRevealed = false
                                 val targetX =
-                                    if (dragOffset.x + panelWidthPx / 2 <= maxWidthPx / 2) {
-                                        marginPx
-                                    } else {
+                                    if (lastDockedRight) {
                                         maxWidthPx - panelWidthPx - marginPx
+                                    } else {
+                                        marginPx
                                     }
                                 dragOffset =
                                     clampOffset(
@@ -375,7 +429,7 @@ fun VoiceCalculatorOverlay(
                     ) {
                         TextButton(
                             onClick = {
-                                if (lockToRightOnIdle && !isRevealed) {
+                                if (mode == VoiceCalcMode.Idle && !isRevealed) {
                                     isRevealed = true
                                 } else {
                                     if (hasPermission) {

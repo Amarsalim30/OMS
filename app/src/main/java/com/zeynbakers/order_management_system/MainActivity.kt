@@ -14,6 +14,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -350,7 +351,8 @@ class MainActivity : ComponentActivity() {
                             hasPermission = hasRecordPermission,
                             onRequestPermission = voiceCalcAccess.onRequestPermission,
                             onApplyAmount = voiceCalcAccess.onApplyAmount,
-                            isVisible = !overlaySuppressed.value
+                            isSuppressed = overlaySuppressed.value,
+                            defaultIdleYDp = 72.dp
                         )
                     }
                 }
