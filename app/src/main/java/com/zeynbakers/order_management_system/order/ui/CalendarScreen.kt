@@ -21,6 +21,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material.icons.Icons
@@ -42,20 +44,32 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.zeynbakers.order_management_system.core.util.formatKes
+import com.zeynbakers.order_management_system.core.ui.LocalAmountFieldRegistry
+import com.zeynbakers.order_management_system.core.ui.LocalVoiceCalcAccess
+import com.zeynbakers.order_management_system.core.ui.LocalVoiceOverlaySuppressed
+import com.zeynbakers.order_management_system.core.ui.VoiceCalculatorOverlay
 import com.zeynbakers.order_management_system.customer.data.CustomerEntity
 import java.math.BigDecimal
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -96,6 +110,8 @@ fun CalendarScreen(
     var totalError by remember { mutableStateOf<String?>(null) }
     var customerError by remember { mutableStateOf<String?>(null) }
     var suggestions by remember { mutableStateOf<List<CustomerEntity>>(emptyList()) }
+    val overlaySuppressed = LocalVoiceOverlaySuppressed.current
+    val voiceCalcAccess = LocalVoiceCalcAccess.current
 
     LaunchedEffect(customerName, customerPhone) {
         val query = when {
@@ -104,6 +120,16 @@ fun CalendarScreen(
             else -> ""
         }
         suggestions = if (query.isBlank()) emptyList() else searchCustomers(query)
+    }
+
+    LaunchedEffect(isQuickAddOpen) {
+        overlaySuppressed.value = isQuickAddOpen
+    }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            overlaySuppressed.value = false
+        }
     }
 
     val activeDate = selectedDate
@@ -241,24 +267,86 @@ fun CalendarScreen(
 
     if (isQuickAddOpen && activeDate != null) {
         val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        val focusManager = LocalFocusManager.current
+        val amountRegistry = LocalAmountFieldRegistry.current
+        val notesRequester = remember { FocusRequester() }
+        val totalRequester = remember { FocusRequester() }
+        val nameRequester = remember { FocusRequester() }
+        val phoneRequester = remember { FocusRequester() }
+        LaunchedEffect(activeDate) {
+            notesRequester.requestFocus()
+        }
         ModalBottomSheet(
             onDismissRequest = { isQuickAddOpen = false },
             sheetState = sheetState
         ) {
-            Column(
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .fillMaxHeight(0.9f)
-                    .imePadding()
-                    .navigationBarsPadding()
-                    .verticalScroll(rememberScrollState())
-                    .padding(16.dp)
             ) {
-                Text(
-                    text = "Add order on ${activeDate.dayOfMonth} ${activeDate.month.name.lowercase().replaceFirstChar { it.uppercase() }}",
-                    style = MaterialTheme.typography.titleMedium
-                )
-                Spacer(Modifier.height(8.dp))
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .fillMaxHeight()
+                        .imePadding()
+                        .navigationBarsPadding()
+                        .verticalScroll(rememberScrollState())
+                        .padding(16.dp)
+                ) {
+                    Text(
+                        text = "Add order on ${activeDate.dayOfMonth} ${activeDate.month.name.lowercase().replaceFirstChar { it.uppercase() }}",
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                    Spacer(Modifier.height(8.dp))
+
+                val trimmedNotes = notes.trim()
+                val parsedTotal = totalText.trim().takeIf { it.isNotEmpty() }?.let {
+                    runCatching { java.math.BigDecimal(it) }.getOrNull()
+                }
+                val hasCustomerMismatch = (customerName.isBlank() xor customerPhone.isBlank())
+                val canSave =
+                    trimmedNotes.isNotEmpty() &&
+                        parsedTotal != null &&
+                        parsedTotal > java.math.BigDecimal.ZERO &&
+                        !hasCustomerMismatch
+
+                fun submitOrder() {
+                    when {
+                        trimmedNotes.isEmpty() -> {
+                            notesError = "Notes are required"
+                            totalError = null
+                            customerError = null
+                        }
+                        parsedTotal == null || parsedTotal <= java.math.BigDecimal.ZERO -> {
+                            notesError = null
+                            totalError = "Enter a valid total"
+                            customerError = null
+                        }
+                        hasCustomerMismatch -> {
+                            notesError = null
+                            totalError = null
+                            customerError = "Enter both name and phone, or leave both blank"
+                        }
+                        else -> {
+                            onSaveOrder(
+                                activeDate,
+                                trimmedNotes,
+                                parsedTotal,
+                                customerName.trim(),
+                                customerPhone.trim()
+                            )
+                            notes = ""
+                            totalText = ""
+                            customerName = ""
+                            customerPhone = ""
+                            notesError = null
+                            totalError = null
+                            customerError = null
+                            isQuickAddOpen = false
+                        }
+                    }
+                }
 
                 OutlinedTextField(
                     value = notes,
@@ -267,7 +355,11 @@ fun CalendarScreen(
                         notesError = null
                     },
                     label = { Text("Notes (required)") },
-                    modifier = Modifier.fillMaxWidth()
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                    keyboardActions = KeyboardActions(onNext = { totalRequester.requestFocus() }),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .focusRequester(notesRequester)
                 )
                 notesError?.let {
                     Text(text = it, color = MaterialTheme.colorScheme.error)
@@ -275,14 +367,30 @@ fun CalendarScreen(
 
                 Spacer(Modifier.height(8.dp))
 
+                val setTotalText by rememberUpdatedState<(String) -> Unit>({ totalText = it })
                 OutlinedTextField(
                     value = totalText,
                     onValueChange = {
-                        totalText = it
+                        val filtered = it.filter { ch -> ch.isDigit() || ch == '.' }
+                        if (filtered.count { ch -> ch == '.' } <= 1) {
+                            totalText = filtered
+                        }
                         totalError = null
                     },
                     label = { Text("Total amount (KES)") },
-                    modifier = Modifier.fillMaxWidth()
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Decimal,
+                        imeAction = ImeAction.Next
+                    ),
+                    keyboardActions = KeyboardActions(onNext = { nameRequester.requestFocus() }),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .focusRequester(totalRequester)
+                        .onFocusChanged { state ->
+                            if (state.isFocused) {
+                                amountRegistry.update(setTotalText)
+                            }
+                        }
                 )
                 totalError?.let {
                     Text(text = it, color = MaterialTheme.colorScheme.error)
@@ -298,7 +406,11 @@ fun CalendarScreen(
                         customerError = null
                     },
                     label = { Text("Customer name") },
-                    modifier = Modifier.fillMaxWidth()
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                    keyboardActions = KeyboardActions(onNext = { phoneRequester.requestFocus() }),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .focusRequester(nameRequester)
                 )
                 Spacer(Modifier.height(8.dp))
                 OutlinedTextField(
@@ -308,7 +420,21 @@ fun CalendarScreen(
                         customerError = null
                     },
                     label = { Text("Customer phone") },
-                    modifier = Modifier.fillMaxWidth()
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Phone,
+                        imeAction = ImeAction.Done
+                    ),
+                    keyboardActions = KeyboardActions(
+                        onDone = {
+                            focusManager.clearFocus()
+                            if (canSave) {
+                                submitOrder()
+                            }
+                        }
+                    ),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .focusRequester(phoneRequester)
                 )
 
                 if (suggestions.isNotEmpty()) {
@@ -331,68 +457,42 @@ fun CalendarScreen(
                 }
 
                 Spacer(Modifier.height(12.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    TextButton(
-                        onClick = {
-                            notes = ""
-                            totalText = ""
-                            customerName = ""
-                            customerPhone = ""
-                            notesError = null
-                            totalError = null
-                            customerError = null
-                        }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Text("Clear")
-                    }
-                    TextButton(
-                        onClick = {
-                            val trimmedNotes = notes.trim()
-                            val parsedTotal = totalText.trim().takeIf { it.isNotEmpty() }?.let {
-                                runCatching { java.math.BigDecimal(it) }.getOrNull()
+                        TextButton(
+                            onClick = {
+                                notes = ""
+                                totalText = ""
+                                customerName = ""
+                                customerPhone = ""
+                                notesError = null
+                                totalError = null
+                                customerError = null
                             }
-                            when {
-                                trimmedNotes.isEmpty() -> {
-                                    notesError = "Notes are required"
-                                    totalError = null
-                                    customerError = null
-                                }
-                                parsedTotal == null || parsedTotal <= java.math.BigDecimal.ZERO -> {
-                                    notesError = null
-                                    totalError = "Enter a valid total"
-                                    customerError = null
-                                }
-                                (customerName.isBlank() xor customerPhone.isBlank()) -> {
-                                    notesError = null
-                                    totalError = null
-                                    customerError = "Enter both name and phone, or leave both blank"
-                                }
-                                else -> {
-                                    onSaveOrder(
-                                        activeDate,
-                                        trimmedNotes,
-                                        parsedTotal,
-                                        customerName.trim(),
-                                        customerPhone.trim()
-                                    )
-                                    notes = ""
-                                    totalText = ""
-                                    customerName = ""
-                                    customerPhone = ""
-                                    notesError = null
-                                    totalError = null
-                                    customerError = null
-                                    isQuickAddOpen = false
-                                }
-                            }
+                        ) {
+                            Text("Clear")
                         }
-                    ) {
-                        Text("Save")
+                        TextButton(
+                            onClick = {
+                                submitOrder()
+                            }
+                        ) {
+                            Text("Save")
+                        }
                     }
                 }
+
+                VoiceCalculatorOverlay(
+                    hasPermission = voiceCalcAccess.hasPermission,
+                    onRequestPermission = voiceCalcAccess.onRequestPermission,
+                    onApplyAmount = voiceCalcAccess.onApplyAmount,
+                    lockToRightOnIdle = true,
+                    lockToTopOnIdle = true,
+                    peekWidthDp = 18.dp,
+                    allowDrag = false
+                )
             }
         }
     }

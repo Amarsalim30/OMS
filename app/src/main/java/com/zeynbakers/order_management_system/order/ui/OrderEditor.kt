@@ -18,6 +18,8 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.focus.onFocusChanged
+import com.zeynbakers.order_management_system.core.ui.LocalAmountFieldRegistry
 import com.zeynbakers.order_management_system.order.data.OrderEntity
 import java.math.BigDecimal
 import java.math.RoundingMode
@@ -32,6 +34,7 @@ fun OrderEditor(order: OrderEntity, onSave: (OrderEntity) -> Unit) {
             if (order.totalAmount == BigDecimal.ZERO) "" else order.totalAmount.toPlainString()
         )
     }
+    val amountRegistry = LocalAmountFieldRegistry.current
 
     LaunchedEffect(order) {
         notes = order.notes
@@ -63,6 +66,7 @@ fun OrderEditor(order: OrderEntity, onSave: (OrderEntity) -> Unit) {
                 modifier = Modifier.fillMaxWidth()
         )
 
+        val setTotalText by rememberUpdatedState<(String) -> Unit>({ totalText = it })
         OutlinedTextField(
                 value = totalText,
                 onValueChange = {
@@ -95,7 +99,13 @@ fun OrderEditor(order: OrderEntity, onSave: (OrderEntity) -> Unit) {
                         formattedTotal != null -> Text("Total: KSh $formattedTotal")
                     }
                 },
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .onFocusChanged { state ->
+                        if (state.isFocused) {
+                            amountRegistry.update(setTotalText)
+                        }
+                    }
         )
 
         Spacer(Modifier.height(4.dp))

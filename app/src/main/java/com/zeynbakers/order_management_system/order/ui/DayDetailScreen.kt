@@ -33,15 +33,18 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.ui.text.input.ImeAction
@@ -49,6 +52,10 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
+import com.zeynbakers.order_management_system.core.ui.LocalAmountFieldRegistry
+import com.zeynbakers.order_management_system.core.ui.LocalVoiceCalcAccess
+import com.zeynbakers.order_management_system.core.ui.LocalVoiceOverlaySuppressed
+import com.zeynbakers.order_management_system.core.ui.VoiceCalculatorOverlay
 import com.zeynbakers.order_management_system.core.util.formatKes
 import com.zeynbakers.order_management_system.customer.data.CustomerEntity
 import com.zeynbakers.order_management_system.order.data.OrderEntity
@@ -86,6 +93,9 @@ fun DayDetailScreen(
     var suggestions by remember { mutableStateOf<List<CustomerEntity>>(emptyList()) }
     var pendingDeleteOrder by remember { mutableStateOf<OrderEntity?>(null) }
     val focusManager = LocalFocusManager.current
+    val amountRegistry = LocalAmountFieldRegistry.current
+    val voiceCalcAccess = LocalVoiceCalcAccess.current
+    val overlaySuppressed = LocalVoiceOverlaySuppressed.current
     val notesRequester = remember { FocusRequester() }
     val totalRequester = remember { FocusRequester() }
     val nameRequester = remember { FocusRequester() }
@@ -145,6 +155,16 @@ fun DayDetailScreen(
     LaunchedEffect(isEditorOpen, editingOrderId) {
         if (isEditorOpen) {
             notesRequester.requestFocus()
+        }
+    }
+
+    LaunchedEffect(isEditorOpen) {
+        overlaySuppressed.value = isEditorOpen
+    }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            overlaySuppressed.value = false
         }
     }
 
@@ -262,25 +282,72 @@ fun DayDetailScreen(
         val canSave =
             notes.trim().isNotEmpty() && parsedTotal != null && parsedTotal > BigDecimal.ZERO && !hasCustomerMismatch
 
+        fun submitOrder() {
+            val trimmedNotes = notes.trim()
+            val finalTotal = trimmedTotal.toBigDecimalOrNull()?.setScale(2, RoundingMode.HALF_UP)
+
+            when {
+                trimmedNotes.isEmpty() -> {
+                    notesError = "Notes are required"
+                    totalError = null
+                    customerError = null
+                }
+                finalTotal == null || finalTotal <= BigDecimal.ZERO -> {
+                    notesError = null
+                    totalError = "Enter a valid total"
+                    customerError = null
+                }
+                hasCustomerMismatch -> {
+                    notesError = null
+                    totalError = null
+                    customerError = "Enter both name and phone, or leave both blank"
+                }
+                else -> {
+                    onSaveOrder(
+                        trimmedNotes,
+                        finalTotal,
+                        customerName.trim(),
+                        customerPhone.trim(),
+                        editingOrderId
+                    )
+                    notes = ""
+                    totalText = ""
+                    customerName = ""
+                    customerPhone = ""
+                    editingOrderId = null
+                    notesError = null
+                    totalError = null
+                    customerError = null
+                    onDraftChange(null)
+                    isEditorOpen = false
+                }
+            }
+        }
+
         val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
         ModalBottomSheet(
             onDismissRequest = { isEditorOpen = false },
             sheetState = sheetState
         ) {
-            Column(
+            Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .fillMaxHeight(0.9f)
-                    .imePadding()
-                    .navigationBarsPadding()
-                    .verticalScroll(rememberScrollState())
-                    .padding(16.dp)
             ) {
-                Text(
-                    text = if (editingOrderId == null) "New Order" else "Edit Order",
-                    style = MaterialTheme.typography.titleLarge
-                )
-                Spacer(Modifier.height(8.dp))
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .fillMaxHeight()
+                        .imePadding()
+                        .navigationBarsPadding()
+                        .verticalScroll(rememberScrollState())
+                        .padding(16.dp)
+                ) {
+                    Text(
+                        text = if (editingOrderId == null) "New Order" else "Edit Order",
+                        style = MaterialTheme.typography.titleLarge
+                    )
+                    Spacer(Modifier.height(8.dp))
 
                 OutlinedTextField(
                     value = notes,
@@ -305,6 +372,7 @@ fun DayDetailScreen(
 
                 Spacer(Modifier.height(8.dp))
 
+                val setTotalText by rememberUpdatedState<(String) -> Unit>({ totalText = it })
                 OutlinedTextField(
                     value = totalText,
                     onValueChange = {
@@ -333,6 +401,11 @@ fun DayDetailScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .focusRequester(totalRequester)
+                        .onFocusChanged { state ->
+                            if (state.isFocused) {
+                                amountRegistry.update(setTotalText)
+                            }
+                        }
                 )
 
                 totalError?.let {
@@ -374,7 +447,14 @@ fun DayDetailScreen(
                         keyboardType = KeyboardType.Phone,
                         imeAction = ImeAction.Done
                     ),
-                    keyboardActions = KeyboardActions(onDone = { focusManager.clearFocus() }),
+                    keyboardActions = KeyboardActions(
+                        onDone = {
+                            focusManager.clearFocus()
+                            if (canSave) {
+                                submitOrder()
+                            }
+                        }
+                    ),
                     modifier = Modifier
                         .fillMaxWidth()
                         .focusRequester(phoneRequester)
@@ -420,48 +500,7 @@ fun DayDetailScreen(
                     }
 
                     Button(
-                        onClick = {
-                            val trimmedNotes = notes.trim()
-                            val finalTotal =
-                                trimmedTotal.toBigDecimalOrNull()?.setScale(2, RoundingMode.HALF_UP)
-
-                            when {
-                                trimmedNotes.isEmpty() -> {
-                                    notesError = "Notes are required"
-                                    totalError = null
-                                    customerError = null
-                                }
-                                finalTotal == null || finalTotal <= BigDecimal.ZERO -> {
-                                    notesError = null
-                                    totalError = "Enter a valid total"
-                                    customerError = null
-                                }
-                                hasCustomerMismatch -> {
-                                    notesError = null
-                                    totalError = null
-                                    customerError = "Enter both name and phone, or leave both blank"
-                                }
-                                else -> {
-                                    onSaveOrder(
-                                        trimmedNotes,
-                                        finalTotal,
-                                        customerName.trim(),
-                                        customerPhone.trim(),
-                                        editingOrderId
-                                    )
-                                    notes = ""
-                                    totalText = ""
-                                    customerName = ""
-                                    customerPhone = ""
-                                    editingOrderId = null
-                                    notesError = null
-                                    totalError = null
-                                    customerError = null
-                                    onDraftChange(null)
-                                    isEditorOpen = false
-                                }
-                            }
-                        }
+                        onClick = { submitOrder() }
                         ,
                         enabled = canSave
                     ) {
@@ -469,7 +508,18 @@ fun DayDetailScreen(
                     }
                 }
 
-                Spacer(Modifier.height(12.dp))
+                    Spacer(Modifier.height(12.dp))
+                }
+
+                VoiceCalculatorOverlay(
+                    hasPermission = voiceCalcAccess.hasPermission,
+                    onRequestPermission = voiceCalcAccess.onRequestPermission,
+                    onApplyAmount = voiceCalcAccess.onApplyAmount,
+                    lockToRightOnIdle = true,
+                    lockToTopOnIdle = true,
+                    peekWidthDp = 18.dp,
+                    allowDrag = false
+                )
             }
         }
     }

@@ -45,8 +45,10 @@ import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
@@ -56,6 +58,8 @@ import com.zeynbakers.order_management_system.accounting.data.EntryType
 import com.zeynbakers.order_management_system.accounting.data.PaymentMethod
 import com.zeynbakers.order_management_system.core.util.formatDateTime
 import com.zeynbakers.order_management_system.core.util.formatKes
+import com.zeynbakers.order_management_system.core.ui.AmountFieldRegistry
+import com.zeynbakers.order_management_system.core.ui.LocalAmountFieldRegistry
 import com.zeynbakers.order_management_system.customer.data.CustomerEntity
 import com.zeynbakers.order_management_system.order.data.OrderStatusOverride
 import java.math.BigDecimal
@@ -86,6 +90,7 @@ fun CustomerDetailScreen(
     var amountError by remember { mutableStateOf<String?>(null) }
     var selectedMethod by remember { mutableStateOf(PaymentMethod.CASH) }
     var selectedOrderId by remember { mutableStateOf<Long?>(null) }
+    val amountRegistry = LocalAmountFieldRegistry.current
     var orderFilter by remember { mutableStateOf(OrderFilter.All) }
     var ledgerFilter by remember { mutableStateOf(LedgerFilter.All) }
     var ledgerQuery by remember { mutableStateOf("") }
@@ -152,6 +157,7 @@ fun CustomerDetailScreen(
                         amountError = null
                     },
                     amountError = amountError,
+                    amountRegistry = amountRegistry,
                     selectedMethod = selectedMethod,
                     onMethodChange = { selectedMethod = it },
                     noteText = noteText,
@@ -279,6 +285,7 @@ private fun PaymentCard(
     amountText: String,
     onAmountChange: (String) -> Unit,
     amountError: String?,
+    amountRegistry: AmountFieldRegistry,
     selectedMethod: PaymentMethod,
     onMethodChange: (PaymentMethod) -> Unit,
     noteText: String,
@@ -305,6 +312,7 @@ private fun PaymentCard(
             }
             Spacer(Modifier.height(8.dp))
 
+            val setAmountText by rememberUpdatedState<(String) -> Unit>({ onAmountChange(it) })
             OutlinedTextField(
                 value = amountText,
                 onValueChange = { onAmountChange(it.filter { ch -> ch.isDigit() || ch == '.' }) },
@@ -314,7 +322,13 @@ private fun PaymentCard(
                     keyboardType = KeyboardType.Decimal,
                     imeAction = ImeAction.Next
                 ),
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .onFocusChanged { state ->
+                        if (state.isFocused) {
+                            amountRegistry.update(setAmountText)
+                        }
+                    }
             )
 
             amountError?.let {

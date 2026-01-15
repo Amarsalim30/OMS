@@ -12,10 +12,19 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.*
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
 import com.zeynbakers.order_management_system.core.db.DatabaseProvider
+import com.zeynbakers.order_management_system.core.ui.AmountFieldRegistry
+import com.zeynbakers.order_management_system.core.ui.LocalAmountFieldRegistry
+import com.zeynbakers.order_management_system.core.ui.LocalVoiceCalcAccess
+import com.zeynbakers.order_management_system.core.ui.LocalVoiceOverlaySuppressed
+import com.zeynbakers.order_management_system.core.ui.VoiceCalcAccess
+import com.zeynbakers.order_management_system.core.ui.VoiceCalculatorOverlay
 import com.zeynbakers.order_management_system.core.ui.theme.Order_management_systemTheme
 import com.zeynbakers.order_management_system.customer.ui.CustomerAccountsViewModel
 import com.zeynbakers.order_management_system.customer.ui.CustomerDetailScreen
@@ -45,6 +54,7 @@ class MainActivity : ComponentActivity() {
                 val database = remember { DatabaseProvider.getDatabase(applicationContext) }
                 val viewModel = remember { OrderViewModel(database = database) }
                 val customerViewModel = remember { CustomerAccountsViewModel(database = database) }
+                val amountRegistry = remember { AmountFieldRegistry() }
                 var currentMonth by remember { mutableStateOf(0) }
                 var currentYear by remember { mutableStateOf(0) }
                 var baseMonth by remember { mutableStateOf(0) }
@@ -55,6 +65,15 @@ class MainActivity : ComponentActivity() {
                 var importContacts by remember { mutableStateOf<List<ImportContact>>(emptyList()) }
                 var selectedContactPhones by remember { mutableStateOf<Set<String>>(emptySet()) }
                 var isContactsLoading by remember { mutableStateOf(false) }
+                var hasRecordPermission by remember {
+                    mutableStateOf(
+                        ContextCompat.checkSelfPermission(
+                            context,
+                            Manifest.permission.RECORD_AUDIO
+                        ) == PackageManager.PERMISSION_GRANTED
+                    )
+                }
+                val overlaySuppressed = remember { mutableStateOf(false) }
 
                 val contactsPermissionLauncher = rememberLauncherForActivityResult(
                     ActivityResultContracts.RequestPermission()
@@ -68,6 +87,12 @@ class MainActivity : ComponentActivity() {
                             Toast.LENGTH_SHORT
                         ).show()
                     }
+                }
+
+                val recordPermissionLauncher = rememberLauncherForActivityResult(
+                    ActivityResultContracts.RequestPermission()
+                ) { granted: Boolean ->
+                    hasRecordPermission = granted
                 }
                 val dayDrafts = remember { mutableStateMapOf<LocalDate, OrderDraft>() }
 
@@ -133,173 +158,199 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
-                when (val active = screen) {
-                    Screen.Calendar -> {
-                        CalendarScreen(
-                            days = calendarDays,
-                            currentYear = currentYear,
-                            currentMonth = currentMonth,
-                            baseYear = baseYear,
-                            baseMonth = baseMonth,
-                            monthSnapshots = monthSnapshots,
-                            monthTotal = monthTotal,
-                            monthBadgeCount = monthBadgeCount,
-                            selectedDate = selectedDate,
-                            onSelectDate = { selectedDate = it },
-                            onSaveOrder = { date, notes, total, name, phone ->
-                                viewModel.saveOrder(
-                                    date = date,
-                                    notes = notes,
-                                    totalAmount = total,
-                                    customerName = name,
-                                    customerPhone = phone,
-                                    existingOrderId = null
-                                )
+                val voiceCalcAccess =
+                    remember(hasRecordPermission) {
+                        VoiceCalcAccess(
+                            hasPermission = hasRecordPermission,
+                            onRequestPermission = {
+                                recordPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
                             },
-                            searchCustomers = { query -> viewModel.searchCustomers(query) },
-                            onCustomersClick = { screen = Screen.CustomerList },
-                            onSummaryClick = { screen = Screen.Summary },
-                            onMonthSettled = { year, month ->
-                                currentYear = year
-                                currentMonth = month
-                            },
-                            onOpenDay = { date ->
-                                viewModel.loadOrdersForDate(date)
-                                screen = Screen.Day(date)
-                            }
+                            onApplyAmount = { amount -> amountRegistry.applyAmount(amount) }
                         )
                     }
-                    is Screen.Day -> {
-                        DayDetailScreen(
-                            date = active.date,
-                            orders = ordersForDate,
-                            dayTotal = dayTotal,
-                            customerNames = orderCustomerNames,
-                            orderPaidAmounts = orderPaidAmounts,
-                            onBack = { screen = Screen.Calendar },
-                            onSaveOrder = { notes, total, name, phone, orderId ->
-                                viewModel.saveOrder(
+
+                CompositionLocalProvider(
+                    LocalAmountFieldRegistry provides amountRegistry,
+                    LocalVoiceCalcAccess provides voiceCalcAccess,
+                    LocalVoiceOverlaySuppressed provides overlaySuppressed
+                ) {
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        when (val active = screen) {
+                            Screen.Calendar -> {
+                                CalendarScreen(
+                                    days = calendarDays,
+                                    currentYear = currentYear,
+                                    currentMonth = currentMonth,
+                                    baseYear = baseYear,
+                                    baseMonth = baseMonth,
+                                    monthSnapshots = monthSnapshots,
+                                    monthTotal = monthTotal,
+                                    monthBadgeCount = monthBadgeCount,
+                                    selectedDate = selectedDate,
+                                    onSelectDate = { selectedDate = it },
+                                    onSaveOrder = { date, notes, total, name, phone ->
+                                        viewModel.saveOrder(
+                                            date = date,
+                                            notes = notes,
+                                            totalAmount = total,
+                                            customerName = name,
+                                            customerPhone = phone,
+                                            existingOrderId = null
+                                        )
+                                    },
+                                    searchCustomers = { query -> viewModel.searchCustomers(query) },
+                                    onCustomersClick = { screen = Screen.CustomerList },
+                                    onSummaryClick = { screen = Screen.Summary },
+                                    onMonthSettled = { year, month ->
+                                        currentYear = year
+                                        currentMonth = month
+                                    },
+                                    onOpenDay = { date ->
+                                        viewModel.loadOrdersForDate(date)
+                                        screen = Screen.Day(date)
+                                    }
+                                )
+                            }
+                            is Screen.Day -> {
+                                DayDetailScreen(
                                     date = active.date,
-                                    notes = notes,
-                                    totalAmount = total,
-                                    customerName = name,
-                                    customerPhone = phone,
-                                    existingOrderId = orderId
+                                    orders = ordersForDate,
+                                    dayTotal = dayTotal,
+                                    customerNames = orderCustomerNames,
+                                    orderPaidAmounts = orderPaidAmounts,
+                                    onBack = { screen = Screen.Calendar },
+                                    onSaveOrder = { notes, total, name, phone, orderId ->
+                                        viewModel.saveOrder(
+                                            date = active.date,
+                                            notes = notes,
+                                            totalAmount = total,
+                                            customerName = name,
+                                            customerPhone = phone,
+                                            existingOrderId = orderId
+                                        )
+                                    },
+                                    onDeleteOrder = { orderId ->
+                                        viewModel.cancelOrder(orderId, active.date)
+                                    },
+                                    loadCustomerById = { id -> viewModel.getCustomerById(id) },
+                                    searchCustomers = { query -> viewModel.searchCustomers(query) },
+                                    draft = dayDrafts[active.date],
+                                    onDraftChange = { updated ->
+                                        if (updated == null) {
+                                            dayDrafts.remove(active.date)
+                                        } else {
+                                            dayDrafts[active.date] = updated
+                                        }
+                                    }
                                 )
-                            },
-                            onDeleteOrder = { orderId ->
-                                viewModel.cancelOrder(orderId, active.date)
-                            },
-                            loadCustomerById = { id -> viewModel.getCustomerById(id) },
-                            searchCustomers = { query -> viewModel.searchCustomers(query) },
-                            draft = dayDrafts[active.date],
-                            onDraftChange = { updated ->
-                                if (updated == null) {
-                                    dayDrafts.remove(active.date)
-                                } else {
-                                    dayDrafts[active.date] = updated
-                                }
                             }
-                        )
-                    }
-                    Screen.Summary -> {
-                        BackHandler { screen = Screen.Calendar }
-                        SummaryScreen(
-                            monthLabel = monthLabel(currentYear, currentMonth),
-                            monthTotal = monthTotal,
-                            onBack = { screen = Screen.Calendar }
-                        )
-                    }
-                    Screen.CustomerList -> {
-                        BackHandler { screen = Screen.Calendar }
-                        CustomerListScreen(
-                            query = customerQuery,
-                            summaries = customerSummaries,
-                            onQueryChange = { customerQuery = it },
-                            onCustomerClick = { id ->
-                                screen = Screen.CustomerDetail(id)
-                            },
-                            onAddCustomer = {
-                                val hasPermission =
-                                    ContextCompat.checkSelfPermission(
-                                        context,
-                                        Manifest.permission.READ_CONTACTS
-                                    ) == PackageManager.PERMISSION_GRANTED
-                                if (hasPermission) {
-                                    screen = Screen.ImportContacts
-                                } else {
-                                    contactsPermissionLauncher.launch(Manifest.permission.READ_CONTACTS)
-                                }
-                            },
-                            onBack = { screen = Screen.Calendar }
-                        )
-                    }
-                    Screen.ImportContacts -> {
-                        BackHandler { screen = Screen.CustomerList }
-                        ImportContactsScreen(
-                            contacts = importContacts,
-                            selectedPhones = selectedContactPhones,
-                            isLoading = isContactsLoading,
-                            onBack = { screen = Screen.CustomerList },
-                            onToggleSelect = { phone ->
-                                selectedContactPhones =
-                                    if (selectedContactPhones.contains(phone)) {
-                                        selectedContactPhones - phone
-                                    } else {
-                                        selectedContactPhones + phone
-                                    }
-                            },
-                            onToggleSelectAll = {
-                                val allPhones = importContacts.map { it.phone }.toSet()
-                                selectedContactPhones =
-                                    if (selectedContactPhones.size == allPhones.size) {
-                                        emptySet()
-                                    } else {
-                                        allPhones
-                                    }
-                            },
-                            onImport = {
-                                if (selectedContactPhones.isEmpty()) {
-                                    Toast.makeText(
-                                        context,
-                                        "Select at least one contact to import",
-                                        Toast.LENGTH_SHORT
-                                    ).show()
-                                } else {
-                                    val contactsByPhone =
-                                        importContacts.associateBy { it.phone }
-                                    selectedContactPhones.forEach { phone ->
-                                        val contact = contactsByPhone[phone] ?: return@forEach
-                                        customerViewModel.importCustomer(contact.name, contact.phone)
-                                    }
-                                    screen = Screen.CustomerList
-                                }
-                            }
-                        )
-                    }
-                    is Screen.CustomerDetail -> {
-                        BackHandler { screen = Screen.CustomerList }
-                        CustomerDetailScreen(
-                            customer = customerDetail,
-                            ledger = customerLedger,
-                            balance = customerBalance,
-                            orders = customerOrders,
-                            onBack = { screen = Screen.CustomerList },
-                            onRecordPayment = { amount, method, note, orderId ->
-                                customerViewModel.recordPayment(
-                                    customerId = active.customerId,
-                                    amount = amount,
-                                    method = method,
-                                    note = note,
-                                    orderId = orderId
+                            Screen.Summary -> {
+                                BackHandler { screen = Screen.Calendar }
+                                SummaryScreen(
+                                    monthLabel = monthLabel(currentYear, currentMonth),
+                                    monthTotal = monthTotal,
+                                    onBack = { screen = Screen.Calendar }
                                 )
-                            },
-                            onUpdateOrderStatusOverride = { orderId, override ->
-                                customerViewModel.setOrderStatusOverride(orderId, override)
-                            },
-                            onWriteOffOrder = { orderId ->
-                                customerViewModel.writeOffOrder(orderId)
                             }
+                            Screen.CustomerList -> {
+                                BackHandler { screen = Screen.Calendar }
+                                CustomerListScreen(
+                                    query = customerQuery,
+                                    summaries = customerSummaries,
+                                    onQueryChange = { customerQuery = it },
+                                    onCustomerClick = { id ->
+                                        screen = Screen.CustomerDetail(id)
+                                    },
+                                    onAddCustomer = {
+                                        val hasPermission =
+                                            ContextCompat.checkSelfPermission(
+                                                context,
+                                                Manifest.permission.READ_CONTACTS
+                                            ) == PackageManager.PERMISSION_GRANTED
+                                        if (hasPermission) {
+                                            screen = Screen.ImportContacts
+                                        } else {
+                                            contactsPermissionLauncher.launch(Manifest.permission.READ_CONTACTS)
+                                        }
+                                    },
+                                    onBack = { screen = Screen.Calendar }
+                                )
+                            }
+                            Screen.ImportContacts -> {
+                                BackHandler { screen = Screen.CustomerList }
+                                ImportContactsScreen(
+                                    contacts = importContacts,
+                                    selectedPhones = selectedContactPhones,
+                                    isLoading = isContactsLoading,
+                                    onBack = { screen = Screen.CustomerList },
+                                    onToggleSelect = { phone ->
+                                        selectedContactPhones =
+                                            if (selectedContactPhones.contains(phone)) {
+                                                selectedContactPhones - phone
+                                            } else {
+                                                selectedContactPhones + phone
+                                            }
+                                    },
+                                    onToggleSelectAll = {
+                                        val allPhones = importContacts.map { it.phone }.toSet()
+                                        selectedContactPhones =
+                                            if (selectedContactPhones.size == allPhones.size) {
+                                                emptySet()
+                                            } else {
+                                                allPhones
+                                            }
+                                    },
+                                    onImport = {
+                                        if (selectedContactPhones.isEmpty()) {
+                                            Toast.makeText(
+                                                context,
+                                                "Select at least one contact to import",
+                                                Toast.LENGTH_SHORT
+                                            ).show()
+                                        } else {
+                                            val contactsByPhone =
+                                                importContacts.associateBy { it.phone }
+                                            selectedContactPhones.forEach { phone ->
+                                                val contact = contactsByPhone[phone] ?: return@forEach
+                                                customerViewModel.importCustomer(contact.name, contact.phone)
+                                            }
+                                            screen = Screen.CustomerList
+                                        }
+                                    }
+                                )
+                            }
+                            is Screen.CustomerDetail -> {
+                                BackHandler { screen = Screen.CustomerList }
+                                CustomerDetailScreen(
+                                    customer = customerDetail,
+                                    ledger = customerLedger,
+                                    balance = customerBalance,
+                                    orders = customerOrders,
+                                    onBack = { screen = Screen.CustomerList },
+                                    onRecordPayment = { amount, method, note, orderId ->
+                                        customerViewModel.recordPayment(
+                                            customerId = active.customerId,
+                                            amount = amount,
+                                            method = method,
+                                            note = note,
+                                            orderId = orderId
+                                        )
+                                    },
+                                    onUpdateOrderStatusOverride = { orderId, override ->
+                                        customerViewModel.setOrderStatusOverride(orderId, override)
+                                    },
+                                    onWriteOffOrder = { orderId ->
+                                        customerViewModel.writeOffOrder(orderId)
+                                    }
+                                )
+                            }
+                        }
+
+                        VoiceCalculatorOverlay(
+                            hasPermission = hasRecordPermission,
+                            onRequestPermission = voiceCalcAccess.onRequestPermission,
+                            onApplyAmount = voiceCalcAccess.onApplyAmount,
+                            isVisible = !overlaySuppressed.value
                         )
                     }
                 }
