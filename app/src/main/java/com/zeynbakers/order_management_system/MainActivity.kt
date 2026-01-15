@@ -22,6 +22,7 @@ import com.zeynbakers.order_management_system.customer.ui.CustomerDetailScreen
 import com.zeynbakers.order_management_system.customer.ui.CustomerListScreen
 import com.zeynbakers.order_management_system.customer.ui.ImportContact
 import com.zeynbakers.order_management_system.customer.ui.ImportContactsScreen
+import com.zeynbakers.order_management_system.order.data.OrderStatusOverride
 import com.zeynbakers.order_management_system.order.ui.CalendarScreen
 import com.zeynbakers.order_management_system.order.ui.DayDetailScreen
 import com.zeynbakers.order_management_system.order.ui.OrderDraft
@@ -292,6 +293,12 @@ class MainActivity : ComponentActivity() {
                                     note = note,
                                     orderId = orderId
                                 )
+                            },
+                            onUpdateOrderStatusOverride = { orderId, override ->
+                                customerViewModel.setOrderStatusOverride(orderId, override)
+                            },
+                            onWriteOffOrder = { orderId ->
+                                customerViewModel.writeOffOrder(orderId)
                             }
                         )
                     }

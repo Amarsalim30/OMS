@@ -16,7 +16,7 @@ import com.zeynbakers.order_management_system.order.data.*
                         CustomerEntity::class,
                         PaymentEntity::class,
                         AccountEntryEntity::class],
-        version = 2,
+        version = 3,
         exportSchema = false
 )
 @TypeConverters(Converters::class)

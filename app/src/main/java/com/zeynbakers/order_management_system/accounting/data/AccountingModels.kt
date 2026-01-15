@@ -15,3 +15,8 @@ data class OrderPaymentSummary(
     val orderId: Long,
     val paid: BigDecimal
 )
+
+data class OrderPaymentActivity(
+    val orderId: Long,
+    val lastPaymentAt: Long?
+)

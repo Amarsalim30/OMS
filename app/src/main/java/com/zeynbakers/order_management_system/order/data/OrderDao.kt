@@ -32,6 +32,9 @@ interface OrderDao {
     @Query("UPDATE orders SET status = 'CANCELLED' WHERE id = :orderId")
     suspend fun markCancelled(orderId: Long)
 
+    @Query("UPDATE orders SET statusOverride = :statusOverride, updatedAt = :updatedAt WHERE id = :orderId")
+    suspend fun updateStatusOverride(orderId: Long, statusOverride: String?, updatedAt: Long)
+
     @Query("SELECT SUM(totalAmount) FROM orders WHERE customerId = :customerId")
     suspend fun getTotalBilled(customerId: Long): BigDecimal?
 

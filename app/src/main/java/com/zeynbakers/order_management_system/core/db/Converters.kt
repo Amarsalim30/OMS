@@ -32,6 +32,17 @@ class Converters {
         com.zeynbakers.order_management_system.order.data.OrderStatus.valueOf(value)
 
     @TypeConverter
+    fun fromOrderStatusOverride(
+        status: com.zeynbakers.order_management_system.order.data.OrderStatusOverride?
+    ): String? = status?.name
+
+    @TypeConverter
+    fun toOrderStatusOverride(
+        value: String?
+    ): com.zeynbakers.order_management_system.order.data.OrderStatusOverride? =
+        value?.let { com.zeynbakers.order_management_system.order.data.OrderStatusOverride.valueOf(it) }
+
+    @TypeConverter
     fun fromItemCategory(category: com.zeynbakers.order_management_system.order.data.ItemCategory): String =
         category.name
 

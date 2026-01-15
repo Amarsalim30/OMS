@@ -11,11 +11,17 @@ import com.zeynbakers.order_management_system.core.db.AppDatabase
 import com.zeynbakers.order_management_system.customer.data.CustomerEntity
 import com.zeynbakers.order_management_system.order.data.OrderEntity
 import com.zeynbakers.order_management_system.order.data.OrderStatus
+import com.zeynbakers.order_management_system.order.data.OrderStatusOverride
 import java.math.BigDecimal
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.atStartOfDayIn
 import kotlinx.datetime.Clock
+import kotlinx.datetime.DateTimeUnit
+import kotlinx.datetime.plus
+import kotlinx.datetime.toLocalDateTime
 
 class CustomerAccountsViewModel(private val database: AppDatabase) : ViewModel() {
     private val accountingDao: AccountingDao = database.accountingDao()
@@ -34,7 +40,7 @@ class CustomerAccountsViewModel(private val database: AppDatabase) : ViewModel()
     private val _balance = MutableStateFlow(BigDecimal.ZERO)
     val balance = _balance.asStateFlow()
 
-    private val _orders = MutableStateFlow<List<OrderEntity>>(emptyList())
+    private val _orders = MutableStateFlow<List<CustomerOrderUi>>(emptyList())
     val orders = _orders.asStateFlow()
     private var lastQuery: String = ""
 
@@ -71,7 +77,57 @@ class CustomerAccountsViewModel(private val database: AppDatabase) : ViewModel()
             _customer.value = customerDao.getById(customerId)
             _ledger.value = accountingDao.getLedgerForCustomer(customerId)
             _balance.value = accountingDao.getCustomerBalance(customerId)
-            _orders.value = orderDao.getOrdersByCustomer(customerId).sortedByDescending { it.orderDate }
+            val orders = orderDao.getOrdersByCustomer(customerId).filter { it.status != OrderStatus.CANCELLED }
+            val orderIds = orders.map { it.id }.filter { it != 0L }
+            val paidByOrder =
+                if (orderIds.isEmpty()) {
+                    emptyMap()
+                } else {
+                    accountingDao.getPaidForOrders(orderIds).associate { it.orderId to it.paid }
+                }
+            val lastPaymentByOrder =
+                if (orderIds.isEmpty()) {
+                    emptyMap()
+                } else {
+                    accountingDao.getLastPaymentDatesForOrders(orderIds)
+                        .associate { it.orderId to it.lastPaymentAt }
+                }
+            val uiOrders =
+                orders.map { order ->
+                    val paidAmount = paidByOrder[order.id] ?: BigDecimal.ZERO
+                    val paymentState =
+                        when {
+                            paidAmount <= BigDecimal.ZERO -> OrderPaymentState.UNPAID
+                            paidAmount < order.totalAmount -> OrderPaymentState.PARTIAL
+                            else -> OrderPaymentState.PAID
+                        }
+                    val effectiveStatus =
+                        when (order.statusOverride) {
+                            OrderStatusOverride.OPEN -> OrderEffectiveStatus.OPEN
+                            OrderStatusOverride.CLOSED -> OrderEffectiveStatus.CLOSED
+                            null ->
+                                if (paidAmount >= order.totalAmount) {
+                                    OrderEffectiveStatus.CLOSED
+                                } else {
+                                    OrderEffectiveStatus.OPEN
+                                }
+                        }
+                    val orderDateMillis =
+                        order.orderDate.atStartOfDayIn(TimeZone.currentSystemDefault()).toEpochMilliseconds()
+                    val lastPaymentAt = lastPaymentByOrder[order.id]
+                    val lastActivityAt =
+                        maxOf(orderDateMillis, order.updatedAt, lastPaymentAt ?: 0L)
+                    CustomerOrderUi(
+                        order = order,
+                        paidAmount = paidAmount,
+                        lastPaymentAt = lastPaymentAt,
+                        lastActivityAt = lastActivityAt,
+                        paymentState = paymentState,
+                        effectiveStatus = effectiveStatus,
+                        statusOverride = order.statusOverride
+                    )
+                }
+            _orders.value = uiOrders.sortedByDescending { it.order.createdAt }
         }
     }
 
@@ -84,6 +140,39 @@ class CustomerAccountsViewModel(private val database: AppDatabase) : ViewModel()
     ) {
         viewModelScope.launch {
             recordPaymentInternal(customerId, amount, method, note, orderId)
+            loadCustomer(customerId)
+        }
+    }
+
+    fun writeOffOrder(orderId: Long) {
+        viewModelScope.launch {
+            val order = orderDao.getOrderById(orderId) ?: return@launch
+            if (!isOlderThanOneMonth(order.orderDate)) return@launch
+            val paidSoFar = accountingDao.getPaidForOrder(orderId)
+            val remaining = order.totalAmount - paidSoFar
+            if (remaining <= BigDecimal.ZERO) return@launch
+
+            accountingDao.insertAccountEntry(
+                AccountEntryEntity(
+                    orderId = orderId,
+                    customerId = order.customerId,
+                    type = EntryType.WRITE_OFF,
+                    amount = remaining,
+                    date = Clock.System.now().toEpochMilliseconds(),
+                    description = "Bad debt write-off: Order #$orderId"
+                )
+            )
+            orderDao.updateStatusOverride(orderId, null, Clock.System.now().toEpochMilliseconds())
+
+            val customerId = _customer.value?.id ?: return@launch
+            loadCustomer(customerId)
+        }
+    }
+
+    fun setOrderStatusOverride(orderId: Long, statusOverride: OrderStatusOverride?) {
+        viewModelScope.launch {
+            orderDao.updateStatusOverride(orderId, statusOverride?.name, Clock.System.now().toEpochMilliseconds())
+            val customerId = _customer.value?.id ?: return@launch
             loadCustomer(customerId)
         }
     }
@@ -166,7 +255,10 @@ class CustomerAccountsViewModel(private val database: AppDatabase) : ViewModel()
         val now = Clock.System.now().toEpochMilliseconds()
         val orders =
             orderDao.getOrdersByCustomer(customerId)
-                .filter { it.status != OrderStatus.CANCELLED }
+                .filter {
+                    it.status != OrderStatus.CANCELLED &&
+                        it.statusOverride != OrderStatusOverride.CLOSED
+                }
                 .sortedBy { it.orderDate }
 
         for (order in orders) {
@@ -201,5 +293,11 @@ class CustomerAccountsViewModel(private val database: AppDatabase) : ViewModel()
                 )
             )
         }
+    }
+
+    private fun isOlderThanOneMonth(orderDate: kotlinx.datetime.LocalDate): Boolean {
+        val cutoff = orderDate.plus(1, DateTimeUnit.MONTH)
+        val today = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date
+        return today >= cutoff
     }
 }

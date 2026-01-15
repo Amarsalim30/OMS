@@ -23,6 +23,7 @@ data class OrderEntity(
     val notes: String,
 
     val status: OrderStatus = OrderStatus.PENDING,
+    val statusOverride: OrderStatusOverride? = null,
 
     val totalAmount: BigDecimal,
     val amountPaid: BigDecimal = BigDecimal.ZERO,
@@ -35,4 +36,9 @@ enum class OrderStatus {
     CONFIRMED,
     COMPLETED,
     CANCELLED
+}
+
+enum class OrderStatusOverride {
+    OPEN,
+    CLOSED
 }
