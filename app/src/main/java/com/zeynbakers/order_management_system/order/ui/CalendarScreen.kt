@@ -202,8 +202,9 @@ fun CalendarScreen(
         monthTotal
     ) {
         derivedStateOf {
+            val snapshot = visibleSnapshot
             when {
-                visibleSnapshot != null -> visibleSnapshot.total
+                snapshot != null -> snapshot.total
                 visibleMonth.first == currentYear && visibleMonth.second == currentMonth -> monthTotal
                 else -> null
             }
@@ -217,8 +218,9 @@ fun CalendarScreen(
         monthBadgeCount
     ) {
         derivedStateOf {
+            val snapshot = visibleSnapshot
             when {
-                visibleSnapshot != null -> visibleSnapshot.badgeCount
+                snapshot != null -> snapshot.badgeCount
                 visibleMonth.first == currentYear && visibleMonth.second == currentMonth -> monthBadgeCount
                 else -> 0
             }
