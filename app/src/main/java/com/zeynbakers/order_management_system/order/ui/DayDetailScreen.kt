@@ -3,18 +3,21 @@ package com.zeynbakers.order_management_system.order.ui
 import android.util.Log
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -31,10 +34,13 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.ModalBottomSheetProperties
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -45,6 +51,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
@@ -53,11 +60,16 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.foundation.shape.RoundedCornerShape
 import com.zeynbakers.order_management_system.BuildConfig
 import com.zeynbakers.order_management_system.core.ui.LocalAmountFieldRegistry
 import com.zeynbakers.order_management_system.core.ui.LocalVoiceCalcAccess
@@ -189,7 +201,45 @@ fun DayDetailScreen(
         onBack()
     }
 
+    val dayStats = remember(orders, orderPaidAmounts, dayTotal) {
+        computeDayStats(orders, orderPaidAmounts, dayTotal)
+    }
+    val dayOfWeekLabel = remember(date) { titleCase(date.dayOfWeek.name) }
+    val monthLabel = remember(date) { titleCase(date.month.name) }
+    val dateLabel = remember(date, monthLabel) { "$monthLabel ${date.dayOfMonth}, ${date.year}" }
+    val onBackClick = {
+        if (isEditorOpen) {
+            isEditorOpen = false
+        } else {
+            onBack()
+        }
+    }
+
     Scaffold(
+        topBar = {
+            TopAppBar(
+                title = {
+                    Column {
+                        Text(
+                            text = dayOfWeekLabel,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Text(
+                            text = dateLabel,
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                },
+                navigationIcon = {
+                    IconButton(onClick = onBackClick) {
+                        Icon(imageVector = Icons.Filled.ArrowBack, contentDescription = "Back")
+                    }
+                },
+                colors = TopAppBarDefaults.topAppBarColors()
+            )
+        },
         floatingActionButton = {
             val existingDraft = draft
             val canRestoreDraft = existingDraft?.let { draftValue ->
@@ -216,60 +266,48 @@ fun DayDetailScreen(
             }
         }
     ) { padding ->
-        Box(modifier = Modifier.padding(padding)) {
-            DaySummaryHeader(
-                date = date,
-                dayTotal = dayTotal,
-                onBack = {
-                    if (isEditorOpen) {
-                        isEditorOpen = false
-                    } else {
-                        onBack()
-                    }
-                }
-            )
-            LazyColumn(modifier = Modifier.padding(top = 88.dp)) {
-                item {
-                    Spacer(Modifier.height(8.dp))
-                }
+        LazyColumn(modifier = Modifier.padding(padding)) {
+            item {
+                DaySummaryCard(
+                    date = date,
+                    dayTotal = dayTotal,
+                    stats = dayStats
+                )
+            }
 
-                if (orders.isEmpty()) {
-                    item {
-                        Text(
-                            text = "No orders yet",
-                            style = MaterialTheme.typography.bodyMedium,
-                            modifier = Modifier.padding(16.dp)
-                        )
-                    }
-                } else {
-                    items(orders) { order ->
-                        val customerLabel =
-                            order.customerId?.let { customerNames[it] } ?: "No customer"
-                        val paidAmount = orderPaidAmounts[order.id] ?: BigDecimal.ZERO
-                        val isPaid = paidAmount >= order.totalAmount
-                        OrderListItem(
-                            order = order,
-                            customerLabel = customerLabel,
-                            isPaid = isPaid,
-                            onEdit = {
-                                notes = order.notes
-                                totalText = order.totalAmount.toPlainString()
-                                editingOrderId = order.id
-                                notesError = null
-                                totalError = null
-                                customerError = null
-                                isEditorOpen = true
-                            },
-                            onDelete = {
-                                pendingDeleteOrder = order
-                            }
-                        )
-                    }
-                }
-
+            if (orders.isEmpty()) {
                 item {
-                    Spacer(Modifier.height(80.dp))
+                    EmptyDayState()
                 }
+            } else {
+                items(orders) { order ->
+                    val customerLabel =
+                        order.customerId?.let { customerNames[it] } ?: "No customer"
+                    val paidAmount = orderPaidAmounts[order.id] ?: BigDecimal.ZERO
+                    val paymentState = resolvePaymentState(order.totalAmount, paidAmount)
+                    OrderListItem(
+                        order = order,
+                        customerLabel = customerLabel,
+                        paidAmount = paidAmount,
+                        paymentState = paymentState,
+                        onEdit = {
+                            notes = order.notes
+                            totalText = order.totalAmount.toPlainString()
+                            editingOrderId = order.id
+                            notesError = null
+                            totalError = null
+                            customerError = null
+                            isEditorOpen = true
+                        },
+                        onDelete = {
+                            pendingDeleteOrder = order
+                        }
+                    )
+                }
+            }
+
+            item {
+                Spacer(Modifier.height(80.dp))
             }
         }
     }
@@ -583,37 +621,269 @@ fun DayDetailScreen(
 }
 
 @Composable
+private fun DaySummaryCard(
+    date: LocalDate,
+    dayTotal: BigDecimal,
+    stats: DaySummaryStats
+) {
+    val monthLabel = titleCase(date.month.name)
+    val dayOfWeekLabel = titleCase(date.dayOfWeek.name)
+    val balanceLabel = if (stats.balance.signum() >= 0) "Balance" else "Over"
+    val balanceValue = formatKes(stats.balance.abs())
+
+    Surface(
+        shape = RoundedCornerShape(20.dp),
+        tonalElevation = 1.dp,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp)
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(16.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant
+                ) {
+                    Column(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            text = date.dayOfMonth.toString(),
+                            style = MaterialTheme.typography.headlineMedium,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Text(
+                            text = monthLabel.take(3).uppercase(),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+
+                Spacer(Modifier.width(12.dp))
+
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = dayOfWeekLabel,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Text(
+                        text = "$monthLabel ${date.dayOfMonth}, ${date.year}",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                Column(horizontalAlignment = Alignment.End) {
+                    Text(
+                        text = "Total",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = formatKes(dayTotal),
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(12.dp))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                SummaryMetric(label = "Paid", value = formatKes(stats.totalPaid))
+                SummaryMetric(label = balanceLabel, value = balanceValue)
+            }
+
+            Spacer(Modifier.height(10.dp))
+
+            val chipScrollState = rememberScrollState()
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(chipScrollState),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                SummaryChip(
+                    label = "Orders",
+                    count = stats.orderCount,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                if (stats.paidCount > 0) {
+                    SummaryChip(
+                        label = "Paid",
+                        count = stats.paidCount,
+                        color = paymentStateColor(PaymentState.PAID)
+                    )
+                }
+                if (stats.partialCount > 0) {
+                    SummaryChip(
+                        label = "Partial",
+                        count = stats.partialCount,
+                        color = paymentStateColor(PaymentState.PARTIAL)
+                    )
+                }
+                if (stats.unpaidCount > 0) {
+                    SummaryChip(
+                        label = "Unpaid",
+                        count = stats.unpaidCount,
+                        color = paymentStateColor(PaymentState.UNPAID)
+                    )
+                }
+                if (stats.overpaidCount > 0) {
+                    SummaryChip(
+                        label = "Overpaid",
+                        count = stats.overpaidCount,
+                        color = paymentStateColor(PaymentState.OVERPAID)
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SummaryMetric(label: String, value: String) {
+    Column {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.SemiBold
+        )
+    }
+}
+
+@Composable
+private fun SummaryChip(label: String, count: Int, color: Color) {
+    Surface(
+        shape = RoundedCornerShape(999.dp),
+        color = color.copy(alpha = 0.15f)
+    ) {
+        Text(
+            text = "$label $count",
+            style = MaterialTheme.typography.labelMedium,
+            color = color,
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+        )
+    }
+}
+
+@Composable
+private fun EmptyDayState() {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 24.dp, vertical = 20.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(text = "No orders yet", style = MaterialTheme.typography.titleMedium)
+        Spacer(Modifier.height(4.dp))
+        Text(
+            text = "Tap + to add the first order.",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
+}
+
+@Composable
 private fun OrderListItem(
     order: OrderEntity,
     customerLabel: String,
-    isPaid: Boolean,
+    paidAmount: BigDecimal,
+    paymentState: PaymentState,
     onEdit: () -> Unit,
     onDelete: () -> Unit
 ) {
+    val stateColor = paymentStateColor(paymentState)
+    val statusLabel = paymentStateLabel(paymentState)
+    val balance = order.totalAmount.subtract(paidAmount)
+    val detailLabel =
+        when (paymentState) {
+            PaymentState.UNPAID -> "Balance ${formatKes(order.totalAmount)}"
+            PaymentState.PARTIAL -> "Balance ${formatKes(balance)}"
+            PaymentState.OVERPAID -> "Over ${formatKes(paidAmount.subtract(order.totalAmount))}"
+            PaymentState.PAID -> null
+        }
+    val customerTextColor =
+        if (customerLabel == "No customer") {
+            MaterialTheme.colorScheme.onSurfaceVariant
+        } else {
+            MaterialTheme.colorScheme.onSurface
+        }
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 6.dp)
-            .clickable { onEdit() }
+            .clickable { onEdit() },
+        shape = RoundedCornerShape(18.dp)
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(12.dp),
-            horizontalArrangement = Arrangement.SpaceBetween
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
+            Surface(
+                color = stateColor,
+                shape = RoundedCornerShape(3.dp),
+                modifier = Modifier
+                    .width(6.dp)
+                    .heightIn(min = 48.dp)
+            ) {}
+            Spacer(Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
-                Text(text = order.notes, style = MaterialTheme.typography.bodyLarge)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = order.notes,
+                        style = MaterialTheme.typography.titleMedium,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Text(
+                        text = formatKes(order.totalAmount),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
                 Spacer(Modifier.height(4.dp))
-                Text(text = customerLabel, style = MaterialTheme.typography.bodyMedium)
-                Text(text = formatKes(order.totalAmount), style = MaterialTheme.typography.bodyMedium)
                 Text(
-                    text = if (isPaid) "Paid" else "Unpaid",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = if (isPaid) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error
+                    text = customerLabel,
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = customerTextColor
                 )
+                Spacer(Modifier.height(6.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    StatusPill(label = statusLabel, color = stateColor)
+                    if (detailLabel != null) {
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            text = detailLabel,
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
             }
-            IconButton(
-                onClick = onDelete
-            ) {
+            IconButton(onClick = onDelete) {
                 Icon(imageVector = Icons.Filled.Delete, contentDescription = "Delete order")
             }
         }
@@ -621,24 +891,97 @@ private fun OrderListItem(
 }
 
 @Composable
-private fun DaySummaryHeader(
-    date: LocalDate,
-    dayTotal: BigDecimal,
-    onBack: () -> Unit
-) {
-    Card(modifier = Modifier.fillMaxWidth().padding(12.dp)) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(12.dp),
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            TextButton(onClick = onBack) { Text("Back") }
-            Column {
-                Text(text = "Date: $date", style = MaterialTheme.typography.titleMedium)
-                Text(text = "Total: ${formatKes(dayTotal)}", style = MaterialTheme.typography.bodyMedium)
-            }
-        }
+private fun StatusPill(label: String, color: Color) {
+    Surface(
+        shape = RoundedCornerShape(999.dp),
+        color = color.copy(alpha = 0.15f)
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelMedium,
+            color = color,
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+        )
     }
 }
+
+private fun resolvePaymentState(total: BigDecimal, paidAmount: BigDecimal): PaymentState {
+    if (paidAmount.compareTo(BigDecimal.ZERO) <= 0) {
+        return PaymentState.UNPAID
+    }
+    val balance = total.subtract(paidAmount)
+    return when {
+        balance.compareTo(BigDecimal.ZERO) > 0 -> PaymentState.PARTIAL
+        balance.compareTo(BigDecimal.ZERO) == 0 -> PaymentState.PAID
+        else -> PaymentState.OVERPAID
+    }
+}
+
+@Composable
+private fun paymentStateColor(state: PaymentState): Color {
+    return when (state) {
+        PaymentState.PAID -> MaterialTheme.colorScheme.tertiary
+        PaymentState.PARTIAL -> MaterialTheme.colorScheme.secondary
+        PaymentState.UNPAID -> MaterialTheme.colorScheme.error
+        PaymentState.OVERPAID -> MaterialTheme.colorScheme.primary
+    }
+}
+
+private fun paymentStateLabel(state: PaymentState): String {
+    return when (state) {
+        PaymentState.PAID -> "Paid"
+        PaymentState.PARTIAL -> "Partial"
+        PaymentState.UNPAID -> "Unpaid"
+        PaymentState.OVERPAID -> "Overpaid"
+    }
+}
+
+private fun computeDayStats(
+    orders: List<OrderEntity>,
+    orderPaidAmounts: Map<Long, BigDecimal>,
+    dayTotal: BigDecimal
+): DaySummaryStats {
+    var paidCount = 0
+    var partialCount = 0
+    var unpaidCount = 0
+    var overpaidCount = 0
+    var totalPaid = BigDecimal.ZERO
+
+    orders.forEach { order ->
+        val paidAmount = orderPaidAmounts[order.id] ?: BigDecimal.ZERO
+        totalPaid = totalPaid.add(paidAmount)
+        when (resolvePaymentState(order.totalAmount, paidAmount)) {
+            PaymentState.PAID -> paidCount += 1
+            PaymentState.PARTIAL -> partialCount += 1
+            PaymentState.UNPAID -> unpaidCount += 1
+            PaymentState.OVERPAID -> overpaidCount += 1
+        }
+    }
+
+    return DaySummaryStats(
+        orderCount = orders.size,
+        paidCount = paidCount,
+        partialCount = partialCount,
+        unpaidCount = unpaidCount,
+        overpaidCount = overpaidCount,
+        totalPaid = totalPaid,
+        balance = dayTotal.subtract(totalPaid)
+    )
+}
+
+private fun titleCase(value: String): String {
+    return value.lowercase().replaceFirstChar { it.uppercase() }
+}
+
+data class DaySummaryStats(
+    val orderCount: Int,
+    val paidCount: Int,
+    val partialCount: Int,
+    val unpaidCount: Int,
+    val overpaidCount: Int,
+    val totalPaid: BigDecimal,
+    val balance: BigDecimal
+)
 
 data class OrderDraft(
     val notes: String,
