@@ -43,7 +43,6 @@ import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.ModalBottomSheetProperties
@@ -86,7 +85,6 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.zeynbakers.order_management_system.BuildConfig
 import com.zeynbakers.order_management_system.core.util.formatKes
 import com.zeynbakers.order_management_system.core.ui.LocalAmountFieldRegistry
 import com.zeynbakers.order_management_system.core.ui.LocalVoiceCalcAccess
@@ -103,6 +101,8 @@ import kotlinx.datetime.TimeZone
 import kotlinx.datetime.plus
 import kotlinx.datetime.toLocalDateTime
 
+private const val TAG_SHEET_BACK = "SheetBack"
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CalendarScreen(
@@ -112,12 +112,12 @@ fun CalendarScreen(
     baseYear: Int,
     baseMonth: Int,
     monthSnapshots: Map<MonthKey, MonthSnapshot>,
-    monthTotal: java.math.BigDecimal,
+    monthTotal: BigDecimal,
     monthBadgeCount: Int,
     selectedDate: LocalDate?,
     onSelectDate: (LocalDate) -> Unit,
     onOpenDay: (LocalDate) -> Unit,
-    onSaveOrder: (LocalDate, String, java.math.BigDecimal, String, String) -> Unit,
+    onSaveOrder: (LocalDate, String, BigDecimal, String, String) -> Unit,
     searchCustomers: suspend (String) -> List<CustomerEntity>,
     onCustomersClick: () -> Unit,
     onSummaryClick: () -> Unit,
@@ -244,7 +244,15 @@ fun CalendarScreen(
             )
         },
         floatingActionButton = {
-            FloatingActionButton(onClick = { isQuickAddOpen = true }) {
+            FloatingActionButton(
+                onClick = {
+                    val date = selectedDate ?: today
+                    if (selectedDate == null) {
+                        onSelectDate(date)
+                    }
+                    isQuickAddOpen = true
+                }
+            ) {
                 Icon(imageVector = Icons.Filled.Add, contentDescription = "Add order")
             }
         }
@@ -308,6 +316,9 @@ fun CalendarScreen(
         val nameRequester = remember { FocusRequester() }
         val phoneRequester = remember { FocusRequester() }
         val imeVisible = WindowInsets.ime.getBottom(density) > 0
+        val imeVisibleState by rememberUpdatedState(imeVisible)
+        val keyboardControllerState by rememberUpdatedState(keyboardController)
+        val focusManagerState by rememberUpdatedState(focusManager)
         LaunchedEffect(activeDate) {
             notesRequester.requestFocus()
         }
@@ -318,19 +329,19 @@ fun CalendarScreen(
         }
         val handleBackPress: () -> Unit = {
             val sheetOpen = isQuickAddOpen
-            if (BuildConfig.DEBUG) {
-                Log.d("SheetBack", "back pressed imeVisible=$imeVisible sheetOpen=$sheetOpen")
+            if (Log.isLoggable(TAG_SHEET_BACK, Log.DEBUG)) {
+                Log.d(TAG_SHEET_BACK, "back pressed imeVisible=$imeVisibleState sheetOpen=$sheetOpen")
             }
-            if (imeVisible) {
-                keyboardController?.hide()
-                focusManager.clearFocus(force = true)
+            if (imeVisibleState) {
+                keyboardControllerState?.hide()
+                focusManagerState.clearFocus(force = true)
             } else {
                 isQuickAddOpen = false
             }
         }
         val handleDismissRequest: () -> Unit = {
-            if (BuildConfig.DEBUG) {
-                Log.d("SheetBack", "dismiss request imeVisible=$imeVisible sheetOpen=true")
+            if (Log.isLoggable(TAG_SHEET_BACK, Log.DEBUG)) {
+                Log.d(TAG_SHEET_BACK, "dismiss request imeVisible=$imeVisible sheetOpen=true")
             }
             dismissSheet()
         }
@@ -339,9 +350,7 @@ fun CalendarScreen(
             sheetState = sheetState,
             properties = ModalBottomSheetProperties(shouldDismissOnBackPress = false)
         ) {
-            BackHandler {
-                handleBackPress()
-            }
+            BackHandler(onBack = handleBackPress)
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -364,13 +373,13 @@ fun CalendarScreen(
 
                 val trimmedNotes = notes.trim()
                 val parsedTotal = totalText.trim().takeIf { it.isNotEmpty() }?.let {
-                    runCatching { java.math.BigDecimal(it) }.getOrNull()
+                    runCatching { BigDecimal(it) }.getOrNull()
                 }
                 val hasCustomerMismatch = (customerName.isBlank() xor customerPhone.isBlank())
                 val canSave =
                     trimmedNotes.isNotEmpty() &&
                         parsedTotal != null &&
-                        parsedTotal > java.math.BigDecimal.ZERO &&
+                        parsedTotal > BigDecimal.ZERO &&
                         !hasCustomerMismatch
 
                 fun submitOrder() {
@@ -380,7 +389,7 @@ fun CalendarScreen(
                             totalError = null
                             customerError = null
                         }
-                        parsedTotal == null || parsedTotal <= java.math.BigDecimal.ZERO -> {
+                        parsedTotal == null || parsedTotal <= BigDecimal.ZERO -> {
                             notesError = null
                             totalError = "Enter a valid total"
                             customerError = null
@@ -560,6 +569,7 @@ fun CalendarScreen(
     }
 }
 
+
 @Composable
 @OptIn(ExperimentalMaterial3Api::class)
 private fun CalendarTopAppBar(
@@ -724,7 +734,7 @@ private fun MonthGrid(
         horizontalArrangement = Arrangement.spacedBy(6.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
-        items(items = days, key = { it.date }) { day ->
+        items(items = days, key = { it.date.toString() }) { day ->
             DayCell(
                 day = day,
                 isSelected = selectedDate == day.date,

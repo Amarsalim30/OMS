@@ -15,10 +15,11 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.unit.dp
 import androidx.activity.compose.BackHandler
-import com.zeynbakers.order_management_system.BuildConfig
 import com.zeynbakers.order_management_system.order.data.*
 import kotlinx.datetime.LocalDate
 import java.math.BigDecimal
+
+private const val TAG_SHEET_BACK = "SheetBack"
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Suppress("unused")
@@ -34,6 +35,9 @@ fun OrderEditorSheet(
     val focusManager = LocalFocusManager.current
     val keyboardController = LocalSoftwareKeyboardController.current
     val imeVisible = WindowInsets.ime.getBottom(density) > 0
+    val imeVisibleState by rememberUpdatedState(imeVisible)
+    val keyboardControllerState by rememberUpdatedState(keyboardController)
+    val focusManagerState by rememberUpdatedState(focusManager)
 
     val dismissSheet = {
         keyboardController?.hide()
@@ -42,19 +46,19 @@ fun OrderEditorSheet(
     }
     val handleBackPress: () -> Unit = {
         val sheetOpen = true
-        if (BuildConfig.DEBUG) {
-            Log.d("SheetBack", "back pressed imeVisible=$imeVisible sheetOpen=$sheetOpen")
+        if (Log.isLoggable(TAG_SHEET_BACK, Log.DEBUG)) {
+            Log.d(TAG_SHEET_BACK, "back pressed imeVisible=$imeVisibleState sheetOpen=$sheetOpen")
         }
-        if (imeVisible) {
-            keyboardController?.hide()
-            focusManager.clearFocus(force = true)
+        if (imeVisibleState) {
+            keyboardControllerState?.hide()
+            focusManagerState.clearFocus(force = true)
         } else {
             onDismiss()
         }
     }
     val handleDismissRequest: () -> Unit = {
-        if (BuildConfig.DEBUG) {
-            Log.d("SheetBack", "dismiss request imeVisible=$imeVisible sheetOpen=true")
+        if (Log.isLoggable(TAG_SHEET_BACK, Log.DEBUG)) {
+            Log.d(TAG_SHEET_BACK, "dismiss request imeVisible=$imeVisible sheetOpen=true")
         }
         dismissSheet()
     }
@@ -63,9 +67,7 @@ fun OrderEditorSheet(
         sheetState = sheetState,
         properties = ModalBottomSheetProperties(shouldDismissOnBackPress = false)
     ) {
-        BackHandler {
-            handleBackPress()
-        }
+        BackHandler(onBack = handleBackPress)
 
         Column(
             modifier = Modifier

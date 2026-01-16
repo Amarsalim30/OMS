@@ -70,7 +70,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.foundation.shape.RoundedCornerShape
-import com.zeynbakers.order_management_system.BuildConfig
 import com.zeynbakers.order_management_system.core.ui.LocalAmountFieldRegistry
 import com.zeynbakers.order_management_system.core.ui.LocalVoiceCalcAccess
 import com.zeynbakers.order_management_system.core.ui.LocalVoiceOverlaySuppressed
@@ -83,6 +82,8 @@ import java.math.RoundingMode
 import java.text.NumberFormat
 import java.util.Locale
 import kotlinx.datetime.LocalDate
+
+private const val TAG_SHEET_BACK = "SheetBack"
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -197,9 +198,7 @@ fun DayDetailScreen(
         suggestions = if (query.isBlank()) emptyList() else searchCustomers(query)
     }
 
-    BackHandler(enabled = !isEditorOpen) {
-        onBack()
-    }
+    BackHandler(enabled = !isEditorOpen, onBack = onBack)
 
     val dayStats = remember(orders, orderPaidAmounts, dayTotal) {
         computeDayStats(orders, orderPaidAmounts, dayTotal)
@@ -369,6 +368,9 @@ fun DayDetailScreen(
         val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
         val density = LocalDensity.current
         val imeVisible = WindowInsets.ime.getBottom(density) > 0
+        val imeVisibleState by rememberUpdatedState(imeVisible)
+        val keyboardControllerState by rememberUpdatedState(keyboardController)
+        val focusManagerState by rememberUpdatedState(focusManager)
         val dismissSheet = {
             keyboardController?.hide()
             focusManager.clearFocus(force = true)
@@ -376,19 +378,19 @@ fun DayDetailScreen(
         }
         val handleBackPress: () -> Unit = {
             val sheetOpen = isEditorOpen
-            if (BuildConfig.DEBUG) {
-                Log.d("SheetBack", "back pressed imeVisible=$imeVisible sheetOpen=$sheetOpen")
+            if (Log.isLoggable(TAG_SHEET_BACK, Log.DEBUG)) {
+                Log.d(TAG_SHEET_BACK, "back pressed imeVisible=$imeVisibleState sheetOpen=$sheetOpen")
             }
-            if (imeVisible) {
-                keyboardController?.hide()
-                focusManager.clearFocus(force = true)
+            if (imeVisibleState) {
+                keyboardControllerState?.hide()
+                focusManagerState.clearFocus(force = true)
             } else {
                 isEditorOpen = false
             }
         }
         val handleDismissRequest: () -> Unit = {
-            if (BuildConfig.DEBUG) {
-                Log.d("SheetBack", "dismiss request imeVisible=$imeVisible sheetOpen=true")
+            if (Log.isLoggable(TAG_SHEET_BACK, Log.DEBUG)) {
+                Log.d(TAG_SHEET_BACK, "dismiss request imeVisible=$imeVisible sheetOpen=true")
             }
             dismissSheet()
         }
@@ -397,9 +399,7 @@ fun DayDetailScreen(
             sheetState = sheetState,
             properties = ModalBottomSheetProperties(shouldDismissOnBackPress = false)
         ) {
-            BackHandler {
-                handleBackPress()
-            }
+            BackHandler(onBack = handleBackPress)
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
