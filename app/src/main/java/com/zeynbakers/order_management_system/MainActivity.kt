@@ -105,6 +105,9 @@ class MainActivity : ComponentActivity() {
                 val orderCustomerNames by viewModel.orderCustomerNames.collectAsState()
                 val orderPaidAmounts by viewModel.orderPaidAmounts.collectAsState()
                 val monthSnapshots by viewModel.monthSnapshots.collectAsState()
+                val summaryOrders by viewModel.summaryOrders.collectAsState()
+                val summaryTotal by viewModel.summaryTotal.collectAsState()
+                val summaryCustomerNames by viewModel.summaryCustomerNames.collectAsState()
 
                 val customerSummaries by customerViewModel.summaries.collectAsState()
                 val customerDetail by customerViewModel.customer.collectAsState()
@@ -258,13 +261,13 @@ class MainActivity : ComponentActivity() {
                                 SummaryScreen(
                                     monthLabel = monthLabel(currentYear, currentMonth),
                                     monthTotal = monthTotal,
-                                    date = summaryDate ?: selectedDate ?: today,
-                                    orders = ordersForDate,
-                                    dayTotal = dayTotal,
-                                    customerNames = orderCustomerNames,
-                                    onLoadDate = { viewModel.loadOrdersForDate(it) },
-                                    onDateChange = { newDate ->
-                                        summaryDate = newDate
+                                    initialDate = summaryDate ?: selectedDate ?: today,
+                                    orders = summaryOrders,
+                                    rangeTotal = summaryTotal,
+                                    customerNames = summaryCustomerNames,
+                                    onAnchorDateChange = { updated -> summaryDate = updated },
+                                    onLoadRange = { start, end ->
+                                        viewModel.loadSummaryRange(startInclusive = start, endExclusive = end)
                                     },
                                     onBack = { screen = Screen.Calendar }
                                 )

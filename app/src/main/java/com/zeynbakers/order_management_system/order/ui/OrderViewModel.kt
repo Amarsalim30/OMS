@@ -43,6 +43,15 @@ class OrderViewModel(private val database: AppDatabase) : ViewModel() {
     private val _dayTotal = MutableStateFlow(BigDecimal.ZERO)
     val dayTotal = _dayTotal.asStateFlow()
 
+    private val _summaryOrders = MutableStateFlow<List<OrderEntity>>(emptyList())
+    val summaryOrders = _summaryOrders.asStateFlow()
+
+    private val _summaryTotal = MutableStateFlow(BigDecimal.ZERO)
+    val summaryTotal = _summaryTotal.asStateFlow()
+
+    private val _summaryCustomerNames = MutableStateFlow<Map<Long, String>>(emptyMap())
+    val summaryCustomerNames = _summaryCustomerNames.asStateFlow()
+
     private val _monthTotal = MutableStateFlow(BigDecimal.ZERO)
     val monthTotal = _monthTotal.asStateFlow()
 
@@ -165,6 +174,27 @@ class OrderViewModel(private val database: AppDatabase) : ViewModel() {
                     accountingDao.getPaidForOrders(orderIds).associate {
                         it.orderId to it.paid
                     }
+                }
+        }
+    }
+
+    fun loadSummaryRange(startInclusive: LocalDate, endExclusive: LocalDate) {
+        viewModelScope.launch {
+            val orders = orderDao.getOrdersBetween(startInclusive.toString(), endExclusive.toString())
+            val activeOrders = orders.filter { it.status != OrderStatus.CANCELLED }
+            _summaryOrders.value =
+                activeOrders.sortedWith(
+                    compareByDescending<OrderEntity> { it.orderDate }.thenByDescending { it.createdAt }
+                )
+            _summaryTotal.value =
+                activeOrders.fold(BigDecimal.ZERO) { acc, order -> acc + order.totalAmount }
+
+            val customerIds = activeOrders.mapNotNull { it.customerId }.distinct()
+            _summaryCustomerNames.value =
+                if (customerIds.isEmpty()) {
+                    emptyMap()
+                } else {
+                    customerDao.getByIds(customerIds).associate { it.id to it.name }
                 }
         }
     }
