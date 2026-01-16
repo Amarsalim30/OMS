@@ -1,5 +1,6 @@
 package com.zeynbakers.order_management_system.order.ui
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
@@ -7,9 +8,11 @@ import android.util.Log
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -18,12 +21,16 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.pager.HorizontalPager
@@ -32,7 +39,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.CenterAlignedTopAppBar
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
@@ -53,7 +59,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.key
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.snapshotFlow
 import androidx.activity.compose.BackHandler
@@ -66,6 +71,7 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -592,8 +598,8 @@ private fun WeekdayHeaderRow() {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 4.dp),
-        horizontalArrangement = Arrangement.SpaceBetween
+            .padding(horizontal = 12.dp, vertical = 6.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp)
     ) {
         labels.forEachIndexed { index, label ->
             val color =
@@ -621,47 +627,25 @@ private fun MonthGrid(
     onOpenDay: (LocalDate) -> Unit,
     onQuickAdd: (LocalDate) -> Unit
 ) {
-    val weeks = remember(days) { days.chunked(7) }
-    Column(
-        modifier = Modifier
-            .padding(horizontal = 8.dp, vertical = 4.dp)
+    LazyVerticalGrid(
+        columns = GridCells.Fixed(7),
+        modifier = Modifier.fillMaxWidth(),
+        userScrollEnabled = false,
+        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
-        weeks.forEachIndexed { index, week ->
-            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-            WeekBandRow(
-                week = week,
-                selectedDate = selectedDate,
+        items(items = days, key = { it.date }) { day ->
+            DayCell(
+                day = day,
+                isSelected = selectedDate == day.date,
                 onSelectDate = onSelectDate,
                 onOpenDay = onOpenDay,
-                onQuickAdd = onQuickAdd
+                onQuickAdd = onQuickAdd,
+                modifier = Modifier
+                    .sizeIn(minWidth = 48.dp, minHeight = 48.dp)
+                    .aspectRatio(1f)
             )
-            if (index == weeks.lastIndex) {
-                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-            }
-        }
-    }
-}
-
-@Composable
-private fun WeekBandRow(
-    week: List<CalendarDayUi>,
-    selectedDate: LocalDate?,
-    onSelectDate: (LocalDate) -> Unit,
-    onOpenDay: (LocalDate) -> Unit,
-    onQuickAdd: (LocalDate) -> Unit
-) {
-    Row(modifier = Modifier.fillMaxWidth().height(96.dp)) {
-        week.forEach { day ->
-            key(day.date) {
-                DayCell(
-                    day = day,
-                    isSelected = selectedDate == day.date,
-                    onSelectDate = onSelectDate,
-                    onOpenDay = onOpenDay,
-                    onQuickAdd = onQuickAdd,
-                    modifier = Modifier.weight(1f)
-                )
-            }
         }
     }
 }
@@ -677,162 +661,143 @@ private fun DayCell(
     modifier: Modifier = Modifier
 ) {
     val hasOrders = day.orderCount > 0
-    val chipLines = buildChipLines(day)
-    val extraCount = (day.orderCount - 2).coerceAtLeast(0)
-
+    val markerStates = remember(day.orderStates, day.orderCount, day.paymentState) {
+        resolveMarkerStates(day)
+    }
+    val overflowCount = (markerStates.size - 3).coerceAtLeast(0)
+    val markersToShow = markerStates.take(3)
     val containerColor =
         if (isSelected) {
-            MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
+            MaterialTheme.colorScheme.primaryContainer
         } else {
             MaterialTheme.colorScheme.surface
         }
+    val baseTextColor =
+        if (isSelected) {
+            MaterialTheme.colorScheme.onPrimaryContainer
+        } else {
+            MaterialTheme.colorScheme.onSurface
+        }
+    val dayTextColor =
+        if (day.isInCurrentMonth) {
+            baseTextColor
+        } else {
+            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+        }
+    val todayRingColor =
+        if (isSelected) {
+            MaterialTheme.colorScheme.onPrimaryContainer
+        } else {
+            MaterialTheme.colorScheme.primary
+        }
+    val handleClick = {
+        if (isSelected && hasOrders) {
+            onOpenDay(day.date)
+        } else {
+            onSelectDate(day.date)
+        }
+    }
 
-    Box(
+    Surface(
         modifier = modifier
-            .padding(4.dp)
+            .alpha(if (day.isInCurrentMonth) 1f else 0.45f)
             .combinedClickable(
                 enabled = day.isInCurrentMonth,
-                onClick = { onSelectDate(day.date) },
+                onClick = { handleClick() },
                 onLongClick = { onQuickAdd(day.date) }
-            )
+            ),
+        color = containerColor,
+        shape = RoundedCornerShape(16.dp),
+        tonalElevation = if (isSelected) 2.dp else 0.dp
     ) {
-        Surface(
-            modifier = Modifier.fillMaxSize().alpha(if (day.isInCurrentMonth) 1f else 0.45f),
-            color = containerColor,
-            shape = RoundedCornerShape(16.dp)
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 8.dp, vertical = 6.dp),
+            verticalArrangement = Arrangement.SpaceBetween
         ) {
-            Column(modifier = Modifier.fillMaxSize().padding(8.dp)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth().height(24.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    DayNumberChip(day = day, isSelected = isSelected)
-                    if (day.isToday) {
-                        TodayChip()
-                    } else if (hasOrders) {
-                        StatusDot(state = day.paymentState)
-                    }
+            Surface(
+                shape = CircleShape,
+                color = Color.Transparent,
+                border = if (day.isToday) BorderStroke(1.5.dp, todayRingColor) else null,
+                modifier = Modifier.size(28.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                    Text(
+                        text = day.date.dayOfMonth.toString(),
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.SemiBold,
+                        color = dayTextColor,
+                        maxLines = 1
+                    )
                 }
-
-                Spacer(Modifier.height(4.dp))
-
-                if (hasOrders) {
-                    chipLines.take(2).forEach { chip ->
-                        OrderChip(
-                            label = chip,
-                            state = day.paymentState,
-                            onClick = { onOpenDay(day.date) }
-                        )
-                        Spacer(Modifier.height(4.dp))
-                    }
-                    if (extraCount > 0) {
-                        Text(
-                            text = "+$extraCount",
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
+            }
+            if (hasOrders) {
+                DayMarkers(
+                    markers = markersToShow,
+                    overflowCount = overflowCount,
+                    onOpenDay = { onOpenDay(day.date) }
+                )
             }
         }
     }
 }
 
 @Composable
-private fun DayNumberChip(day: CalendarDayUi, isSelected: Boolean) {
-    val textColor =
-        if (day.isInCurrentMonth) {
-            MaterialTheme.colorScheme.onSurface
-        } else {
-            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
-        }
-    if (isSelected) {
-        Surface(
-            shape = RoundedCornerShape(10.dp),
-            color = MaterialTheme.colorScheme.surface
-        ) {
-            Text(
-                text = day.date.dayOfMonth.toString(),
-                style = MaterialTheme.typography.labelLarge,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-            )
-        }
-    } else {
-        Text(
-            text = day.date.dayOfMonth.toString(),
-            style = MaterialTheme.typography.labelLarge,
-            fontWeight = FontWeight.SemiBold,
-            color = textColor
-        )
-    }
-}
-
-@Composable
-private fun TodayChip() {
-    Surface(
-        shape = RoundedCornerShape(8.dp),
-        color = MaterialTheme.colorScheme.surface,
-        tonalElevation = 1.dp
-    ) {
-        Text(
-            text = "TODAY",
-            style = MaterialTheme.typography.labelSmall,
-            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-        )
-    }
-}
-
-@Composable
-private fun StatusDot(state: PaymentState?) {
-    val color =
-        when (state) {
-            PaymentState.PAID -> MaterialTheme.colorScheme.tertiary
-            PaymentState.PARTIAL -> MaterialTheme.colorScheme.secondary
-            PaymentState.UNPAID -> MaterialTheme.colorScheme.error
-            PaymentState.OVERPAID -> MaterialTheme.colorScheme.primary
-            null -> MaterialTheme.colorScheme.outline
-        }
-    Surface(color = color, shape = CircleShape, modifier = Modifier.size(8.dp)) {}
-}
-
-@Composable
-private fun OrderChip(label: String, state: PaymentState?, onClick: () -> Unit) {
-    val dotColor =
-        when (state) {
-            PaymentState.PAID -> MaterialTheme.colorScheme.tertiary
-            PaymentState.PARTIAL -> MaterialTheme.colorScheme.secondary
-            PaymentState.UNPAID -> MaterialTheme.colorScheme.error
-            PaymentState.OVERPAID -> MaterialTheme.colorScheme.primary
-            null -> MaterialTheme.colorScheme.outline
-        }
-    Surface(
-        shape = RoundedCornerShape(8.dp),
-        color = MaterialTheme.colorScheme.surfaceVariant,
+private fun DayMarkers(
+    markers: List<PaymentState>,
+    overflowCount: Int,
+    onOpenDay: () -> Unit
+) {
+    Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { onClick() }
+            .height(14.dp)
+            .clickable { onOpenDay() },
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
+        markers.forEach { state ->
             Surface(
-                color = dotColor,
+                color = paymentStateColor(state),
                 shape = CircleShape,
                 modifier = Modifier.size(6.dp)
             ) {}
-            Spacer(Modifier.width(6.dp))
-            Text(
-                text = label,
-                style = MaterialTheme.typography.labelSmall,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
+        }
+        if (overflowCount > 0) {
+            Surface(
+                shape = RoundedCornerShape(999.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant
+            ) {
+                Text(
+                    text = "+$overflowCount",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp)
+                )
+            }
         }
     }
+}
+
+@Composable
+private fun paymentStateColor(state: PaymentState): Color {
+    return when (state) {
+        PaymentState.PAID -> MaterialTheme.colorScheme.tertiary
+        PaymentState.PARTIAL -> MaterialTheme.colorScheme.secondary
+        PaymentState.UNPAID -> MaterialTheme.colorScheme.error
+        PaymentState.OVERPAID -> MaterialTheme.colorScheme.primary
+    }
+}
+
+private fun resolveMarkerStates(day: CalendarDayUi): List<PaymentState> {
+    if (day.orderStates.isNotEmpty()) {
+        return day.orderStates
+    }
+    if (day.paymentState != null && day.orderCount > 0) {
+        return List(day.orderCount) { day.paymentState }
+    }
+    return emptyList()
 }
 
 @Composable
@@ -861,20 +826,6 @@ private fun BottomActionBar(
             overflow = TextOverflow.Ellipsis
         )
     }
-}
-
-private fun buildChipLines(day: CalendarDayUi): List<String> {
-    if (day.orderCount == 0) return emptyList()
-    val totalLine = "${formatKes(day.totalAmount)} - ${if (day.orderCount == 1) "1 order" else "${day.orderCount} orders"}"
-    val statusLine =
-        when (day.paymentState) {
-            PaymentState.UNPAID -> "Unpaid - ${formatKes(day.totalAmount)}"
-            PaymentState.PARTIAL -> "Partial - ${formatKes(day.totalAmount)}"
-            PaymentState.PAID -> "Paid - ${formatKes(day.totalAmount)}"
-            PaymentState.OVERPAID -> "Overpaid - ${formatKes(day.totalAmount)}"
-            null -> totalLine
-        }
-    return listOf(statusLine, totalLine).distinct()
 }
 
 private fun buildMonthGrid(

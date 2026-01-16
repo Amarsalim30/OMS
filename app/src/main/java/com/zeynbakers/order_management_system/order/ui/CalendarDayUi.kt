@@ -16,5 +16,6 @@ data class CalendarDayUi(
     val totalAmount: BigDecimal,
     val isToday: Boolean,
     val isInCurrentMonth: Boolean,
-    val paymentState: PaymentState?
+    val paymentState: PaymentState?,
+    val orderStates: List<PaymentState> = emptyList()
 )

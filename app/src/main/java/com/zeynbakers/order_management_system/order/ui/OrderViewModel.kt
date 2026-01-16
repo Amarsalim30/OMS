@@ -275,6 +275,11 @@ class OrderViewModel(private val database: AppDatabase) : ViewModel() {
                 val dayOrders = grouped[date] ?: emptyList()
                 val dayTotal = totals[date] ?: BigDecimal.ZERO
                 val dayPaid = paidTotals[date] ?: BigDecimal.ZERO
+                val orderStates =
+                    dayOrders.map { order ->
+                        val paid = paidByOrder[order.id] ?: BigDecimal.ZERO
+                        resolveOrderPaymentState(order.totalAmount, paid)
+                    }
                 val paymentState =
                     if (dayTotal <= BigDecimal.ZERO) {
                         null
@@ -293,7 +298,8 @@ class OrderViewModel(private val database: AppDatabase) : ViewModel() {
                     totalAmount = dayTotal,
                     isToday = date == today,
                     isInCurrentMonth = date.monthNumber == month,
-                    paymentState = paymentState
+                    paymentState = paymentState,
+                    orderStates = orderStates
                 )
             }
 
@@ -362,5 +368,15 @@ class OrderViewModel(private val database: AppDatabase) : ViewModel() {
         val newYear = total / 12
         val newMonth = (total % 12) + 1
         return Pair(newYear, newMonth)
+    }
+
+    private fun resolveOrderPaymentState(total: BigDecimal, paid: BigDecimal): PaymentState {
+        if (paid <= BigDecimal.ZERO) return PaymentState.UNPAID
+        val balance = total - paid
+        return when {
+            balance > BigDecimal.ZERO -> PaymentState.PARTIAL
+            balance == BigDecimal.ZERO -> PaymentState.PAID
+            else -> PaymentState.OVERPAID
+        }
     }
 }
