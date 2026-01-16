@@ -36,6 +36,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.CenterAlignedTopAppBar
@@ -55,6 +56,7 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.getValue
@@ -68,10 +70,16 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -177,23 +185,45 @@ fun CalendarScreen(
                 }
             }
     }
-    val visibleMonth = remember(pagerState.currentPage, anchorYear, anchorMonth) {
-        shiftMonth(anchorYear, anchorMonth, pagerState.currentPage - baseIndex)
+    val visibleMonth by remember(pagerState, anchorYear, anchorMonth) {
+        derivedStateOf { shiftMonth(anchorYear, anchorMonth, pagerState.currentPage - baseIndex) }
     }
-    val monthTitle = formatMonthTitle(visibleMonth.first, visibleMonth.second)
-    val visibleSnapshot = monthSnapshots[MonthKey(visibleMonth.first, visibleMonth.second)]
-    val displayedMonthTotal =
-        when {
-            visibleSnapshot != null -> visibleSnapshot.total
-            visibleMonth.first == currentYear && visibleMonth.second == currentMonth -> monthTotal
-            else -> null
+    val monthTitle by remember(visibleMonth) {
+        derivedStateOf { formatMonthTitle(visibleMonth.first, visibleMonth.second) }
+    }
+    val visibleSnapshot by remember(visibleMonth, monthSnapshots) {
+        derivedStateOf { monthSnapshots[MonthKey(visibleMonth.first, visibleMonth.second)] }
+    }
+    val displayedMonthTotal by remember(
+        visibleSnapshot,
+        visibleMonth,
+        currentYear,
+        currentMonth,
+        monthTotal
+    ) {
+        derivedStateOf {
+            when {
+                visibleSnapshot != null -> visibleSnapshot.total
+                visibleMonth.first == currentYear && visibleMonth.second == currentMonth -> monthTotal
+                else -> null
+            }
         }
-    val displayedBadgeCount =
-        when {
-            visibleSnapshot != null -> visibleSnapshot.badgeCount
-            visibleMonth.first == currentYear && visibleMonth.second == currentMonth -> monthBadgeCount
-            else -> 0
+    }
+    val displayedBadgeCount by remember(
+        visibleSnapshot,
+        visibleMonth,
+        currentYear,
+        currentMonth,
+        monthBadgeCount
+    ) {
+        derivedStateOf {
+            when {
+                visibleSnapshot != null -> visibleSnapshot.badgeCount
+                visibleMonth.first == currentYear && visibleMonth.second == currentMonth -> monthBadgeCount
+                else -> 0
+            }
         }
+    }
 
     Scaffold(
         topBar = {
@@ -213,12 +243,15 @@ fun CalendarScreen(
         },
         floatingActionButton = {
             FloatingActionButton(onClick = { isQuickAddOpen = true }) {
-                Text("+")
+                Icon(imageVector = Icons.Filled.Add, contentDescription = "Add order")
             }
         }
     ) { padding ->
         Column(modifier = Modifier.padding(padding)) {
-            MonthSummaryCard(monthTotal = displayedMonthTotal)
+            MonthSummaryCard(
+                monthTotal = displayedMonthTotal,
+                dueCount = displayedBadgeCount
+            )
 
             WeekdayHeaderRow()
 
@@ -572,23 +605,77 @@ private fun CalendarTopAppBar(
 }
 
 @Composable
-private fun MonthSummaryCard(monthTotal: BigDecimal?) {
+private fun MonthSummaryCard(monthTotal: BigDecimal?, dueCount: Int) {
     Surface(
-        tonalElevation = 2.dp,
-        shape = MaterialTheme.shapes.medium,
+        tonalElevation = 1.dp,
+        shape = RoundedCornerShape(16.dp),
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 8.dp)
     ) {
-        Column(modifier = Modifier.padding(12.dp)) {
-            Text(
-                text = "Month total",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            val totalLabel = monthTotal?.let { formatKes(it) } ?: "Loading..."
-            Text(text = totalLabel, style = MaterialTheme.typography.titleLarge)
+        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column {
+                    Text(
+                        text = "Month total",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    val totalLabel = monthTotal?.let { formatKes(it) } ?: "Loading..."
+                    Text(text = totalLabel, style = MaterialTheme.typography.titleLarge)
+                }
+                if (dueCount > 0) {
+                    Surface(
+                        shape = RoundedCornerShape(999.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant
+                    ) {
+                        Text(
+                            text = "$dueCount due",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                        )
+                    }
+                }
+            }
+            Spacer(Modifier.height(8.dp))
+            StatusLegendRow()
         }
+    }
+}
+
+@Composable
+private fun StatusLegendRow() {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        LegendItem(label = "Unpaid", state = PaymentState.UNPAID)
+        LegendItem(label = "Partial", state = PaymentState.PARTIAL)
+        LegendItem(label = "Paid", state = PaymentState.PAID)
+        LegendItem(label = "Overpaid", state = PaymentState.OVERPAID)
+    }
+}
+
+@Composable
+private fun LegendItem(label: String, state: PaymentState) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        Surface(
+            color = paymentStateColor(state),
+            shape = CircleShape,
+            modifier = Modifier.size(6.dp)
+        ) {}
+        Spacer(Modifier.width(6.dp))
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
     }
 }
 
@@ -652,7 +739,7 @@ private fun MonthGrid(
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun DayCell(
+fun DayCell(
     day: CalendarDayUi,
     isSelected: Boolean,
     onSelectDate: (LocalDate) -> Unit,
@@ -666,6 +753,10 @@ private fun DayCell(
     }
     val overflowCount = (markerStates.size - 3).coerceAtLeast(0)
     val markersToShow = markerStates.take(3)
+    val dayDescription = remember(day, markerStates, isSelected) {
+        buildDayContentDescription(day, markerStates, isSelected)
+    }
+    val dayTag = remember(day) { "day-cell-${day.date}" }
     val containerColor =
         if (isSelected) {
             MaterialTheme.colorScheme.primaryContainer
@@ -700,6 +791,12 @@ private fun DayCell(
 
     Surface(
         modifier = modifier
+            .testTag(dayTag)
+            .semantics(mergeDescendants = true) {
+                contentDescription = dayDescription
+                role = Role.Button
+                selected = isSelected
+            }
             .alpha(if (day.isInCurrentMonth) 1f else 0.45f)
             .combinedClickable(
                 enabled = day.isInCurrentMonth,
@@ -736,7 +833,8 @@ private fun DayCell(
                 DayMarkers(
                     markers = markersToShow,
                     overflowCount = overflowCount,
-                    onOpenDay = { onOpenDay(day.date) }
+                    onOpenDay = { onOpenDay(day.date) },
+                    tag = "day-markers-${day.date}"
                 )
             }
         }
@@ -747,12 +845,14 @@ private fun DayCell(
 private fun DayMarkers(
     markers: List<PaymentState>,
     overflowCount: Int,
-    onOpenDay: () -> Unit
+    onOpenDay: () -> Unit,
+    tag: String
 ) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .height(14.dp)
+            .testTag(tag)
             .clickable { onOpenDay() },
         horizontalArrangement = Arrangement.spacedBy(4.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -767,7 +867,8 @@ private fun DayMarkers(
         if (overflowCount > 0) {
             Surface(
                 shape = RoundedCornerShape(999.dp),
-                color = MaterialTheme.colorScheme.surfaceVariant
+                color = MaterialTheme.colorScheme.surfaceVariant,
+                modifier = Modifier.testTag("$tag-overflow")
             ) {
                 Text(
                     text = "+$overflowCount",
@@ -800,6 +901,36 @@ private fun resolveMarkerStates(day: CalendarDayUi): List<PaymentState> {
     return emptyList()
 }
 
+private fun buildDayContentDescription(
+    day: CalendarDayUi,
+    markerStates: List<PaymentState>,
+    isSelected: Boolean
+): String {
+    val monthLabel = day.date.month.name.lowercase().replaceFirstChar { it.uppercase() }
+    val builder = StringBuilder()
+    builder.append("${day.date.dayOfMonth} $monthLabel ${day.date.year}")
+    if (day.isToday) {
+        builder.append(", today")
+    }
+    if (day.orderCount > 0) {
+        builder.append(", ${day.orderCount} orders")
+        val unpaidCount = markerStates.count { it == PaymentState.UNPAID }
+        val partialCount = markerStates.count { it == PaymentState.PARTIAL }
+        val paidCount = markerStates.count { it == PaymentState.PAID }
+        val overpaidCount = markerStates.count { it == PaymentState.OVERPAID }
+        if (unpaidCount > 0) builder.append(", $unpaidCount unpaid")
+        if (partialCount > 0) builder.append(", $partialCount partial")
+        if (paidCount > 0) builder.append(", $paidCount paid")
+        if (overpaidCount > 0) builder.append(", $overpaidCount overpaid")
+    } else {
+        builder.append(", no orders")
+    }
+    if (isSelected) {
+        builder.append(", selected")
+    }
+    return builder.toString()
+}
+
 @Composable
 private fun BottomActionBar(
     selectedDate: LocalDate?,
@@ -808,23 +939,43 @@ private fun BottomActionBar(
 ) {
     val dateLabel = selectedDate?.let { "${it.dayOfMonth} ${it.month.name.lowercase().replaceFirstChar { c -> c.uppercase() }}" }
         ?: "Select a day"
+    val isEnabled = selectedDate != null
     Surface(
         modifier = modifier
             .fillMaxWidth()
-            .padding(16.dp)
-            .clickable(enabled = selectedDate != null) {
-                selectedDate?.let { onClick(it) }
-            },
-        shape = RoundedCornerShape(24.dp),
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        shape = RoundedCornerShape(16.dp),
+        tonalElevation = 1.dp,
         color = MaterialTheme.colorScheme.surfaceVariant
     ) {
-        Text(
-            text = "Add order on $dateLabel",
-            style = MaterialTheme.typography.bodyMedium,
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis
-        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 10.dp)
+                .padding(end = 72.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = "Selected day",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    text = dateLabel,
+                    style = MaterialTheme.typography.bodyMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            TextButton(
+                onClick = { selectedDate?.let { onClick(it) } },
+                enabled = isEnabled
+            ) {
+                Text("Add")
+            }
+        }
     }
 }
 
