@@ -191,7 +191,7 @@ fun CalendarScreen(
 
     Scaffold(
         topBar = {
-            CalendarTopBar(
+            CalendarTopAppBar(
                 monthTitle = monthTitle,
                 badgeCount = displayedBadgeCount,
                 onCustomersClick = onCustomersClick,
@@ -199,7 +199,7 @@ fun CalendarScreen(
             )
         },
         bottomBar = {
-            BottomQuickAddBar(
+            BottomActionBar(
                 selectedDate = selectedDate,
                 onClick = { _ -> isQuickAddOpen = true },
                 modifier = Modifier.navigationBarsPadding()
@@ -212,24 +212,7 @@ fun CalendarScreen(
         }
     ) { padding ->
         Column(modifier = Modifier.padding(padding)) {
-            Surface(
-                tonalElevation = 2.dp,
-                shape = MaterialTheme.shapes.medium,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 8.dp)
-            ) {
-                Column(modifier = Modifier.padding(12.dp)) {
-                    Text(
-                        text = "Month total",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    val totalLabel =
-                        displayedMonthTotal?.let { formatKes(it) } ?: "Loading..."
-                    Text(text = totalLabel, style = MaterialTheme.typography.titleLarge)
-                }
-            }
+            MonthSummaryCard(monthTotal = displayedMonthTotal)
 
             WeekdayHeaderRow()
 
@@ -259,7 +242,7 @@ fun CalendarScreen(
                         )
                 }
 
-                CalendarMonthGrid(
+                MonthGrid(
                     days = monthDays,
                     selectedDate = selectedDate,
                     onSelectDate = onSelectDate,
@@ -538,7 +521,7 @@ fun CalendarScreen(
 
 @Composable
 @OptIn(ExperimentalMaterial3Api::class)
-private fun CalendarTopBar(
+private fun CalendarTopAppBar(
     monthTitle: String,
     badgeCount: Int,
     onSummaryClick: () -> Unit,
@@ -583,6 +566,27 @@ private fun CalendarTopBar(
 }
 
 @Composable
+private fun MonthSummaryCard(monthTotal: BigDecimal?) {
+    Surface(
+        tonalElevation = 2.dp,
+        shape = MaterialTheme.shapes.medium,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp)
+    ) {
+        Column(modifier = Modifier.padding(12.dp)) {
+            Text(
+                text = "Month total",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            val totalLabel = monthTotal?.let { formatKes(it) } ?: "Loading..."
+            Text(text = totalLabel, style = MaterialTheme.typography.titleLarge)
+        }
+    }
+}
+
+@Composable
 private fun WeekdayHeaderRow() {
     val labels = listOf("M", "T", "W", "T", "F", "S", "S")
     Row(
@@ -610,7 +614,7 @@ private fun WeekdayHeaderRow() {
 }
 
 @Composable
-private fun CalendarMonthGrid(
+private fun MonthGrid(
     days: List<CalendarDayUi>,
     selectedDate: LocalDate?,
     onSelectDate: (LocalDate) -> Unit,
@@ -649,7 +653,7 @@ private fun WeekBandRow(
     Row(modifier = Modifier.fillMaxWidth().height(96.dp)) {
         week.forEach { day ->
             key(day.date) {
-                DayColumnCell(
+                DayCell(
                     day = day,
                     isSelected = selectedDate == day.date,
                     onSelectDate = onSelectDate,
@@ -664,7 +668,7 @@ private fun WeekBandRow(
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun DayColumnCell(
+private fun DayCell(
     day: CalendarDayUi,
     isSelected: Boolean,
     onSelectDate: (LocalDate) -> Unit,
@@ -832,7 +836,7 @@ private fun OrderChip(label: String, state: PaymentState?, onClick: () -> Unit) 
 }
 
 @Composable
-private fun BottomQuickAddBar(
+private fun BottomActionBar(
     selectedDate: LocalDate?,
     onClick: (LocalDate) -> Unit,
     modifier: Modifier = Modifier
