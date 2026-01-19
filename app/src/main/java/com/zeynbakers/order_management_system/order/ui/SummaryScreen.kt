@@ -1,5 +1,6 @@
 package com.zeynbakers.order_management_system.order.ui
 
+import android.widget.Toast
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -46,9 +47,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.Alignment
 import com.zeynbakers.order_management_system.core.util.formatKes
 import com.zeynbakers.order_management_system.order.data.OrderEntity
 import com.zeynbakers.order_management_system.order.domain.OrderLineItem
@@ -64,6 +67,7 @@ import kotlinx.datetime.TimeZone
 import kotlinx.datetime.atStartOfDayIn
 import kotlinx.datetime.plus
 import kotlinx.datetime.toLocalDateTime
+import kotlinx.datetime.Clock
 
 private enum class SummaryRangeMode(val label: String) {
     DAY("Day"),
@@ -93,9 +97,13 @@ fun SummaryScreen(
     onBack: () -> Unit
 ) {
     val clipboardManager = LocalClipboardManager.current
+    val context = LocalContext.current
     var isDatePickerOpen by remember { mutableStateOf(false) }
     var mode by remember { mutableStateOf(SummaryRangeMode.DAY) }
     var anchorDate by remember { mutableStateOf(initialDate) }
+    val today = remember {
+        Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date
+    }
 
     LaunchedEffect(initialDate) {
         anchorDate = initialDate
@@ -181,7 +189,12 @@ fun SummaryScreen(
                 },
                 actions = {
                     IconButton(
-                        onClick = { clipboardManager.setText(AnnotatedString(chefMessage)) },
+                        onClick = {
+                            clipboardManager.setText(AnnotatedString(chefMessage))
+                            Toast
+                                .makeText(context, "Chef list copied", Toast.LENGTH_SHORT)
+                                .show()
+                        },
                         enabled = aggregatedItems.isNotEmpty() || unparsedLines.isNotEmpty()
                     ) {
                         Icon(imageVector = Icons.Filled.ContentCopy, contentDescription = "Copy chef list")
@@ -197,19 +210,21 @@ fun SummaryScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             item {
-                MonthTotalCard(monthTotal = monthTotal)
+                MonthTotalCard(monthTotal = monthTotal, label = monthLabel)
             }
 
             item {
                 ChefPrepCard(
                     mode = mode,
                     rangeLabel = rangeLabel,
+                    anchorLabel = "Anchor: $anchorDate",
                     orderCount = orders.size,
                     rangeTotal = rangeTotal,
                     hasChefList = aggregatedItems.isNotEmpty() || unparsedLines.isNotEmpty(),
                     onPickDate = { isDatePickerOpen = true },
                     onPrev = { anchorDate = shiftAnchorDate(mode, anchorDate, -1) },
                     onNext = { anchorDate = shiftAnchorDate(mode, anchorDate, 1) },
+                    onToday = { anchorDate = today },
                     onModeChange = { mode = it }
                 )
             }
@@ -351,7 +366,7 @@ private fun OrderSummaryCard(
 }
 
 @Composable
-private fun MonthTotalCard(monthTotal: BigDecimal) {
+private fun MonthTotalCard(monthTotal: BigDecimal, label: String) {
     Surface(
         tonalElevation = 2.dp,
         shape = MaterialTheme.shapes.large,
@@ -362,10 +377,10 @@ private fun MonthTotalCard(monthTotal: BigDecimal) {
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Column(modifier = Modifier.weight(1f)) {
-                Text(text = "Month total", style = MaterialTheme.typography.titleSmall)
+                Text(text = "Current month total", style = MaterialTheme.typography.titleSmall)
                 Spacer(Modifier.height(2.dp))
                 Text(
-                    text = "All orders (current month)",
+                    text = label,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -382,12 +397,14 @@ private fun MonthTotalCard(monthTotal: BigDecimal) {
 private fun ChefPrepCard(
     mode: SummaryRangeMode,
     rangeLabel: String,
+    anchorLabel: String,
     orderCount: Int,
     rangeTotal: BigDecimal,
     hasChefList: Boolean,
     onPickDate: () -> Unit,
     onPrev: () -> Unit,
     onNext: () -> Unit,
+    onToday: () -> Unit,
     onModeChange: (SummaryRangeMode) -> Unit
 ) {
     ElevatedCard(modifier = Modifier.fillMaxWidth()) {
@@ -427,7 +444,8 @@ private fun ChefPrepCard(
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 6.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
                     IconButton(onClick = onPrev) {
                         Icon(imageVector = Icons.Filled.KeyboardArrowLeft, contentDescription = "Previous")
@@ -443,6 +461,22 @@ private fun ChefPrepCard(
                         Icon(imageVector = Icons.Filled.KeyboardArrowRight, contentDescription = "Next")
                     }
                 }
+            }
+
+            Spacer(Modifier.height(6.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = anchorLabel,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                TextButton(onClick = onToday) { Text("Today") }
             }
 
             Spacer(Modifier.height(10.dp))
@@ -536,7 +570,7 @@ private fun DailySummaryCard(
                 Text(text = date, style = MaterialTheme.typography.bodyLarge)
                 Spacer(Modifier.height(2.dp))
                 Text(
-                    text = "Orders: $orderCount • Total: ${formatKes(total)}",
+                    text = "Orders: $orderCount - Total: ${formatKes(total)}",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

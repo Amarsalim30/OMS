@@ -23,12 +23,14 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Payments
 import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.outlined.AccountBalanceWallet
+import androidx.compose.material.icons.filled.Money
 import androidx.compose.material3.Button
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -46,9 +48,11 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
@@ -72,6 +76,8 @@ import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.plus
 import kotlinx.datetime.toLocalDateTime
+import android.content.Intent
+import android.net.Uri
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -243,6 +249,7 @@ fun CustomerDetailScreen(
 
 @Composable
 private fun BalanceCard(customer: CustomerEntity?, balance: BigDecimal) {
+    val context = LocalContext.current
     Surface(
         tonalElevation = 1.dp,
         shape = MaterialTheme.shapes.medium,
@@ -275,6 +282,11 @@ private fun BalanceCard(customer: CustomerEntity?, balance: BigDecimal) {
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
+                Spacer(Modifier.height(6.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    TextButton(onClick = { launchDial(context, phone) }) { Text("Call") }
+                    TextButton(onClick = { launchSms(context, phone) }) { Text("Message") }
+                }
             }
         }
     }
@@ -295,6 +307,17 @@ private fun PaymentCard(
     onSelectOrder: (Long?) -> Unit,
     onSubmit: () -> Unit
 ) {
+    var orderSearch by rememberSaveable { mutableStateOf("") }
+    val visibleOrders = remember(eligibleOrders, orderSearch) {
+        val lowered = orderSearch.trim().lowercase()
+        eligibleOrders
+            .filter { order ->
+                if (lowered.isBlank()) return@filter true
+                val label = orderLabel(order).lowercase()
+                label.contains(lowered)
+            }
+            .take(20)
+    }
     Surface(
         tonalElevation = 1.dp,
         shape = MaterialTheme.shapes.medium,
@@ -341,12 +364,12 @@ private fun PaymentCard(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                PaymentMethodToggle(
+                PaymentMethodChip(
                     label = "Cash",
                     selected = selectedMethod == PaymentMethod.CASH,
                     onClick = { onMethodChange(PaymentMethod.CASH) }
                 )
-                PaymentMethodToggle(
+                PaymentMethodChip(
                     label = "Mpesa",
                     selected = selectedMethod == PaymentMethod.MPESA,
                     onClick = { onMethodChange(PaymentMethod.MPESA) }
@@ -366,11 +389,19 @@ private fun PaymentCard(
             Spacer(Modifier.height(10.dp))
             Text(text = "Apply to order (optional)", style = MaterialTheme.typography.bodyMedium)
             Spacer(Modifier.height(6.dp))
+            OutlinedTextField(
+                value = orderSearch,
+                onValueChange = { orderSearch = it },
+                label = { Text("Search open orders") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth()
+            )
+            Spacer(Modifier.height(6.dp))
             TextButton(onClick = { onSelectOrder(null) }) {
                 val label = if (selectedOrderId == null) "No order (selected)" else "No order"
                 Text(text = label)
             }
-            eligibleOrders.take(10).forEach { order ->
+            visibleOrders.forEach { order ->
                 TextButton(onClick = { onSelectOrder(order.order.id) }) {
                     val label = orderLabel(order)
                     val selectedLabel = "$label (selected)"
@@ -428,6 +459,8 @@ private fun OrderRow(
     onWriteOff: () -> Unit
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
+    var pendingOverride by remember { mutableStateOf<OrderStatusOverride?>(null) }
+    var confirmWriteOff by remember { mutableStateOf(false) }
     val primaryLine = buildOrderPrimaryLine(order)
     val notes = order.order.notes.ifBlank { "No notes" }.take(60)
     val chipLabel = orderStatusChipLabel(order)
@@ -482,14 +515,14 @@ private fun OrderRow(
                     DropdownMenuItem(
                         text = { Text("Close order") },
                         onClick = {
-                            onUpdateOverride(OrderStatusOverride.CLOSED)
+                            pendingOverride = OrderStatusOverride.CLOSED
                             menuExpanded = false
                         }
                     )
                     DropdownMenuItem(
                         text = { Text("Reopen order") },
                         onClick = {
-                            onUpdateOverride(OrderStatusOverride.OPEN)
+                            pendingOverride = OrderStatusOverride.OPEN
                             menuExpanded = false
                         }
                     )
@@ -504,7 +537,7 @@ private fun OrderRow(
                         DropdownMenuItem(
                             text = { Text("Write off balance") },
                             onClick = {
-                                onWriteOff()
+                                confirmWriteOff = true
                                 menuExpanded = false
                             }
                         )
@@ -512,6 +545,45 @@ private fun OrderRow(
                 }
             }
         }
+    }
+
+    pendingOverride?.let { choice ->
+        val label =
+            when (choice) {
+                OrderStatusOverride.CLOSED -> "close"
+                OrderStatusOverride.OPEN -> "reopen"
+            }
+        AlertDialog(
+            onDismissRequest = { pendingOverride = null },
+            title = { Text("Apply override?") },
+            text = { Text("This will $label the order regardless of payment state.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    onUpdateOverride(choice)
+                    pendingOverride = null
+                }) { Text("Confirm") }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingOverride = null }) { Text("Cancel") }
+            }
+        )
+    }
+
+    if (confirmWriteOff) {
+        AlertDialog(
+            onDismissRequest = { confirmWriteOff = false },
+            title = { Text("Write off balance?") },
+            text = { Text("This will mark the remaining balance as an adjustment.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    onWriteOff()
+                    confirmWriteOff = false
+                }) { Text("Write off") }
+            },
+            dismissButton = {
+                TextButton(onClick = { confirmWriteOff = false }) { Text("Cancel") }
+            }
+        )
     }
 }
 
@@ -593,24 +665,59 @@ private fun LedgerSectionCard(
 
 @Composable
 private fun LedgerRow(entry: AccountEntryEntity) {
+    val amountColor =
+        when (entry.type) {
+            EntryType.DEBIT -> MaterialTheme.colorScheme.error
+            EntryType.CREDIT -> MaterialTheme.colorScheme.primary
+            EntryType.WRITE_OFF -> MaterialTheme.colorScheme.secondary
+        }
+    val typeLabel =
+        when (entry.type) {
+            EntryType.DEBIT -> "Order"
+            EntryType.CREDIT -> "Payment"
+            EntryType.WRITE_OFF -> "Adjustment"
+        }
     Column(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
         Text(text = formatDateTime(entry.date), style = MaterialTheme.typography.labelMedium)
         Text(text = entry.description, style = MaterialTheme.typography.bodyMedium)
         val sign = if (entry.type == EntryType.DEBIT) "+" else "-"
-        Text(text = "$sign ${formatKes(entry.amount)}", style = MaterialTheme.typography.bodyMedium)
+        Text(text = typeLabel, style = MaterialTheme.typography.labelSmall, color = amountColor)
+        Text(
+            text = "$sign ${formatKes(entry.amount)}",
+            style = MaterialTheme.typography.bodyMedium,
+            color = amountColor
+        )
     }
 }
 
 @Composable
-private fun PaymentMethodToggle(
+private fun PaymentMethodChip(
     label: String,
     selected: Boolean,
     onClick: () -> Unit
 ) {
-    val text = if (selected) "$label (selected)" else label
-    TextButton(onClick = onClick, modifier = Modifier.height(48.dp)) {
-        Text(text = text)
-    }
+    FilterChip(
+        selected = selected,
+        onClick = onClick,
+        label = { Text(label) },
+        leadingIcon = {
+            Icon(
+                imageVector = Icons.Filled.Money,
+                contentDescription = null,
+                tint = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+    )
+}
+
+private fun launchDial(context: android.content.Context, phone: String) {
+    val intent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:$phone")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    context.startActivity(intent)
+}
+
+private fun launchSms(context: android.content.Context, phone: String) {
+    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("sms:$phone")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    context.startActivity(intent)
 }
 
 private fun filterOrders(orders: List<CustomerOrderUi>, filter: OrderFilter): List<CustomerOrderUi> {
@@ -686,7 +793,7 @@ private fun orderLabel(order: CustomerOrderUi): String {
             OrderPaymentState.PARTIAL -> "Partial"
             OrderPaymentState.PAID -> "Paid"
         }
-    return "$dateLabel • ${formatKes(order.order.totalAmount)} • $stateLabel"
+    return "$dateLabel - ${formatKes(order.order.totalAmount)} - $stateLabel"
 }
 
 private fun buildOrderPrimaryLine(order: CustomerOrderUi): String = orderLabel(order)

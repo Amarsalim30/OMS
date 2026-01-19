@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
@@ -58,6 +59,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.rememberUpdatedState
@@ -93,6 +95,7 @@ import com.zeynbakers.order_management_system.core.ui.VoiceCalculatorOverlay
 import com.zeynbakers.order_management_system.customer.data.CustomerEntity
 import java.math.BigDecimal
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.launch
 import kotlinx.datetime.Clock
 import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.LocalDate
@@ -134,6 +137,7 @@ fun CalendarScreen(
     var suggestions by remember { mutableStateOf<List<CustomerEntity>>(emptyList()) }
     val overlaySuppressed = LocalVoiceOverlaySuppressed.current
     val voiceCalcAccess = LocalVoiceCalcAccess.current
+    val scope = rememberCoroutineScope()
 
     LaunchedEffect(customerName, customerPhone) {
         val query = when {
@@ -232,6 +236,13 @@ fun CalendarScreen(
             CalendarTopAppBar(
                 monthTitle = monthTitle,
                 badgeCount = displayedBadgeCount,
+                onToday = {
+                    scope.launch {
+                        val jump = monthOffset(anchorYear, anchorMonth, today.year, today.monthNumber)
+                        pagerState.animateScrollToPage(baseIndex + jump)
+                        onSelectDate(today)
+                    }
+                },
                 onCustomersClick = onCustomersClick,
                 onSummaryClick = onSummaryClick
             )
@@ -239,7 +250,11 @@ fun CalendarScreen(
         bottomBar = {
             BottomActionBar(
                 selectedDate = selectedDate,
-                onClick = { _ -> isQuickAddOpen = true },
+                onAddClick = { _ -> isQuickAddOpen = true },
+                onViewClick = { date ->
+                    onSelectDate(date)
+                    onOpenDay(date)
+                },
                 modifier = Modifier.navigationBarsPadding()
             )
         },
@@ -375,6 +390,7 @@ fun CalendarScreen(
                 val parsedTotal = totalText.trim().takeIf { it.isNotEmpty() }?.let {
                     runCatching { BigDecimal(it) }.getOrNull()
                 }
+                val formattedTotal = parsedTotal?.let { formatKes(it) }
                 val hasCustomerMismatch = (customerName.isBlank() xor customerPhone.isBlank())
                 val canSave =
                     trimmedNotes.isNotEmpty() &&
@@ -449,6 +465,12 @@ fun CalendarScreen(
                         totalError = null
                     },
                     label = { Text("Total amount (KES)") },
+                    supportingText = {
+                        when {
+                            parsedTotal == null && totalText.isNotBlank() -> Text("Enter a valid total")
+                            formattedTotal != null -> Text("Will save as $formattedTotal")
+                        }
+                    },
                     keyboardOptions = KeyboardOptions(
                         keyboardType = KeyboardType.Decimal,
                         imeAction = ImeAction.Next
@@ -510,15 +532,21 @@ fun CalendarScreen(
 
                 if (suggestions.isNotEmpty()) {
                     Spacer(Modifier.height(6.dp))
-                    suggestions.forEach { customer ->
-                        TextButton(
-                            onClick = {
-                                customerName = customer.name
-                                customerPhone = customer.phone
-                                suggestions = emptyList()
+                    Column(
+                        modifier = Modifier
+                            .heightIn(max = 180.dp)
+                            .verticalScroll(rememberScrollState())
+                    ) {
+                        suggestions.forEach { customer ->
+                            TextButton(
+                                onClick = {
+                                    customerName = customer.name
+                                    customerPhone = customer.phone
+                                    suggestions = emptyList()
+                                }
+                            ) {
+                                Text("${customer.name} - ${customer.phone}")
                             }
-                        ) {
-                            Text("${customer.name} - ${customer.phone}")
                         }
                     }
                 }
@@ -532,6 +560,11 @@ fun CalendarScreen(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
+                        TextButton(
+                            onClick = { dismissSheet() }
+                        ) {
+                            Text("Cancel")
+                        }
                         TextButton(
                             onClick = {
                                 notes = ""
@@ -548,7 +581,8 @@ fun CalendarScreen(
                         TextButton(
                             onClick = {
                                 submitOrder()
-                            }
+                            },
+                            enabled = canSave
                         ) {
                             Text("Save")
                         }
@@ -575,6 +609,7 @@ fun CalendarScreen(
 private fun CalendarTopAppBar(
     monthTitle: String,
     badgeCount: Int,
+    onToday: () -> Unit,
     onSummaryClick: () -> Unit,
     onCustomersClick: () -> Unit
 ) {
@@ -594,6 +629,9 @@ private fun CalendarTopAppBar(
             }
         },
         actions = {
+            TextButton(onClick = onToday) {
+                Text("Today")
+            }
             TextButton(onClick = onCustomersClick) {
                 Icon(imageVector = Icons.Filled.Search, contentDescription = "Customers")
                 Spacer(Modifier.width(6.dp))
@@ -946,7 +984,8 @@ private fun buildDayContentDescription(
 @Composable
 private fun BottomActionBar(
     selectedDate: LocalDate?,
-    onClick: (LocalDate) -> Unit,
+    onAddClick: (LocalDate) -> Unit,
+    onViewClick: (LocalDate) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val dateLabel = selectedDate?.let { "${it.dayOfMonth} ${it.month.name.lowercase().replaceFirstChar { c -> c.uppercase() }}" }
@@ -981,11 +1020,19 @@ private fun BottomActionBar(
                     overflow = TextOverflow.Ellipsis
                 )
             }
-            TextButton(
-                onClick = { selectedDate?.let { onClick(it) } },
-                enabled = isEnabled
-            ) {
-                Text("Add")
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                TextButton(
+                    onClick = { selectedDate?.let { onViewClick(it) } },
+                    enabled = isEnabled
+                ) {
+                    Text("View day")
+                }
+                TextButton(
+                    onClick = { selectedDate?.let { onAddClick(it) } },
+                    enabled = isEnabled
+                ) {
+                    Text("Add")
+                }
             }
         }
     }
@@ -1029,6 +1076,12 @@ private fun shiftMonth(year: Int, month: Int, delta: Int): Pair<Int, Int> {
     val newYear = total / 12
     val newMonth = (total % 12) + 1
     return Pair(newYear, newMonth)
+}
+
+private fun monthOffset(anchorYear: Int, anchorMonth: Int, targetYear: Int, targetMonth: Int): Int {
+    val anchorTotal = (anchorYear * 12) + (anchorMonth - 1)
+    val targetTotal = (targetYear * 12) + (targetMonth - 1)
+    return targetTotal - anchorTotal
 }
 
 private fun isLeapYear(year: Int): Boolean {

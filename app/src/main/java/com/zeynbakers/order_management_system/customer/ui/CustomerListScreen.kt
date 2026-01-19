@@ -28,6 +28,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Search
@@ -212,7 +213,8 @@ private fun CustomersScreenM3(
                         CustomerRowItem(
                             customer = customer,
                             onClick = { onCustomerClick(customer.customerId) },
-                            onLongClick = { longPressedCustomer = customer }
+                            onLongClick = { longPressedCustomer = customer },
+                            onMenuClick = { longPressedCustomer = customer }
                         )
                     }
                 }
@@ -278,8 +280,10 @@ private fun CustomersTopBar(
             TextButton(onClick = onBack) { Text("Back") }
         },
         actions = {
-            IconButton(onClick = onAddCustomer) {
+            TextButton(onClick = onAddCustomer) {
                 Icon(imageVector = Icons.Filled.Add, contentDescription = "Import contacts")
+                Spacer(Modifier.width(6.dp))
+                Text("Import contacts")
             }
             IconButton(onClick = onMore) {
                 Icon(imageVector = Icons.Filled.MoreVert, contentDescription = "More")
@@ -371,7 +375,7 @@ private fun SortMenu(
             onClick = { onSelect(CustomerSort.BalanceDesc) },
             trailingIcon = {
                 if (selectedSort == CustomerSort.BalanceDesc) {
-                    Text("?")
+                    Icon(imageVector = Icons.Filled.Check, contentDescription = "Selected")
                 }
             }
         )
@@ -380,7 +384,7 @@ private fun SortMenu(
             onClick = { onSelect(CustomerSort.BalanceAsc) },
             trailingIcon = {
                 if (selectedSort == CustomerSort.BalanceAsc) {
-                    Text("?")
+                    Icon(imageVector = Icons.Filled.Check, contentDescription = "Selected")
                 }
             }
         )
@@ -389,7 +393,7 @@ private fun SortMenu(
             onClick = { onSelect(CustomerSort.NameAsc) },
             trailingIcon = {
                 if (selectedSort == CustomerSort.NameAsc) {
-                    Text("?")
+                    Icon(imageVector = Icons.Filled.Check, contentDescription = "Selected")
                 }
             }
         )
@@ -401,7 +405,8 @@ private fun SortMenu(
 private fun CustomerRowItem(
     customer: CustomerAccountSummary,
     onClick: () -> Unit,
-    onLongClick: () -> Unit
+    onLongClick: () -> Unit,
+    onMenuClick: () -> Unit
 ) {
     val name = customer.name.ifBlank { "Unknown Customer" }
     val initials = name.trim().split(" ").take(2).mapNotNull { it.firstOrNull() }.joinToString("")
@@ -449,21 +454,24 @@ private fun CustomerRowItem(
                         overflow = TextOverflow.Ellipsis
                     )
                 }
-                Spacer(Modifier.height(6.dp))
-                Text(
-                    text = "Billed ${formatKes(customer.billed)} ? Paid ${formatKes(customer.paid)}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
+            Spacer(Modifier.height(6.dp))
+            Text(
+                text = "Billed ${formatKes(customer.billed)} - Paid ${formatKes(customer.paid)}",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
 
-            Spacer(Modifier.width(8.dp))
+        Spacer(Modifier.width(8.dp))
 
-            BalanceChip(balance = customer.balance)
+        BalanceChip(balance = customer.balance)
+        IconButton(onClick = onMenuClick) {
+            Icon(imageVector = Icons.Filled.MoreVert, contentDescription = "Customer actions")
         }
     }
+}
 }
 
 @Composable

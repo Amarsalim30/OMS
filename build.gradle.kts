@@ -5,3 +5,9 @@ plugins {
     alias(libs.plugins.kotlin.compose) apply false
     alias(libs.plugins.ksp) apply false
 }
+
+tasks.register("debug") {
+    group = "build"
+    description = "Assembles the debug APK for the app module."
+    dependsOn(":app:assembleDebug")
+}

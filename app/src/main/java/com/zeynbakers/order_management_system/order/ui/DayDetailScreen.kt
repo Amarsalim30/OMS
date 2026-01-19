@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardOptions
@@ -45,6 +46,7 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.getValue
@@ -64,11 +66,15 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.foundation.shape.RoundedCornerShape
 import com.zeynbakers.order_management_system.core.ui.LocalAmountFieldRegistry
 import com.zeynbakers.order_management_system.core.ui.LocalVoiceCalcAccess
@@ -82,6 +88,7 @@ import java.math.RoundingMode
 import java.text.NumberFormat
 import java.util.Locale
 import kotlinx.datetime.LocalDate
+import androidx.compose.material3.FilterChip
 
 private const val TAG_SHEET_BACK = "SheetBack"
 
@@ -121,6 +128,8 @@ fun DayDetailScreen(
     val totalRequester = remember { FocusRequester() }
     val nameRequester = remember { FocusRequester() }
     val phoneRequester = remember { FocusRequester() }
+    var orderFilter by rememberSaveable { mutableStateOf(DayOrderFilter.All) }
+    var searchQuery by rememberSaveable(date) { mutableStateOf("") }
     val formatter = remember {
         NumberFormat.getNumberInstance(Locale.forLanguageTag("en-KE")).apply {
             minimumFractionDigits = 2
@@ -206,11 +215,61 @@ fun DayDetailScreen(
     val dayOfWeekLabel = remember(date) { titleCase(date.dayOfWeek.name) }
     val monthLabel = remember(date) { titleCase(date.month.name) }
     val dateLabel = remember(date, monthLabel) { "$monthLabel ${date.dayOfMonth}, ${date.year}" }
+    val filteredOrders by remember(
+        orders,
+        orderFilter,
+        orderPaidAmounts,
+        searchQuery,
+        customerNames
+    ) {
+        derivedStateOf {
+            val normalizedQuery = searchQuery.trim().lowercase()
+            orders.filter { order ->
+                val paidAmount = orderPaidAmounts[order.id] ?: BigDecimal.ZERO
+                val matchesStatus =
+                    when (orderFilter) {
+                        DayOrderFilter.All -> true
+                        DayOrderFilter.Unpaid ->
+                            resolvePaymentState(order.totalAmount, paidAmount) == PaymentState.UNPAID
+                        DayOrderFilter.Partial ->
+                            resolvePaymentState(order.totalAmount, paidAmount) == PaymentState.PARTIAL
+                        DayOrderFilter.Paid ->
+                            resolvePaymentState(order.totalAmount, paidAmount) == PaymentState.PAID
+                        DayOrderFilter.Overpaid ->
+                            resolvePaymentState(order.totalAmount, paidAmount) == PaymentState.OVERPAID
+                    }
+                if (!matchesStatus) return@filter false
+                if (normalizedQuery.isBlank()) return@filter true
+                val customerLabel =
+                    order.customerId?.let { customerNames[it] }.orEmpty().lowercase()
+                order.notes.lowercase().contains(normalizedQuery) ||
+                    customerLabel.contains(normalizedQuery)
+            }
+        }
+    }
     val onBackClick = {
         if (isEditorOpen) {
             isEditorOpen = false
         } else {
             onBack()
+        }
+    }
+    val (emptyTitle, emptySubtitle) = remember(orders, orderFilter, searchQuery) {
+        when {
+            orders.isEmpty() ->
+                Pair("No orders yet", "Tap + to add the first order.")
+            searchQuery.isNotBlank() ->
+                Pair("No matches", "Try a different name or note.")
+            orderFilter == DayOrderFilter.Unpaid ->
+                Pair("No unpaid orders", "All orders are paid or partial.")
+            orderFilter == DayOrderFilter.Partial ->
+                Pair("No partial payments", "No orders are partially paid.")
+            orderFilter == DayOrderFilter.Paid ->
+                Pair("No paid orders", "No orders are fully paid yet.")
+            orderFilter == DayOrderFilter.Overpaid ->
+                Pair("No overpaid orders", "No orders have extra payments.")
+            else ->
+                Pair("No orders", "Try a different filter.")
         }
     }
 
@@ -261,7 +320,7 @@ fun DayDetailScreen(
                 customerError = null
                 isEditorOpen = true
             }) {
-                Text("+")
+                Icon(imageVector = Icons.Filled.Add, contentDescription = "Add order")
             }
         }
     ) { padding ->
@@ -274,12 +333,91 @@ fun DayDetailScreen(
                 )
             }
 
-            if (orders.isEmpty()) {
+            if (orders.isNotEmpty()) {
                 item {
-                    EmptyDayState()
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .horizontalScroll(rememberScrollState()),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            DayOrderFilter.values().forEach { filter ->
+                                val filterCount =
+                                    when (filter) {
+                                        DayOrderFilter.All -> orders.size
+                                        DayOrderFilter.Unpaid -> dayStats.unpaidCount
+                                        DayOrderFilter.Partial -> dayStats.partialCount
+                                        DayOrderFilter.Paid -> dayStats.paidCount
+                                        DayOrderFilter.Overpaid -> dayStats.overpaidCount
+                                    }
+                                val filterLabel =
+                                    if (filter == DayOrderFilter.All) {
+                                        "${filter.label} ($filterCount)"
+                                    } else if (filterCount == 0) {
+                                        filter.label
+                                    } else {
+                                        "${filter.label} ($filterCount)"
+                                    }
+                                FilterChip(
+                                    selected = orderFilter == filter,
+                                    onClick = { orderFilter = filter },
+                                    label = { Text(filterLabel) }
+                                )
+                            }
+                        }
+
+                        Spacer(Modifier.height(10.dp))
+
+                        OutlinedTextField(
+                            value = searchQuery,
+                            onValueChange = { searchQuery = it },
+                            label = { Text("Search orders") },
+                            placeholder = { Text("Notes or customer") },
+                            leadingIcon = {
+                                Icon(imageVector = Icons.Filled.Search, contentDescription = null)
+                            },
+                            trailingIcon = {
+                                if (searchQuery.isNotBlank()) {
+                                    IconButton(onClick = { searchQuery = "" }) {
+                                        Icon(
+                                            imageVector = Icons.Filled.Close,
+                                            contentDescription = "Clear search"
+                                        )
+                                    }
+                                }
+                            },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+
+                        Spacer(Modifier.height(6.dp))
+
+                        val orderCountLabel =
+                            if (searchQuery.isBlank() && orderFilter == DayOrderFilter.All) {
+                                "${filteredOrders.size} orders"
+                            } else {
+                                "Showing ${filteredOrders.size} of ${orders.size} orders"
+                            }
+                        Text(
+                            text = orderCountLabel,
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+
+            if (filteredOrders.isEmpty()) {
+                item {
+                    EmptyDayState(title = emptyTitle, subtitle = emptySubtitle)
                 }
             } else {
-                items(orders) { order ->
+                items(filteredOrders) { order ->
                     val customerLabel =
                         order.customerId?.let { customerNames[it] } ?: "No customer"
                     val paidAmount = orderPaidAmounts[order.id] ?: BigDecimal.ZERO
@@ -317,6 +455,7 @@ fun DayDetailScreen(
         val parsedTotal = trimmedTotal.toBigDecimalOrNull()
         val currentTotal = parsedTotal ?: BigDecimal.ZERO
         val statusText = if (paidAmount >= currentTotal && currentTotal > BigDecimal.ZERO) "Paid" else "Unpaid"
+        val remaining = if (currentTotal > paidAmount) currentTotal.subtract(paidAmount) else BigDecimal.ZERO
         val formattedTotal = parsedTotal?.let { formatter.format(it) }
         val isTotalInvalid = trimmedTotal.isNotEmpty() && parsedTotal == null
         val hasCustomerMismatch = (customerName.isBlank() xor customerPhone.isBlank())
@@ -476,7 +615,7 @@ fun DayDetailScreen(
                             if (state.isFocused) {
                                 amountRegistry.update(setTotalText)
                             }
-                        }
+                    }
                 )
 
                 totalError?.let {
@@ -484,7 +623,11 @@ fun DayDetailScreen(
                 }
 
                 Spacer(Modifier.height(4.dp))
-                Text(text = "Status: $statusText", style = MaterialTheme.typography.labelLarge)
+                Text(
+                    text = "Status: $statusText - Paid ${formatKes(paidAmount)} - Due ${formatKes(remaining)}",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
 
                 Spacer(Modifier.height(8.dp))
                 Text(text = "Customer (optional)", style = MaterialTheme.typography.titleMedium)
@@ -534,15 +677,21 @@ fun DayDetailScreen(
                 if (suggestions.isNotEmpty()) {
                     Spacer(Modifier.height(6.dp))
                     Text(text = "Suggestions", style = MaterialTheme.typography.labelLarge)
-                    suggestions.forEach { customer ->
-                        TextButton(
-                            onClick = {
-                                customerName = customer.name
-                                customerPhone = customer.phone
-                                suggestions = emptyList()
+                    Column(
+                        modifier = Modifier
+                            .heightIn(max = 180.dp)
+                            .verticalScroll(rememberScrollState())
+                    ) {
+                        suggestions.forEach { customer ->
+                            TextButton(
+                                onClick = {
+                                    customerName = customer.name
+                                    customerPhone = customer.phone
+                                    suggestions = emptyList()
+                                }
+                            ) {
+                                Text("${customer.name} - ${customer.phone}")
                             }
-                        ) {
-                            Text("${customer.name} - ${customer.phone}")
                         }
                     }
                 }
@@ -553,26 +702,34 @@ fun DayDetailScreen(
 
                 Spacer(Modifier.height(12.dp))
 
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    TextButton(
-                        onClick = {
-                            notes = ""
-                            totalText = ""
-                            customerName = ""
-                            customerPhone = ""
-                            editingOrderId = null
-                            notesError = null
-                            totalError = null
-                            customerError = null
-                            onDraftChange(null)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        TextButton(onClick = { dismissSheet() }) {
+                            Text("Cancel")
                         }
-                    ) {
-                        Text("Clear")
+                        TextButton(
+                            onClick = {
+                                notes = ""
+                                totalText = ""
+                                customerName = ""
+                                customerPhone = ""
+                                editingOrderId = null
+                                notesError = null
+                                totalError = null
+                                customerError = null
+                                onDraftChange(null)
+                            }
+                        ) {
+                            Text("Clear")
+                        }
                     }
 
                     Button(
-                        onClick = { submitOrder() }
-                        ,
+                        onClick = { submitOrder() },
                         enabled = canSave
                     ) {
                         Text("Save")
@@ -782,17 +939,20 @@ private fun SummaryChip(label: String, count: Int, color: Color) {
 }
 
 @Composable
-private fun EmptyDayState() {
+private fun EmptyDayState(
+    title: String,
+    subtitle: String
+) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 24.dp, vertical = 20.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Text(text = "No orders yet", style = MaterialTheme.typography.titleMedium)
+        Text(text = title, style = MaterialTheme.typography.titleMedium)
         Spacer(Modifier.height(4.dp))
         Text(
-            text = "Tap + to add the first order.",
+            text = subtitle,
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -849,19 +1009,25 @@ private fun OrderListItem(
             Column(modifier = Modifier.weight(1f)) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+                    verticalAlignment = Alignment.Top
                 ) {
                     Text(
                         text = order.notes,
                         style = MaterialTheme.typography.titleMedium,
                         maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f)
                     )
+                    Spacer(Modifier.width(8.dp))
                     Text(
                         text = formatKes(order.totalAmount),
                         style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                        softWrap = false,
+                        textAlign = TextAlign.End,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.widthIn(min = 84.dp)
                     )
                 }
                 Spacer(Modifier.height(4.dp))
@@ -990,3 +1156,11 @@ data class OrderDraft(
     val customerPhone: String,
     val editingOrderId: Long?
 )
+
+private enum class DayOrderFilter(val label: String) {
+    All("All"),
+    Unpaid("Unpaid"),
+    Partial("Partial"),
+    Paid("Paid"),
+    Overpaid("Overpaid")
+}

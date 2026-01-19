@@ -21,11 +21,16 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconToggleButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
@@ -44,6 +49,13 @@ fun ImportContactsScreen(
 ) {
     val selectedCount = selectedPhones.size
     val allSelected = contacts.isNotEmpty() && selectedCount == contacts.size
+    var query by rememberSaveable { mutableStateOf("") }
+    val filteredContacts =
+        contacts.filter { contact ->
+            val lowered = query.trim().lowercase()
+            if (lowered.isBlank()) return@filter true
+            contact.name.lowercase().contains(lowered) || contact.phone.contains(lowered)
+        }
 
     Scaffold(
         topBar = {
@@ -76,6 +88,24 @@ fun ImportContactsScreen(
                 return@Column
             }
 
+            Text(
+                text = "Import customers from your phonebook. We skip empty numbers automatically.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+
+            Spacer(Modifier.height(12.dp))
+
+            OutlinedTextField(
+                value = query,
+                onValueChange = { query = it },
+                label = { Text("Search contacts") },
+                placeholder = { Text("Name or phone") },
+                modifier = Modifier.fillMaxWidth()
+            )
+
+            Spacer(Modifier.height(12.dp))
+
             if (contacts.isEmpty()) {
                 Text(
                     text = "No contacts found on this device.",
@@ -91,11 +121,20 @@ fun ImportContactsScreen(
 
             Spacer(Modifier.height(8.dp))
 
+            if (filteredContacts.isEmpty()) {
+                Text(
+                    text = "No matches for \"$query\".",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                return@Column
+            }
+
             LazyColumn(
                 contentPadding = PaddingValues(bottom = 24.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                items(contacts, key = { it.phone }) { contact ->
+                items(filteredContacts, key = { it.phone }) { contact ->
                     ContactRow(
                         contact = contact,
                         selected = selectedPhones.contains(contact.phone),
