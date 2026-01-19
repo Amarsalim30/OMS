@@ -20,11 +20,28 @@ interface AccountingDao {
     @Query("SELECT * FROM account_entries WHERE orderId = :orderId")
     suspend fun getEntriesForOrder(orderId: Long): List<AccountEntryEntity>
 
+    @Query("SELECT * FROM account_entries WHERE orderId = :orderId AND type = 'CREDIT' ORDER BY date ASC, id ASC")
+    suspend fun getCreditEntriesForOrder(orderId: Long): List<AccountEntryEntity>
+
+    @Query(
+        """
+        SELECT * FROM account_entries
+        WHERE customerId = :customerId
+        AND orderId IS NULL
+        AND type = 'CREDIT'
+        ORDER BY date ASC, id ASC
+        """
+    )
+    suspend fun getCustomerUnassignedCredits(customerId: Long): List<AccountEntryEntity>
+
     @Query("SELECT * FROM account_entries WHERE orderId = :orderId AND type = :type ORDER BY date DESC, id DESC")
     suspend fun getEntriesForOrderByType(orderId: Long, type: EntryType): List<AccountEntryEntity>
 
     @Query("UPDATE account_entries SET customerId = :customerId WHERE orderId = :orderId")
     suspend fun updateCustomerIdForOrderEntries(orderId: Long, customerId: Long?)
+
+    @Query("UPDATE account_entries SET orderId = :orderId, description = :description WHERE id = :id")
+    suspend fun updateAccountEntryOrderIdAndDescription(id: Long, orderId: Long?, description: String)
 
     @Query(
         """
@@ -55,6 +72,9 @@ interface AccountingDao {
     @Query("DELETE FROM account_entries WHERE orderId = :orderId AND type = 'DEBIT'")
     suspend fun deleteDebitEntriesForOrder(orderId: Long)
 
+    @Query("DELETE FROM account_entries WHERE orderId = :orderId AND type = 'WRITE_OFF'")
+    suspend fun deleteWriteOffEntriesForOrder(orderId: Long)
+
     @Transaction
     suspend fun upsertDebitForOrder(
         orderId: Long,
@@ -74,6 +94,56 @@ interface AccountingDao {
                 description = description
             )
         )
+    }
+
+    @Transaction
+    suspend fun applyAvailableCustomerCreditToOrder(
+        orderId: Long,
+        customerId: Long,
+        orderTotal: BigDecimal,
+        now: Long
+    ) {
+        if (orderTotal <= BigDecimal.ZERO) return
+
+        val alreadyPaid = getPaidForOrder(orderId)
+        var remaining = orderTotal - alreadyPaid
+        if (remaining <= BigDecimal.ZERO) return
+
+        val credits = getCustomerUnassignedCredits(customerId)
+        for (entry in credits) {
+            if (remaining <= BigDecimal.ZERO) break
+            if (entry.amount <= BigDecimal.ZERO) continue
+
+            val applyAmount = if (entry.amount > remaining) remaining else entry.amount
+            val appliedDescription = "Applied credit from entry #${entry.id} to Order #$orderId"
+
+            if (applyAmount.compareTo(entry.amount) == 0) {
+                updateAccountEntryOrderIdAndDescription(entry.id, orderId, appliedDescription)
+                remaining -= entry.amount
+            } else {
+                updateAccountEntryAmount(entry.id, entry.amount - applyAmount)
+                insertAccountEntry(
+                    AccountEntryEntity(
+                        orderId = orderId,
+                        customerId = customerId,
+                        type = EntryType.CREDIT,
+                        amount = applyAmount,
+                        date = now,
+                        description = appliedDescription
+                    )
+                )
+                remaining -= applyAmount
+            }
+        }
+    }
+
+    @Transaction
+    suspend fun moveOrderCreditsToCustomerLevel(orderId: Long) {
+        val credits = getCreditEntriesForOrder(orderId)
+        for (entry in credits) {
+            val description = "Credit from cancelled Order #$orderId: ${entry.description}"
+            updateAccountEntryOrderIdAndDescription(entry.id, null, description)
+        }
     }
 
     /**

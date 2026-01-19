@@ -458,7 +458,7 @@ fun DayDetailScreen(
         val remaining = if (currentTotal > paidAmount) currentTotal.subtract(paidAmount) else BigDecimal.ZERO
         val formattedTotal = parsedTotal?.let { formatter.format(it) }
         val isTotalInvalid = trimmedTotal.isNotEmpty() && parsedTotal == null
-        val hasCustomerMismatch = (customerName.isBlank() xor customerPhone.isBlank())
+        val hasCustomerMismatch = customerName.isNotBlank() && customerPhone.isBlank()
         val canSave =
             notes.trim().isNotEmpty() && parsedTotal != null && parsedTotal > BigDecimal.ZERO && !hasCustomerMismatch
 
@@ -480,7 +480,7 @@ fun DayDetailScreen(
                 hasCustomerMismatch -> {
                     notesError = null
                     totalError = null
-                    customerError = "Enter both name and phone, or leave both blank"
+                    customerError = "Phone is required to attach a customer"
                 }
                 else -> {
                     onSaveOrder(

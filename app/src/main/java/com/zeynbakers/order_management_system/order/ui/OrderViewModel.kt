@@ -134,6 +134,14 @@ class OrderViewModel(private val database: AppDatabase) : ViewModel() {
                 orderTotal = savedOrder.totalAmount,
                 now = now
             )
+            if (customerId != null) {
+                accountingDao.applyAvailableCustomerCreditToOrder(
+                    orderId = orderId,
+                    customerId = customerId,
+                    orderTotal = savedOrder.totalAmount,
+                    now = now
+                )
+            }
 
             loadOrdersForDate(date)
             refreshMonthTotals()
@@ -203,6 +211,8 @@ class OrderViewModel(private val database: AppDatabase) : ViewModel() {
         viewModelScope.launch {
             orderDao.markCancelled(orderId)
             accountingDao.deleteDebitEntriesForOrder(orderId)
+            accountingDao.deleteWriteOffEntriesForOrder(orderId)
+            accountingDao.moveOrderCreditsToCustomerLevel(orderId)
             loadOrdersForDate(date)
             refreshMonthTotals()
         }
@@ -330,17 +340,17 @@ class OrderViewModel(private val database: AppDatabase) : ViewModel() {
     }
 
     private suspend fun resolveCustomerId(name: String, phone: String): Long? {
-        if (name.isBlank() && phone.isBlank()) return null
-        if (name.isBlank() || phone.isBlank()) return null
+        if (phone.isBlank()) return null
 
+        val cleanName = name.ifBlank { phone }
         val existing = customerDao.getByPhone(phone)
         return if (existing != null) {
-            if (existing.name != name) {
+            if (name.isNotBlank() && existing.name != name) {
                 customerDao.update(existing.copy(name = name))
             }
             existing.id
         } else {
-            customerDao.insert(CustomerEntity(name = name, phone = phone))
+            customerDao.insert(CustomerEntity(name = cleanName, phone = phone))
         }
     }
 

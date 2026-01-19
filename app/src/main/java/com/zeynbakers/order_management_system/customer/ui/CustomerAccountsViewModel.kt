@@ -95,11 +95,13 @@ class CustomerAccountsViewModel(private val database: AppDatabase) : ViewModel()
             val uiOrders =
                 orders.map { order ->
                     val paidAmount = paidByOrder[order.id] ?: BigDecimal.ZERO
+                    val paidComparison = paidAmount.compareTo(order.totalAmount)
                     val paymentState =
                         when {
                             paidAmount <= BigDecimal.ZERO -> OrderPaymentState.UNPAID
-                            paidAmount < order.totalAmount -> OrderPaymentState.PARTIAL
-                            else -> OrderPaymentState.PAID
+                            paidComparison < 0 -> OrderPaymentState.PARTIAL
+                            paidComparison == 0 -> OrderPaymentState.PAID
+                            else -> OrderPaymentState.OVERPAID
                         }
                     val effectiveStatus =
                         when (order.statusOverride) {

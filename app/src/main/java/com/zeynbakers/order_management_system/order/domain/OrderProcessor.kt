@@ -28,6 +28,8 @@ class OrderProcessor(
 
         orderDao.markCancelled(orderId)
         accountingDao.deleteDebitEntriesForOrder(orderId)
+        accountingDao.deleteWriteOffEntriesForOrder(orderId)
+        accountingDao.moveOrderCreditsToCustomerLevel(orderId)
     }
 }
     

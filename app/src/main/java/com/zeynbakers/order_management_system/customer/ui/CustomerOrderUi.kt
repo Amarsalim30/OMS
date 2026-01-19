@@ -17,7 +17,8 @@ data class CustomerOrderUi(
 enum class OrderPaymentState {
     UNPAID,
     PARTIAL,
-    PAID
+    PAID,
+    OVERPAID
 }
 
 enum class OrderEffectiveStatus {

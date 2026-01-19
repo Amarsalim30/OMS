@@ -19,8 +19,13 @@ fun parseVoiceMath(transcript: String): VoiceMathParseResult? {
 
 private fun normalizeTranscript(input: String): String {
     val lowered = input.lowercase()
+    val reordered =
+        lowered.replace(
+            Regex("\\b(take|subtract|deduct)\\s+(.+?)\\s+from\\s+(.+?)\\b"),
+            "$3 - $2"
+        )
     val cleaned =
-        lowered
+        reordered
             .replace(",", "")
             .replace("×", "*")
             .replace("÷", "/")
@@ -42,6 +47,8 @@ private fun normalizeTranscript(input: String): String {
             .replace(Regex("\\badd\\b"), "+")
             .replace(Regex("\\bminus\\b"), " - ")
             .replace(Regex("\\bsubtract\\b"), " - ")
+            .replace(Regex("\\bless\\b"), " - ")
+            .replace(Regex("\\bdeduct\\b"), " - ")
             .replace(Regex("([a-z]+)-([a-z]+)"), "$1 $2")
             .replace(Regex("\\bcash\\b"), " ")
             .replace(Regex("\\bkes\\b"), " ")
@@ -51,8 +58,8 @@ private fun normalizeTranscript(input: String): String {
             .replace("shilling", " ")
             .replace("bob", " ")
             .replace("=", " ")
-            .replace(Regex("([+*/])"), " $1 ")
-            .replace(Regex("[^a-z0-9+*/.% ]"), " ")
+            .replace(Regex("([+\\-*/])"), " $1 ")
+            .replace(Regex("[^a-z0-9+\\-*/.% ]"), " ")
     return cleaned.split(Regex("\\s+")).joinToString(" ")
 }
 
@@ -64,8 +71,8 @@ private fun normalizeFallback(input: String): String {
             .replace("÷", "/")
             .replace(Regex("(?<!\\d)\\.|\\.(?!\\d)"), " ")
             .replace(Regex("(?<=\\d)x(?=\\d)"), "*")
-            .replace(Regex("[^0-9+*/.% ]"), " ")
-            .replace(Regex("([+*/])"), " $1 ")
+            .replace(Regex("[^0-9+\\-*/.% ]"), " ")
+            .replace(Regex("([+\\-*/])"), " $1 ")
     return cleaned.split(Regex("\\s+")).joinToString(" ")
 }
 
@@ -88,6 +95,25 @@ private val IGNORE_WORDS = setOf("cash", "kes", "ksh", "kshs", "shillings", "shi
 private fun tokenize(tokens: List<String>): List<Token>? {
     val output = mutableListOf<Token>()
     var i = 0
+    var expectNumber = true
+
+    fun appendNumber(number: BigDecimal, nextIndex: Int): Int {
+        var index = nextIndex
+        if (index < tokens.size && tokens[index] == "percent") {
+            index++
+            if (index < tokens.size && tokens[index] == "of") {
+                index++
+                output.add(Token.Number(number.divide(BigDecimal(100))))
+                output.add(Token.Operator('*'))
+            } else {
+                output.add(Token.Percent(number))
+            }
+        } else {
+            output.add(Token.Number(number))
+        }
+        return index
+    }
+
     while (i < tokens.size) {
         val token = tokens[i]
         if (token.isBlank()) {
@@ -98,46 +124,53 @@ private fun tokenize(tokens: List<String>): List<Token>? {
             i++
             continue
         }
-        when (token) {
-            "+", "-", "*", "/" -> {
-                output.add(Token.Operator(token[0]))
-                i++
-            }
-            "and" -> {
-                val hasNumber =
-                    output.lastOrNull() is Token.Number || output.lastOrNull() is Token.Percent
-                val nextParsed = if (i + 1 < tokens.size) parseNumberToken(tokens, i + 1) else null
-                if (hasNumber && nextParsed != null) {
-                    output.add(Token.Operator('+'))
+        if (expectNumber) {
+            when (token) {
+                "-" -> {
+                    val parsed = parseNumberToken(tokens, i + 1) ?: return null
+                    val number = parsed.first.negate()
+                    i = appendNumber(number, parsed.second)
+                    expectNumber = false
                 }
-                i++
-            }
-            "percent" -> {
-                // Percent without a number is invalid.
-                return null
-            }
-            "of" -> {
-                i++
-            }
-            else -> {
-                val parsed = parseNumberToken(tokens, i) ?: return null
-                val number = parsed.first
-                i = parsed.second
-                if (i < tokens.size && tokens[i] == "percent") {
+                "+", "*", "/" -> return null
+                "and" -> {
                     i++
-                    if (i < tokens.size && tokens[i] == "of") {
-                        i++
-                        output.add(Token.Number(number.divide(BigDecimal(100))))
-                        output.add(Token.Operator('*'))
-                    } else {
-                        output.add(Token.Percent(number))
+                }
+                "percent" -> return null
+                "of" -> {
+                    i++
+                }
+                else -> {
+                    val parsed = parseNumberToken(tokens, i) ?: return null
+                    i = appendNumber(parsed.first, parsed.second)
+                    expectNumber = false
+                }
+            }
+        } else {
+            when (token) {
+                "+", "-", "*", "/" -> {
+                    output.add(Token.Operator(token[0]))
+                    i++
+                    expectNumber = true
+                }
+                "and" -> {
+                    val nextParsed = if (i + 1 < tokens.size) parseNumberToken(tokens, i + 1) else null
+                    if (nextParsed != null) {
+                        output.add(Token.Operator('+'))
+                        expectNumber = true
                     }
-                } else {
-                    output.add(Token.Number(number))
+                    i++
+                }
+                "of" -> {
+                    i++
+                }
+                else -> {
+                    return null
                 }
             }
         }
     }
+    if (expectNumber && output.isNotEmpty()) return null
     return output
 }
 
@@ -176,8 +209,8 @@ private fun evaluateExpression(tokens: List<Token>): BigDecimal? {
     val values = ArrayDeque<BigDecimal>()
     val ops = ArrayDeque<Char>()
 
-    fun applyOp() {
-        if (values.size < 2 || ops.isEmpty()) return
+    fun applyOp(): Boolean {
+        if (values.size < 2 || ops.isEmpty()) return false
         val right = values.removeLast()
         val left = values.removeLast()
         val op = ops.removeLast()
@@ -186,10 +219,14 @@ private fun evaluateExpression(tokens: List<Token>): BigDecimal? {
                 '+' -> left + right
                 '-' -> left - right
                 '*' -> left * right
-                '/' -> if (right.compareTo(BigDecimal.ZERO) == 0) BigDecimal.ZERO else left.divide(right, 6, RoundingMode.HALF_UP)
-                else -> left
+                '/' -> {
+                    if (right.compareTo(BigDecimal.ZERO) == 0) return false
+                    left.divide(right, 6, RoundingMode.HALF_UP)
+                }
+                else -> return false
             }
         values.addLast(result)
+        return true
     }
 
     fun precedence(op: Char): Int = if (op == '*' || op == '/') 2 else 1
@@ -199,7 +236,7 @@ private fun evaluateExpression(tokens: List<Token>): BigDecimal? {
             is Token.Number -> values.addLast(token.value)
             is Token.Operator -> {
                 while (ops.isNotEmpty() && precedence(ops.last()) >= precedence(token.op)) {
-                    applyOp()
+                    if (!applyOp()) return null
                 }
                 ops.addLast(token.op)
             }
@@ -209,9 +246,9 @@ private fun evaluateExpression(tokens: List<Token>): BigDecimal? {
         }
     }
     while (ops.isNotEmpty()) {
-        applyOp()
+        if (!applyOp()) return null
     }
-    return values.lastOrNull()
+    return if (values.size == 1) values.last() else null
 }
 
 private fun parseNumberToken(tokens: List<String>, start: Int): Pair<BigDecimal, Int>? {

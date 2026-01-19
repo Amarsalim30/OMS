@@ -486,10 +486,20 @@ private fun OrderRow(
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis
                 )
-                if (order.paymentState == OrderPaymentState.PARTIAL) {
+                val paymentDetail =
+                    when (order.paymentState) {
+                        OrderPaymentState.PARTIAL ->
+                            "Paid ${formatKes(order.paidAmount)} / ${formatKes(order.order.totalAmount)}"
+                        OrderPaymentState.OVERPAID -> {
+                            val overpaidAmount = order.paidAmount - order.order.totalAmount
+                            "Paid ${formatKes(order.paidAmount)} / ${formatKes(order.order.totalAmount)} (Over ${formatKes(overpaidAmount)})"
+                        }
+                        else -> null
+                    }
+                if (paymentDetail != null) {
                     Spacer(Modifier.height(4.dp))
                     Text(
-                        text = "Paid ${formatKes(order.paidAmount)} / ${formatKes(order.order.totalAmount)}",
+                        text = paymentDetail,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -729,6 +739,7 @@ private fun filterOrders(orders: List<CustomerOrderUi>, filter: OrderFilter): Li
             OrderFilter.Unpaid -> order.paymentState == OrderPaymentState.UNPAID
             OrderFilter.Partial -> order.paymentState == OrderPaymentState.PARTIAL
             OrderFilter.Paid -> order.paymentState == OrderPaymentState.PAID
+            OrderFilter.Overpaid -> order.paymentState == OrderPaymentState.OVERPAID
         }
     }
 }
@@ -792,6 +803,7 @@ private fun orderLabel(order: CustomerOrderUi): String {
             OrderPaymentState.UNPAID -> "Unpaid"
             OrderPaymentState.PARTIAL -> "Partial"
             OrderPaymentState.PAID -> "Paid"
+            OrderPaymentState.OVERPAID -> "Overpaid"
         }
     return "$dateLabel - ${formatKes(order.order.totalAmount)} - $stateLabel"
 }
@@ -807,6 +819,7 @@ private fun orderStatusChipLabel(order: CustomerOrderUi): String {
                 OrderPaymentState.UNPAID -> "UNPAID"
                 OrderPaymentState.PARTIAL -> "PARTIAL"
                 OrderPaymentState.PAID -> "PAID"
+                OrderPaymentState.OVERPAID -> "OVERPAID"
             }
     }
 }
@@ -817,6 +830,7 @@ private fun orderStatusChipColor(order: CustomerOrderUi) =
         order.statusOverride != null -> MaterialTheme.colorScheme.surfaceVariant
         order.paymentState == OrderPaymentState.UNPAID -> MaterialTheme.colorScheme.errorContainer
         order.paymentState == OrderPaymentState.PARTIAL -> MaterialTheme.colorScheme.secondaryContainer
+        order.paymentState == OrderPaymentState.OVERPAID -> MaterialTheme.colorScheme.primaryContainer
         else -> MaterialTheme.colorScheme.tertiaryContainer
     }
 
@@ -860,7 +874,8 @@ private enum class OrderFilter(val label: String) {
     Closed("Closed"),
     Unpaid("Unpaid"),
     Partial("Partial"),
-    Paid("Paid")
+    Paid("Paid"),
+    Overpaid("Overpaid")
 }
 
 private enum class LedgerFilter(val label: String) {
