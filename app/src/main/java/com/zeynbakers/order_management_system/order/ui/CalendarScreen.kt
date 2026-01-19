@@ -3,6 +3,7 @@ package com.zeynbakers.order_management_system.order.ui
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.combinedClickable
 import android.util.Log
 import androidx.compose.foundation.layout.Arrangement
@@ -38,12 +39,16 @@ import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.ModalBottomSheetProperties
@@ -391,7 +396,7 @@ fun CalendarScreen(
                     runCatching { BigDecimal(it) }.getOrNull()
                 }
                 val formattedTotal = parsedTotal?.let { formatKes(it) }
-                val hasCustomerMismatch = (customerName.isBlank() xor customerPhone.isBlank())
+        val hasCustomerMismatch = customerName.isNotBlank() && customerPhone.isBlank()
                 val canSave =
                     trimmedNotes.isNotEmpty() &&
                         parsedTotal != null &&
@@ -413,7 +418,7 @@ fun CalendarScreen(
                         hasCustomerMismatch -> {
                             notesError = null
                             totalError = null
-                            customerError = "Enter both name and phone, or leave both blank"
+                            customerError = "Phone is required to attach a customer"
                         }
                         else -> {
                             onSaveOrder(
@@ -618,36 +623,30 @@ private fun CalendarTopAppBar(
             Text(
                 text = monthTitle,
                 style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                softWrap = false,
+                overflow = TextOverflow.Ellipsis
             )
         },
         navigationIcon = {
-            TextButton(onClick = onSummaryClick) {
+            IconButton(onClick = onSummaryClick) {
                 Icon(imageVector = Icons.Filled.Menu, contentDescription = "Summary")
-                Spacer(Modifier.width(6.dp))
-                Text("Summary")
             }
         },
         actions = {
-            TextButton(onClick = onToday) {
-                Text("Today")
+            IconButton(onClick = onToday) {
+                Icon(imageVector = Icons.Filled.CalendarToday, contentDescription = "Today")
             }
-            TextButton(onClick = onCustomersClick) {
-                Icon(imageVector = Icons.Filled.Search, contentDescription = "Customers")
-                Spacer(Modifier.width(6.dp))
-                Text("Customers")
-            }
-            if (badgeCount > 0) {
-                Surface(
-                    shape = RoundedCornerShape(6.dp),
-                    color = MaterialTheme.colorScheme.surfaceVariant,
-                    modifier = Modifier.padding(end = 12.dp)
-                ) {
-                    Text(
-                        text = badgeCount.toString(),
-                        style = MaterialTheme.typography.labelSmall,
-                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                    )
+            BadgedBox(
+                badge = {
+                    if (badgeCount > 0) {
+                        Badge { Text(badgeCount.toString()) }
+                    }
+                }
+            ) {
+                IconButton(onClick = onCustomersClick) {
+                    Icon(imageVector = Icons.Filled.Search, contentDescription = "Customers")
                 }
             }
         }
@@ -681,12 +680,12 @@ private fun MonthSummaryCard(monthTotal: BigDecimal?, dueCount: Int) {
                 if (dueCount > 0) {
                     Surface(
                         shape = RoundedCornerShape(999.dp),
-                        color = MaterialTheme.colorScheme.surfaceVariant
+                        color = MaterialTheme.colorScheme.errorContainer
                     ) {
                         Text(
-                            text = "$dueCount due",
+                            text = "Due $dueCount",
                             style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            color = MaterialTheme.colorScheme.onErrorContainer,
                             modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
                         )
                     }
@@ -701,7 +700,9 @@ private fun MonthSummaryCard(monthTotal: BigDecimal?, dueCount: Int) {
 @Composable
 private fun StatusLegendRow() {
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .horizontalScroll(rememberScrollState()),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
