@@ -14,8 +14,14 @@ interface AccountingDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAccountEntry(entry: AccountEntryEntity): Long
 
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAccountEntries(entries: List<AccountEntryEntity>)
+
     @Query("SELECT * FROM payments WHERE orderId = :orderId")
     suspend fun getPaymentsForOrder(orderId: Long): List<PaymentEntity>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertPayments(payments: List<PaymentEntity>)
 
     @Query("SELECT * FROM account_entries WHERE orderId = :orderId")
     suspend fun getEntriesForOrder(orderId: Long): List<AccountEntryEntity>
