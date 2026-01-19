@@ -66,6 +66,10 @@ dependencies {
     // Kotlinx DateTime
     implementation(libs.kotlinx.datetime)
 
+    // WorkManager
+    implementation(libs.androidx.work.runtime.ktx)
+    implementation(libs.androidx.documentfile)
+
     // Compose
     implementation(libs.androidx.activity.compose)
     implementation(platform(libs.androidx.compose.bom))

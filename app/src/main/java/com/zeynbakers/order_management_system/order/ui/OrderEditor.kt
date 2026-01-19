@@ -20,6 +20,8 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.focus.onFocusChanged
 import com.zeynbakers.order_management_system.core.ui.LocalAmountFieldRegistry
+import com.zeynbakers.order_management_system.core.ui.LocalVoiceInputRouter
+import com.zeynbakers.order_management_system.core.ui.VoiceTarget
 import com.zeynbakers.order_management_system.order.data.OrderEntity
 import java.math.BigDecimal
 import java.math.RoundingMode
@@ -35,6 +37,7 @@ fun OrderEditor(order: OrderEntity, onSave: (OrderEntity) -> Unit) {
         )
     }
     val amountRegistry = LocalAmountFieldRegistry.current
+    val voiceRouter = LocalVoiceInputRouter.current
 
     LaunchedEffect(order) {
         notes = order.notes
@@ -53,6 +56,13 @@ fun OrderEditor(order: OrderEntity, onSave: (OrderEntity) -> Unit) {
     }
     val formattedTotal = totalAmount?.let { formatter.format(it) }
 
+    val notesState by rememberUpdatedState(notes)
+    val setNotes by rememberUpdatedState<(String) -> Unit>({ notes = it })
+    DisposableEffect(Unit) {
+        voiceRouter.registerNotesTarget(getNotes = { notesState }, setNotes = setNotes)
+        onDispose { voiceRouter.clearNotesTarget() }
+    }
+
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         OutlinedTextField(
                 value = notes,
@@ -63,7 +73,13 @@ fun OrderEditor(order: OrderEntity, onSave: (OrderEntity) -> Unit) {
                 placeholder = { Text("Customer details, delivery time, etc.") },
                 minLines = 2,
                 maxLines = 3,
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .onFocusChanged { state ->
+                        if (state.isFocused) {
+                            voiceRouter.onFocusTarget(VoiceTarget.Notes)
+                        }
+                    }
         )
 
         val setTotalText by rememberUpdatedState<(String) -> Unit>({ totalText = it })
@@ -104,6 +120,7 @@ fun OrderEditor(order: OrderEntity, onSave: (OrderEntity) -> Unit) {
                     .onFocusChanged { state ->
                         if (state.isFocused) {
                             amountRegistry.update(setTotalText)
+                            voiceRouter.onFocusTarget(VoiceTarget.Total)
                         }
                     }
         )

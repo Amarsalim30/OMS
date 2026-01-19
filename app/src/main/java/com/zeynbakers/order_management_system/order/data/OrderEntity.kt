@@ -22,6 +22,8 @@ data class OrderEntity(
 
     val notes: String,
 
+    val pickupTime: String? = null,
+
     val status: OrderStatus = OrderStatus.PENDING,
     val statusOverride: OrderStatusOverride? = null,
 

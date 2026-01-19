@@ -23,6 +23,12 @@ interface OrderDao {
     @Query("SELECT * FROM orders WHERE customerId = :customerId")
     suspend fun getOrdersByCustomer(customerId: Long): List<OrderEntity>
 
+    @Query("SELECT * FROM orders")
+    suspend fun getAllOrders(): List<OrderEntity>
+
+    @Query("SELECT * FROM orders WHERE status != 'CANCELLED' ORDER BY orderDate DESC, createdAt DESC")
+    suspend fun getActiveOrders(): List<OrderEntity>
+
     @Query("SELECT * FROM orders WHERE id = :orderId")
     suspend fun getOrderById(orderId: Long): OrderEntity?
 

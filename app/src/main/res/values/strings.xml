@@ -1,3 +1,11 @@
 <resources>
     <string name="app_name">OrderBook</string>
+    <string name="notification_channel_due">Due reminders</string>
+    <string name="notification_channel_due_desc">Order due-date reminders</string>
+    <string name="notification_channel_summary">Daily summary</string>
+    <string name="notification_channel_summary_desc">Daily order summary</string>
+    <string name="shortcut_new_order">New order</string>
+    <string name="shortcut_today">Today</string>
+    <string name="shortcut_unpaid">Unpaid</string>
+    <string name="widget_today_unpaid_desc">Today and unpaid snapshot</string>
 </resources>

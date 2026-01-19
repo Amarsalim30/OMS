@@ -93,9 +93,12 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.zeynbakers.order_management_system.core.util.formatKes
+import com.zeynbakers.order_management_system.core.util.normalizePickupTime
 import com.zeynbakers.order_management_system.core.ui.LocalAmountFieldRegistry
 import com.zeynbakers.order_management_system.core.ui.LocalVoiceCalcAccess
 import com.zeynbakers.order_management_system.core.ui.LocalVoiceOverlaySuppressed
+import com.zeynbakers.order_management_system.core.ui.LocalVoiceInputRouter
+import com.zeynbakers.order_management_system.core.ui.VoiceTarget
 import com.zeynbakers.order_management_system.core.ui.VoiceCalculatorOverlay
 import com.zeynbakers.order_management_system.customer.data.CustomerEntity
 import java.math.BigDecimal
@@ -125,23 +128,27 @@ fun CalendarScreen(
     selectedDate: LocalDate?,
     onSelectDate: (LocalDate) -> Unit,
     onOpenDay: (LocalDate) -> Unit,
-    onSaveOrder: (LocalDate, String, BigDecimal, String, String) -> Unit,
+    onSaveOrder: (LocalDate, String, BigDecimal, String, String, String?) -> Unit,
     searchCustomers: suspend (String) -> List<CustomerEntity>,
     onCustomersClick: () -> Unit,
     onSummaryClick: () -> Unit,
-    onMonthSettled: (Int, Int) -> Unit
+    onMonthSettled: (Int, Int) -> Unit,
+    openQuickAddDate: LocalDate?,
+    onQuickAddConsumed: () -> Unit
 ) {
     var isQuickAddOpen by remember { mutableStateOf(false) }
     var notes by remember { mutableStateOf("") }
     var totalText by remember { mutableStateOf("") }
     var customerName by remember { mutableStateOf("") }
     var customerPhone by remember { mutableStateOf("") }
+    var pickupTimeText by remember { mutableStateOf("") }
     var notesError by remember { mutableStateOf<String?>(null) }
     var totalError by remember { mutableStateOf<String?>(null) }
     var customerError by remember { mutableStateOf<String?>(null) }
     var suggestions by remember { mutableStateOf<List<CustomerEntity>>(emptyList()) }
     val overlaySuppressed = LocalVoiceOverlaySuppressed.current
     val voiceCalcAccess = LocalVoiceCalcAccess.current
+    val voiceRouter = LocalVoiceInputRouter.current
     val scope = rememberCoroutineScope()
 
     LaunchedEffect(customerName, customerPhone) {
@@ -155,6 +162,13 @@ fun CalendarScreen(
 
     LaunchedEffect(isQuickAddOpen) {
         overlaySuppressed.value = isQuickAddOpen
+    }
+
+    LaunchedEffect(openQuickAddDate) {
+        val target = openQuickAddDate ?: return@LaunchedEffect
+        onSelectDate(target)
+        isQuickAddOpen = true
+        onQuickAddConsumed()
     }
 
     DisposableEffect(Unit) {
@@ -333,12 +347,19 @@ fun CalendarScreen(
         val amountRegistry = LocalAmountFieldRegistry.current
         val notesRequester = remember { FocusRequester() }
         val totalRequester = remember { FocusRequester() }
+        val pickupRequester = remember { FocusRequester() }
         val nameRequester = remember { FocusRequester() }
         val phoneRequester = remember { FocusRequester() }
+        val notesState by rememberUpdatedState(notes)
+        val setNotes by rememberUpdatedState<(String) -> Unit>({ notes = it })
         val imeVisible = WindowInsets.ime.getBottom(density) > 0
         val imeVisibleState by rememberUpdatedState(imeVisible)
         val keyboardControllerState by rememberUpdatedState(keyboardController)
         val focusManagerState by rememberUpdatedState(focusManager)
+        DisposableEffect(Unit) {
+            voiceRouter.registerNotesTarget(getNotes = { notesState }, setNotes = setNotes)
+            onDispose { voiceRouter.clearNotesTarget() }
+        }
         LaunchedEffect(activeDate) {
             notesRequester.requestFocus()
         }
@@ -396,12 +417,16 @@ fun CalendarScreen(
                     runCatching { BigDecimal(it) }.getOrNull()
                 }
                 val formattedTotal = parsedTotal?.let { formatKes(it) }
-        val hasCustomerMismatch = customerName.isNotBlank() && customerPhone.isBlank()
+                val normalizedPickupTime =
+                    if (pickupTimeText.isBlank()) null else normalizePickupTime(pickupTimeText)
+                val isPickupTimeInvalid = pickupTimeText.isNotBlank() && normalizedPickupTime == null
+                val hasCustomerMismatch = customerName.isNotBlank() && customerPhone.isBlank()
                 val canSave =
                     trimmedNotes.isNotEmpty() &&
                         parsedTotal != null &&
                         parsedTotal > BigDecimal.ZERO &&
-                        !hasCustomerMismatch
+                        !hasCustomerMismatch &&
+                        !isPickupTimeInvalid
 
                 fun submitOrder() {
                     when {
@@ -420,18 +445,25 @@ fun CalendarScreen(
                             totalError = null
                             customerError = "Phone is required to attach a customer"
                         }
+                        isPickupTimeInvalid -> {
+                            notesError = null
+                            totalError = null
+                            customerError = null
+                        }
                         else -> {
                             onSaveOrder(
                                 activeDate,
                                 trimmedNotes,
                                 parsedTotal,
                                 customerName.trim(),
-                                customerPhone.trim()
+                                customerPhone.trim(),
+                                normalizedPickupTime
                             )
                             notes = ""
                             totalText = ""
                             customerName = ""
                             customerPhone = ""
+                            pickupTimeText = ""
                             notesError = null
                             totalError = null
                             customerError = null
@@ -452,6 +484,11 @@ fun CalendarScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .focusRequester(notesRequester)
+                        .onFocusChanged { state ->
+                            if (state.isFocused) {
+                                voiceRouter.onFocusTarget(VoiceTarget.Notes)
+                            }
+                        }
                 )
                 notesError?.let {
                     Text(text = it, color = MaterialTheme.colorScheme.error)
@@ -480,19 +517,48 @@ fun CalendarScreen(
                         keyboardType = KeyboardType.Decimal,
                         imeAction = ImeAction.Next
                     ),
-                    keyboardActions = KeyboardActions(onNext = { nameRequester.requestFocus() }),
+                    keyboardActions = KeyboardActions(onNext = { pickupRequester.requestFocus() }),
                     modifier = Modifier
                         .fillMaxWidth()
                         .focusRequester(totalRequester)
                         .onFocusChanged { state ->
                             if (state.isFocused) {
                                 amountRegistry.update(setTotalText)
+                                voiceRouter.onFocusTarget(VoiceTarget.Total)
                             }
                         }
                 )
                 totalError?.let {
                     Text(text = it, color = MaterialTheme.colorScheme.error)
                 }
+
+                Spacer(Modifier.height(8.dp))
+
+                OutlinedTextField(
+                    value = pickupTimeText,
+                    onValueChange = {
+                        val filtered = it.filter { ch -> ch.isDigit() || ch == ':' || ch == '.' }
+                        if (filtered.length <= 5) {
+                            pickupTimeText = filtered
+                        }
+                    },
+                    label = { Text("Pickup time (optional)") },
+                    placeholder = { Text("09:00") },
+                    isError = isPickupTimeInvalid,
+                    supportingText = {
+                        if (isPickupTimeInvalid) {
+                            Text("Use HH:MM (e.g., 09:30 or 930).")
+                        }
+                    },
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Number,
+                        imeAction = ImeAction.Next
+                    ),
+                    keyboardActions = KeyboardActions(onNext = { nameRequester.requestFocus() }),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .focusRequester(pickupRequester)
+                )
 
                 Spacer(Modifier.height(8.dp))
 
@@ -576,6 +642,7 @@ fun CalendarScreen(
                                 totalText = ""
                                 customerName = ""
                                 customerPhone = ""
+                                pickupTimeText = ""
                                 notesError = null
                                 totalError = null
                                 customerError = null
@@ -597,11 +664,10 @@ fun CalendarScreen(
                 VoiceCalculatorOverlay(
                     hasPermission = voiceCalcAccess.hasPermission,
                     onRequestPermission = voiceCalcAccess.onRequestPermission,
-                    onApplyAmount = voiceCalcAccess.onApplyAmount,
                     lockToRightOnIdle = true,
                     lockToTopOnIdle = true,
                     peekWidthDp = 18.dp,
-                    allowDrag = false
+                    allowDrag = true
                 )
             }
         }

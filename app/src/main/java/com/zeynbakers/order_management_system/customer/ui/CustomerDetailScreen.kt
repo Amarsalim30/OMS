@@ -64,6 +64,8 @@ import com.zeynbakers.order_management_system.core.util.formatDateTime
 import com.zeynbakers.order_management_system.core.util.formatKes
 import com.zeynbakers.order_management_system.core.ui.AmountFieldRegistry
 import com.zeynbakers.order_management_system.core.ui.LocalAmountFieldRegistry
+import com.zeynbakers.order_management_system.core.ui.LocalVoiceInputRouter
+import com.zeynbakers.order_management_system.core.ui.VoiceTarget
 import com.zeynbakers.order_management_system.customer.data.CustomerEntity
 import com.zeynbakers.order_management_system.order.data.OrderStatusOverride
 import java.math.BigDecimal
@@ -307,6 +309,7 @@ private fun PaymentCard(
     onSelectOrder: (Long?) -> Unit,
     onSubmit: () -> Unit
 ) {
+    val voiceRouter = LocalVoiceInputRouter.current
     var orderSearch by rememberSaveable { mutableStateOf("") }
     val visibleOrders = remember(eligibleOrders, orderSearch) {
         val lowered = orderSearch.trim().lowercase()
@@ -350,6 +353,7 @@ private fun PaymentCard(
                     .onFocusChanged { state ->
                         if (state.isFocused) {
                             amountRegistry.update(setAmountText)
+                            voiceRouter.onFocusTarget(VoiceTarget.Total)
                         }
                     }
             )

@@ -8,6 +8,7 @@ import com.zeynbakers.order_management_system.customer.data.CustomerEntity
 import com.zeynbakers.order_management_system.order.data.OrderDao
 import com.zeynbakers.order_management_system.order.data.OrderEntity
 import com.zeynbakers.order_management_system.order.data.OrderStatus
+import com.zeynbakers.order_management_system.order.data.OrderStatusOverride
 import java.math.BigDecimal
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -67,6 +68,15 @@ class OrderViewModel(private val database: AppDatabase) : ViewModel() {
     private val _orderPaidAmounts = MutableStateFlow<Map<Long, BigDecimal>>(emptyMap())
     val orderPaidAmounts = _orderPaidAmounts.asStateFlow()
 
+    private val _unpaidOrders = MutableStateFlow<List<OrderEntity>>(emptyList())
+    val unpaidOrders = _unpaidOrders.asStateFlow()
+
+    private val _unpaidPaidAmounts = MutableStateFlow<Map<Long, BigDecimal>>(emptyMap())
+    val unpaidPaidAmounts = _unpaidPaidAmounts.asStateFlow()
+
+    private val _unpaidCustomerNames = MutableStateFlow<Map<Long, String>>(emptyMap())
+    val unpaidCustomerNames = _unpaidCustomerNames.asStateFlow()
+
     private var lastMonth: Int? = null
     private var lastYear: Int? = null
 
@@ -76,11 +86,13 @@ class OrderViewModel(private val database: AppDatabase) : ViewModel() {
         totalAmount: BigDecimal,
         customerName: String,
         customerPhone: String,
+        pickupTime: String?,
         existingOrderId: Long?
     ) {
         viewModelScope.launch {
             val now = Clock.System.now().toEpochMilliseconds()
             val cleanNotes = notes.trim()
+            val normalizedPickupTime = pickupTime?.trim()?.takeIf { it.isNotBlank() }
             val existingOrder =
                 if (existingOrderId != null && existingOrderId != 0L) {
                     orderDao.getOrderById(existingOrderId)
@@ -109,6 +121,7 @@ class OrderViewModel(private val database: AppDatabase) : ViewModel() {
                         notes = cleanNotes,
                         totalAmount = totalAmount,
                         customerId = customerId,
+                        pickupTime = normalizedPickupTime,
                         updatedAt = now
                     )
 
@@ -358,6 +371,38 @@ class OrderViewModel(private val database: AppDatabase) : ViewModel() {
         val month = lastMonth ?: return
         val year = lastYear ?: return
         loadMonth(month = month, year = year)
+    }
+
+    fun loadUnpaidOrders() {
+        viewModelScope.launch {
+            val orders =
+                orderDao.getActiveOrders()
+                    .filter { it.statusOverride != OrderStatusOverride.CLOSED }
+            val orderIds = orders.map { it.id }.filter { it != 0L }
+            val paidByOrder =
+                if (orderIds.isEmpty()) {
+                    emptyMap()
+                } else {
+                    accountingDao.getPaidForOrders(orderIds).associate { it.orderId to it.paid }
+                }
+            val unpaid =
+                orders.filter { order ->
+                    val paid = paidByOrder[order.id] ?: BigDecimal.ZERO
+                    paid < order.totalAmount
+                }
+            val customerIds = unpaid.mapNotNull { it.customerId }.distinct()
+            _unpaidCustomerNames.value =
+                if (customerIds.isEmpty()) {
+                    emptyMap()
+                } else {
+                    customerDao.getByIds(customerIds).associate { it.id to it.name }
+                }
+            _unpaidPaidAmounts.value = paidByOrder
+            _unpaidOrders.value =
+                unpaid.sortedWith(
+                    compareByDescending<OrderEntity> { it.orderDate }.thenByDescending { it.createdAt }
+                )
+        }
     }
 
     private fun isLeapYear(year: Int): Boolean {

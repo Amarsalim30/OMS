@@ -79,8 +79,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import com.zeynbakers.order_management_system.core.ui.LocalAmountFieldRegistry
 import com.zeynbakers.order_management_system.core.ui.LocalVoiceCalcAccess
 import com.zeynbakers.order_management_system.core.ui.LocalVoiceOverlaySuppressed
+import com.zeynbakers.order_management_system.core.ui.LocalVoiceInputRouter
+import com.zeynbakers.order_management_system.core.ui.VoiceTarget
 import com.zeynbakers.order_management_system.core.ui.VoiceCalculatorOverlay
 import com.zeynbakers.order_management_system.core.util.formatKes
+import com.zeynbakers.order_management_system.core.util.normalizePickupTime
 import com.zeynbakers.order_management_system.customer.data.CustomerEntity
 import com.zeynbakers.order_management_system.order.data.OrderEntity
 import java.math.BigDecimal
@@ -101,7 +104,7 @@ fun DayDetailScreen(
     customerNames: Map<Long, String>,
     orderPaidAmounts: Map<Long, BigDecimal>,
     onBack: () -> Unit,
-    onSaveOrder: (String, BigDecimal, String, String, Long?) -> Unit,
+    onSaveOrder: (String, BigDecimal, String, String, String?, Long?) -> Unit,
     onDeleteOrder: (Long) -> Unit,
     loadCustomerById: suspend (Long) -> CustomerEntity?,
     searchCustomers: suspend (String) -> List<CustomerEntity>,
@@ -112,6 +115,7 @@ fun DayDetailScreen(
     var totalText by rememberSaveable(date) { mutableStateOf(draft?.totalText ?: "") }
     var customerName by rememberSaveable(date) { mutableStateOf(draft?.customerName ?: "") }
     var customerPhone by rememberSaveable(date) { mutableStateOf(draft?.customerPhone ?: "") }
+    var pickupTimeText by rememberSaveable(date) { mutableStateOf(draft?.pickupTime ?: "") }
     var editingOrderId by rememberSaveable(date) { mutableStateOf<Long?>(draft?.editingOrderId) }
     var isEditorOpen by rememberSaveable(date) { mutableStateOf(false) }
     var notesError by remember { mutableStateOf<String?>(null) }
@@ -124,8 +128,10 @@ fun DayDetailScreen(
     val amountRegistry = LocalAmountFieldRegistry.current
     val voiceCalcAccess = LocalVoiceCalcAccess.current
     val overlaySuppressed = LocalVoiceOverlaySuppressed.current
+    val voiceRouter = LocalVoiceInputRouter.current
     val notesRequester = remember { FocusRequester() }
     val totalRequester = remember { FocusRequester() }
+    val pickupRequester = remember { FocusRequester() }
     val nameRequester = remember { FocusRequester() }
     val phoneRequester = remember { FocusRequester() }
     var orderFilter by rememberSaveable { mutableStateOf(DayOrderFilter.All) }
@@ -137,12 +143,13 @@ fun DayDetailScreen(
         }
     }
 
-    LaunchedEffect(notes, totalText, customerName, customerPhone, editingOrderId) {
+    LaunchedEffect(notes, totalText, customerName, customerPhone, pickupTimeText, editingOrderId) {
         val hasDraftContent =
             notes.isNotBlank() ||
                 totalText.isNotBlank() ||
                 customerName.isNotBlank() ||
                 customerPhone.isNotBlank() ||
+                pickupTimeText.isNotBlank() ||
                 editingOrderId != null
         if (hasDraftContent) {
             onDraftChange(
@@ -151,6 +158,7 @@ fun DayDetailScreen(
                     totalText = totalText,
                     customerName = customerName,
                     customerPhone = customerPhone,
+                    pickupTime = pickupTimeText,
                     editingOrderId = editingOrderId
                 )
             )
@@ -163,14 +171,17 @@ fun DayDetailScreen(
         if (editingOrderId == null) {
             customerName = ""
             customerPhone = ""
+            pickupTimeText = ""
             return@LaunchedEffect
         }
         val order = orders.firstOrNull { it.id == editingOrderId }
         if (order == null) {
             customerName = ""
             customerPhone = ""
+            pickupTimeText = ""
             return@LaunchedEffect
         }
+        pickupTimeText = order.pickupTime.orEmpty()
         val customerId = order.customerId
         if (customerId == null) {
             customerName = ""
@@ -458,9 +469,22 @@ fun DayDetailScreen(
         val remaining = if (currentTotal > paidAmount) currentTotal.subtract(paidAmount) else BigDecimal.ZERO
         val formattedTotal = parsedTotal?.let { formatter.format(it) }
         val isTotalInvalid = trimmedTotal.isNotEmpty() && parsedTotal == null
+        val normalizedPickupTime =
+            if (pickupTimeText.isBlank()) null else normalizePickupTime(pickupTimeText)
+        val isPickupTimeInvalid = pickupTimeText.isNotBlank() && normalizedPickupTime == null
         val hasCustomerMismatch = customerName.isNotBlank() && customerPhone.isBlank()
         val canSave =
-            notes.trim().isNotEmpty() && parsedTotal != null && parsedTotal > BigDecimal.ZERO && !hasCustomerMismatch
+            notes.trim().isNotEmpty() &&
+                parsedTotal != null &&
+                parsedTotal > BigDecimal.ZERO &&
+                !hasCustomerMismatch &&
+                !isPickupTimeInvalid
+        val notesState by rememberUpdatedState(notes)
+        val setNotes by rememberUpdatedState<(String) -> Unit>({ notes = it })
+        DisposableEffect(Unit) {
+            voiceRouter.registerNotesTarget(getNotes = { notesState }, setNotes = setNotes)
+            onDispose { voiceRouter.clearNotesTarget() }
+        }
 
         fun submitOrder() {
             val trimmedNotes = notes.trim()
@@ -482,18 +506,25 @@ fun DayDetailScreen(
                     totalError = null
                     customerError = "Phone is required to attach a customer"
                 }
+                isPickupTimeInvalid -> {
+                    notesError = null
+                    totalError = null
+                    customerError = null
+                }
                 else -> {
                     onSaveOrder(
                         trimmedNotes,
                         finalTotal,
                         customerName.trim(),
                         customerPhone.trim(),
+                        normalizedPickupTime,
                         editingOrderId
                     )
                     notes = ""
                     totalText = ""
                     customerName = ""
                     customerPhone = ""
+                    pickupTimeText = ""
                     editingOrderId = null
                     notesError = null
                     totalError = null
@@ -574,6 +605,11 @@ fun DayDetailScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .focusRequester(notesRequester)
+                        .onFocusChanged { state ->
+                            if (state.isFocused) {
+                                voiceRouter.onFocusTarget(VoiceTarget.Notes)
+                            }
+                        }
                 )
 
                 notesError?.let {
@@ -601,7 +637,7 @@ fun DayDetailScreen(
                         keyboardType = KeyboardType.Decimal,
                         imeAction = ImeAction.Next
                     ),
-                    keyboardActions = KeyboardActions(onNext = { nameRequester.requestFocus() }),
+                    keyboardActions = KeyboardActions(onNext = { pickupRequester.requestFocus() }),
                     supportingText = {
                         when {
                             isTotalInvalid -> Text("Enter a valid amount.")
@@ -614,6 +650,7 @@ fun DayDetailScreen(
                         .onFocusChanged { state ->
                             if (state.isFocused) {
                                 amountRegistry.update(setTotalText)
+                                voiceRouter.onFocusTarget(VoiceTarget.Total)
                             }
                     }
                 )
@@ -627,6 +664,35 @@ fun DayDetailScreen(
                     text = "Status: $statusText - Paid ${formatKes(paidAmount)} - Due ${formatKes(remaining)}",
                     style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                Spacer(Modifier.height(8.dp))
+
+                OutlinedTextField(
+                    value = pickupTimeText,
+                    onValueChange = {
+                        val filtered = it.filter { ch -> ch.isDigit() || ch == ':' || ch == '.' }
+                        if (filtered.length <= 5) {
+                            pickupTimeText = filtered
+                        }
+                    },
+                    label = { Text("Pickup time (optional)") },
+                    placeholder = { Text("09:00") },
+                    isError = isPickupTimeInvalid,
+                    supportingText = {
+                        if (isPickupTimeInvalid) {
+                            Text("Use HH:MM (e.g., 09:30 or 930).")
+                        }
+                    },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Number,
+                        imeAction = ImeAction.Next
+                    ),
+                    keyboardActions = KeyboardActions(onNext = { nameRequester.requestFocus() }),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .focusRequester(pickupRequester)
                 )
 
                 Spacer(Modifier.height(8.dp))
@@ -717,6 +783,7 @@ fun DayDetailScreen(
                                 totalText = ""
                                 customerName = ""
                                 customerPhone = ""
+                                pickupTimeText = ""
                                 editingOrderId = null
                                 notesError = null
                                 totalError = null
@@ -742,11 +809,10 @@ fun DayDetailScreen(
                 VoiceCalculatorOverlay(
                     hasPermission = voiceCalcAccess.hasPermission,
                     onRequestPermission = voiceCalcAccess.onRequestPermission,
-                    onApplyAmount = voiceCalcAccess.onApplyAmount,
                     lockToRightOnIdle = true,
                     lockToTopOnIdle = true,
                     peekWidthDp = 18.dp,
-                    allowDrag = false
+                    allowDrag = true
                 )
             }
         }
@@ -1154,6 +1220,7 @@ data class OrderDraft(
     val totalText: String,
     val customerName: String,
     val customerPhone: String,
+    val pickupTime: String,
     val editingOrderId: Long?
 )
 

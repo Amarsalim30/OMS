@@ -2,6 +2,7 @@ package com.zeynbakers.order_management_system
 
 import android.Manifest
 import android.content.Context
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Bundle
 import android.provider.ContactsContract
@@ -19,10 +20,19 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
+import com.zeynbakers.order_management_system.core.backup.BackupScheduler
+import com.zeynbakers.order_management_system.core.backup.BackupSettingsScreen
 import com.zeynbakers.order_management_system.core.db.DatabaseProvider
+import com.zeynbakers.order_management_system.core.navigation.AppIntents
+import com.zeynbakers.order_management_system.core.navigation.AppShortcuts
+import com.zeynbakers.order_management_system.core.notifications.NotificationScheduler
+import com.zeynbakers.order_management_system.core.notifications.NotificationSettingsScreen
+import com.zeynbakers.order_management_system.core.widget.WidgetUpdater
 import com.zeynbakers.order_management_system.core.ui.AmountFieldRegistry
 import com.zeynbakers.order_management_system.core.ui.LocalAmountFieldRegistry
 import com.zeynbakers.order_management_system.core.ui.LocalVoiceCalcAccess
+import com.zeynbakers.order_management_system.core.ui.LocalVoiceInputRouter
+import com.zeynbakers.order_management_system.core.ui.VoiceInputRouter
 import com.zeynbakers.order_management_system.core.ui.LocalVoiceOverlaySuppressed
 import com.zeynbakers.order_management_system.core.ui.VoiceCalcAccess
 import com.zeynbakers.order_management_system.core.ui.VoiceCalculatorOverlay
@@ -32,12 +42,12 @@ import com.zeynbakers.order_management_system.customer.ui.CustomerDetailScreen
 import com.zeynbakers.order_management_system.customer.ui.CustomerListScreen
 import com.zeynbakers.order_management_system.customer.ui.ImportContact
 import com.zeynbakers.order_management_system.customer.ui.ImportContactsScreen
-import com.zeynbakers.order_management_system.order.data.OrderStatusOverride
 import com.zeynbakers.order_management_system.order.ui.CalendarScreen
 import com.zeynbakers.order_management_system.order.ui.DayDetailScreen
 import com.zeynbakers.order_management_system.order.ui.OrderDraft
 import com.zeynbakers.order_management_system.order.ui.OrderViewModel
 import com.zeynbakers.order_management_system.order.ui.SummaryScreen
+import com.zeynbakers.order_management_system.order.ui.UnpaidOrdersScreen
 import kotlinx.datetime.Clock
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
@@ -46,9 +56,12 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 class MainActivity : ComponentActivity() {
+    private val launchIntent = mutableStateOf<Intent?>(null)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+        launchIntent.value = intent
 
         setContent {
             Order_management_systemTheme {
@@ -56,6 +69,7 @@ class MainActivity : ComponentActivity() {
                 val viewModel = remember { OrderViewModel(database = database) }
                 val customerViewModel = remember { CustomerAccountsViewModel(database = database) }
                 val amountRegistry = remember { AmountFieldRegistry() }
+                val voiceRouter = remember { VoiceInputRouter(onApplyTotal = amountRegistry::applyAmount) }
                 var currentMonth by remember { mutableStateOf(0) }
                 var currentYear by remember { mutableStateOf(0) }
                 var baseMonth by remember { mutableStateOf(0) }
@@ -108,6 +122,9 @@ class MainActivity : ComponentActivity() {
                 val summaryOrders by viewModel.summaryOrders.collectAsState()
                 val summaryTotal by viewModel.summaryTotal.collectAsState()
                 val summaryCustomerNames by viewModel.summaryCustomerNames.collectAsState()
+                val unpaidOrders by viewModel.unpaidOrders.collectAsState()
+                val unpaidPaidAmounts by viewModel.unpaidPaidAmounts.collectAsState()
+                val unpaidCustomerNames by viewModel.unpaidCustomerNames.collectAsState()
 
                 val customerSummaries by customerViewModel.summaries.collectAsState()
                 val customerDetail by customerViewModel.customer.collectAsState()
@@ -117,11 +134,17 @@ class MainActivity : ComponentActivity() {
 
                 var selectedDate by remember { mutableStateOf<LocalDate?>(null) }
                 var summaryDate by remember { mutableStateOf<LocalDate?>(null) }
+                var quickAddDate by remember { mutableStateOf<LocalDate?>(null) }
+                val incomingIntent by launchIntent
                 val today = remember {
                     Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date
                 }
 
                 LaunchedEffect(Unit) {
+                    BackupScheduler.ensureScheduled(context)
+                    NotificationScheduler.ensureScheduled(context)
+                    AppShortcuts.ensure(context.applicationContext)
+                    WidgetUpdater.enqueue(context)
                     val now = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault())
                     currentMonth = now.monthNumber
                     currentYear = now.year
@@ -136,6 +159,42 @@ class MainActivity : ComponentActivity() {
                     if (currentMonth > 0 && currentYear > 0) {
                         viewModel.loadMonth(month = currentMonth, year = currentYear)
                         viewModel.prefetchAdjacentMonths(year = currentYear, month = currentMonth)
+                    }
+                }
+
+                LaunchedEffect(incomingIntent) {
+                    val intent = incomingIntent ?: return@LaunchedEffect
+                    when (intent.action) {
+                        AppIntents.ACTION_SHOW_TODAY -> {
+                            selectedDate = today
+                            viewModel.loadOrdersForDate(today)
+                            screen = Screen.Day(today)
+                        }
+                        AppIntents.ACTION_SHOW_DAY -> {
+                            val targetDate =
+                                intent.getStringExtra(AppIntents.EXTRA_TARGET_DATE)?.let {
+                                    runCatching { LocalDate.parse(it) }.getOrNull()
+                                } ?: today
+                            selectedDate = targetDate
+                            viewModel.loadOrdersForDate(targetDate)
+                            screen = Screen.Day(targetDate)
+                        }
+                        AppIntents.ACTION_SHOW_UNPAID -> {
+                            viewModel.loadUnpaidOrders()
+                            screen = Screen.Unpaid
+                        }
+                        AppIntents.ACTION_SHOW_SUMMARY -> {
+                            summaryDate =
+                                intent.getStringExtra(AppIntents.EXTRA_TARGET_DATE)?.let {
+                                    runCatching { LocalDate.parse(it) }.getOrNull()
+                                } ?: today
+                            screen = Screen.Summary
+                        }
+                        AppIntents.ACTION_NEW_ORDER -> {
+                            selectedDate = today
+                            quickAddDate = today
+                            screen = Screen.Calendar
+                        }
                     }
                 }
 
@@ -166,6 +225,13 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
+                LaunchedEffect(screen) {
+                    val currentScreen = screen
+                    if (currentScreen is Screen.Unpaid) {
+                        viewModel.loadUnpaidOrders()
+                    }
+                }
+
                 val voiceCalcAccess =
                     remember(hasRecordPermission) {
                         VoiceCalcAccess(
@@ -180,7 +246,8 @@ class MainActivity : ComponentActivity() {
                 CompositionLocalProvider(
                     LocalAmountFieldRegistry provides amountRegistry,
                     LocalVoiceCalcAccess provides voiceCalcAccess,
-                    LocalVoiceOverlaySuppressed provides overlaySuppressed
+                    LocalVoiceOverlaySuppressed provides overlaySuppressed,
+                    LocalVoiceInputRouter provides voiceRouter
                 ) {
                     Box(modifier = Modifier.fillMaxSize()) {
                         when (val active = screen) {
@@ -196,15 +263,18 @@ class MainActivity : ComponentActivity() {
                                     monthBadgeCount = monthBadgeCount,
                                     selectedDate = selectedDate,
                                     onSelectDate = { selectedDate = it },
-                                    onSaveOrder = { date, notes, total, name, phone ->
+                                    onSaveOrder = { date, notes, total, name, phone, pickupTime ->
                                         viewModel.saveOrder(
                                             date = date,
                                             notes = notes,
                                             totalAmount = total,
                                             customerName = name,
                                             customerPhone = phone,
+                                            pickupTime = pickupTime,
                                             existingOrderId = null
                                         )
+                                        WidgetUpdater.enqueue(context)
+                                        NotificationScheduler.enqueueNow(context)
                                     },
                                     searchCustomers = { query -> viewModel.searchCustomers(query) },
                                     onCustomersClick = { screen = Screen.CustomerList },
@@ -220,7 +290,9 @@ class MainActivity : ComponentActivity() {
                                     onOpenDay = { date ->
                                         viewModel.loadOrdersForDate(date)
                                         screen = Screen.Day(date)
-                                    }
+                                    },
+                                    openQuickAddDate = quickAddDate,
+                                    onQuickAddConsumed = { quickAddDate = null }
                                 )
                             }
                             is Screen.Day -> {
@@ -231,18 +303,23 @@ class MainActivity : ComponentActivity() {
                                     customerNames = orderCustomerNames,
                                     orderPaidAmounts = orderPaidAmounts,
                                     onBack = { screen = Screen.Calendar },
-                                    onSaveOrder = { notes, total, name, phone, orderId ->
+                                    onSaveOrder = { notes, total, name, phone, pickupTime, orderId ->
                                         viewModel.saveOrder(
                                             date = active.date,
                                             notes = notes,
                                             totalAmount = total,
                                             customerName = name,
                                             customerPhone = phone,
+                                            pickupTime = pickupTime,
                                             existingOrderId = orderId
                                         )
+                                        WidgetUpdater.enqueue(context)
+                                        NotificationScheduler.enqueueNow(context)
                                     },
                                     onDeleteOrder = { orderId ->
                                         viewModel.cancelOrder(orderId, active.date)
+                                        WidgetUpdater.enqueue(context)
+                                        NotificationScheduler.enqueueNow(context)
                                     },
                                     loadCustomerById = { id -> viewModel.getCustomerById(id) },
                                     searchCustomers = { query -> viewModel.searchCustomers(query) },
@@ -269,8 +346,14 @@ class MainActivity : ComponentActivity() {
                                     onLoadRange = { start, end ->
                                         viewModel.loadSummaryRange(startInclusive = start, endExclusive = end)
                                     },
+                                    onBackupClick = { screen = Screen.Backup },
+                                    onNotificationsClick = { screen = Screen.Notifications },
                                     onBack = { screen = Screen.Calendar }
                                 )
+                            }
+                            Screen.Backup -> {
+                                BackHandler { screen = Screen.Summary }
+                                BackupSettingsScreen(onBack = { screen = Screen.Summary })
                             }
                             Screen.CustomerList -> {
                                 BackHandler { screen = Screen.Calendar }
@@ -355,21 +438,47 @@ class MainActivity : ComponentActivity() {
                                             note = note,
                                             orderId = orderId
                                         )
+                                        viewModel.loadUnpaidOrders()
+                                        WidgetUpdater.enqueue(context)
+                                        NotificationScheduler.enqueueNow(context)
                                     },
                                     onUpdateOrderStatusOverride = { orderId, override ->
                                         customerViewModel.setOrderStatusOverride(orderId, override)
+                                        viewModel.loadUnpaidOrders()
+                                        WidgetUpdater.enqueue(context)
+                                        NotificationScheduler.enqueueNow(context)
                                     },
                                     onWriteOffOrder = { orderId ->
                                         customerViewModel.writeOffOrder(orderId)
+                                        viewModel.loadUnpaidOrders()
+                                        WidgetUpdater.enqueue(context)
+                                        NotificationScheduler.enqueueNow(context)
                                     }
                                 )
+                            }
+                            Screen.Unpaid -> {
+                                BackHandler { screen = Screen.Calendar }
+                                UnpaidOrdersScreen(
+                                    orders = unpaidOrders,
+                                    paidAmounts = unpaidPaidAmounts,
+                                    customerNames = unpaidCustomerNames,
+                                    onBack = { screen = Screen.Calendar },
+                                    onOpenDay = { date ->
+                                        selectedDate = date
+                                        viewModel.loadOrdersForDate(date)
+                                        screen = Screen.Day(date)
+                                    }
+                                )
+                            }
+                            Screen.Notifications -> {
+                                BackHandler { screen = Screen.Summary }
+                                NotificationSettingsScreen(onBack = { screen = Screen.Summary })
                             }
                         }
 
                         VoiceCalculatorOverlay(
                             hasPermission = hasRecordPermission,
                             onRequestPermission = voiceCalcAccess.onRequestPermission,
-                            onApplyAmount = voiceCalcAccess.onApplyAmount,
                             isSuppressed = overlaySuppressed.value,
                             defaultIdleYDp = 72.dp
                         )
@@ -378,12 +487,20 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        launchIntent.value = intent
+    }
 }
 
 private sealed class Screen {
     data object Calendar : Screen()
     data class Day(val date: LocalDate) : Screen()
     data object Summary : Screen()
+    data object Backup : Screen()
+    data object Unpaid : Screen()
+    data object Notifications : Screen()
     data object CustomerList : Screen()
     data object ImportContacts : Screen()
     data class CustomerDetail(val customerId: Long) : Screen()

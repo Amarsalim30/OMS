@@ -20,6 +20,8 @@ import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.Card
 import androidx.compose.material3.DatePicker
@@ -94,6 +96,8 @@ fun SummaryScreen(
     customerNames: Map<Long, String>,
     onAnchorDateChange: (LocalDate) -> Unit,
     onLoadRange: (LocalDate, LocalDate) -> Unit,
+    onBackupClick: () -> Unit,
+    onNotificationsClick: () -> Unit,
     onBack: () -> Unit
 ) {
     val clipboardManager = LocalClipboardManager.current
@@ -198,6 +202,12 @@ fun SummaryScreen(
                         enabled = aggregatedItems.isNotEmpty() || unparsedLines.isNotEmpty()
                     ) {
                         Icon(imageVector = Icons.Filled.ContentCopy, contentDescription = "Copy chef list")
+                    }
+                    IconButton(onClick = onNotificationsClick) {
+                        Icon(imageVector = Icons.Filled.Notifications, contentDescription = "Notifications")
+                    }
+                    IconButton(onClick = onBackupClick) {
+                        Icon(imageVector = Icons.Filled.Settings, contentDescription = "Backup")
                     }
                 },
                 scrollBehavior = scrollBehavior

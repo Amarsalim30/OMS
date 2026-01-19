@@ -20,6 +20,12 @@ interface AccountingDao {
     @Query("SELECT * FROM account_entries WHERE orderId = :orderId")
     suspend fun getEntriesForOrder(orderId: Long): List<AccountEntryEntity>
 
+    @Query("SELECT * FROM account_entries")
+    suspend fun getAllAccountEntries(): List<AccountEntryEntity>
+
+    @Query("SELECT * FROM payments")
+    suspend fun getAllPayments(): List<PaymentEntity>
+
     @Query("SELECT * FROM account_entries WHERE orderId = :orderId AND type = 'CREDIT' ORDER BY date ASC, id ASC")
     suspend fun getCreditEntriesForOrder(orderId: Long): List<AccountEntryEntity>
 

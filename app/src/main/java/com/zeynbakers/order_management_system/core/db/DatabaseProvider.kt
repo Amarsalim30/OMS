@@ -59,13 +59,19 @@ object DatabaseProvider {
         }
     }
 
+    private val migration4To5 = object : Migration(4, 5) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE orders ADD COLUMN pickupTime TEXT")
+        }
+    }
+
     fun getDatabase(context: Context): AppDatabase {
         return instance ?: synchronized(this) {
             val db = Room.databaseBuilder(
                 context.applicationContext,
                 AppDatabase::class.java,
                 "order_app_db"
-            ).addMigrations(migration1To2, migration2To3, migration3To4).build()
+            ).addMigrations(migration1To2, migration2To3, migration3To4, migration4To5).build()
             instance = db
             db
         }

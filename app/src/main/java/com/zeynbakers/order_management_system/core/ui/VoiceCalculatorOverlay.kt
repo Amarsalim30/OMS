@@ -5,6 +5,7 @@ import android.os.Bundle
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
+import android.widget.Toast
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGestures
@@ -14,15 +15,18 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.MicOff
 import androidx.compose.material3.Button
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -48,9 +52,10 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.systemBars
-import com.zeynbakers.order_management_system.core.util.formatKes
-import com.zeynbakers.order_management_system.core.util.parseVoiceMath
-import java.math.BigDecimal
+import com.zeynbakers.order_management_system.core.ui.VoiceNotesMode
+import com.zeynbakers.order_management_system.core.ui.VoicePreparedResult
+import com.zeynbakers.order_management_system.core.ui.VoiceTarget
+import com.zeynbakers.order_management_system.core.ui.LocalVoiceInputRouter
 import android.util.Log
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -60,7 +65,6 @@ import kotlinx.coroutines.launch
 fun VoiceCalculatorOverlay(
     hasPermission: Boolean,
     onRequestPermission: () -> Unit,
-    onApplyAmount: (BigDecimal) -> Unit,
     isVisible: Boolean = true,
     isSuppressed: Boolean = false,
     lockToRightOnIdle: Boolean = false,
@@ -73,9 +77,10 @@ fun VoiceCalculatorOverlay(
     val context = LocalContext.current
     val density = LocalDensity.current
     val coroutineScope = rememberCoroutineScope()
+    val voiceRouter = LocalVoiceInputRouter.current
     var mode by remember { mutableStateOf(VoiceCalcMode.Idle) }
     var transcript by remember { mutableStateOf("") }
-    var result by remember { mutableStateOf<BigDecimal?>(null) }
+    var prepared by remember { mutableStateOf<VoicePreparedResult?>(null) }
     var errorText by remember { mutableStateOf<String?>(null) }
     var pendingStart by remember { mutableStateOf(false) }
     var hasUserMoved by remember { mutableStateOf(false) }
@@ -123,7 +128,7 @@ fun VoiceCalculatorOverlay(
         pendingStart = false
         errorText = null
         transcript = ""
-        result = null
+        prepared = null
         lastPartial = ""
         mode = VoiceCalcMode.Listening
         try {
@@ -210,15 +215,16 @@ fun VoiceCalculatorOverlay(
                         val fallbackText = lastPartial
                         if (fallbackText.isNotBlank()) {
                             transcript = fallbackText
-                            val parsed = parseVoiceMath(fallbackText)
-                            if (parsed == null) {
+                            val preparedResult = voiceRouter.prepare(fallbackText)
+                            if (!preparedResult.canApply) {
                                 vcLog("parse failed (error fallback)")
-                                errorText = "Didn't catch that"
+                                errorText = preparedResult.errorMessage ?: "Didn't catch that"
+                                prepared = null
                                 mode = VoiceCalcMode.Error
                             } else {
-                                result = parsed.value
+                                prepared = preparedResult
                                 mode = VoiceCalcMode.Result
-                                vcLog("parse ok (error fallback): ${parsed.value}")
+                                vcLog("parse ok (error fallback)")
                             }
                         } else {
                             errorText = "Didn't catch that"
@@ -238,15 +244,16 @@ fun VoiceCalculatorOverlay(
                         val finalText = if (spokenText.isBlank()) lastPartial else spokenText
                         transcript = finalText
                         vcLog("final transcript: $finalText")
-                        val parsed = parseVoiceMath(finalText)
-                        if (parsed == null) {
+                        val preparedResult = voiceRouter.prepare(finalText)
+                        if (!preparedResult.canApply) {
                             vcLog("parse failed")
-                            errorText = "Didn't catch that"
+                            errorText = preparedResult.errorMessage ?: "Didn't catch that"
+                            prepared = null
                             mode = VoiceCalcMode.Error
                         } else {
-                            result = parsed.value
+                            prepared = preparedResult
                             mode = VoiceCalcMode.Result
-                            vcLog("parse ok: ${parsed.value}")
+                            vcLog("parse ok")
                         }
                     }
 
@@ -308,8 +315,19 @@ fun VoiceCalculatorOverlay(
     }
 
     val minimizedSize = 48.dp
-    val panelWidth = if (mode == VoiceCalcMode.Idle) minimizedSize else 300.dp
-    val panelHeight = if (mode == VoiceCalcMode.Idle) minimizedSize else 180.dp
+    val isIdleExpanded = mode == VoiceCalcMode.Idle && isRevealed
+    val panelWidth =
+        when {
+            isIdleExpanded -> 280.dp
+            mode == VoiceCalcMode.Idle -> minimizedSize
+            else -> 300.dp
+        }
+    val panelHeight =
+        when {
+            isIdleExpanded -> 208.dp
+            mode == VoiceCalcMode.Idle -> minimizedSize
+            else -> 180.dp
+        }
 
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val maxWidthPx = with(density) { maxWidth.toPx() }
@@ -442,34 +460,46 @@ fun VoiceCalculatorOverlay(
         ) {
             when (mode) {
                 VoiceCalcMode.Idle -> {
-                    Box(
-                        modifier = Modifier
-                            .size(minimizedSize)
-                            .background(
-                                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
-                                shape = MaterialTheme.shapes.large
-                            ),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        TextButton(
-                            onClick = {
-                                if (mode == VoiceCalcMode.Idle && !isRevealed) {
-                                    isRevealed = true
+                    if (isRevealed) {
+                        VoiceIdlePanel(
+                            target = voiceRouter.target,
+                            hasNotesTarget = voiceRouter.hasNotesTarget,
+                            followsFocus = voiceRouter.followsFocus,
+                            notesMode = voiceRouter.notesMode,
+                            onTargetSelect = { voiceRouter.setManualTarget(it) },
+                            onEnableAuto = { voiceRouter.enableFollowFocus() },
+                            onNotesModeChange = { voiceRouter.updateNotesMode(it) },
+                            onStart = {
+                                if (hasPermission) {
+                                    startListening()
                                 } else {
-                                    if (hasPermission) {
-                                        startListening()
-                                    } else {
-                                        pendingStart = true
-                                        onRequestPermission()
-                                    }
+                                    pendingStart = true
+                                    onRequestPermission()
                                 }
-                            }
+                            },
+                            onClose = { isRevealed = false }
+                        )
+                    } else {
+                        Box(
+                            modifier = Modifier
+                                .size(minimizedSize)
+                                .background(
+                                    color = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f),
+                                    shape = MaterialTheme.shapes.large
+                                ),
+                            contentAlignment = Alignment.Center
                         ) {
-                            Icon(
-                                imageVector = Icons.Filled.Mic,
-                                contentDescription = "Voice calculator",
-                                tint = Color.White
-                            )
+                            TextButton(
+                                onClick = {
+                                    isRevealed = true
+                                }
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.Mic,
+                                    contentDescription = "Voice input",
+                                    tint = Color.White
+                                )
+                            }
                         }
                     }
                 }
@@ -477,7 +507,7 @@ fun VoiceCalculatorOverlay(
                     VoicePanel(
                         title = "Listening...",
                         transcript = transcript,
-                        result = result,
+                        target = voiceRouter.target,
                         onClose = {
                             runCatching { speechRecognizer?.cancel() }
                                 .onFailure { t ->
@@ -489,10 +519,14 @@ fun VoiceCalculatorOverlay(
                 }
                 VoiceCalcMode.Result -> {
                     VoiceResultPanel(
-                        transcript = transcript,
-                        result = result,
+                        prepared = prepared,
                         onApply = {
-                            result?.let { onApplyAmount(it) }
+                            val appliedMessage = prepared?.let { voiceRouter.apply(it) }
+                            if (!appliedMessage.isNullOrBlank()) {
+                                Toast
+                                    .makeText(context, appliedMessage, Toast.LENGTH_SHORT)
+                                    .show()
+                            }
                             mode = VoiceCalcMode.Idle
                         },
                         onAgain = { startListening() },
@@ -512,26 +546,129 @@ fun VoiceCalculatorOverlay(
 }
 
 @Composable
-private fun VoicePanel(
-    title: String,
-    transcript: String,
-    result: BigDecimal?,
+private fun VoiceIdlePanel(
+    target: VoiceTarget,
+    hasNotesTarget: Boolean,
+    followsFocus: Boolean,
+    notesMode: VoiceNotesMode,
+    onTargetSelect: (VoiceTarget) -> Unit,
+    onEnableAuto: () -> Unit,
+    onNotesModeChange: (VoiceNotesMode) -> Unit,
+    onStart: () -> Unit,
     onClose: () -> Unit
 ) {
     Column(modifier = Modifier.padding(12.dp)) {
-        Text(text = title, style = MaterialTheme.typography.titleSmall)
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(text = "Voice input", style = MaterialTheme.typography.titleSmall)
+            Spacer(Modifier.width(8.dp))
+            Text(
+                text = if (followsFocus) "Auto" else "Manual",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            if (!followsFocus) {
+                Spacer(Modifier.width(6.dp))
+                TextButton(onClick = onEnableAuto) { Text("Follow focus") }
+            }
+        }
+
+        Spacer(Modifier.height(8.dp))
+
+        if (hasNotesTarget) {
+            Text(
+                text = "Target",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(Modifier.height(4.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilterChip(
+                    selected = target == VoiceTarget.Notes,
+                    onClick = { onTargetSelect(VoiceTarget.Notes) },
+                    label = { Text("Notes") }
+                )
+                FilterChip(
+                    selected = target == VoiceTarget.Total,
+                    onClick = { onTargetSelect(VoiceTarget.Total) },
+                    label = { Text("Total") }
+                )
+            }
+        } else {
+            Text(
+                text = "Target: Total",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+
+        if (hasNotesTarget && target == VoiceTarget.Notes) {
+            Spacer(Modifier.height(8.dp))
+            Text(
+                text = "Notes mode",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(Modifier.height(4.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilterChip(
+                    selected = notesMode == VoiceNotesMode.Append,
+                    onClick = { onNotesModeChange(VoiceNotesMode.Append) },
+                    label = { Text("Append") }
+                )
+                FilterChip(
+                    selected = notesMode == VoiceNotesMode.Replace,
+                    onClick = { onNotesModeChange(VoiceNotesMode.Replace) },
+                    label = { Text("Replace") }
+                )
+            }
+        }
+
+        Spacer(Modifier.height(10.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(onClick = onStart) { Text("Start") }
+            TextButton(onClick = onClose) { Text("Close") }
+        }
+    }
+}
+
+@Composable
+private fun VoicePanel(
+    title: String,
+    transcript: String,
+    target: VoiceTarget,
+    onClose: () -> Unit
+) {
+    Column(modifier = Modifier.padding(12.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(text = title, style = MaterialTheme.typography.titleSmall)
+            Spacer(Modifier.width(8.dp))
+            Text(
+                text = "Target: ${targetLabel(target)}",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
         Spacer(Modifier.height(6.dp))
+        val hint =
+            if (target == VoiceTarget.Notes) {
+                "Say notes..."
+            } else {
+                "Say an amount..."
+            }
         Text(
-            text = if (transcript.isBlank()) "Say an amount..." else transcript,
+            text = if (transcript.isBlank()) hint else transcript,
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
-        )
-        Spacer(Modifier.height(8.dp))
-        Text(
-            text = result?.let { formatKes(it) } ?: "--",
-            style = MaterialTheme.typography.titleLarge
         )
         Spacer(Modifier.height(8.dp))
         TextButton(onClick = onClose) {
@@ -542,17 +679,17 @@ private fun VoicePanel(
 
 @Composable
 private fun VoiceResultPanel(
-    transcript: String,
-    result: BigDecimal?,
+    prepared: VoicePreparedResult?,
     onApply: () -> Unit,
     onAgain: () -> Unit,
     onClose: () -> Unit
 ) {
     Column(modifier = Modifier.padding(12.dp)) {
-        Text(text = "Result", style = MaterialTheme.typography.titleSmall)
+        val target = prepared?.target ?: VoiceTarget.Total
+        Text(text = "Result (${targetLabel(target)})", style = MaterialTheme.typography.titleSmall)
         Spacer(Modifier.height(6.dp))
         Text(
-            text = transcript,
+            text = prepared?.transcript.orEmpty(),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             maxLines = 2,
@@ -560,12 +697,17 @@ private fun VoiceResultPanel(
         )
         Spacer(Modifier.height(8.dp))
         Text(
-            text = result?.let { formatKes(it) } ?: "--",
+            text = prepared?.previewLabel.orEmpty(),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Text(
+            text = prepared?.previewValue ?: "--",
             style = MaterialTheme.typography.titleLarge
         )
         Spacer(Modifier.height(8.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(onClick = onApply, enabled = result != null) { Text("Use") }
+            Button(onClick = onApply, enabled = prepared?.canApply == true) { Text("Use") }
             TextButton(onClick = onAgain) { Text("Again") }
             TextButton(onClick = onClose) { Text("Close") }
         }
@@ -596,6 +738,10 @@ private fun VoiceErrorPanel(
             TextButton(onClick = onClose) { Text("Close") }
         }
     }
+}
+
+private fun targetLabel(target: VoiceTarget): String {
+    return if (target == VoiceTarget.Notes) "Notes" else "Total"
 }
 
 private enum class VoiceCalcMode {
