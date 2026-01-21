@@ -20,11 +20,14 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
+import com.zeynbakers.order_management_system.accounting.ui.PaymentIntakeScreen
+import com.zeynbakers.order_management_system.accounting.ui.PaymentIntakeViewModel
 import com.zeynbakers.order_management_system.core.backup.BackupScheduler
 import com.zeynbakers.order_management_system.core.backup.BackupSettingsScreen
 import com.zeynbakers.order_management_system.core.db.DatabaseProvider
 import com.zeynbakers.order_management_system.core.navigation.AppIntents
 import com.zeynbakers.order_management_system.core.navigation.AppShortcuts
+import com.zeynbakers.order_management_system.core.navigation.extractSharedText
 import com.zeynbakers.order_management_system.core.notifications.NotificationScheduler
 import com.zeynbakers.order_management_system.core.notifications.NotificationSettingsScreen
 import com.zeynbakers.order_management_system.core.widget.WidgetUpdater
@@ -37,6 +40,7 @@ import com.zeynbakers.order_management_system.core.ui.LocalVoiceOverlaySuppresse
 import com.zeynbakers.order_management_system.core.ui.VoiceCalcAccess
 import com.zeynbakers.order_management_system.core.ui.VoiceCalculatorOverlay
 import com.zeynbakers.order_management_system.core.ui.theme.Order_management_systemTheme
+import com.zeynbakers.order_management_system.core.util.normalizePhoneNumber
 import com.zeynbakers.order_management_system.customer.ui.CustomerAccountsViewModel
 import com.zeynbakers.order_management_system.customer.ui.CustomerDetailScreen
 import com.zeynbakers.order_management_system.customer.ui.CustomerListScreen
@@ -68,6 +72,7 @@ class MainActivity : ComponentActivity() {
                 val database = remember { DatabaseProvider.getDatabase(applicationContext) }
                 val viewModel = remember { OrderViewModel(database = database) }
                 val customerViewModel = remember { CustomerAccountsViewModel(database = database) }
+                val paymentIntakeViewModel = remember { PaymentIntakeViewModel(database = database) }
                 val amountRegistry = remember { AmountFieldRegistry() }
                 val voiceRouter = remember { VoiceInputRouter(onApplyTotal = amountRegistry::applyAmount) }
                 var currentMonth by remember { mutableStateOf(0) }
@@ -80,6 +85,7 @@ class MainActivity : ComponentActivity() {
                 var importContacts by remember { mutableStateOf<List<ImportContact>>(emptyList()) }
                 var selectedContactPhones by remember { mutableStateOf<Set<String>>(emptySet()) }
                 var isContactsLoading by remember { mutableStateOf(false) }
+                var paymentIntakeText by remember { mutableStateOf<String?>(null) }
                 var hasRecordPermission by remember {
                     mutableStateOf(
                         ContextCompat.checkSelfPermission(
@@ -194,6 +200,12 @@ class MainActivity : ComponentActivity() {
                             selectedDate = today
                             quickAddDate = today
                             screen = Screen.Calendar
+                        }
+                        Intent.ACTION_SEND,
+                        Intent.ACTION_SEND_MULTIPLE -> {
+                            val sharedText = extractSharedText(intent) ?: return@LaunchedEffect
+                            paymentIntakeText = sharedText
+                            screen = Screen.PaymentIntake(sharedText)
                         }
                     }
                 }
@@ -474,6 +486,23 @@ class MainActivity : ComponentActivity() {
                                 BackHandler { screen = Screen.Summary }
                                 NotificationSettingsScreen(onBack = { screen = Screen.Summary })
                             }
+                            is Screen.PaymentIntake -> {
+                                BackHandler { screen = Screen.Calendar }
+                                PaymentIntakeScreen(
+                                    viewModel = paymentIntakeViewModel,
+                                    initialText = active.sharedText ?: paymentIntakeText,
+                                    onClose = { screen = Screen.Calendar },
+                                    onApplied = {
+                                        if (currentMonth > 0 && currentYear > 0) {
+                                            viewModel.loadMonth(month = currentMonth, year = currentYear)
+                                        }
+                                        viewModel.loadUnpaidOrders()
+                                        WidgetUpdater.enqueue(context)
+                                        NotificationScheduler.enqueueNow(context)
+                                        screen = Screen.Calendar
+                                    }
+                                )
+                            }
                         }
 
                         VoiceCalculatorOverlay(
@@ -504,6 +533,7 @@ private sealed class Screen {
     data object CustomerList : Screen()
     data object ImportContacts : Screen()
     data class CustomerDetail(val customerId: Long) : Screen()
+    data class PaymentIntake(val sharedText: String?) : Screen()
 }
 
 private fun monthLabel(year: Int, month: Int): String {
@@ -524,10 +554,6 @@ private fun monthLabel(year: Int, month: Int): String {
         else -> "Month"
     }
     return "$monthName $year"
-}
-
-private fun normalizePhoneNumber(raw: String): String {
-    return raw.filter { it.isDigit() || it == '+' }
 }
 
 private fun loadAllContacts(context: Context): List<ImportContact> {

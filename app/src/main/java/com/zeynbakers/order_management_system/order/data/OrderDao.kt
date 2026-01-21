@@ -35,6 +35,9 @@ interface OrderDao {
     @Query("SELECT * FROM orders WHERE id = :orderId")
     suspend fun getOrderById(orderId: Long): OrderEntity?
 
+    @Query("SELECT * FROM orders WHERE id IN (:orderIds)")
+    suspend fun getOrdersByIds(orderIds: List<Long>): List<OrderEntity>
+
     @Query("UPDATE orders SET status = 'COMPLETED' WHERE id = :orderId")
     suspend fun markCompleted(orderId: Long)
 

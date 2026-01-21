@@ -65,13 +65,47 @@ object DatabaseProvider {
         }
     }
 
+    private val migration5To6 = object : Migration(5, 6) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS mpesa_transactions (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                    transactionCode TEXT,
+                    hash TEXT NOT NULL,
+                    amount TEXT NOT NULL,
+                    senderName TEXT,
+                    senderPhone TEXT,
+                    receivedAt INTEGER NOT NULL,
+                    rawText TEXT,
+                    customerId INTEGER,
+                    orderId INTEGER,
+                    accountEntryId INTEGER
+                )
+                """
+            )
+            db.execSQL(
+                "CREATE UNIQUE INDEX IF NOT EXISTS index_mpesa_transactions_transactionCode ON mpesa_transactions(transactionCode)"
+            )
+            db.execSQL("CREATE UNIQUE INDEX IF NOT EXISTS index_mpesa_transactions_hash ON mpesa_transactions(hash)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_mpesa_transactions_orderId ON mpesa_transactions(orderId)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_mpesa_transactions_customerId ON mpesa_transactions(customerId)")
+        }
+    }
+
     fun getDatabase(context: Context): AppDatabase {
         return instance ?: synchronized(this) {
             val db = Room.databaseBuilder(
                 context.applicationContext,
                 AppDatabase::class.java,
                 "order_app_db"
-            ).addMigrations(migration1To2, migration2To3, migration3To4, migration4To5).build()
+            ).addMigrations(
+                migration1To2,
+                migration2To3,
+                migration3To4,
+                migration4To5,
+                migration5To6
+            ).build()
             instance = db
             db
         }
