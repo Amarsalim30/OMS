@@ -7,6 +7,8 @@ import com.zeynbakers.order_management_system.accounting.data.AccountingDao
 import com.zeynbakers.order_management_system.accounting.data.CustomerAccountSummary
 import com.zeynbakers.order_management_system.accounting.data.EntryType
 import com.zeynbakers.order_management_system.accounting.data.PaymentMethod
+import com.zeynbakers.order_management_system.accounting.domain.PaymentReceiptProcessor
+import com.zeynbakers.order_management_system.accounting.domain.ReceiptAllocation
 import com.zeynbakers.order_management_system.core.db.AppDatabase
 import com.zeynbakers.order_management_system.customer.data.CustomerEntity
 import com.zeynbakers.order_management_system.order.data.OrderEntity
@@ -202,103 +204,32 @@ class CustomerAccountsViewModel(private val database: AppDatabase) : ViewModel()
             }
         }
 
-        if (orderId == null) {
-            allocatePaymentToOldestOrders(customerId, amount, baseDescription)
-            return
-        }
-
-        val order = orderDao.getOrderById(orderId) ?: return
-        val paidSoFar = accountingDao.getPaidForOrder(orderId)
-        val remaining = order.totalAmount - paidSoFar
-
-        if (remaining <= BigDecimal.ZERO) {
-            accountingDao.insertAccountEntry(
-                AccountEntryEntity(
-                    orderId = null,
-                    customerId = customerId,
-                    type = EntryType.CREDIT,
-                    amount = amount,
-                    date = Clock.System.now().toEpochMilliseconds(),
-                    description = "Extra payment for Order #$orderId"
-                )
-            )
-            return
-        }
-
-        val appliedToOrder = if (amount > remaining) remaining else amount
-        accountingDao.insertAccountEntry(
-            AccountEntryEntity(
-                orderId = orderId,
-                customerId = customerId,
-                type = EntryType.CREDIT,
-                amount = appliedToOrder,
-                date = Clock.System.now().toEpochMilliseconds(),
-                description = baseDescription
-            )
-        )
-
-        val excess = amount - appliedToOrder
-        if (excess > BigDecimal.ZERO) {
-            accountingDao.insertAccountEntry(
-                AccountEntryEntity(
-                    orderId = null,
-                    customerId = customerId,
-                    type = EntryType.CREDIT,
-                    amount = excess,
-                    date = Clock.System.now().toEpochMilliseconds(),
-                    description = "Extra payment for Order #$orderId"
-                )
-            )
-        }
-    }
-
-    private suspend fun allocatePaymentToOldestOrders(
-        customerId: Long,
-        amount: BigDecimal,
-        description: String
-    ) {
-        var remainingPayment = amount
+        val processor = PaymentReceiptProcessor(database)
         val now = Clock.System.now().toEpochMilliseconds()
-        val orders =
-            orderDao.getOrdersByCustomer(customerId)
-                .filter {
-                    it.status != OrderStatus.CANCELLED &&
-                        it.statusOverride != OrderStatusOverride.CLOSED
-                }
-                .sortedBy { it.orderDate }
-
-        for (order in orders) {
-            if (remainingPayment <= BigDecimal.ZERO) break
-            val paidSoFar = accountingDao.getPaidForOrder(order.id)
-            val remaining = order.totalAmount - paidSoFar
-            if (remaining <= BigDecimal.ZERO) continue
-
-            val applied = if (remainingPayment > remaining) remaining else remainingPayment
-            accountingDao.insertAccountEntry(
-                AccountEntryEntity(
-                    orderId = order.id,
-                    customerId = customerId,
-                    type = EntryType.CREDIT,
-                    amount = applied,
-                    date = now,
-                    description = description
-                )
+        val receipt =
+            processor.createReceipt(
+                amount = amount,
+                receivedAt = now,
+                method = method,
+                transactionCode = null,
+                hash = null,
+                senderName = null,
+                senderPhone = null,
+                rawText = null,
+                customerId = customerId,
+                note = note.takeIf { it.isNotBlank() }
             )
-            remainingPayment -= applied
-        }
-
-        if (remainingPayment > BigDecimal.ZERO) {
-            accountingDao.insertAccountEntry(
-                AccountEntryEntity(
-                    orderId = null,
-                    customerId = customerId,
-                    type = EntryType.CREDIT,
-                    amount = remainingPayment,
-                    date = now,
-                    description = "Extra payment"
-                )
-            )
-        }
+        val allocation =
+            if (orderId == null) {
+                ReceiptAllocation.OldestOrders(customerId)
+            } else {
+                ReceiptAllocation.Order(orderId)
+            }
+        processor.createAndApplyReceipt(
+            receipt = receipt,
+            descriptionBase = baseDescription,
+            allocation = allocation
+        )
     }
 
     private fun isOlderThanOneMonth(orderDate: kotlinx.datetime.LocalDate): Boolean {

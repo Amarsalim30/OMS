@@ -115,6 +115,18 @@ class MainActivity : ComponentActivity() {
                         ).show()
                     }
                 }
+                val openImportContacts = {
+                    val hasPermission =
+                        ContextCompat.checkSelfPermission(
+                            context,
+                            Manifest.permission.READ_CONTACTS
+                        ) == PackageManager.PERMISSION_GRANTED
+                    if (hasPermission) {
+                        screen = Screen.ImportContacts
+                    } else {
+                        contactsPermissionLauncher.launch(Manifest.permission.READ_CONTACTS)
+                    }
+                }
 
                 val recordPermissionLauncher = rememberLauncherForActivityResult(
                     ActivityResultContracts.RequestPermission()
@@ -368,6 +380,9 @@ class MainActivity : ComponentActivity() {
                                         WidgetUpdater.enqueue(context)
                                         NotificationScheduler.enqueueNow(context)
                                     },
+                                    onReceivePayment = {
+                                        openPaymentIntake(null, Screen.Day(active.date))
+                                    },
                                     loadCustomerById = { id -> viewModel.getCustomerById(id) },
                                     searchCustomers = { query -> viewModel.searchCustomers(query) },
                                     draft = dayDrafts[active.date],
@@ -393,9 +408,6 @@ class MainActivity : ComponentActivity() {
                                     onLoadRange = { start, end ->
                                         viewModel.loadSummaryRange(startInclusive = start, endExclusive = end)
                                     },
-                                    onPaymentIntakeClick = {
-                                        openPaymentIntake(null, Screen.Summary)
-                                    },
                                     onBackupClick = { screen = Screen.Backup },
                                     onNotificationsClick = { screen = Screen.Notifications },
                                     onBack = { screen = Screen.Calendar }
@@ -403,7 +415,10 @@ class MainActivity : ComponentActivity() {
                             }
                             Screen.Backup -> {
                                 BackHandler { screen = Screen.Summary }
-                                BackupSettingsScreen(onBack = { screen = Screen.Summary })
+                                BackupSettingsScreen(
+                                    onBack = { screen = Screen.Summary },
+                                    onImportContacts = openImportContacts
+                                )
                             }
                             Screen.CustomerList -> {
                                 BackHandler { screen = Screen.Calendar }
@@ -414,18 +429,7 @@ class MainActivity : ComponentActivity() {
                                     onCustomerClick = { id ->
                                         screen = Screen.CustomerDetail(id)
                                     },
-                                    onAddCustomer = {
-                                        val hasPermission =
-                                            ContextCompat.checkSelfPermission(
-                                                context,
-                                                Manifest.permission.READ_CONTACTS
-                                            ) == PackageManager.PERMISSION_GRANTED
-                                        if (hasPermission) {
-                                            screen = Screen.ImportContacts
-                                        } else {
-                                            contactsPermissionLauncher.launch(Manifest.permission.READ_CONTACTS)
-                                        }
-                                    },
+                                    onAddCustomer = openImportContacts,
                                     onPaymentHistory = { customerId ->
                                         openPaymentHistory(PaymentHistoryFilter.Customer(customerId))
                                     },
@@ -498,6 +502,9 @@ class MainActivity : ComponentActivity() {
                                     onPaymentHistory = { customerId ->
                                         openPaymentHistory(PaymentHistoryFilter.Customer(customerId))
                                     },
+                                    onReceivePayment = {
+                                        openPaymentIntake(null, Screen.CustomerDetail(active.customerId))
+                                    },
                                     onOrderPaymentHistory = { orderId ->
                                         openPaymentHistory(PaymentHistoryFilter.Order(orderId))
                                     },
@@ -526,6 +533,9 @@ class MainActivity : ComponentActivity() {
                                         selectedDate = date
                                         viewModel.loadOrdersForDate(date)
                                         screen = Screen.Day(date)
+                                    },
+                                    onReceivePayment = {
+                                        openPaymentIntake(null, Screen.Unpaid)
                                     }
                                 )
                             }
@@ -560,14 +570,6 @@ class MainActivity : ComponentActivity() {
                                     viewModel = paymentHistoryViewModel,
                                     filter = active.filter,
                                     onBack = { screen = paymentHistoryReturnScreen },
-                                    onOpenCustomer = { customerId ->
-                                        screen = Screen.CustomerDetail(customerId)
-                                    },
-                                    onOpenOrder = { date ->
-                                        selectedDate = date
-                                        viewModel.loadOrdersForDate(date)
-                                        screen = Screen.Day(date)
-                                    },
                                     onRemoved = {
                                         if (currentMonth > 0 && currentYear > 0) {
                                             viewModel.loadMonth(month = currentMonth, year = currentYear)

@@ -27,7 +27,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.MoreVert
@@ -77,7 +76,6 @@ fun CustomerListScreen(
     onCustomerClick: (Long) -> Unit,
     onBack: () -> Unit,
     onAddCustomer: () -> Unit = {},
-    onRecordPayment: (Long) -> Unit = {},
     onPaymentHistory: (Long) -> Unit = {},
     onAddOrder: (Long) -> Unit = {},
     onEditCustomer: (Long) -> Unit = {},
@@ -90,7 +88,6 @@ fun CustomerListScreen(
         onCustomerClick = onCustomerClick,
         onBack = onBack,
         onAddCustomer = onAddCustomer,
-        onRecordPayment = onRecordPayment,
         onPaymentHistory = onPaymentHistory,
         onAddOrder = onAddOrder,
         onEditCustomer = onEditCustomer,
@@ -106,7 +103,6 @@ private fun CustomersScreenM3(
     onCustomerClick: (Long) -> Unit,
     onBack: () -> Unit,
     onAddCustomer: () -> Unit,
-    onRecordPayment: (Long) -> Unit,
     onPaymentHistory: (Long) -> Unit,
     onAddOrder: (Long) -> Unit,
     onEditCustomer: (Long) -> Unit,
@@ -153,7 +149,6 @@ private fun CustomersScreenM3(
         topBar = {
             CustomersTopBar(
                 onBack = onBack,
-                onAddCustomer = onAddCustomer,
                 onMore = { isSortMenuOpen = true }
             )
         }
@@ -245,10 +240,6 @@ private fun CustomersScreenM3(
                     onPaymentHistory(customer.customerId)
                     longPressedCustomer = null
                 })
-                ActionRow(label = "Record payment", onClick = {
-                    onRecordPayment(customer.customerId)
-                    longPressedCustomer = null
-                })
                 ActionRow(label = "Add order", onClick = {
                     onAddOrder(customer.customerId)
                     longPressedCustomer = null
@@ -269,7 +260,6 @@ private fun CustomersScreenM3(
 @Composable
 private fun CustomersTopBar(
     onBack: () -> Unit,
-    onAddCustomer: () -> Unit,
     onMore: () -> Unit
 ) {
     CenterAlignedTopAppBar(
@@ -287,11 +277,6 @@ private fun CustomersTopBar(
             TextButton(onClick = onBack) { Text("Back") }
         },
         actions = {
-            TextButton(onClick = onAddCustomer) {
-                Icon(imageVector = Icons.Filled.Add, contentDescription = "Import contacts")
-                Spacer(Modifier.width(6.dp))
-                Text("Import contacts")
-            }
             IconButton(onClick = onMore) {
                 Icon(imageVector = Icons.Filled.MoreVert, contentDescription = "More")
             }

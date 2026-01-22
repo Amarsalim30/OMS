@@ -21,7 +21,6 @@ import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Notifications
-import androidx.compose.material.icons.filled.Payments
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.Card
@@ -97,7 +96,6 @@ fun SummaryScreen(
     customerNames: Map<Long, String>,
     onAnchorDateChange: (LocalDate) -> Unit,
     onLoadRange: (LocalDate, LocalDate) -> Unit,
-    onPaymentIntakeClick: () -> Unit,
     onBackupClick: () -> Unit,
     onNotificationsClick: () -> Unit,
     onBack: () -> Unit
@@ -207,9 +205,6 @@ fun SummaryScreen(
                     }
                     IconButton(onClick = onNotificationsClick) {
                         Icon(imageVector = Icons.Filled.Notifications, contentDescription = "Notifications")
-                    }
-                    IconButton(onClick = onPaymentIntakeClick) {
-                        Icon(imageVector = Icons.Filled.Payments, contentDescription = "Payment intake")
                     }
                     IconButton(onClick = onBackupClick) {
                         Icon(imageVector = Icons.Filled.Settings, contentDescription = "Backup")

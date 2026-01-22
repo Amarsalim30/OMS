@@ -106,6 +106,7 @@ fun DayDetailScreen(
     onBack: () -> Unit,
     onSaveOrder: (String, BigDecimal, String, String, String?, Long?) -> Unit,
     onDeleteOrder: (Long) -> Unit,
+    onReceivePayment: (OrderEntity) -> Unit,
     loadCustomerById: suspend (Long) -> CustomerEntity?,
     searchCustomers: suspend (String) -> List<CustomerEntity>,
     draft: OrderDraft?,
@@ -449,7 +450,8 @@ fun DayDetailScreen(
                         },
                         onDelete = {
                             pendingDeleteOrder = order
-                        }
+                        },
+                        onReceivePayment = { onReceivePayment(order) }
                     )
                 }
             }
@@ -1032,11 +1034,13 @@ private fun OrderListItem(
     paidAmount: BigDecimal,
     paymentState: PaymentState,
     onEdit: () -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    onReceivePayment: () -> Unit
 ) {
     val stateColor = paymentStateColor(paymentState)
     val statusLabel = paymentStateLabel(paymentState)
     val balance = order.totalAmount.subtract(paidAmount)
+    val showReceive = paymentState == PaymentState.UNPAID || paymentState == PaymentState.PARTIAL
     val detailLabel =
         when (paymentState) {
             PaymentState.UNPAID -> "Balance ${formatKes(order.totalAmount)}"
@@ -1103,15 +1107,26 @@ private fun OrderListItem(
                     color = customerTextColor
                 )
                 Spacer(Modifier.height(6.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    StatusPill(label = statusLabel, color = stateColor)
-                    if (detailLabel != null) {
-                        Spacer(Modifier.width(8.dp))
-                        Text(
-                            text = detailLabel,
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        StatusPill(label = statusLabel, color = stateColor)
+                        if (detailLabel != null) {
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                text = detailLabel,
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                    if (showReceive) {
+                        TextButton(onClick = onReceivePayment) {
+                            Text("Receive")
+                        }
                     }
                 }
             }

@@ -22,5 +22,6 @@ data class AccountEntryEntity(
 enum class EntryType {
     DEBIT,
     CREDIT,
-    WRITE_OFF
+    WRITE_OFF,
+    REVERSAL
 }

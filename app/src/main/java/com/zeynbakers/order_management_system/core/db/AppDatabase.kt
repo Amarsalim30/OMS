@@ -16,8 +16,10 @@ import com.zeynbakers.order_management_system.order.data.*
                         CustomerEntity::class,
                         PaymentEntity::class,
                         AccountEntryEntity::class,
-                        MpesaTransactionEntity::class],
-        version = 6,
+                        MpesaTransactionEntity::class,
+                        PaymentReceiptEntity::class,
+                        PaymentAllocationEntity::class],
+        version = 7,
         exportSchema = false
 )
 @TypeConverters(Converters::class)
@@ -27,4 +29,6 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun customerDao(): CustomerDao
     abstract fun accountingDao(): AccountingDao
     abstract fun mpesaTransactionDao(): MpesaTransactionDao
+    abstract fun paymentReceiptDao(): PaymentReceiptDao
+    abstract fun paymentAllocationDao(): PaymentAllocationDao
 }

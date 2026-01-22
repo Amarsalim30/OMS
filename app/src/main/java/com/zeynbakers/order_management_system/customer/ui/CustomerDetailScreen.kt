@@ -91,6 +91,7 @@ fun CustomerDetailScreen(
     onBack: () -> Unit,
     onRecordPayment: (BigDecimal, PaymentMethod, String, Long?) -> Unit,
     onPaymentHistory: (Long) -> Unit,
+    onReceivePayment: () -> Unit,
     onOrderPaymentHistory: (Long) -> Unit,
     onUpdateOrderStatusOverride: (Long, OrderStatusOverride?) -> Unit,
     onWriteOffOrder: (Long) -> Unit
@@ -150,7 +151,7 @@ fun CustomerDetailScreen(
                         onClick = { customer?.id?.let { onPaymentHistory(it) } },
                         enabled = customer != null
                     ) {
-                        Icon(imageVector = Icons.Filled.Payments, contentDescription = "Payment history")
+                        Icon(imageVector = Icons.AutoMirrored.Filled.ReceiptLong, contentDescription = "Receipt history")
                     }
                 }
             )
@@ -164,7 +165,12 @@ fun CustomerDetailScreen(
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             item {
-                BalanceCard(customer = customer, balance = balance)
+                BalanceCard(
+                    customer = customer,
+                    balance = balance,
+                    canReceive = customer != null,
+                    onReceivePayment = onReceivePayment
+                )
             }
 
             item {
@@ -261,7 +267,12 @@ fun CustomerDetailScreen(
 }
 
 @Composable
-private fun BalanceCard(customer: CustomerEntity?, balance: BigDecimal) {
+private fun BalanceCard(
+    customer: CustomerEntity?,
+    balance: BigDecimal,
+    canReceive: Boolean,
+    onReceivePayment: () -> Unit
+) {
     val context = LocalContext.current
     Surface(
         tonalElevation = 1.dp,
@@ -300,6 +311,13 @@ private fun BalanceCard(customer: CustomerEntity?, balance: BigDecimal) {
                     TextButton(onClick = { launchDial(context, phone) }) { Text("Call") }
                     TextButton(onClick = { launchSms(context, phone) }) { Text("Message") }
                 }
+            }
+            Spacer(Modifier.height(8.dp))
+            TextButton(
+                onClick = onReceivePayment,
+                enabled = canReceive
+            ) {
+                Text("Receive payment")
             }
         }
     }
@@ -703,17 +721,23 @@ private fun LedgerRow(entry: AccountEntryEntity) {
             EntryType.DEBIT -> MaterialTheme.colorScheme.error
             EntryType.CREDIT -> MaterialTheme.colorScheme.primary
             EntryType.WRITE_OFF -> MaterialTheme.colorScheme.secondary
+            EntryType.REVERSAL -> MaterialTheme.colorScheme.error
         }
     val typeLabel =
         when (entry.type) {
             EntryType.DEBIT -> "Order"
             EntryType.CREDIT -> "Payment"
             EntryType.WRITE_OFF -> "Adjustment"
+            EntryType.REVERSAL -> "Reversal"
         }
     Column(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
         Text(text = formatDateTime(entry.date), style = MaterialTheme.typography.labelMedium)
         Text(text = entry.description, style = MaterialTheme.typography.bodyMedium)
-        val sign = if (entry.type == EntryType.DEBIT) "+" else "-"
+        val sign =
+            when (entry.type) {
+                EntryType.DEBIT, EntryType.REVERSAL -> "+"
+                EntryType.CREDIT, EntryType.WRITE_OFF -> "-"
+            }
         Text(text = typeLabel, style = MaterialTheme.typography.labelSmall, color = amountColor)
         Text(
             text = "$sign ${formatKes(entry.amount)}",
@@ -775,12 +799,12 @@ private fun filterLedger(
     val lowered = query.trim().lowercase()
     return ledger.filter { entry ->
         val matchesFilter =
-            when (filter) {
-                LedgerFilter.All -> true
-                LedgerFilter.Orders -> entry.type == EntryType.DEBIT
-                LedgerFilter.Payments -> entry.type == EntryType.CREDIT
-                LedgerFilter.Adjustments -> entry.type == EntryType.WRITE_OFF
-            }
+        when (filter) {
+            LedgerFilter.All -> true
+            LedgerFilter.Orders -> entry.type == EntryType.DEBIT
+            LedgerFilter.Payments -> entry.type == EntryType.CREDIT || entry.type == EntryType.REVERSAL
+            LedgerFilter.Adjustments -> entry.type == EntryType.WRITE_OFF
+        }
         if (!matchesFilter) return@filter false
         if (lowered.isBlank()) return@filter true
         val amountText = entry.amount.toPlainString()

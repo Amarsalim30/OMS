@@ -65,4 +65,37 @@ class Converters {
     @TypeConverter
     fun toEntryType(value: String): com.zeynbakers.order_management_system.accounting.data.EntryType =
         com.zeynbakers.order_management_system.accounting.data.EntryType.valueOf(value)
+
+    @TypeConverter
+    fun fromReceiptStatus(
+        status: com.zeynbakers.order_management_system.accounting.data.PaymentReceiptStatus
+    ): String = status.name
+
+    @TypeConverter
+    fun toReceiptStatus(
+        value: String
+    ): com.zeynbakers.order_management_system.accounting.data.PaymentReceiptStatus =
+        com.zeynbakers.order_management_system.accounting.data.PaymentReceiptStatus.valueOf(value)
+
+    @TypeConverter
+    fun fromAllocationType(
+        type: com.zeynbakers.order_management_system.accounting.data.PaymentAllocationType
+    ): String = type.name
+
+    @TypeConverter
+    fun toAllocationType(
+        value: String
+    ): com.zeynbakers.order_management_system.accounting.data.PaymentAllocationType =
+        com.zeynbakers.order_management_system.accounting.data.PaymentAllocationType.valueOf(value)
+
+    @TypeConverter
+    fun fromAllocationStatus(
+        status: com.zeynbakers.order_management_system.accounting.data.PaymentAllocationStatus
+    ): String = status.name
+
+    @TypeConverter
+    fun toAllocationStatus(
+        value: String
+    ): com.zeynbakers.order_management_system.accounting.data.PaymentAllocationStatus =
+        com.zeynbakers.order_management_system.accounting.data.PaymentAllocationStatus.valueOf(value)
 }

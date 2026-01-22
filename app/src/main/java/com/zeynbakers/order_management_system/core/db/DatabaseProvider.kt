@@ -93,6 +93,135 @@ object DatabaseProvider {
         }
     }
 
+    private val migration6To7 = object : Migration(6, 7) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS payment_receipts (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                    amount TEXT NOT NULL,
+                    receivedAt INTEGER NOT NULL,
+                    method TEXT NOT NULL,
+                    transactionCode TEXT,
+                    hash TEXT,
+                    senderName TEXT,
+                    senderPhone TEXT,
+                    rawText TEXT,
+                    customerId INTEGER,
+                    note TEXT,
+                    status TEXT NOT NULL,
+                    createdAt INTEGER NOT NULL,
+                    voidedAt INTEGER,
+                    voidReason TEXT
+                )
+                """
+            )
+            db.execSQL(
+                "CREATE UNIQUE INDEX IF NOT EXISTS index_payment_receipts_transactionCode ON payment_receipts(transactionCode)"
+            )
+            db.execSQL(
+                "CREATE UNIQUE INDEX IF NOT EXISTS index_payment_receipts_hash ON payment_receipts(hash)"
+            )
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_payment_receipts_customerId ON payment_receipts(customerId)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_payment_receipts_receivedAt ON payment_receipts(receivedAt)")
+
+            db.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS payment_allocations (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                    receiptId INTEGER NOT NULL,
+                    orderId INTEGER,
+                    customerId INTEGER,
+                    amount TEXT NOT NULL,
+                    type TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    accountEntryId INTEGER,
+                    reversalEntryId INTEGER,
+                    createdAt INTEGER NOT NULL,
+                    voidedAt INTEGER,
+                    voidReason TEXT,
+                    FOREIGN KEY(receiptId) REFERENCES payment_receipts(id) ON DELETE CASCADE
+                )
+                """
+            )
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_payment_allocations_receiptId ON payment_allocations(receiptId)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_payment_allocations_orderId ON payment_allocations(orderId)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_payment_allocations_customerId ON payment_allocations(customerId)")
+            db.execSQL(
+                "CREATE INDEX IF NOT EXISTS index_payment_allocations_accountEntryId ON payment_allocations(accountEntryId)"
+            )
+
+            db.execSQL(
+                """
+                INSERT INTO payment_receipts (
+                    amount,
+                    receivedAt,
+                    method,
+                    transactionCode,
+                    hash,
+                    senderName,
+                    senderPhone,
+                    rawText,
+                    customerId,
+                    note,
+                    status,
+                    createdAt,
+                    voidedAt,
+                    voidReason
+                )
+                SELECT
+                    amount,
+                    receivedAt,
+                    'MPESA',
+                    transactionCode,
+                    hash,
+                    senderName,
+                    senderPhone,
+                    rawText,
+                    customerId,
+                    NULL,
+                    'APPLIED',
+                    receivedAt,
+                    NULL,
+                    NULL
+                FROM mpesa_transactions
+                """
+            )
+
+            db.execSQL(
+                """
+                INSERT INTO payment_allocations (
+                    receiptId,
+                    orderId,
+                    customerId,
+                    amount,
+                    type,
+                    status,
+                    accountEntryId,
+                    reversalEntryId,
+                    createdAt,
+                    voidedAt,
+                    voidReason
+                )
+                SELECT
+                    pr.id,
+                    tx.orderId,
+                    tx.customerId,
+                    tx.amount,
+                    CASE WHEN tx.orderId IS NULL THEN 'CUSTOMER_CREDIT' ELSE 'ORDER' END,
+                    'APPLIED',
+                    tx.accountEntryId,
+                    NULL,
+                    tx.receivedAt,
+                    NULL,
+                    NULL
+                FROM mpesa_transactions tx
+                INNER JOIN payment_receipts pr ON pr.hash = tx.hash
+                """
+            )
+        }
+    }
+
     fun getDatabase(context: Context): AppDatabase {
         return instance ?: synchronized(this) {
             val db = Room.databaseBuilder(
@@ -104,7 +233,8 @@ object DatabaseProvider {
                 migration2To3,
                 migration3To4,
                 migration4To5,
-                migration5To6
+                migration5To6,
+                migration6To7
             ).build()
             instance = db
             db
