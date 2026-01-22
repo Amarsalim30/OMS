@@ -22,6 +22,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
 import com.zeynbakers.order_management_system.accounting.ui.PaymentIntakeScreen
 import com.zeynbakers.order_management_system.accounting.ui.PaymentIntakeViewModel
+import com.zeynbakers.order_management_system.accounting.ui.PaymentIntakeHistoryScreen
+import com.zeynbakers.order_management_system.accounting.ui.PaymentIntakeHistoryViewModel
+import com.zeynbakers.order_management_system.accounting.ui.PaymentHistoryFilter
 import com.zeynbakers.order_management_system.core.backup.BackupScheduler
 import com.zeynbakers.order_management_system.core.backup.BackupSettingsScreen
 import com.zeynbakers.order_management_system.core.db.DatabaseProvider
@@ -73,6 +76,7 @@ class MainActivity : ComponentActivity() {
                 val viewModel = remember { OrderViewModel(database = database) }
                 val customerViewModel = remember { CustomerAccountsViewModel(database = database) }
                 val paymentIntakeViewModel = remember { PaymentIntakeViewModel(database = database) }
+                val paymentHistoryViewModel = remember { PaymentIntakeHistoryViewModel(database = database) }
                 val amountRegistry = remember { AmountFieldRegistry() }
                 val voiceRouter = remember { VoiceInputRouter(onApplyTotal = amountRegistry::applyAmount) }
                 var currentMonth by remember { mutableStateOf(0) }
@@ -86,6 +90,8 @@ class MainActivity : ComponentActivity() {
                 var selectedContactPhones by remember { mutableStateOf<Set<String>>(emptySet()) }
                 var isContactsLoading by remember { mutableStateOf(false) }
                 var paymentIntakeText by remember { mutableStateOf<String?>(null) }
+                var paymentReturnScreen by remember { mutableStateOf<Screen>(Screen.Calendar) }
+                var paymentHistoryReturnScreen by remember { mutableStateOf<Screen>(Screen.Calendar) }
                 var hasRecordPermission by remember {
                     mutableStateOf(
                         ContextCompat.checkSelfPermission(
@@ -144,6 +150,36 @@ class MainActivity : ComponentActivity() {
                 val incomingIntent by launchIntent
                 val today = remember {
                     Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date
+                }
+                val openPaymentIntake: (String?, Screen) -> Unit = openPaymentIntake@{ sharedText, returnTo ->
+                    val isActive = screen is Screen.PaymentIntake
+                    if (!isActive) {
+                        val safeReturn =
+                            if (returnTo is Screen.PaymentIntake) Screen.Calendar else returnTo
+                        paymentReturnScreen = safeReturn
+                    }
+                    if (!sharedText.isNullOrBlank()) {
+                        if (isActive) {
+                            paymentIntakeViewModel.appendRawText(sharedText)
+                            return@openPaymentIntake
+                        }
+                        paymentIntakeText = sharedText
+                    } else if (!isActive) {
+                        paymentIntakeViewModel.setRawText("")
+                        paymentIntakeText = null
+                    }
+                    if (!isActive) {
+                        screen = Screen.PaymentIntake(sharedText)
+                    }
+                }
+                val openPaymentHistory: (PaymentHistoryFilter) -> Unit = { filter ->
+                    val isActive = screen is Screen.PaymentIntakeHistory
+                    if (!isActive) {
+                        val safeReturn =
+                            if (screen is Screen.PaymentIntakeHistory) Screen.Calendar else screen
+                        paymentHistoryReturnScreen = safeReturn
+                    }
+                    screen = Screen.PaymentIntakeHistory(filter)
                 }
 
                 LaunchedEffect(Unit) {
@@ -204,8 +240,7 @@ class MainActivity : ComponentActivity() {
                         Intent.ACTION_SEND,
                         Intent.ACTION_SEND_MULTIPLE -> {
                             val sharedText = extractSharedText(intent) ?: return@LaunchedEffect
-                            paymentIntakeText = sharedText
-                            screen = Screen.PaymentIntake(sharedText)
+                            openPaymentIntake(sharedText, screen)
                         }
                     }
                 }
@@ -358,6 +393,9 @@ class MainActivity : ComponentActivity() {
                                     onLoadRange = { start, end ->
                                         viewModel.loadSummaryRange(startInclusive = start, endExclusive = end)
                                     },
+                                    onPaymentIntakeClick = {
+                                        openPaymentIntake(null, Screen.Summary)
+                                    },
                                     onBackupClick = { screen = Screen.Backup },
                                     onNotificationsClick = { screen = Screen.Notifications },
                                     onBack = { screen = Screen.Calendar }
@@ -387,6 +425,9 @@ class MainActivity : ComponentActivity() {
                                         } else {
                                             contactsPermissionLauncher.launch(Manifest.permission.READ_CONTACTS)
                                         }
+                                    },
+                                    onPaymentHistory = { customerId ->
+                                        openPaymentHistory(PaymentHistoryFilter.Customer(customerId))
                                     },
                                     onBack = { screen = Screen.Calendar }
                                 )
@@ -454,6 +495,12 @@ class MainActivity : ComponentActivity() {
                                         WidgetUpdater.enqueue(context)
                                         NotificationScheduler.enqueueNow(context)
                                     },
+                                    onPaymentHistory = { customerId ->
+                                        openPaymentHistory(PaymentHistoryFilter.Customer(customerId))
+                                    },
+                                    onOrderPaymentHistory = { orderId ->
+                                        openPaymentHistory(PaymentHistoryFilter.Order(orderId))
+                                    },
                                     onUpdateOrderStatusOverride = { orderId, override ->
                                         customerViewModel.setOrderStatusOverride(orderId, override)
                                         viewModel.loadUnpaidOrders()
@@ -487,11 +534,14 @@ class MainActivity : ComponentActivity() {
                                 NotificationSettingsScreen(onBack = { screen = Screen.Summary })
                             }
                             is Screen.PaymentIntake -> {
-                                BackHandler { screen = Screen.Calendar }
+                                BackHandler { screen = paymentReturnScreen }
                                 PaymentIntakeScreen(
                                     viewModel = paymentIntakeViewModel,
                                     initialText = active.sharedText ?: paymentIntakeText,
-                                    onClose = { screen = Screen.Calendar },
+                                    onClose = {
+                                        paymentIntakeText = null
+                                        screen = paymentReturnScreen
+                                    },
                                     onApplied = {
                                         if (currentMonth > 0 && currentYear > 0) {
                                             viewModel.loadMonth(month = currentMonth, year = currentYear)
@@ -499,7 +549,39 @@ class MainActivity : ComponentActivity() {
                                         viewModel.loadUnpaidOrders()
                                         WidgetUpdater.enqueue(context)
                                         NotificationScheduler.enqueueNow(context)
-                                        screen = Screen.Calendar
+                                        paymentIntakeText = null
+                                        screen = paymentReturnScreen
+                                    }
+                                )
+                            }
+                            is Screen.PaymentIntakeHistory -> {
+                                BackHandler { screen = paymentHistoryReturnScreen }
+                                PaymentIntakeHistoryScreen(
+                                    viewModel = paymentHistoryViewModel,
+                                    filter = active.filter,
+                                    onBack = { screen = paymentHistoryReturnScreen },
+                                    onOpenCustomer = { customerId ->
+                                        screen = Screen.CustomerDetail(customerId)
+                                    },
+                                    onOpenOrder = { date ->
+                                        selectedDate = date
+                                        viewModel.loadOrdersForDate(date)
+                                        screen = Screen.Day(date)
+                                    },
+                                    onRemoved = {
+                                        if (currentMonth > 0 && currentYear > 0) {
+                                            viewModel.loadMonth(month = currentMonth, year = currentYear)
+                                        }
+                                        viewModel.loadUnpaidOrders()
+                                        val returnScreen = paymentHistoryReturnScreen
+                                        if (returnScreen is Screen.CustomerDetail) {
+                                            customerViewModel.loadCustomer(returnScreen.customerId)
+                                        }
+                                        if (returnScreen is Screen.Day) {
+                                            viewModel.loadOrdersForDate(returnScreen.date)
+                                        }
+                                        WidgetUpdater.enqueue(context)
+                                        NotificationScheduler.enqueueNow(context)
                                     }
                                 )
                             }
@@ -534,6 +616,7 @@ private sealed class Screen {
     data object ImportContacts : Screen()
     data class CustomerDetail(val customerId: Long) : Screen()
     data class PaymentIntake(val sharedText: String?) : Screen()
+    data class PaymentIntakeHistory(val filter: PaymentHistoryFilter) : Screen()
 }
 
 private fun monthLabel(year: Int, month: Int): String {

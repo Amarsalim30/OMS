@@ -78,6 +78,7 @@ fun CustomerListScreen(
     onBack: () -> Unit,
     onAddCustomer: () -> Unit = {},
     onRecordPayment: (Long) -> Unit = {},
+    onPaymentHistory: (Long) -> Unit = {},
     onAddOrder: (Long) -> Unit = {},
     onEditCustomer: (Long) -> Unit = {},
     onDeleteCustomer: (Long) -> Unit = {}
@@ -90,6 +91,7 @@ fun CustomerListScreen(
         onBack = onBack,
         onAddCustomer = onAddCustomer,
         onRecordPayment = onRecordPayment,
+        onPaymentHistory = onPaymentHistory,
         onAddOrder = onAddOrder,
         onEditCustomer = onEditCustomer,
         onDeleteCustomer = onDeleteCustomer
@@ -105,6 +107,7 @@ private fun CustomersScreenM3(
     onBack: () -> Unit,
     onAddCustomer: () -> Unit,
     onRecordPayment: (Long) -> Unit,
+    onPaymentHistory: (Long) -> Unit,
     onAddOrder: (Long) -> Unit,
     onEditCustomer: (Long) -> Unit,
     onDeleteCustomer: (Long) -> Unit
@@ -236,6 +239,10 @@ private fun CustomersScreenM3(
                 Spacer(Modifier.height(12.dp))
                 ActionRow(label = "View details", onClick = {
                     onCustomerClick(customer.customerId)
+                    longPressedCustomer = null
+                })
+                ActionRow(label = "Payment history", onClick = {
+                    onPaymentHistory(customer.customerId)
                     longPressedCustomer = null
                 })
                 ActionRow(label = "Record payment", onClick = {

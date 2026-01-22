@@ -29,6 +29,9 @@ interface AccountingDao {
     @Query("SELECT * FROM account_entries")
     suspend fun getAllAccountEntries(): List<AccountEntryEntity>
 
+    @Query("SELECT * FROM account_entries WHERE id IN (:ids)")
+    suspend fun getEntriesByIds(ids: List<Long>): List<AccountEntryEntity>
+
     @Query("SELECT * FROM payments")
     suspend fun getAllPayments(): List<PaymentEntity>
 
@@ -80,6 +83,9 @@ interface AccountingDao {
 
     @Query("DELETE FROM account_entries WHERE id = :id")
     suspend fun deleteAccountEntryById(id: Long)
+
+    @Query("SELECT * FROM account_entries WHERE description IN (:descriptions)")
+    suspend fun getEntriesByDescriptions(descriptions: List<String>): List<AccountEntryEntity>
 
     @Query("DELETE FROM account_entries WHERE orderId = :orderId AND type = 'DEBIT'")
     suspend fun deleteDebitEntriesForOrder(orderId: Long)

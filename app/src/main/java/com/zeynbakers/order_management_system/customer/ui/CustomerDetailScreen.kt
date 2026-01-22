@@ -90,6 +90,8 @@ fun CustomerDetailScreen(
     orders: List<CustomerOrderUi>,
     onBack: () -> Unit,
     onRecordPayment: (BigDecimal, PaymentMethod, String, Long?) -> Unit,
+    onPaymentHistory: (Long) -> Unit,
+    onOrderPaymentHistory: (Long) -> Unit,
     onUpdateOrderStatusOverride: (Long, OrderStatusOverride?) -> Unit,
     onWriteOffOrder: (Long) -> Unit
 ) {
@@ -141,6 +143,14 @@ fun CustomerDetailScreen(
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    }
+                },
+                actions = {
+                    IconButton(
+                        onClick = { customer?.id?.let { onPaymentHistory(it) } },
+                        enabled = customer != null
+                    ) {
+                        Icon(imageVector = Icons.Filled.Payments, contentDescription = "Payment history")
                     }
                 }
             )
@@ -205,6 +215,7 @@ fun CustomerDetailScreen(
                 items(filteredOrders, key = { it.order.id }) { order ->
                     OrderRow(
                         order = order,
+                        onPaymentHistory = { onOrderPaymentHistory(order.order.id) },
                         onUpdateOverride = { override -> onUpdateOrderStatusOverride(order.order.id, override) },
                         onWriteOff = { onWriteOffOrder(order.order.id) }
                     )
@@ -459,6 +470,7 @@ private fun OrdersHeader(
 @Composable
 private fun OrderRow(
     order: CustomerOrderUi,
+    onPaymentHistory: () -> Unit,
     onUpdateOverride: (OrderStatusOverride?) -> Unit,
     onWriteOff: () -> Unit
 ) {
@@ -526,6 +538,13 @@ private fun OrderRow(
                     Icon(imageVector = Icons.Filled.MoreVert, contentDescription = "Order actions")
                 }
                 DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
+                    DropdownMenuItem(
+                        text = { Text("Payment history") },
+                        onClick = {
+                            onPaymentHistory()
+                            menuExpanded = false
+                        }
+                    )
                     DropdownMenuItem(
                         text = { Text("Close order") },
                         onClick = {
