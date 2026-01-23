@@ -222,6 +222,12 @@ object DatabaseProvider {
         }
     }
 
+    private val migration7To8 = object : Migration(7, 8) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("DROP TABLE IF EXISTS mpesa_transactions")
+        }
+    }
+
     fun getDatabase(context: Context): AppDatabase {
         return instance ?: synchronized(this) {
             val db = Room.databaseBuilder(
@@ -234,7 +240,8 @@ object DatabaseProvider {
                 migration3To4,
                 migration4To5,
                 migration5To6,
-                migration6To7
+                migration6To7,
+                migration7To8
             ).build()
             instance = db
             db

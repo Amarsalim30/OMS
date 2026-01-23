@@ -191,7 +191,19 @@ class MainActivity : ComponentActivity() {
                             if (screen is Screen.PaymentIntakeHistory) Screen.Calendar else screen
                         paymentHistoryReturnScreen = safeReturn
                     }
-                    screen = Screen.PaymentIntakeHistory(filter)
+                    screen = Screen.PaymentIntakeHistory(filter = filter, focusReceiptId = null)
+                }
+                val openPaymentHistoryForReceipt: (Long) -> Unit = { receiptId ->
+                    val isActive = screen is Screen.PaymentIntakeHistory
+                    if (!isActive) {
+                        val safeReturn =
+                            if (screen is Screen.PaymentIntakeHistory) Screen.Calendar else screen
+                        paymentHistoryReturnScreen = safeReturn
+                    }
+                    screen = Screen.PaymentIntakeHistory(
+                        filter = PaymentHistoryFilter.All,
+                        focusReceiptId = receiptId
+                    )
                 }
 
                 LaunchedEffect(Unit) {
@@ -561,7 +573,16 @@ class MainActivity : ComponentActivity() {
                                         NotificationScheduler.enqueueNow(context)
                                         paymentIntakeText = null
                                         screen = paymentReturnScreen
-                                    }
+                                    },
+                                    onAppliedInPlace = {
+                                        if (currentMonth > 0 && currentYear > 0) {
+                                            viewModel.loadMonth(month = currentMonth, year = currentYear)
+                                        }
+                                        viewModel.loadUnpaidOrders()
+                                        WidgetUpdater.enqueue(context)
+                                        NotificationScheduler.enqueueNow(context)
+                                    },
+                                    onOpenReceiptHistory = openPaymentHistoryForReceipt
                                 )
                             }
                             is Screen.PaymentIntakeHistory -> {
@@ -569,6 +590,7 @@ class MainActivity : ComponentActivity() {
                                 PaymentIntakeHistoryScreen(
                                     viewModel = paymentHistoryViewModel,
                                     filter = active.filter,
+                                    focusReceiptId = active.focusReceiptId,
                                     onBack = { screen = paymentHistoryReturnScreen },
                                     onRemoved = {
                                         if (currentMonth > 0 && currentYear > 0) {
@@ -618,7 +640,10 @@ private sealed class Screen {
     data object ImportContacts : Screen()
     data class CustomerDetail(val customerId: Long) : Screen()
     data class PaymentIntake(val sharedText: String?) : Screen()
-    data class PaymentIntakeHistory(val filter: PaymentHistoryFilter) : Screen()
+    data class PaymentIntakeHistory(
+        val filter: PaymentHistoryFilter,
+        val focusReceiptId: Long? = null
+    ) : Screen()
 }
 
 private fun monthLabel(year: Int, month: Int): String {
