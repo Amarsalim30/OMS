@@ -49,6 +49,17 @@ interface AccountingDao {
     )
     suspend fun getCustomerUnassignedCredits(customerId: Long): List<AccountEntryEntity>
 
+    @Query(
+        """
+        SELECT * FROM account_entries
+        WHERE customerId = :customerId
+        AND orderId IS NULL
+        AND type = 'REVERSAL'
+        ORDER BY date ASC, id ASC
+        """
+    )
+    suspend fun getCustomerUnassignedReversals(customerId: Long): List<AccountEntryEntity>
+
     @Query("SELECT * FROM account_entries WHERE orderId = :orderId AND type = :type ORDER BY date DESC, id DESC")
     suspend fun getEntriesForOrderByType(orderId: Long, type: EntryType): List<AccountEntryEntity>
 
@@ -127,11 +138,29 @@ interface AccountingDao {
         if (remaining <= BigDecimal.ZERO) return
 
         val credits = getCustomerUnassignedCredits(customerId)
+        val reversals = getCustomerUnassignedReversals(customerId)
+        var reversalOffset = reversals.fold(BigDecimal.ZERO) { acc, entry -> acc + entry.amount }
         for (entry in credits) {
             if (remaining <= BigDecimal.ZERO) break
             if (entry.amount <= BigDecimal.ZERO) continue
+            if (reversalOffset > BigDecimal.ZERO) {
+                if (reversalOffset >= entry.amount) {
+                    reversalOffset -= entry.amount
+                    continue
+                }
+            }
 
-            val applyAmount = if (entry.amount > remaining) remaining else entry.amount
+            val availableAmount =
+                if (reversalOffset > BigDecimal.ZERO) {
+                    val adjusted = entry.amount - reversalOffset
+                    reversalOffset = BigDecimal.ZERO
+                    adjusted
+                } else {
+                    entry.amount
+                }
+            if (availableAmount <= BigDecimal.ZERO) continue
+
+            val applyAmount = if (availableAmount > remaining) remaining else availableAmount
             val appliedDescription = "Applied credit from entry #${entry.id} to Order #$orderId"
 
             if (applyAmount.compareTo(entry.amount) == 0) {
@@ -330,9 +359,35 @@ interface AccountingDao {
         WHERE customerId = :customerId
     """)
     suspend fun getLedgerTotals(customerId: Long): LedgerTotals
+
+    @Query(
+        """
+        SELECT
+            IFNULL(SUM(CASE WHEN orderId IS NOT NULL AND type = 'DEBIT' THEN amount ELSE 0 END), 0) as orderBilled,
+            IFNULL(SUM(CASE
+                WHEN orderId IS NOT NULL AND type IN ('CREDIT', 'WRITE_OFF') THEN amount
+                WHEN orderId IS NOT NULL AND type = 'REVERSAL' THEN -amount
+                ELSE 0
+            END), 0) as orderPaid,
+            IFNULL(SUM(CASE
+                WHEN orderId IS NULL AND type = 'CREDIT' THEN amount
+                WHEN orderId IS NULL AND type = 'REVERSAL' THEN -amount
+                ELSE 0
+            END), 0) as extraCredit
+        FROM account_entries
+        WHERE customerId = :customerId
+        """
+    )
+    suspend fun getCustomerFinanceTotals(customerId: Long): CustomerFinanceTotals
 }
 
 data class LedgerTotals(
     val billed: BigDecimal?,
     val paid: BigDecimal?
+)
+
+data class CustomerFinanceTotals(
+    val orderBilled: BigDecimal?,
+    val orderPaid: BigDecimal?,
+    val extraCredit: BigDecimal?
 )

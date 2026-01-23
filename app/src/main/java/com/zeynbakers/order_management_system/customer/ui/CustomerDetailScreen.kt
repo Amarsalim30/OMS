@@ -87,6 +87,7 @@ fun CustomerDetailScreen(
     customer: CustomerEntity?,
     ledger: List<AccountEntryEntity>,
     balance: BigDecimal,
+    financeSummary: CustomerFinanceSummary?,
     orders: List<CustomerOrderUi>,
     onBack: () -> Unit,
     onRecordPayment: (BigDecimal, PaymentMethod, String, Long?) -> Unit,
@@ -168,6 +169,7 @@ fun CustomerDetailScreen(
                 BalanceCard(
                     customer = customer,
                     balance = balance,
+                    financeSummary = financeSummary,
                     canReceive = customer != null,
                     onReceivePayment = onReceivePayment
                 )
@@ -270,10 +272,27 @@ fun CustomerDetailScreen(
 private fun BalanceCard(
     customer: CustomerEntity?,
     balance: BigDecimal,
+    financeSummary: CustomerFinanceSummary?,
     canReceive: Boolean,
     onReceivePayment: () -> Unit
 ) {
     val context = LocalContext.current
+    val summary = financeSummary
+    val orderTotal = summary?.orderTotal ?: BigDecimal.ZERO
+    val paidToOrders = summary?.paidToOrders ?: BigDecimal.ZERO
+    val availableCredit = summary?.availableCredit ?: BigDecimal.ZERO
+    val netBalance = summary?.netBalance ?: balance
+    val netLabel =
+        if (summary == null) {
+            "Balance"
+        } else {
+            when {
+                netBalance > BigDecimal.ZERO -> "Balance due"
+                netBalance < BigDecimal.ZERO -> "Extra available"
+                else -> "Settled"
+            }
+        }
+    val netAmount = netBalance.abs()
     Surface(
         tonalElevation = 1.dp,
         shape = MaterialTheme.shapes.medium,
@@ -286,11 +305,25 @@ private fun BalanceCard(
                     contentDescription = "Balance",
                     tint = MaterialTheme.colorScheme.primary
                 )
-                Spacer(Modifier.width(8.dp))
-                Text(text = "Balance", style = MaterialTheme.typography.labelLarge)
+            Spacer(Modifier.width(8.dp))
+                Text(text = "Customer summary", style = MaterialTheme.typography.labelLarge)
             }
             Spacer(Modifier.height(4.dp))
-            Text(text = formatKes(balance), style = MaterialTheme.typography.titleLarge)
+            Text(text = "$netLabel ${formatKes(netAmount)}", style = MaterialTheme.typography.titleLarge)
+            if (summary != null) {
+                Spacer(Modifier.height(8.dp))
+                SummaryRow(label = "Orders total", amount = formatKes(orderTotal))
+                SummaryRow(label = "Payments applied", amount = formatKes(paidToOrders))
+                SummaryRow(label = "Extra credit", amount = formatKes(availableCredit.max(BigDecimal.ZERO)))
+                if (availableCredit > BigDecimal.ZERO) {
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        text = "Extra credit auto-applies to new orders.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
             customer?.phone?.takeIf { it.isNotBlank() }?.let { phone ->
                 Spacer(Modifier.height(6.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -320,6 +353,27 @@ private fun BalanceCard(
                 Text("Receive payment")
             }
         }
+    }
+}
+
+@Composable
+private fun SummaryRow(
+    label: String,
+    amount: String
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Text(
+            text = amount,
+            style = MaterialTheme.typography.bodySmall
+        )
     }
 }
 
@@ -420,7 +474,10 @@ private fun PaymentCard(
             )
 
             Spacer(Modifier.height(10.dp))
-            Text(text = "Apply to order (optional)", style = MaterialTheme.typography.bodyMedium)
+            Text(
+                text = "Apply to order (optional). If none, goes to oldest orders.",
+                style = MaterialTheme.typography.bodyMedium
+            )
             Spacer(Modifier.height(6.dp))
             OutlinedTextField(
                 value = orderSearch,
@@ -431,7 +488,12 @@ private fun PaymentCard(
             )
             Spacer(Modifier.height(6.dp))
             TextButton(onClick = { onSelectOrder(null) }) {
-                val label = if (selectedOrderId == null) "No order (selected)" else "No order"
+                val label =
+                    if (selectedOrderId == null) {
+                        "Oldest orders (selected)"
+                    } else {
+                        "Oldest orders"
+                    }
                 Text(text = label)
             }
             visibleOrders.forEach { order ->
@@ -725,13 +787,23 @@ private fun LedgerRow(entry: AccountEntryEntity) {
         }
     val typeLabel =
         when (entry.type) {
-            EntryType.DEBIT -> "Order"
-            EntryType.CREDIT -> "Payment"
-            EntryType.WRITE_OFF -> "Adjustment"
-            EntryType.REVERSAL -> "Reversal"
+            EntryType.DEBIT -> "Order charge"
+            EntryType.CREDIT ->
+                if (entry.orderId == null) "Extra credit" else "Payment"
+            EntryType.WRITE_OFF -> "Write-off"
+            EntryType.REVERSAL ->
+                if (entry.orderId == null) "Credit reversal" else "Reversal"
         }
+    val orderLabel = entry.orderId?.let { "Order #$it" }
     Column(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
         Text(text = formatDateTime(entry.date), style = MaterialTheme.typography.labelMedium)
+        if (orderLabel != null) {
+            Text(
+                text = orderLabel,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
         Text(text = entry.description, style = MaterialTheme.typography.bodyMedium)
         val sign =
             when (entry.type) {

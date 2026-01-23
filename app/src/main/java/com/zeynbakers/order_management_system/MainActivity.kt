@@ -154,6 +154,7 @@ class MainActivity : ComponentActivity() {
                 val customerDetail by customerViewModel.customer.collectAsState()
                 val customerLedger by customerViewModel.ledger.collectAsState()
                 val customerBalance by customerViewModel.balance.collectAsState()
+                val customerFinanceSummary by customerViewModel.financeSummary.collectAsState()
                 val customerOrders by customerViewModel.orders.collectAsState()
 
                 var selectedDate by remember { mutableStateOf<LocalDate?>(null) }
@@ -497,6 +498,7 @@ class MainActivity : ComponentActivity() {
                                     customer = customerDetail,
                                     ledger = customerLedger,
                                     balance = customerBalance,
+                                    financeSummary = customerFinanceSummary,
                                     orders = customerOrders,
                                     onBack = { screen = Screen.CustomerList },
                                     onRecordPayment = { amount, method, note, orderId ->

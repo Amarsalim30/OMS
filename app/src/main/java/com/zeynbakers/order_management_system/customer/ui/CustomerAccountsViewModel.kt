@@ -25,6 +25,13 @@ import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.plus
 import kotlinx.datetime.toLocalDateTime
 
+data class CustomerFinanceSummary(
+    val orderTotal: BigDecimal,
+    val paidToOrders: BigDecimal,
+    val availableCredit: BigDecimal,
+    val netBalance: BigDecimal
+)
+
 class CustomerAccountsViewModel(private val database: AppDatabase) : ViewModel() {
     private val accountingDao: AccountingDao = database.accountingDao()
     private val customerDao = database.customerDao()
@@ -41,6 +48,9 @@ class CustomerAccountsViewModel(private val database: AppDatabase) : ViewModel()
 
     private val _balance = MutableStateFlow(BigDecimal.ZERO)
     val balance = _balance.asStateFlow()
+
+    private val _financeSummary = MutableStateFlow<CustomerFinanceSummary?>(null)
+    val financeSummary = _financeSummary.asStateFlow()
 
     private val _orders = MutableStateFlow<List<CustomerOrderUi>>(emptyList())
     val orders = _orders.asStateFlow()
@@ -79,6 +89,18 @@ class CustomerAccountsViewModel(private val database: AppDatabase) : ViewModel()
             _customer.value = customerDao.getById(customerId)
             _ledger.value = accountingDao.getLedgerForCustomer(customerId)
             _balance.value = accountingDao.getCustomerBalance(customerId)
+            val financeTotals = accountingDao.getCustomerFinanceTotals(customerId)
+            val orderTotal = financeTotals.orderBilled ?: BigDecimal.ZERO
+            val paidToOrders = financeTotals.orderPaid ?: BigDecimal.ZERO
+            val availableCredit = financeTotals.extraCredit ?: BigDecimal.ZERO
+            val netBalance = orderTotal - paidToOrders - availableCredit
+            _financeSummary.value =
+                CustomerFinanceSummary(
+                    orderTotal = orderTotal,
+                    paidToOrders = paidToOrders,
+                    availableCredit = availableCredit,
+                    netBalance = netBalance
+                )
             val orders = orderDao.getOrdersByCustomer(customerId).filter { it.status != OrderStatus.CANCELLED }
             val orderIds = orders.map { it.id }.filter { it != 0L }
             val paidByOrder =
