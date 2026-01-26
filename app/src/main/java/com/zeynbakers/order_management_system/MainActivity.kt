@@ -14,6 +14,7 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
@@ -50,6 +51,7 @@ import com.zeynbakers.order_management_system.core.ui.VoiceCalculatorOverlay
 import com.zeynbakers.order_management_system.core.ui.theme.Order_management_systemTheme
 import com.zeynbakers.order_management_system.core.util.formatKes
 import com.zeynbakers.order_management_system.core.util.normalizePhoneNumber
+import com.zeynbakers.order_management_system.core.updates.UpdatePreferences
 import com.zeynbakers.order_management_system.customer.ui.CustomerAccountsViewModel
 import com.zeynbakers.order_management_system.customer.ui.CustomerDetailScreen
 import com.zeynbakers.order_management_system.customer.ui.CustomerListScreen
@@ -109,6 +111,19 @@ class MainActivity : ComponentActivity() {
                     )
                 }
                 val overlaySuppressed = remember { mutableStateOf(false) }
+                val updatePrefs = remember { UpdatePreferences(context) }
+                val updateNotes = remember {
+                    listOf(
+                        "Share M-PESA messages from Messages directly into the app.",
+                        "Oldest-order allocation is now the default when applying payments.",
+                        "Each order has its own payment history, plus move/void controls.",
+                        "Clearer order labels across screens for faster recognition.",
+                        "Improved M-PESA amount parsing for cleaner imports.",
+                        "Better voice recognition for notes and customer details.",
+                        "Faster voice calculator responses when adding totals."
+                    )
+                }
+                var showUpdateDialog by remember { mutableStateOf(false) }
 
                 val contactsPermissionLauncher = rememberLauncherForActivityResult(
                     ActivityResultContracts.RequestPermission()
@@ -218,6 +233,14 @@ class MainActivity : ComponentActivity() {
                     )
                 }
 
+                LaunchedEffect(screen) {
+                    if (screen == Screen.Calendar &&
+                        updatePrefs.shouldShowUpdate(BuildConfig.VERSION_NAME)
+                    ) {
+                        showUpdateDialog = true
+                    }
+                }
+
                 LaunchedEffect(Unit) {
                     BackupScheduler.ensureScheduled(context)
                     NotificationScheduler.ensureScheduled(context)
@@ -313,6 +336,33 @@ class MainActivity : ComponentActivity() {
                     if (currentScreen is Screen.Unpaid) {
                         viewModel.loadUnpaidOrders()
                     }
+                }
+
+                if (showUpdateDialog) {
+                    AlertDialog(
+                        onDismissRequest = {
+                            showUpdateDialog = false
+                            updatePrefs.markVersionSeen(BuildConfig.VERSION_NAME)
+                        },
+                        title = { Text("What's new") },
+                        text = {
+                            Column {
+                                updateNotes.forEach { note ->
+                                    Text(text = "- $note")
+                                }
+                            }
+                        },
+                        confirmButton = {
+                            TextButton(
+                                onClick = {
+                                    showUpdateDialog = false
+                                    updatePrefs.markVersionSeen(BuildConfig.VERSION_NAME)
+                                }
+                            ) {
+                                Text("Got it")
+                            }
+                        }
+                    )
                 }
 
                 LaunchedEffect(creditPrompt) {
