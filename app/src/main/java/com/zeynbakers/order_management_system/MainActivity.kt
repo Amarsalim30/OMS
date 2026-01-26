@@ -15,6 +15,9 @@ import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -25,6 +28,8 @@ import com.zeynbakers.order_management_system.accounting.ui.PaymentIntakeViewMod
 import com.zeynbakers.order_management_system.accounting.ui.PaymentIntakeHistoryScreen
 import com.zeynbakers.order_management_system.accounting.ui.PaymentIntakeHistoryViewModel
 import com.zeynbakers.order_management_system.accounting.ui.PaymentHistoryFilter
+import com.zeynbakers.order_management_system.accounting.ui.LedgerScreen
+import com.zeynbakers.order_management_system.accounting.ui.LedgerViewModel
 import com.zeynbakers.order_management_system.core.backup.BackupScheduler
 import com.zeynbakers.order_management_system.core.backup.BackupSettingsScreen
 import com.zeynbakers.order_management_system.core.db.DatabaseProvider
@@ -43,6 +48,7 @@ import com.zeynbakers.order_management_system.core.ui.LocalVoiceOverlaySuppresse
 import com.zeynbakers.order_management_system.core.ui.VoiceCalcAccess
 import com.zeynbakers.order_management_system.core.ui.VoiceCalculatorOverlay
 import com.zeynbakers.order_management_system.core.ui.theme.Order_management_systemTheme
+import com.zeynbakers.order_management_system.core.util.formatKes
 import com.zeynbakers.order_management_system.core.util.normalizePhoneNumber
 import com.zeynbakers.order_management_system.customer.ui.CustomerAccountsViewModel
 import com.zeynbakers.order_management_system.customer.ui.CustomerDetailScreen
@@ -52,6 +58,7 @@ import com.zeynbakers.order_management_system.customer.ui.ImportContactsScreen
 import com.zeynbakers.order_management_system.order.ui.CalendarScreen
 import com.zeynbakers.order_management_system.order.ui.DayDetailScreen
 import com.zeynbakers.order_management_system.order.ui.OrderDraft
+import com.zeynbakers.order_management_system.order.ui.OrderCreditPrompt
 import com.zeynbakers.order_management_system.order.ui.OrderViewModel
 import com.zeynbakers.order_management_system.order.ui.SummaryScreen
 import com.zeynbakers.order_management_system.order.ui.UnpaidOrdersScreen
@@ -77,6 +84,7 @@ class MainActivity : ComponentActivity() {
                 val customerViewModel = remember { CustomerAccountsViewModel(database = database) }
                 val paymentIntakeViewModel = remember { PaymentIntakeViewModel(database = database) }
                 val paymentHistoryViewModel = remember { PaymentIntakeHistoryViewModel(database = database) }
+                val ledgerViewModel = remember { LedgerViewModel(database = database) }
                 val amountRegistry = remember { AmountFieldRegistry() }
                 val voiceRouter = remember { VoiceInputRouter(onApplyTotal = amountRegistry::applyAmount) }
                 var currentMonth by remember { mutableStateOf(0) }
@@ -149,6 +157,7 @@ class MainActivity : ComponentActivity() {
                 val unpaidOrders by viewModel.unpaidOrders.collectAsState()
                 val unpaidPaidAmounts by viewModel.unpaidPaidAmounts.collectAsState()
                 val unpaidCustomerNames by viewModel.unpaidCustomerNames.collectAsState()
+                val creditPrompt by viewModel.creditPrompt.collectAsState()
 
                 val customerSummaries by customerViewModel.summaries.collectAsState()
                 val customerDetail by customerViewModel.customer.collectAsState()
@@ -160,6 +169,7 @@ class MainActivity : ComponentActivity() {
                 var selectedDate by remember { mutableStateOf<LocalDate?>(null) }
                 var summaryDate by remember { mutableStateOf<LocalDate?>(null) }
                 var quickAddDate by remember { mutableStateOf<LocalDate?>(null) }
+                var pendingCreditPrompt by remember { mutableStateOf<OrderCreditPrompt?>(null) }
                 val incomingIntent by launchIntent
                 val today = remember {
                     Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date
@@ -304,6 +314,12 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
+                LaunchedEffect(creditPrompt) {
+                    if (creditPrompt != null) {
+                        pendingCreditPrompt = creditPrompt
+                    }
+                }
+
                 val voiceCalcAccess =
                     remember(hasRecordPermission) {
                         VoiceCalcAccess(
@@ -393,6 +409,30 @@ class MainActivity : ComponentActivity() {
                                         WidgetUpdater.enqueue(context)
                                         NotificationScheduler.enqueueNow(context)
                                     },
+                                    loadOrderPaymentAllocations = { orderId ->
+                                        viewModel.loadOrderPaymentAllocations(orderId)
+                                    },
+                                    loadMoveOrderOptions = { customerId, excludeOrderId ->
+                                        viewModel.loadMoveOrderOptions(customerId, excludeOrderId)
+                                    },
+                                    onDeleteOrderWithPayments = { orderId, date, allocationIds, action, target, moveFull ->
+                                        val result = viewModel.deleteOrderWithPayments(
+                                            orderId = orderId,
+                                            date = date,
+                                            allocationIds = allocationIds,
+                                            action = action,
+                                            target = target,
+                                            moveFullReceipts = moveFull
+                                        )
+                                        if (result) {
+                                            WidgetUpdater.enqueue(context)
+                                            NotificationScheduler.enqueueNow(context)
+                                        }
+                                        result
+                                    },
+                                    onOrderPaymentHistory = { orderId ->
+                                        openPaymentHistory(PaymentHistoryFilter.Order(orderId))
+                                    },
                                     onReceivePayment = {
                                         openPaymentIntake(null, Screen.Day(active.date))
                                     },
@@ -421,6 +461,7 @@ class MainActivity : ComponentActivity() {
                                     onLoadRange = { start, end ->
                                         viewModel.loadSummaryRange(startInclusive = start, endExclusive = end)
                                     },
+                                    onLedgerClick = { screen = Screen.Ledger },
                                     onBackupClick = { screen = Screen.Backup },
                                     onNotificationsClick = { screen = Screen.Notifications },
                                     onBack = { screen = Screen.Calendar }
@@ -557,6 +598,13 @@ class MainActivity : ComponentActivity() {
                                 BackHandler { screen = Screen.Summary }
                                 NotificationSettingsScreen(onBack = { screen = Screen.Summary })
                             }
+                            Screen.Ledger -> {
+                                BackHandler { screen = Screen.Summary }
+                                LedgerScreen(
+                                    viewModel = ledgerViewModel,
+                                    onBack = { screen = Screen.Summary }
+                                )
+                            }
                             is Screen.PaymentIntake -> {
                                 BackHandler { screen = paymentReturnScreen }
                                 PaymentIntakeScreen(
@@ -619,6 +667,40 @@ class MainActivity : ComponentActivity() {
                             isSuppressed = overlaySuppressed.value,
                             defaultIdleYDp = 72.dp
                         )
+
+                        pendingCreditPrompt?.let { prompt ->
+                            AlertDialog(
+                                onDismissRequest = {
+                                    pendingCreditPrompt = null
+                                    viewModel.clearCreditPrompt()
+                                },
+                                title = { Text("Apply available credit?") },
+                                text = {
+                                    Text(
+                                        "Customer has ${formatKes(prompt.availableCredit)} in credit. Apply it to Order #${prompt.orderId}?"
+                                    )
+                                },
+                                confirmButton = {
+                                    TextButton(onClick = {
+                                        pendingCreditPrompt = null
+                                        viewModel.applyAvailableCreditToOrder(
+                                            orderId = prompt.orderId,
+                                            customerId = prompt.customerId
+                                        )
+                                    }) {
+                                        Text("Apply credit")
+                                    }
+                                },
+                                dismissButton = {
+                                    TextButton(onClick = {
+                                        pendingCreditPrompt = null
+                                        viewModel.clearCreditPrompt()
+                                    }) {
+                                        Text("Skip")
+                                    }
+                                }
+                            )
+                        }
                     }
                 }
             }
@@ -638,6 +720,7 @@ private sealed class Screen {
     data object Backup : Screen()
     data object Unpaid : Screen()
     data object Notifications : Screen()
+    data object Ledger : Screen()
     data object CustomerList : Screen()
     data object ImportContacts : Screen()
     data class CustomerDetail(val customerId: Long) : Screen()

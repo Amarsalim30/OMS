@@ -29,6 +29,9 @@ interface AccountingDao {
     @Query("SELECT * FROM account_entries")
     suspend fun getAllAccountEntries(): List<AccountEntryEntity>
 
+    @Query("SELECT * FROM account_entries ORDER BY date DESC, id DESC LIMIT :limit")
+    suspend fun getRecentLedgerEntries(limit: Int): List<AccountEntryEntity>
+
     @Query("SELECT * FROM account_entries WHERE id IN (:ids)")
     suspend fun getEntriesByIds(ids: List<Long>): List<AccountEntryEntity>
 

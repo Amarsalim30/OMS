@@ -7,6 +7,8 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
@@ -27,6 +29,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
@@ -53,6 +56,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -71,7 +75,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Search
@@ -83,19 +87,22 @@ import com.zeynbakers.order_management_system.core.ui.LocalVoiceInputRouter
 import com.zeynbakers.order_management_system.core.ui.VoiceTarget
 import com.zeynbakers.order_management_system.core.ui.VoiceCalculatorOverlay
 import com.zeynbakers.order_management_system.core.util.formatKes
+import com.zeynbakers.order_management_system.core.util.formatDateTime
 import com.zeynbakers.order_management_system.core.util.normalizePickupTime
 import com.zeynbakers.order_management_system.customer.data.CustomerEntity
+import com.zeynbakers.order_management_system.accounting.domain.ReceiptAllocation
 import com.zeynbakers.order_management_system.order.data.OrderEntity
 import java.math.BigDecimal
 import java.math.RoundingMode
 import java.text.NumberFormat
 import java.util.Locale
 import kotlinx.datetime.LocalDate
+import kotlinx.coroutines.launch
 import androidx.compose.material3.FilterChip
 
 private const val TAG_SHEET_BACK = "SheetBack"
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun DayDetailScreen(
     date: LocalDate,
@@ -106,6 +113,17 @@ fun DayDetailScreen(
     onBack: () -> Unit,
     onSaveOrder: (String, BigDecimal, String, String, String?, Long?) -> Unit,
     onDeleteOrder: (Long) -> Unit,
+    loadOrderPaymentAllocations: suspend (Long) -> List<OrderPaymentAllocationUi>,
+    loadMoveOrderOptions: suspend (Long?, Long) -> List<OrderMoveOption>,
+    onDeleteOrderWithPayments: suspend (
+        Long,
+        LocalDate,
+        List<Long>,
+        OrderPaymentAction,
+        ReceiptAllocation?,
+        Boolean
+    ) -> Boolean,
+    onOrderPaymentHistory: (Long) -> Unit,
     onReceivePayment: (OrderEntity) -> Unit,
     loadCustomerById: suspend (Long) -> CustomerEntity?,
     searchCustomers: suspend (String) -> List<CustomerEntity>,
@@ -124,12 +142,20 @@ fun DayDetailScreen(
     var customerError by remember { mutableStateOf<String?>(null) }
     var suggestions by remember { mutableStateOf<List<CustomerEntity>>(emptyList()) }
     var pendingDeleteOrder by remember { mutableStateOf<OrderEntity?>(null) }
+    var deleteAllocations by remember { mutableStateOf<List<OrderPaymentAllocationUi>>(emptyList()) }
+    var deleteSelection by remember { mutableStateOf<Set<Long>>(emptySet()) }
+    var deleteAction by remember { mutableStateOf(OrderPaymentAction.MOVE) }
+    var deleteMoveTarget by remember { mutableStateOf(DeleteMoveTarget.OLDEST_ORDERS) }
+    var deleteMoveOrderOptions by remember { mutableStateOf<List<OrderMoveOption>>(emptyList()) }
+    var deleteSelectedOrderId by remember { mutableStateOf<Long?>(null) }
+    var deleteMoveFullReceipts by remember { mutableStateOf(true) }
     val focusManager = LocalFocusManager.current
     val keyboardController = LocalSoftwareKeyboardController.current
     val amountRegistry = LocalAmountFieldRegistry.current
     val voiceCalcAccess = LocalVoiceCalcAccess.current
     val overlaySuppressed = LocalVoiceOverlaySuppressed.current
     val voiceRouter = LocalVoiceInputRouter.current
+    val scope = rememberCoroutineScope()
     val notesRequester = remember { FocusRequester() }
     val totalRequester = remember { FocusRequester() }
     val pickupRequester = remember { FocusRequester() }
@@ -219,6 +245,22 @@ fun DayDetailScreen(
         suggestions = if (query.isBlank()) emptyList() else searchCustomers(query)
     }
 
+    LaunchedEffect(pendingDeleteOrder?.id) {
+        val order = pendingDeleteOrder ?: return@LaunchedEffect
+        deleteAllocations = loadOrderPaymentAllocations(order.id)
+        deleteSelection = deleteAllocations.map { it.allocationId }.toSet()
+        deleteAction = OrderPaymentAction.MOVE
+        deleteMoveTarget =
+            if (order.customerId != null) {
+                DeleteMoveTarget.OLDEST_ORDERS
+            } else {
+                DeleteMoveTarget.ORDER
+            }
+        deleteMoveOrderOptions = loadMoveOrderOptions(order.customerId, order.id)
+        deleteSelectedOrderId = deleteMoveOrderOptions.firstOrNull()?.orderId
+        deleteMoveFullReceipts = true
+    }
+
     BackHandler(enabled = !isEditorOpen, onBack = onBack)
 
     val dayStats = remember(orders, orderPaidAmounts, dayTotal) {
@@ -304,7 +346,7 @@ fun DayDetailScreen(
                 },
                 navigationIcon = {
                     IconButton(onClick = onBackClick) {
-                        Icon(imageVector = Icons.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors()
@@ -451,6 +493,7 @@ fun DayDetailScreen(
                         onDelete = {
                             pendingDeleteOrder = order
                         },
+                        onPaymentHistory = { onOrderPaymentHistory(order.id) },
                         onReceivePayment = { onReceivePayment(order) }
                     )
                 }
@@ -822,18 +865,212 @@ fun DayDetailScreen(
 
     if (pendingDeleteOrder != null) {
         val order = pendingDeleteOrder!!
+        val hasAllocations = deleteAllocations.isNotEmpty()
+        val selectedAllocations =
+            deleteAllocations.filter { allocation -> deleteSelection.contains(allocation.allocationId) }
+        val targetAllocation =
+            if (deleteAction == OrderPaymentAction.MOVE) {
+                when (deleteMoveTarget) {
+                    DeleteMoveTarget.ORDER ->
+                        deleteSelectedOrderId?.let { ReceiptAllocation.Order(it) }
+                    DeleteMoveTarget.OLDEST_ORDERS ->
+                        order.customerId?.let { ReceiptAllocation.OldestOrders(it) }
+                    DeleteMoveTarget.CUSTOMER_CREDIT ->
+                        order.customerId?.let { ReceiptAllocation.CustomerCredit(it) }
+                }
+            } else {
+                null
+            }
+        val canConfirm =
+            if (!hasAllocations) {
+                true
+            } else {
+                when (deleteAction) {
+                    OrderPaymentAction.MOVE ->
+                        selectedAllocations.isNotEmpty() && targetAllocation != null
+                    OrderPaymentAction.VOID -> selectedAllocations.isNotEmpty()
+                }
+            }
+
         AlertDialog(
             onDismissRequest = { pendingDeleteOrder = null },
             title = { Text("Delete order?") },
-            text = { Text("This will remove the order from the calendar and totals.") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Order #${order.id} will be cancelled and removed from totals.")
+
+                    if (!hasAllocations) {
+                        Text(
+                            text = "No payments are linked to this order.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    } else {
+                        Text(
+                            text = "Select payments to move or delete.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            TextButton(
+                                onClick = {
+                                    deleteSelection = deleteAllocations.map { it.allocationId }.toSet()
+                                }
+                            ) { Text("Select all") }
+                            TextButton(onClick = { deleteSelection = emptySet() }) { Text("Clear") }
+                        }
+
+                        Column(
+                            modifier = Modifier
+                                .heightIn(max = 220.dp)
+                                .verticalScroll(rememberScrollState()),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            deleteAllocations.forEach { allocation ->
+                                val selected = deleteSelection.contains(allocation.allocationId)
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Checkbox(
+                                        checked = selected,
+                                        onCheckedChange = { checked ->
+                                            deleteSelection =
+                                                if (checked) {
+                                                    deleteSelection + allocation.allocationId
+                                                } else {
+                                                    deleteSelection - allocation.allocationId
+                                                }
+                                        }
+                                    )
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        val codeLabel =
+                                            allocation.transactionCode?.let { "${allocation.method.name} $it" }
+                                                ?: allocation.method.name
+                                        Text(
+                                            text = "${formatKes(allocation.amount)} - $codeLabel",
+                                            style = MaterialTheme.typography.bodyMedium
+                                        )
+                                        Text(
+                                            text = formatDateTime(allocation.receivedAt),
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                        val sender =
+                                            allocation.senderName?.takeIf { it.isNotBlank() }
+                                                ?: allocation.senderPhone?.takeIf { it.isNotBlank() }
+                                        if (sender != null) {
+                                            Text(
+                                                text = "From $sender",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        Spacer(Modifier.height(6.dp))
+                        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            FilterChip(
+                                selected = deleteAction == OrderPaymentAction.MOVE,
+                                onClick = { deleteAction = OrderPaymentAction.MOVE },
+                                label = { Text("Move payments") }
+                            )
+                            FilterChip(
+                                selected = deleteAction == OrderPaymentAction.VOID,
+                                onClick = { deleteAction = OrderPaymentAction.VOID },
+                                label = { Text("Delete payments") }
+                            )
+                        }
+
+                        if (deleteAction == OrderPaymentAction.MOVE) {
+                            if (order.customerId == null) {
+                                Text(
+                                    text = "No customer on this order. Choose a target order.",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                FilterChip(
+                                    selected = deleteMoveTarget == DeleteMoveTarget.ORDER,
+                                    onClick = { deleteMoveTarget = DeleteMoveTarget.ORDER },
+                                    label = { Text("Order") }
+                                )
+                                if (order.customerId != null) {
+                                    FilterChip(
+                                        selected = deleteMoveTarget == DeleteMoveTarget.OLDEST_ORDERS,
+                                        onClick = { deleteMoveTarget = DeleteMoveTarget.OLDEST_ORDERS },
+                                        label = { Text("Oldest orders") }
+                                    )
+                                    FilterChip(
+                                        selected = deleteMoveTarget == DeleteMoveTarget.CUSTOMER_CREDIT,
+                                        onClick = { deleteMoveTarget = DeleteMoveTarget.CUSTOMER_CREDIT },
+                                        label = { Text("Customer credit") }
+                                    )
+                                }
+                            }
+
+                            if (deleteMoveTarget == DeleteMoveTarget.ORDER) {
+                                if (deleteMoveOrderOptions.isEmpty()) {
+                                    Text(
+                                        text = "No other orders available.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                } else {
+                                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        deleteMoveOrderOptions.forEach { option ->
+                                            FilterChip(
+                                                selected = deleteSelectedOrderId == option.orderId,
+                                                onClick = { deleteSelectedOrderId = option.orderId },
+                                                label = { Text(option.label) }
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Checkbox(
+                                    checked = deleteMoveFullReceipts,
+                                    onCheckedChange = { deleteMoveFullReceipts = it }
+                                )
+                                Text(
+                                    text = "Move full receipts (affects other orders)",
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            }
+                        }
+                    }
+                }
+            },
             confirmButton = {
                 Button(
                     onClick = {
-                        onDeleteOrder(order.id)
-                        pendingDeleteOrder = null
-                    }
+                        val allocationIds = selectedAllocations.map { it.allocationId }
+                        scope.launch {
+                            if (!hasAllocations) {
+                                onDeleteOrder(order.id)
+                            } else {
+                                onDeleteOrderWithPayments(
+                                    order.id,
+                                    date,
+                                    allocationIds,
+                                    deleteAction,
+                                    targetAllocation,
+                                    deleteMoveFullReceipts
+                                )
+                            }
+                            pendingDeleteOrder = null
+                        }
+                    },
+                    enabled = canConfirm
                 ) {
-                    Text("Delete")
+                    Text("Delete order")
                 }
             },
             dismissButton = {
@@ -1035,6 +1272,7 @@ private fun OrderListItem(
     paymentState: PaymentState,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
+    onPaymentHistory: () -> Unit,
     onReceivePayment: () -> Unit
 ) {
     val stateColor = paymentStateColor(paymentState)
@@ -1123,9 +1361,14 @@ private fun OrderListItem(
                             )
                         }
                     }
-                    if (showReceive) {
-                        TextButton(onClick = onReceivePayment) {
-                            Text("Receive")
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        TextButton(onClick = onPaymentHistory) {
+                            Text("History")
+                        }
+                        if (showReceive) {
+                            TextButton(onClick = onReceivePayment) {
+                                Text("Record payment")
+                            }
                         }
                     }
                 }
@@ -1245,4 +1488,10 @@ private enum class DayOrderFilter(val label: String) {
     Partial("Partial"),
     Paid("Paid"),
     Overpaid("Overpaid")
+}
+
+private enum class DeleteMoveTarget {
+    ORDER,
+    OLDEST_ORDERS,
+    CUSTOMER_CREDIT
 }

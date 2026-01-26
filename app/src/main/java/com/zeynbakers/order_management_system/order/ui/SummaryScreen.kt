@@ -1,3 +1,5 @@
+@file:Suppress("DEPRECATION")
+
 package com.zeynbakers.order_management_system.order.ui
 
 import android.widget.Toast
@@ -15,13 +17,14 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.ContentCopy
-import androidx.compose.material.icons.filled.KeyboardArrowLeft
-import androidx.compose.material.icons.filled.KeyboardArrowRight
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.automirrored.filled.ReceiptLong
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.Card
 import androidx.compose.material3.DatePicker
@@ -97,6 +100,7 @@ fun SummaryScreen(
     onAnchorDateChange: (LocalDate) -> Unit,
     onLoadRange: (LocalDate, LocalDate) -> Unit,
     onBackupClick: () -> Unit,
+    onLedgerClick: () -> Unit,
     onNotificationsClick: () -> Unit,
     onBack: () -> Unit
 ) {
@@ -188,7 +192,7 @@ fun SummaryScreen(
                 },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(imageVector = Icons.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
                 },
                 actions = {
@@ -202,6 +206,9 @@ fun SummaryScreen(
                         enabled = aggregatedItems.isNotEmpty() || unparsedLines.isNotEmpty()
                     ) {
                         Icon(imageVector = Icons.Filled.ContentCopy, contentDescription = "Copy chef list")
+                    }
+                    IconButton(onClick = onLedgerClick) {
+                        Icon(imageVector = Icons.AutoMirrored.Filled.ReceiptLong, contentDescription = "Ledger")
                     }
                     IconButton(onClick = onNotificationsClick) {
                         Icon(imageVector = Icons.Filled.Notifications, contentDescription = "Notifications")
@@ -458,7 +465,7 @@ private fun ChefPrepCard(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     IconButton(onClick = onPrev) {
-                        Icon(imageVector = Icons.Filled.KeyboardArrowLeft, contentDescription = "Previous")
+                        Icon(imageVector = Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = "Previous")
                     }
                     Text(
                         text = rangeLabel,
@@ -468,7 +475,7 @@ private fun ChefPrepCard(
                         overflow = TextOverflow.Ellipsis
                     )
                     IconButton(onClick = onNext) {
-                        Icon(imageVector = Icons.Filled.KeyboardArrowRight, contentDescription = "Next")
+                        Icon(imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = "Next")
                     }
                 }
             }

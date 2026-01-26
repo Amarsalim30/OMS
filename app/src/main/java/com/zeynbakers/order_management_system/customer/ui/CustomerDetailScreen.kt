@@ -324,7 +324,7 @@ private fun BalanceCard(
                 if (availableCredit > BigDecimal.ZERO) {
                     Spacer(Modifier.height(4.dp))
                     Text(
-                        text = "Extra credit auto-applies to new orders.",
+                        text = "You will be asked before applying credit to new orders.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -356,7 +356,7 @@ private fun BalanceCard(
                 onClick = onReceivePayment,
                 enabled = canReceive
             ) {
-                Text("Receive payment")
+                Text("Record payment")
             }
         }
     }

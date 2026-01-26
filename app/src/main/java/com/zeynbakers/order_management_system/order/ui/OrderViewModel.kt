@@ -3,6 +3,10 @@ package com.zeynbakers.order_management_system.order.ui
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.zeynbakers.order_management_system.accounting.data.AccountingDao
+import com.zeynbakers.order_management_system.accounting.data.PaymentAllocationStatus
+import com.zeynbakers.order_management_system.accounting.data.PaymentMethod
+import com.zeynbakers.order_management_system.accounting.domain.PaymentReceiptProcessor
+import com.zeynbakers.order_management_system.accounting.domain.ReceiptAllocation
 import com.zeynbakers.order_management_system.core.db.AppDatabase
 import com.zeynbakers.order_management_system.customer.data.CustomerEntity
 import com.zeynbakers.order_management_system.order.data.OrderDao
@@ -34,6 +38,9 @@ class OrderViewModel(private val database: AppDatabase) : ViewModel() {
     private val orderDao: OrderDao = database.orderDao()
     private val accountingDao: AccountingDao = database.accountingDao()
     private val customerDao = database.customerDao()
+    private val allocationDao = database.paymentAllocationDao()
+    private val receiptDao = database.paymentReceiptDao()
+    private val receiptProcessor = PaymentReceiptProcessor(database)
 
     private val _calendarDays = MutableStateFlow<List<CalendarDayUi>>(emptyList())
     val calendarDays = _calendarDays.asStateFlow()
@@ -77,6 +84,9 @@ class OrderViewModel(private val database: AppDatabase) : ViewModel() {
     private val _unpaidCustomerNames = MutableStateFlow<Map<Long, String>>(emptyMap())
     val unpaidCustomerNames = _unpaidCustomerNames.asStateFlow()
 
+    private val _creditPrompt = MutableStateFlow<OrderCreditPrompt?>(null)
+    val creditPrompt = _creditPrompt.asStateFlow()
+
     private var lastMonth: Int? = null
     private var lastYear: Int? = null
 
@@ -99,6 +109,7 @@ class OrderViewModel(private val database: AppDatabase) : ViewModel() {
                 } else {
                     null
                 }
+            val isNewOrder = existingOrder == null
             val resolvedCustomerId = resolveCustomerId(customerName.trim(), customerPhone.trim())
             val customerId =
                 if (existingOrder != null && resolvedCustomerId == null) {
@@ -147,18 +158,42 @@ class OrderViewModel(private val database: AppDatabase) : ViewModel() {
                 orderTotal = savedOrder.totalAmount,
                 now = now
             )
-            if (customerId != null) {
-                accountingDao.applyAvailableCustomerCreditToOrder(
-                    orderId = orderId,
-                    customerId = customerId,
-                    orderTotal = savedOrder.totalAmount,
-                    now = now
-                )
+            if (isNewOrder && customerId != null) {
+                val financeTotals = accountingDao.getCustomerFinanceTotals(customerId)
+                val availableCredit = financeTotals.extraCredit ?: BigDecimal.ZERO
+                if (availableCredit > BigDecimal.ZERO) {
+                    _creditPrompt.value =
+                        OrderCreditPrompt(
+                            orderId = orderId,
+                            customerId = customerId,
+                            availableCredit = availableCredit
+                        )
+                }
             }
 
             loadOrdersForDate(date)
             refreshMonthTotals()
         }
+    }
+
+    fun applyAvailableCreditToOrder(orderId: Long, customerId: Long) {
+        viewModelScope.launch {
+            val order = orderDao.getOrderById(orderId) ?: return@launch
+            val now = Clock.System.now().toEpochMilliseconds()
+            accountingDao.applyAvailableCustomerCreditToOrder(
+                orderId = orderId,
+                customerId = customerId,
+                orderTotal = order.totalAmount,
+                now = now
+            )
+            loadOrdersForDate(order.orderDate)
+            refreshMonthTotals()
+            _creditPrompt.value = null
+        }
+    }
+
+    fun clearCreditPrompt() {
+        _creditPrompt.value = null
     }
 
     private suspend fun upsertAccountingEntry(order: OrderEntity) {
@@ -229,6 +264,89 @@ class OrderViewModel(private val database: AppDatabase) : ViewModel() {
             loadOrdersForDate(date)
             refreshMonthTotals()
         }
+    }
+
+    suspend fun loadOrderPaymentAllocations(orderId: Long): List<OrderPaymentAllocationUi> {
+        val allocations =
+            allocationDao.getByOrderId(orderId)
+                .filter { it.status == PaymentAllocationStatus.APPLIED }
+        if (allocations.isEmpty()) return emptyList()
+        val receiptIds = allocations.map { it.receiptId }.distinct()
+        val receiptsById = receiptDao.getByIds(receiptIds).associateBy { it.id }
+        return allocations.mapNotNull { allocation ->
+            val receipt = receiptsById[allocation.receiptId] ?: return@mapNotNull null
+            OrderPaymentAllocationUi(
+                allocationId = allocation.id,
+                receiptId = allocation.receiptId,
+                amount = allocation.amount,
+                receivedAt = receipt.receivedAt,
+                method = receipt.method,
+                transactionCode = receipt.transactionCode,
+                senderName = receipt.senderName,
+                senderPhone = receipt.senderPhone
+            )
+        }
+    }
+
+    suspend fun loadMoveOrderOptions(
+        customerId: Long?,
+        excludeOrderId: Long
+    ): List<OrderMoveOption> {
+        val orders =
+            if (customerId == null) {
+                orderDao.getActiveOrders()
+            } else {
+                orderDao.getOrdersByCustomer(customerId)
+            }
+        return orders
+            .filter { it.id != excludeOrderId }
+            .filter { it.status != OrderStatus.CANCELLED && it.statusOverride != OrderStatusOverride.CLOSED }
+            .sortedWith(
+                compareBy<OrderEntity> { it.orderDate }
+                    .thenBy { it.createdAt }
+                    .thenBy { it.id }
+            )
+            .map { order ->
+                OrderMoveOption(order.id, "Order #${order.id} (${order.orderDate})")
+            }
+    }
+
+    suspend fun deleteOrderWithPayments(
+        orderId: Long,
+        date: LocalDate,
+        allocationIds: List<Long>,
+        action: OrderPaymentAction,
+        target: ReceiptAllocation?,
+        moveFullReceipts: Boolean
+    ): Boolean {
+        val description = "Order #$orderId deleted"
+        when (action) {
+            OrderPaymentAction.MOVE -> {
+                if (allocationIds.isNotEmpty() && target != null) {
+                    receiptProcessor.moveAllocations(
+                        allocationIds = allocationIds,
+                        target = target,
+                        descriptionBase = description,
+                        moveFullReceipts = moveFullReceipts
+                    )
+                }
+            }
+            OrderPaymentAction.VOID -> {
+                if (allocationIds.isNotEmpty()) {
+                    receiptProcessor.voidAllocations(
+                        allocationIds = allocationIds,
+                        reason = "Order deleted"
+                    )
+                }
+            }
+        }
+        orderDao.markCancelled(orderId)
+        accountingDao.deleteDebitEntriesForOrder(orderId)
+        accountingDao.deleteWriteOffEntriesForOrder(orderId)
+        accountingDao.moveOrderCreditsToCustomerLevel(orderId)
+        loadOrdersForDate(date)
+        refreshMonthTotals()
+        return true
     }
 
     fun loadMonth(month: Int, year: Int) {
@@ -435,3 +553,30 @@ class OrderViewModel(private val database: AppDatabase) : ViewModel() {
         }
     }
 }
+
+data class OrderPaymentAllocationUi(
+    val allocationId: Long,
+    val receiptId: Long,
+    val amount: BigDecimal,
+    val receivedAt: Long,
+    val method: PaymentMethod,
+    val transactionCode: String?,
+    val senderName: String?,
+    val senderPhone: String?
+)
+
+data class OrderMoveOption(
+    val orderId: Long,
+    val label: String
+)
+
+enum class OrderPaymentAction {
+    MOVE,
+    VOID
+}
+
+data class OrderCreditPrompt(
+    val orderId: Long,
+    val customerId: Long,
+    val availableCredit: BigDecimal
+)
