@@ -110,10 +110,16 @@ fun CustomerDetailScreen(
     val expandedLedgerMonths = remember { mutableStateMapOf<String, Boolean>() }
 
     val eligibleOrders = remember(orders) {
-        orders.filter { order ->
-            order.effectiveStatus == OrderEffectiveStatus.OPEN &&
-                order.paidAmount < order.order.totalAmount
-        }
+        orders
+            .filter { order ->
+                order.effectiveStatus == OrderEffectiveStatus.OPEN &&
+                    order.paidAmount < order.order.totalAmount
+            }
+            .sortedWith(
+                compareBy<CustomerOrderUi> { it.order.orderDate }
+                    .thenBy { it.order.createdAt }
+                    .thenBy { it.order.id }
+            )
     }
 
     val filteredOrders by remember(orders, orderFilter) {
