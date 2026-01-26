@@ -165,6 +165,7 @@ class MainActivity : ComponentActivity() {
                 val customerBalance by customerViewModel.balance.collectAsState()
                 val customerFinanceSummary by customerViewModel.financeSummary.collectAsState()
                 val customerOrders by customerViewModel.orders.collectAsState()
+                val customerOrderLabels by customerViewModel.orderLabels.collectAsState()
 
                 var selectedDate by remember { mutableStateOf<LocalDate?>(null) }
                 var summaryDate by remember { mutableStateOf<LocalDate?>(null) }
@@ -541,6 +542,7 @@ class MainActivity : ComponentActivity() {
                                     balance = customerBalance,
                                     financeSummary = customerFinanceSummary,
                                     orders = customerOrders,
+                                    orderLabels = customerOrderLabels,
                                     onBack = { screen = Screen.CustomerList },
                                     onRecordPayment = { amount, method, note, orderId ->
                                         customerViewModel.recordPayment(
@@ -677,7 +679,7 @@ class MainActivity : ComponentActivity() {
                                 title = { Text("Apply available credit?") },
                                 text = {
                                     Text(
-                                        "Customer has ${formatKes(prompt.availableCredit)} in credit. Apply it to Order #${prompt.orderId}?"
+                                        "Customer has ${formatKes(prompt.availableCredit)} in credit. Apply it to ${prompt.orderLabel}?"
                                     )
                                 },
                                 confirmButton = {

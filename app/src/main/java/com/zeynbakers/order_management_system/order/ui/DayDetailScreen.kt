@@ -88,6 +88,7 @@ import com.zeynbakers.order_management_system.core.ui.VoiceTarget
 import com.zeynbakers.order_management_system.core.ui.VoiceCalculatorOverlay
 import com.zeynbakers.order_management_system.core.util.formatKes
 import com.zeynbakers.order_management_system.core.util.formatDateTime
+import com.zeynbakers.order_management_system.core.util.formatOrderLabelWithId
 import com.zeynbakers.order_management_system.core.util.normalizePickupTime
 import com.zeynbakers.order_management_system.customer.data.CustomerEntity
 import com.zeynbakers.order_management_system.accounting.domain.ReceiptAllocation
@@ -897,7 +898,15 @@ fun DayDetailScreen(
             title = { Text("Delete order?") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Order #${order.id} will be cancelled and removed from totals.")
+                    val label =
+                        formatOrderLabelWithId(
+                            orderId = order.id,
+                            date = order.orderDate,
+                            customerName = order.customerId?.let { customerNames[it] },
+                            notes = order.notes,
+                            totalAmount = order.totalAmount
+                        )
+                    Text("$label will be cancelled and removed from totals.")
 
                     if (!hasAllocations) {
                         Text(
@@ -1281,10 +1290,10 @@ private fun OrderListItem(
     val showReceive = paymentState == PaymentState.UNPAID || paymentState == PaymentState.PARTIAL
     val detailLabel =
         when (paymentState) {
-            PaymentState.UNPAID -> "Balance ${formatKes(order.totalAmount)}"
-            PaymentState.PARTIAL -> "Balance ${formatKes(balance)}"
-            PaymentState.OVERPAID -> "Over ${formatKes(paidAmount.subtract(order.totalAmount))}"
-            PaymentState.PAID -> null
+            PaymentState.UNPAID -> "Balance due ${formatKes(order.totalAmount)}"
+            PaymentState.PARTIAL -> "Balance due ${formatKes(balance)}"
+            PaymentState.OVERPAID -> "Overpaid by ${formatKes(paidAmount.subtract(order.totalAmount))}"
+            PaymentState.PAID -> "Paid in full"
         }
     val customerTextColor =
         if (customerLabel == "No customer") {
@@ -1347,28 +1356,31 @@ private fun OrderListItem(
                 Spacer(Modifier.height(6.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        StatusPill(label = statusLabel, color = stateColor)
-                        if (detailLabel != null) {
-                            Spacer(Modifier.width(8.dp))
-                            Text(
-                                text = detailLabel,
-                                style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
+                    StatusPill(label = statusLabel, color = stateColor)
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text = detailLabel,
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+                Spacer(Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    TextButton(onClick = onPaymentHistory) {
+                        Text("History")
                     }
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        TextButton(onClick = onPaymentHistory) {
-                            Text("History")
-                        }
-                        if (showReceive) {
-                            TextButton(onClick = onReceivePayment) {
-                                Text("Record payment")
-                            }
+                    if (showReceive) {
+                        Spacer(Modifier.width(8.dp))
+                        Button(onClick = onReceivePayment) {
+                            Text("Record payment")
                         }
                     }
                 }

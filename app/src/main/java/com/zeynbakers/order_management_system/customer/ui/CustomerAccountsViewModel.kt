@@ -10,6 +10,7 @@ import com.zeynbakers.order_management_system.accounting.data.PaymentMethod
 import com.zeynbakers.order_management_system.accounting.domain.PaymentReceiptProcessor
 import com.zeynbakers.order_management_system.accounting.domain.ReceiptAllocation
 import com.zeynbakers.order_management_system.core.db.AppDatabase
+import com.zeynbakers.order_management_system.core.util.formatOrderLabelWithId
 import com.zeynbakers.order_management_system.customer.data.CustomerEntity
 import com.zeynbakers.order_management_system.order.data.OrderEntity
 import com.zeynbakers.order_management_system.order.data.OrderStatus
@@ -45,6 +46,9 @@ class CustomerAccountsViewModel(private val database: AppDatabase) : ViewModel()
 
     private val _ledger = MutableStateFlow<List<AccountEntryEntity>>(emptyList())
     val ledger = _ledger.asStateFlow()
+
+    private val _orderLabels = MutableStateFlow<Map<Long, String>>(emptyMap())
+    val orderLabels = _orderLabels.asStateFlow()
 
     private val _balance = MutableStateFlow(BigDecimal.ZERO)
     val balance = _balance.asStateFlow()
@@ -101,7 +105,20 @@ class CustomerAccountsViewModel(private val database: AppDatabase) : ViewModel()
                     availableCredit = availableCredit,
                     netBalance = netBalance
                 )
-            val orders = orderDao.getOrdersByCustomer(customerId).filter { it.status != OrderStatus.CANCELLED }
+            val allOrders = orderDao.getOrdersByCustomer(customerId)
+            val customerName = _customer.value?.name
+            _orderLabels.value =
+                allOrders.associate { order ->
+                    order.id to
+                        formatOrderLabelWithId(
+                            orderId = order.id,
+                            date = order.orderDate,
+                            customerName = customerName,
+                            notes = order.notes,
+                            totalAmount = order.totalAmount
+                        )
+                }
+            val orders = allOrders.filter { it.status != OrderStatus.CANCELLED }
             val orderIds = orders.map { it.id }.filter { it != 0L }
             val paidByOrder =
                 if (orderIds.isEmpty()) {
@@ -182,6 +199,15 @@ class CustomerAccountsViewModel(private val database: AppDatabase) : ViewModel()
             val remaining = order.totalAmount - paidSoFar
             if (remaining <= BigDecimal.ZERO) return@launch
 
+            val customerName = _customer.value?.name
+            val orderLabel =
+                formatOrderLabelWithId(
+                    orderId = orderId,
+                    date = order.orderDate,
+                    customerName = customerName,
+                    notes = order.notes,
+                    totalAmount = order.totalAmount
+                )
             accountingDao.insertAccountEntry(
                 AccountEntryEntity(
                     orderId = orderId,
@@ -189,7 +215,7 @@ class CustomerAccountsViewModel(private val database: AppDatabase) : ViewModel()
                     type = EntryType.WRITE_OFF,
                     amount = remaining,
                     date = Clock.System.now().toEpochMilliseconds(),
-                    description = "Bad debt write-off: Order #$orderId"
+                    description = "Bad debt write-off: $orderLabel"
                 )
             )
             orderDao.updateStatusOverride(orderId, null, Clock.System.now().toEpochMilliseconds())

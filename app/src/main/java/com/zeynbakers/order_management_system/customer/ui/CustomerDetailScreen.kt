@@ -89,6 +89,7 @@ fun CustomerDetailScreen(
     balance: BigDecimal,
     financeSummary: CustomerFinanceSummary?,
     orders: List<CustomerOrderUi>,
+    orderLabels: Map<Long, String>,
     onBack: () -> Unit,
     onRecordPayment: (BigDecimal, PaymentMethod, String, Long?) -> Unit,
     onPaymentHistory: (Long) -> Unit,
@@ -258,7 +259,8 @@ fun CustomerDetailScreen(
                         onToggle = {
                             val current = expandedLedgerMonths[section.key] ?: false
                             expandedLedgerMonths[section.key] = !current
-                        }
+                        },
+                        orderLabels = orderLabels
                     )
                 }
 
@@ -754,7 +756,8 @@ private fun LedgerHeader(
 private fun LedgerSectionCard(
     section: LedgerSection,
     expanded: Boolean,
-    onToggle: () -> Unit
+    onToggle: () -> Unit,
+    orderLabels: Map<Long, String>
 ) {
     Surface(
         tonalElevation = 1.dp,
@@ -775,7 +778,7 @@ private fun LedgerSectionCard(
             if (expanded) {
                 Spacer(Modifier.height(4.dp))
                 section.entries.forEach { entry ->
-                    LedgerRow(entry)
+                    LedgerRow(entry, orderLabels)
                 }
             }
         }
@@ -783,7 +786,7 @@ private fun LedgerSectionCard(
 }
 
 @Composable
-private fun LedgerRow(entry: AccountEntryEntity) {
+private fun LedgerRow(entry: AccountEntryEntity, orderLabels: Map<Long, String>) {
     val amountColor =
         when (entry.type) {
             EntryType.DEBIT -> MaterialTheme.colorScheme.error
@@ -800,7 +803,8 @@ private fun LedgerRow(entry: AccountEntryEntity) {
             EntryType.REVERSAL ->
                 if (entry.orderId == null) "Credit reversal" else "Reversal"
         }
-    val orderLabel = entry.orderId?.let { "Order #$it" }
+    val orderLabel =
+        entry.orderId?.let { id -> orderLabels[id] ?: "Order ID $id" }
     Column(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
         Text(text = formatDateTime(entry.date), style = MaterialTheme.typography.labelMedium)
         if (orderLabel != null) {

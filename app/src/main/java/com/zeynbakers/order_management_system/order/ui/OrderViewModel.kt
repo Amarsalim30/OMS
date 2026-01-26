@@ -8,6 +8,7 @@ import com.zeynbakers.order_management_system.accounting.data.PaymentMethod
 import com.zeynbakers.order_management_system.accounting.domain.PaymentReceiptProcessor
 import com.zeynbakers.order_management_system.accounting.domain.ReceiptAllocation
 import com.zeynbakers.order_management_system.core.db.AppDatabase
+import com.zeynbakers.order_management_system.core.util.formatOrderLabelWithId
 import com.zeynbakers.order_management_system.customer.data.CustomerEntity
 import com.zeynbakers.order_management_system.order.data.OrderDao
 import com.zeynbakers.order_management_system.order.data.OrderEntity
@@ -162,11 +163,21 @@ class OrderViewModel(private val database: AppDatabase) : ViewModel() {
                 val financeTotals = accountingDao.getCustomerFinanceTotals(customerId)
                 val availableCredit = financeTotals.extraCredit ?: BigDecimal.ZERO
                 if (availableCredit > BigDecimal.ZERO) {
+                    val customerName = customerId?.let { customerDao.getById(it)?.name }
+                    val orderLabel =
+                        formatOrderLabelWithId(
+                            orderId = orderId,
+                            date = savedOrder.orderDate,
+                            customerName = customerName,
+                            notes = savedOrder.notes,
+                            totalAmount = savedOrder.totalAmount
+                        )
                     _creditPrompt.value =
                         OrderCreditPrompt(
                             orderId = orderId,
                             customerId = customerId,
-                            availableCredit = availableCredit
+                            availableCredit = availableCredit,
+                            orderLabel = orderLabel
                         )
                 }
             }
@@ -197,12 +208,21 @@ class OrderViewModel(private val database: AppDatabase) : ViewModel() {
     }
 
     private suspend fun upsertAccountingEntry(order: OrderEntity) {
+        val customerName = order.customerId?.let { customerDao.getById(it)?.name }
+        val orderLabel =
+            formatOrderLabelWithId(
+                orderId = order.id,
+                date = order.orderDate,
+                customerName = customerName,
+                notes = order.notes,
+                totalAmount = order.totalAmount
+            )
         accountingDao.upsertDebitForOrder(
             orderId = order.id,
             customerId = order.customerId,
             amount = order.totalAmount,
             date = order.orderDate.atStartOfDayIn(TimeZone.currentSystemDefault()).toEpochMilliseconds(),
-            description = "Charge: Order #${order.id}"
+            description = "Charge: $orderLabel"
         )
     }
 
@@ -298,6 +318,10 @@ class OrderViewModel(private val database: AppDatabase) : ViewModel() {
             } else {
                 orderDao.getOrdersByCustomer(customerId)
             }
+        val customerIds = orders.mapNotNull { it.customerId }.distinct()
+        val customerNames =
+            if (customerIds.isEmpty()) emptyMap()
+            else customerDao.getByIds(customerIds).associate { it.id to it.name }
         return orders
             .filter { it.id != excludeOrderId }
             .filter { it.status != OrderStatus.CANCELLED && it.statusOverride != OrderStatusOverride.CLOSED }
@@ -307,7 +331,15 @@ class OrderViewModel(private val database: AppDatabase) : ViewModel() {
                     .thenBy { it.id }
             )
             .map { order ->
-                OrderMoveOption(order.id, "Order #${order.id} (${order.orderDate})")
+                val label =
+                    formatOrderLabelWithId(
+                        orderId = order.id,
+                        date = order.orderDate,
+                        customerName = order.customerId?.let { customerNames[it] },
+                        notes = order.notes,
+                        totalAmount = order.totalAmount
+                    )
+                OrderMoveOption(order.id, label)
             }
     }
 
@@ -319,7 +351,19 @@ class OrderViewModel(private val database: AppDatabase) : ViewModel() {
         target: ReceiptAllocation?,
         moveFullReceipts: Boolean
     ): Boolean {
-        val description = "Order #$orderId deleted"
+        val order = orderDao.getOrderById(orderId)
+        val orderLabel =
+            order?.let {
+                val customerName = it.customerId?.let { id -> customerDao.getById(id)?.name }
+                formatOrderLabelWithId(
+                    orderId = it.id,
+                    date = it.orderDate,
+                    customerName = customerName,
+                    notes = it.notes,
+                    totalAmount = it.totalAmount
+                )
+            } ?: "Order ID $orderId"
+        val description = "$orderLabel deleted"
         when (action) {
             OrderPaymentAction.MOVE -> {
                 if (allocationIds.isNotEmpty() && target != null) {
@@ -578,5 +622,6 @@ enum class OrderPaymentAction {
 data class OrderCreditPrompt(
     val orderId: Long,
     val customerId: Long,
-    val availableCredit: BigDecimal
+    val availableCredit: BigDecimal,
+    val orderLabel: String
 )
