@@ -81,6 +81,7 @@ fun CustomerDetailScreen(
     orderLabels: Map<Long, String>,
     onBack: () -> Unit,
     onPaymentHistory: (Long) -> Unit,
+    onOpenStatement: (Long) -> Unit,
     onReceivePayment: () -> Unit,
     onOrderPaymentHistory: (Long) -> Unit,
     onUpdateOrderStatusOverride: (Long, OrderStatusOverride?) -> Unit,
@@ -126,6 +127,15 @@ fun CustomerDetailScreen(
                 },
                 actions = {
                     IconButton(
+                        onClick = { customer?.id?.let { onOpenStatement(it) } },
+                        enabled = customer != null
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.AccountBalanceWallet,
+                            contentDescription = "Statement"
+                        )
+                    }
+                    IconButton(
                         onClick = { customer?.id?.let { onPaymentHistory(it) } },
                         enabled = customer != null
                     ) {
@@ -139,7 +149,7 @@ fun CustomerDetailScreen(
             modifier = Modifier
                 .padding(padding)
                 .imePadding(),
-            contentPadding = PaddingValues(12.dp),
+            contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 12.dp, bottom = 0.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             item {

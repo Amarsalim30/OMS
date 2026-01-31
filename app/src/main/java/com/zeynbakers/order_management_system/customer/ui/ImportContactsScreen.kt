@@ -78,7 +78,7 @@ fun ImportContactsScreen(
         Column(
             modifier = Modifier
                 .padding(padding)
-                .padding(12.dp)
+                .padding(start = 12.dp, end = 12.dp, top = 12.dp)
         ) {
             if (isLoading) {
                 Row(

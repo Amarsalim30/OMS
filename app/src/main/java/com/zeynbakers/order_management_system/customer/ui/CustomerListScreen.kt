@@ -159,7 +159,11 @@ private fun CustomersScreenM3(
             )
         }
     ) { padding ->
-        Column(modifier = Modifier.padding(padding).padding(12.dp)) {
+        Column(
+            modifier = Modifier
+                .padding(padding)
+                .padding(start = 12.dp, end = 12.dp, top = 12.dp)
+        ) {
             SearchField(
                 queryText = queryText,
                 onQueryTextChange = { queryText = it }
@@ -211,7 +215,7 @@ private fun CustomersScreenM3(
             } else {
                 LazyColumn(
                     verticalArrangement = Arrangement.spacedBy(6.dp),
-                    contentPadding = PaddingValues(bottom = 12.dp)
+                    contentPadding = PaddingValues(bottom = 0.dp)
                 ) {
                     items(filteredCustomers, key = { it.customerId }) { customer ->
                         CustomerRowItem(

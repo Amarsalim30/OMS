@@ -210,7 +210,7 @@ fun SummaryScreen(
                         Icon(imageVector = Icons.Filled.ContentCopy, contentDescription = "Copy chef list")
                     }
                     IconButton(onClick = onLedgerClick) {
-                        Icon(imageVector = Icons.AutoMirrored.Filled.ReceiptLong, contentDescription = "Ledger")
+                        Icon(imageVector = Icons.AutoMirrored.Filled.ReceiptLong, contentDescription = "Statements")
                     }
                     IconButton(onClick = onNotificationsClick) {
                         Icon(imageVector = Icons.Filled.Notifications, contentDescription = "Notifications")

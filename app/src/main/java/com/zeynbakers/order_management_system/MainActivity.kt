@@ -141,6 +141,7 @@ class MainActivity : ComponentActivity() {
                 var paymentIntakeText by rememberSaveable { mutableStateOf<String?>(null) }
                 var moneyTabName by rememberSaveable { mutableStateOf(MoneyTab.Mpesa.name) }
                 var manualCustomerId by rememberSaveable { mutableStateOf<Long?>(null) }
+                var statementCustomerId by rememberSaveable { mutableStateOf<Long?>(null) }
                 var showMoreSheet by rememberSaveable { mutableStateOf(false) }
                 var selectedTopLevelRoute by rememberSaveable { mutableStateOf(AppRoutes.Calendar) }
 
@@ -376,7 +377,7 @@ class MainActivity : ComponentActivity() {
                                 selectedTopLevelRoute = AppRoutes.Calendar
                                 navController.navigate(AppRoutes.Summary)
                             },
-                            MoreAction("Ledger", Icons.Filled.ReceiptLong) {
+                            MoreAction("Statements", Icons.Filled.ReceiptLong) {
                                 showMoreSheet = false
                                 moneyTabName = MoneyTab.Ledger.name
                                 selectedTopLevelRoute = AppRoutes.Money
@@ -614,6 +615,12 @@ class MainActivity : ComponentActivity() {
                                                 null
                                             )
                                         },
+                                        onOpenStatement = { id ->
+                                            statementCustomerId = id
+                                            moneyTabName = MoneyTab.Ledger.name
+                                            selectedTopLevelRoute = AppRoutes.Money
+                                            navController.navigate(AppRoutes.Money) { launchSingleTop = true }
+                                        },
                                         onReceivePayment = {
                                             manualCustomerId = customerId
                                             moneyTabName = MoneyTab.Manual.name
@@ -697,8 +704,12 @@ class MainActivity : ComponentActivity() {
                                         ledgerViewModel = ledgerViewModel,
                                         initialText = paymentIntakeText,
                                         manualCustomerId = manualCustomerId,
+                                        statementCustomerId = statementCustomerId,
                                         onManualContextConsumed = {
                                             manualCustomerId = null
+                                        },
+                                        onStatementContextConsumed = {
+                                            statementCustomerId = null
                                         },
                                         onManualSaved = { refreshAfterPayments() },
                                         onApplied = {
