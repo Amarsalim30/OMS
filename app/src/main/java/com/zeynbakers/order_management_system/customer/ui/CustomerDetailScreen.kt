@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -20,10 +21,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ReceiptLong
 import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.Payments
 import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.outlined.AccountBalanceWallet
-import androidx.compose.material.icons.filled.Money
 import androidx.compose.material3.Button
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.DropdownMenu
@@ -47,32 +46,22 @@ import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.zeynbakers.order_management_system.accounting.data.AccountEntryEntity
 import com.zeynbakers.order_management_system.accounting.data.EntryType
-import com.zeynbakers.order_management_system.accounting.data.PaymentMethod
 import com.zeynbakers.order_management_system.core.util.formatDateTime
 import com.zeynbakers.order_management_system.core.util.formatKes
-import com.zeynbakers.order_management_system.core.ui.AmountFieldRegistry
-import com.zeynbakers.order_management_system.core.ui.LocalAmountFieldRegistry
-import com.zeynbakers.order_management_system.core.ui.LocalVoiceInputRouter
-import com.zeynbakers.order_management_system.core.ui.VoiceTarget
 import com.zeynbakers.order_management_system.customer.data.CustomerEntity
 import com.zeynbakers.order_management_system.order.data.OrderStatusOverride
 import java.math.BigDecimal
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
-import androidx.compose.foundation.text.KeyboardOptions
 import kotlinx.datetime.Clock
 import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.TimeZone
@@ -91,37 +80,17 @@ fun CustomerDetailScreen(
     orders: List<CustomerOrderUi>,
     orderLabels: Map<Long, String>,
     onBack: () -> Unit,
-    onRecordPayment: (BigDecimal, PaymentMethod, String, Long?) -> Unit,
     onPaymentHistory: (Long) -> Unit,
     onReceivePayment: () -> Unit,
     onOrderPaymentHistory: (Long) -> Unit,
     onUpdateOrderStatusOverride: (Long, OrderStatusOverride?) -> Unit,
     onWriteOffOrder: (Long) -> Unit
 ) {
-    var amountText by remember { mutableStateOf("") }
-    var noteText by remember { mutableStateOf("") }
-    var amountError by remember { mutableStateOf<String?>(null) }
-    var selectedMethod by remember { mutableStateOf(PaymentMethod.CASH) }
-    var selectedOrderId by remember { mutableStateOf<Long?>(null) }
-    val amountRegistry = LocalAmountFieldRegistry.current
     var orderFilter by remember { mutableStateOf(OrderFilter.All) }
     var ledgerFilter by remember { mutableStateOf(LedgerFilter.All) }
     var ledgerQuery by remember { mutableStateOf("") }
     var visibleLedgerMonths by remember { mutableStateOf(3) }
     val expandedLedgerMonths = remember { mutableStateMapOf<String, Boolean>() }
-
-    val eligibleOrders = remember(orders) {
-        orders
-            .filter { order ->
-                order.effectiveStatus == OrderEffectiveStatus.OPEN &&
-                    order.paidAmount < order.order.totalAmount
-            }
-            .sortedWith(
-                compareBy<CustomerOrderUi> { it.order.orderDate }
-                    .thenBy { it.order.createdAt }
-                    .thenBy { it.order.id }
-            )
-    }
 
     val filteredOrders by remember(orders, orderFilter) {
         derivedStateOf { filterOrders(orders, orderFilter) }
@@ -141,6 +110,7 @@ fun CustomerDetailScreen(
     }
 
     Scaffold(
+        contentWindowInsets = WindowInsets(0),
         topBar = {
             CenterAlignedTopAppBar(
                 title = {
@@ -169,8 +139,8 @@ fun CustomerDetailScreen(
             modifier = Modifier
                 .padding(padding)
                 .imePadding(),
-            contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
+            contentPadding = PaddingValues(12.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             item {
                 BalanceCard(
@@ -179,38 +149,6 @@ fun CustomerDetailScreen(
                     financeSummary = financeSummary,
                     canReceive = customer != null,
                     onReceivePayment = onReceivePayment
-                )
-            }
-
-            item {
-                PaymentCard(
-                    amountText = amountText,
-                    onAmountChange = {
-                        amountText = it
-                        amountError = null
-                    },
-                    amountError = amountError,
-                    amountRegistry = amountRegistry,
-                    selectedMethod = selectedMethod,
-                    onMethodChange = { selectedMethod = it },
-                    noteText = noteText,
-                    onNoteChange = { noteText = it },
-                    eligibleOrders = eligibleOrders,
-                    selectedOrderId = selectedOrderId,
-                    onSelectOrder = { selectedOrderId = it },
-                    onSubmit = {
-                        val parsedAmount = amountText.trim().takeIf { it.isNotEmpty() }?.let {
-                            runCatching { BigDecimal(it) }.getOrNull()
-                        }
-                        if (parsedAmount == null || parsedAmount <= BigDecimal.ZERO) {
-                            amountError = "Enter a valid amount"
-                        } else {
-                            onRecordPayment(parsedAmount, selectedMethod, noteText, selectedOrderId)
-                            amountText = ""
-                            noteText = ""
-                            amountError = null
-                        }
-                    }
                 )
             }
 
@@ -382,144 +320,6 @@ private fun SummaryRow(
             text = amount,
             style = MaterialTheme.typography.bodySmall
         )
-    }
-}
-
-@Composable
-private fun PaymentCard(
-    amountText: String,
-    onAmountChange: (String) -> Unit,
-    amountError: String?,
-    amountRegistry: AmountFieldRegistry,
-    selectedMethod: PaymentMethod,
-    onMethodChange: (PaymentMethod) -> Unit,
-    noteText: String,
-    onNoteChange: (String) -> Unit,
-    eligibleOrders: List<CustomerOrderUi>,
-    selectedOrderId: Long?,
-    onSelectOrder: (Long?) -> Unit,
-    onSubmit: () -> Unit
-) {
-    val voiceRouter = LocalVoiceInputRouter.current
-    var orderSearch by rememberSaveable { mutableStateOf("") }
-    val visibleOrders = remember(eligibleOrders, orderSearch) {
-        val lowered = orderSearch.trim().lowercase()
-        eligibleOrders
-            .filter { order ->
-                if (lowered.isBlank()) return@filter true
-                val label = orderLabel(order).lowercase()
-                label.contains(lowered)
-            }
-            .take(20)
-    }
-    Surface(
-        tonalElevation = 1.dp,
-        shape = MaterialTheme.shapes.medium,
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Column(modifier = Modifier.padding(12.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                    imageVector = Icons.Filled.Payments,
-                    contentDescription = "Record payment",
-                    tint = MaterialTheme.colorScheme.primary
-                )
-                Spacer(Modifier.width(8.dp))
-                Text(text = "Record payment", style = MaterialTheme.typography.titleMedium)
-            }
-            Spacer(Modifier.height(8.dp))
-
-            val setAmountText by rememberUpdatedState<(String) -> Unit>({ onAmountChange(it) })
-            OutlinedTextField(
-                value = amountText,
-                onValueChange = { onAmountChange(it.filter { ch -> ch.isDigit() || ch == '.' }) },
-                label = { Text("Amount (KES)") },
-                placeholder = { Text("KES 0.00") },
-                keyboardOptions = KeyboardOptions(
-                    keyboardType = KeyboardType.Decimal,
-                    imeAction = ImeAction.Next
-                ),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .onFocusChanged { state ->
-                        if (state.isFocused) {
-                            amountRegistry.update(setAmountText)
-                            voiceRouter.onFocusTarget(VoiceTarget.Total)
-                        }
-                    }
-            )
-
-            amountError?.let {
-                Text(text = it, color = MaterialTheme.colorScheme.error)
-            }
-
-            Spacer(Modifier.height(8.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                PaymentMethodChip(
-                    label = "Cash",
-                    selected = selectedMethod == PaymentMethod.CASH,
-                    onClick = { onMethodChange(PaymentMethod.CASH) }
-                )
-                PaymentMethodChip(
-                    label = "Mpesa",
-                    selected = selectedMethod == PaymentMethod.MPESA,
-                    onClick = { onMethodChange(PaymentMethod.MPESA) }
-                )
-            }
-
-            Spacer(Modifier.height(8.dp))
-
-            OutlinedTextField(
-                value = noteText,
-                onValueChange = onNoteChange,
-                label = { Text("Note (optional)") },
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
-                modifier = Modifier.fillMaxWidth()
-            )
-
-            Spacer(Modifier.height(10.dp))
-            Text(
-                text = "Apply to order (optional). If none, goes to oldest orders.",
-                style = MaterialTheme.typography.bodyMedium
-            )
-            Spacer(Modifier.height(6.dp))
-            OutlinedTextField(
-                value = orderSearch,
-                onValueChange = { orderSearch = it },
-                label = { Text("Search open orders") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth()
-            )
-            Spacer(Modifier.height(6.dp))
-            TextButton(onClick = { onSelectOrder(null) }) {
-                val label =
-                    if (selectedOrderId == null) {
-                        "Oldest orders (selected)"
-                    } else {
-                        "Oldest orders"
-                    }
-                Text(text = label)
-            }
-            visibleOrders.forEach { order ->
-                TextButton(onClick = { onSelectOrder(order.order.id) }) {
-                    val label = orderLabel(order)
-                    val selectedLabel = "$label (selected)"
-                    Text(text = if (selectedOrderId == order.order.id) selectedLabel else label)
-                }
-            }
-
-            Spacer(Modifier.height(12.dp))
-            Button(
-                onClick = onSubmit,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text("Save payment")
-            }
-        }
     }
 }
 
@@ -829,26 +629,6 @@ private fun LedgerRow(entry: AccountEntryEntity, orderLabels: Map<Long, String>)
     }
 }
 
-@Composable
-private fun PaymentMethodChip(
-    label: String,
-    selected: Boolean,
-    onClick: () -> Unit
-) {
-    FilterChip(
-        selected = selected,
-        onClick = onClick,
-        label = { Text(label) },
-        leadingIcon = {
-            Icon(
-                imageVector = Icons.Filled.Money,
-                contentDescription = null,
-                tint = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-    )
-}
-
 private fun launchDial(context: android.content.Context, phone: String) {
     val intent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:$phone")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
     context.startActivity(intent)
@@ -1013,3 +793,4 @@ private enum class LedgerFilter(val label: String) {
     Payments("Payments"),
     Adjustments("Adjustments")
 }
+

@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -58,6 +59,7 @@ fun ImportContactsScreen(
         }
 
     Scaffold(
+        contentWindowInsets = WindowInsets(0),
         topBar = {
             CenterAlignedTopAppBar(
                 title = { Text(text = "Import contacts") },
@@ -76,7 +78,7 @@ fun ImportContactsScreen(
         Column(
             modifier = Modifier
                 .padding(padding)
-                .padding(16.dp)
+                .padding(12.dp)
         ) {
             if (isLoading) {
                 Row(
@@ -94,7 +96,7 @@ fun ImportContactsScreen(
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
 
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(8.dp))
 
             OutlinedTextField(
                 value = query,
@@ -104,7 +106,7 @@ fun ImportContactsScreen(
                 modifier = Modifier.fillMaxWidth()
             )
 
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(8.dp))
 
             if (contacts.isEmpty()) {
                 Text(
@@ -230,3 +232,4 @@ private fun RoundCheckToggle(
         Icon(imageVector = icon, contentDescription = contentDescription)
     }
 }
+

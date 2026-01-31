@@ -329,6 +329,7 @@ fun DayDetailScreen(
     }
 
     Scaffold(
+        contentWindowInsets = WindowInsets(0),
         topBar = {
             TopAppBar(
                 title = {
@@ -628,7 +629,7 @@ fun DayDetailScreen(
                         .imePadding()
                         .navigationBarsPadding()
                         .verticalScroll(rememberScrollState())
-                        .padding(16.dp)
+                        .padding(12.dp)
                 ) {
                     Text(
                         text = if (editingOrderId == null) "New Order" else "Edit Order",
@@ -812,7 +813,7 @@ fun DayDetailScreen(
                     Text(text = it, color = MaterialTheme.colorScheme.error)
                 }
 
-                Spacer(Modifier.height(12.dp))
+                Spacer(Modifier.height(8.dp))
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -849,7 +850,7 @@ fun DayDetailScreen(
                     }
                 }
 
-                    Spacer(Modifier.height(12.dp))
+                    Spacer(Modifier.height(8.dp))
                 }
 
                 VoiceCalculatorOverlay(
@@ -1109,7 +1110,7 @@ private fun DaySummaryCard(
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 8.dp)
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
+        Column(modifier = Modifier.padding(12.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
@@ -1164,7 +1165,7 @@ private fun DaySummaryCard(
                 }
             }
 
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(8.dp))
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -1507,3 +1508,4 @@ private enum class DeleteMoveTarget {
     OLDEST_ORDERS,
     CUSTOMER_CREDIT
 }
+

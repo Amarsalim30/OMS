@@ -75,7 +75,7 @@ fun OrderEditorSheet(
                 .fillMaxHeight(0.9f)
                 .imePadding()
                 .navigationBarsPadding()
-                .padding(16.dp)
+                .padding(12.dp)
         ) {
 
             Text(
@@ -124,3 +124,4 @@ fun OrderEditorSheet(
         }
     }
 }
+

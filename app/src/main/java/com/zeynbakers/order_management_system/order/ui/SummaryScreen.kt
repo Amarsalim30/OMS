@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -176,6 +177,7 @@ fun SummaryScreen(
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
 
     Scaffold(
+        contentWindowInsets = WindowInsets(0),
         topBar = {
             CenterAlignedTopAppBar(
                 title = {
@@ -224,7 +226,7 @@ fun SummaryScreen(
         LazyColumn(
             modifier = Modifier.fillMaxSize().padding(padding),
             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             item {
                 MonthTotalCard(monthTotal = monthTotal, label = monthLabel)
@@ -390,7 +392,7 @@ private fun MonthTotalCard(monthTotal: BigDecimal, label: String) {
         color = MaterialTheme.colorScheme.surfaceContainerHighest
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(16.dp),
+            modifier = Modifier.fillMaxWidth().padding(12.dp),
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Column(modifier = Modifier.weight(1f)) {
@@ -425,7 +427,7 @@ private fun ChefPrepCard(
     onModeChange: (SummaryRangeMode) -> Unit
 ) {
     ElevatedCard(modifier = Modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.padding(16.dp)) {
+        Column(modifier = Modifier.padding(12.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween
@@ -443,7 +445,7 @@ private fun ChefPrepCard(
                 }
             }
 
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(8.dp))
             TabRow(selectedTabIndex = SummaryRangeMode.entries.indexOf(mode)) {
                 SummaryRangeMode.entries.forEach { entry ->
                     Tab(
@@ -454,7 +456,7 @@ private fun ChefPrepCard(
                 }
             }
 
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(8.dp))
             Surface(
                 color = MaterialTheme.colorScheme.surfaceContainerHigh,
                 shape = MaterialTheme.shapes.medium
@@ -555,7 +557,7 @@ private fun UnparsedLinesCard(unparsedLines: List<String>) {
         contentColor = MaterialTheme.colorScheme.onErrorContainer,
         shape = MaterialTheme.shapes.large
     ) {
-        Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+        Column(modifier = Modifier.fillMaxWidth().padding(12.dp)) {
             Text(text = "Unparsed lines (${unparsedLines.size})", style = MaterialTheme.typography.titleSmall)
             Spacer(Modifier.height(8.dp))
             unparsedLines.forEach { line ->
@@ -580,7 +582,7 @@ private fun DailySummaryCard(
             .clickable(onClick = onOpenDay)
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(16.dp),
+            modifier = Modifier.fillMaxWidth().padding(12.dp),
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Column(modifier = Modifier.weight(1f)) {
@@ -687,3 +689,4 @@ private fun monthName(month: Int): String {
         else -> "Month"
     }
 }
+

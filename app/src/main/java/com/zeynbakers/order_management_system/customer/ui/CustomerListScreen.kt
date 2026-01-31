@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
@@ -79,7 +80,8 @@ fun CustomerListScreen(
     onPaymentHistory: (Long) -> Unit = {},
     onAddOrder: (Long) -> Unit = {},
     onEditCustomer: (Long) -> Unit = {},
-    onDeleteCustomer: (Long) -> Unit = {}
+    onDeleteCustomer: (Long) -> Unit = {},
+    showBack: Boolean = true
 ) {
     CustomersScreenM3(
         query = query,
@@ -91,7 +93,8 @@ fun CustomerListScreen(
         onPaymentHistory = onPaymentHistory,
         onAddOrder = onAddOrder,
         onEditCustomer = onEditCustomer,
-        onDeleteCustomer = onDeleteCustomer
+        onDeleteCustomer = onDeleteCustomer,
+        showBack = showBack
     )
 }
 
@@ -106,7 +109,8 @@ private fun CustomersScreenM3(
     onPaymentHistory: (Long) -> Unit,
     onAddOrder: (Long) -> Unit,
     onEditCustomer: (Long) -> Unit,
-    onDeleteCustomer: (Long) -> Unit
+    onDeleteCustomer: (Long) -> Unit,
+    showBack: Boolean
 ) {
     var queryText by rememberSaveable { mutableStateOf(query) }
     var selectedFilter by rememberSaveable { mutableStateOf(CustomerFilter.All) }
@@ -146,20 +150,22 @@ private fun CustomersScreenM3(
     }
 
     Scaffold(
+        contentWindowInsets = WindowInsets(0),
         topBar = {
             CustomersTopBar(
                 onBack = onBack,
-                onMore = { isSortMenuOpen = true }
+                onMore = { isSortMenuOpen = true },
+                showBack = showBack
             )
         }
     ) { padding ->
-        Column(modifier = Modifier.padding(padding).padding(16.dp)) {
+        Column(modifier = Modifier.padding(padding).padding(12.dp)) {
             SearchField(
                 queryText = queryText,
                 onQueryTextChange = { queryText = it }
             )
 
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(6.dp))
 
             FilterSortBar(
                 selectedFilter = selectedFilter,
@@ -178,7 +184,7 @@ private fun CustomersScreenM3(
                 }
             )
 
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(6.dp))
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -195,7 +201,7 @@ private fun CustomersScreenM3(
                 )
             }
 
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(6.dp))
 
             if (filteredCustomers.isEmpty()) {
                 EmptyCustomersState(
@@ -204,7 +210,7 @@ private fun CustomersScreenM3(
                 )
             } else {
                 LazyColumn(
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
                     contentPadding = PaddingValues(bottom = 12.dp)
                 ) {
                     items(filteredCustomers, key = { it.customerId }) { customer ->
@@ -226,12 +232,12 @@ private fun CustomersScreenM3(
             onDismissRequest = { longPressedCustomer = null },
             sheetState = sheetState
         ) {
-            Column(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
+            Column(modifier = Modifier.fillMaxWidth().padding(12.dp)) {
                 Text(
                     text = customer.name.ifBlank { "Unknown Customer" },
                     style = MaterialTheme.typography.titleMedium
                 )
-                Spacer(Modifier.height(12.dp))
+                Spacer(Modifier.height(6.dp))
                 ActionRow(label = "View details", onClick = {
                     onCustomerClick(customer.customerId)
                     longPressedCustomer = null
@@ -260,7 +266,8 @@ private fun CustomersScreenM3(
 @Composable
 private fun CustomersTopBar(
     onBack: () -> Unit,
-    onMore: () -> Unit
+    onMore: () -> Unit,
+    showBack: Boolean
 ) {
     CenterAlignedTopAppBar(
         title = {
@@ -274,7 +281,9 @@ private fun CustomersTopBar(
             }
         },
         navigationIcon = {
-            TextButton(onClick = onBack) { Text("Back") }
+            if (showBack) {
+                TextButton(onClick = onBack) { Text("Back") }
+            }
         },
         actions = {
             IconButton(onClick = onMore) {
@@ -348,9 +357,9 @@ private fun FilterSortBar(
             )
         }
 
-            IconButton(onClick = onSortMenuToggle) {
-                Icon(imageVector = Icons.AutoMirrored.Filled.Sort, contentDescription = "Sort")
-            }
+        IconButton(onClick = onSortMenuToggle) {
+            Icon(imageVector = Icons.AutoMirrored.Filled.Sort, contentDescription = "Sort")
+        }
     }
 }
 
@@ -415,7 +424,7 @@ private fun CustomerRowItem(
             .padding(vertical = 2.dp)
     ) {
         Row(
-            modifier = Modifier.padding(12.dp),
+            modifier = Modifier.padding(10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Surface(
@@ -428,7 +437,7 @@ private fun CustomerRowItem(
                 }
             }
 
-            Spacer(Modifier.width(12.dp))
+            Spacer(Modifier.width(8.dp))
 
             Column(modifier = Modifier.weight(1f)) {
                 Text(
@@ -446,24 +455,24 @@ private fun CustomerRowItem(
                         overflow = TextOverflow.Ellipsis
                     )
                 }
-            Spacer(Modifier.height(6.dp))
-            Text(
-                text = "Billed ${formatKes(customer.billed)} - Paid ${formatKes(customer.paid)}",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
-        }
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    text = "Billed ${formatKes(customer.billed)} - Paid ${formatKes(customer.paid)}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
 
-        Spacer(Modifier.width(8.dp))
+            Spacer(Modifier.width(6.dp))
 
-        BalanceChip(balance = customer.balance)
-        IconButton(onClick = onMenuClick) {
-            Icon(imageVector = Icons.Filled.MoreVert, contentDescription = "Customer actions")
+            BalanceChip(balance = customer.balance)
+            IconButton(onClick = onMenuClick) {
+                Icon(imageVector = Icons.Filled.MoreVert, contentDescription = "Customer actions")
+            }
         }
     }
-}
 }
 
 @Composable
@@ -480,7 +489,7 @@ private fun BalanceChip(balance: BigDecimal) {
         modifier = Modifier.heightIn(min = 32.dp)
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+            modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
@@ -488,7 +497,7 @@ private fun BalanceChip(balance: BigDecimal) {
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurface
             )
-            Spacer(Modifier.width(6.dp))
+            Spacer(Modifier.width(4.dp))
             Text(
                 text = formatKes(balance.abs()),
                 style = MaterialTheme.typography.labelLarge,
@@ -506,7 +515,7 @@ private fun EmptyCustomersState(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(top = 32.dp),
+            .padding(top = 20.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Icon(
@@ -515,7 +524,7 @@ private fun EmptyCustomersState(
             tint = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.size(48.dp)
         )
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(6.dp))
         Text(
             text = if (isSearching) "No customers found" else "No customers yet",
             style = MaterialTheme.typography.titleMedium
@@ -526,7 +535,7 @@ private fun EmptyCustomersState(
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
-        Spacer(Modifier.height(12.dp))
+        Spacer(Modifier.height(6.dp))
         Button(onClick = onAddCustomer) {
             Text("Add customer")
         }
@@ -543,7 +552,7 @@ private fun ActionRow(label: String, onClick: () -> Unit) {
         color = MaterialTheme.colorScheme.surface
     ) {
         Row(
-            modifier = Modifier.padding(vertical = 12.dp),
+            modifier = Modifier.padding(vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(text = label, style = MaterialTheme.typography.bodyLarge)
@@ -563,4 +572,7 @@ private enum class CustomerSort {
     BalanceAsc,
     NameAsc
 }
+
+
+
 

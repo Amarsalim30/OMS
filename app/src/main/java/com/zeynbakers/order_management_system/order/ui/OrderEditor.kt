@@ -63,7 +63,7 @@ fun OrderEditor(order: OrderEntity, onSave: (OrderEntity) -> Unit) {
         onDispose { voiceRouter.clearNotesTarget() }
     }
 
-    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         OutlinedTextField(
                 value = notes,
                 onValueChange = {
@@ -129,7 +129,7 @@ fun OrderEditor(order: OrderEntity, onSave: (OrderEntity) -> Unit) {
 
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Button(
                 onClick = {
@@ -155,3 +155,4 @@ fun OrderEditor(order: OrderEntity, onSave: (OrderEntity) -> Unit) {
         }
     }
 }
+

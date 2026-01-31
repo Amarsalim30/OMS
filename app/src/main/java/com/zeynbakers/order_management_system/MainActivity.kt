@@ -8,7 +8,6 @@ import android.os.Bundle
 import android.provider.ContactsContract
 import android.widget.Toast
 import androidx.activity.ComponentActivity
-import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -16,42 +15,76 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CalendarToday
+import androidx.compose.material.icons.filled.ListAlt
+import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.Payments
+import androidx.compose.material.icons.filled.People
+import androidx.compose.material.icons.filled.PersonAdd
+import androidx.compose.material.icons.filled.ReceiptLong
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.ui.unit.dp
-import androidx.compose.runtime.*
+import androidx.compose.material3.windowsizeclass.ExperimentalMaterial3WindowSizeClassApi
+import androidx.compose.material3.windowsizeclass.calculateWindowSizeClass
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
-import com.zeynbakers.order_management_system.accounting.ui.PaymentIntakeScreen
-import com.zeynbakers.order_management_system.accounting.ui.PaymentIntakeViewModel
+import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.NavGraph.Companion.findStartDestination
+import androidx.navigation.NavHostController
+import androidx.navigation.NavType
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
+import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
+import com.zeynbakers.order_management_system.accounting.ui.LedgerViewModel
 import com.zeynbakers.order_management_system.accounting.ui.PaymentIntakeHistoryScreen
 import com.zeynbakers.order_management_system.accounting.ui.PaymentIntakeHistoryViewModel
+import com.zeynbakers.order_management_system.accounting.ui.PaymentIntakeViewModel
 import com.zeynbakers.order_management_system.accounting.ui.PaymentHistoryFilter
-import com.zeynbakers.order_management_system.accounting.ui.LedgerScreen
-import com.zeynbakers.order_management_system.accounting.ui.LedgerViewModel
 import com.zeynbakers.order_management_system.core.backup.BackupScheduler
 import com.zeynbakers.order_management_system.core.backup.BackupSettingsScreen
 import com.zeynbakers.order_management_system.core.db.DatabaseProvider
 import com.zeynbakers.order_management_system.core.navigation.AppIntents
+import com.zeynbakers.order_management_system.core.navigation.AppRoutes
 import com.zeynbakers.order_management_system.core.navigation.AppShortcuts
 import com.zeynbakers.order_management_system.core.navigation.extractSharedText
 import com.zeynbakers.order_management_system.core.notifications.NotificationScheduler
 import com.zeynbakers.order_management_system.core.notifications.NotificationSettingsScreen
-import com.zeynbakers.order_management_system.core.widget.WidgetUpdater
 import com.zeynbakers.order_management_system.core.ui.AmountFieldRegistry
+import com.zeynbakers.order_management_system.core.ui.AppScaffold
+import com.zeynbakers.order_management_system.core.ui.AppViewModelFactory
 import com.zeynbakers.order_management_system.core.ui.LocalAmountFieldRegistry
 import com.zeynbakers.order_management_system.core.ui.LocalVoiceCalcAccess
 import com.zeynbakers.order_management_system.core.ui.LocalVoiceInputRouter
-import com.zeynbakers.order_management_system.core.ui.VoiceInputRouter
 import com.zeynbakers.order_management_system.core.ui.LocalVoiceOverlaySuppressed
+import com.zeynbakers.order_management_system.core.ui.MoneyScreen
+import com.zeynbakers.order_management_system.core.ui.MoneyTab
+import com.zeynbakers.order_management_system.core.ui.MoreAction
+import com.zeynbakers.order_management_system.core.ui.TopLevelDestination
 import com.zeynbakers.order_management_system.core.ui.VoiceCalcAccess
 import com.zeynbakers.order_management_system.core.ui.VoiceCalculatorOverlay
+import com.zeynbakers.order_management_system.core.ui.VoiceInputRouter
 import com.zeynbakers.order_management_system.core.ui.theme.Order_management_systemTheme
 import com.zeynbakers.order_management_system.core.util.formatKes
 import com.zeynbakers.order_management_system.core.util.normalizePhoneNumber
 import com.zeynbakers.order_management_system.core.updates.UpdatePreferences
+import com.zeynbakers.order_management_system.core.widget.WidgetUpdater
 import com.zeynbakers.order_management_system.customer.ui.CustomerAccountsViewModel
 import com.zeynbakers.order_management_system.customer.ui.CustomerDetailScreen
 import com.zeynbakers.order_management_system.customer.ui.CustomerListScreen
@@ -59,21 +92,22 @@ import com.zeynbakers.order_management_system.customer.ui.ImportContact
 import com.zeynbakers.order_management_system.customer.ui.ImportContactsScreen
 import com.zeynbakers.order_management_system.order.ui.CalendarScreen
 import com.zeynbakers.order_management_system.order.ui.DayDetailScreen
-import com.zeynbakers.order_management_system.order.ui.OrderDraft
 import com.zeynbakers.order_management_system.order.ui.OrderCreditPrompt
+import com.zeynbakers.order_management_system.order.ui.OrderDraft
 import com.zeynbakers.order_management_system.order.ui.OrderViewModel
 import com.zeynbakers.order_management_system.order.ui.SummaryScreen
 import com.zeynbakers.order_management_system.order.ui.UnpaidOrdersScreen
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.datetime.Clock
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 
 class MainActivity : ComponentActivity() {
     private val launchIntent = mutableStateOf<Intent?>(null)
 
+    @OptIn(ExperimentalMaterial3WindowSizeClassApi::class)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -81,27 +115,40 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             Order_management_systemTheme {
+                val context = LocalContext.current
                 val database = remember { DatabaseProvider.getDatabase(applicationContext) }
-                val viewModel = remember { OrderViewModel(database = database) }
-                val customerViewModel = remember { CustomerAccountsViewModel(database = database) }
-                val paymentIntakeViewModel = remember { PaymentIntakeViewModel(database = database) }
-                val paymentHistoryViewModel = remember { PaymentIntakeHistoryViewModel(database = database) }
-                val ledgerViewModel = remember { LedgerViewModel(database = database) }
+                val viewModelFactory = remember { AppViewModelFactory(database) }
+                val orderViewModel: OrderViewModel = viewModel(factory = viewModelFactory)
+                val customerViewModel: CustomerAccountsViewModel = viewModel(factory = viewModelFactory)
+                val paymentIntakeViewModel: PaymentIntakeViewModel = viewModel(factory = viewModelFactory)
+                val paymentHistoryViewModel: PaymentIntakeHistoryViewModel = viewModel(factory = viewModelFactory)
+                val ledgerViewModel: LedgerViewModel = viewModel(factory = viewModelFactory)
+
                 val amountRegistry = remember { AmountFieldRegistry() }
                 val voiceRouter = remember { VoiceInputRouter(onApplyTotal = amountRegistry::applyAmount) }
-                var currentMonth by remember { mutableStateOf(0) }
-                var currentYear by remember { mutableStateOf(0) }
-                var baseMonth by remember { mutableStateOf(0) }
-                var baseYear by remember { mutableStateOf(0) }
-                var screen by remember { mutableStateOf<Screen>(Screen.Calendar) }
-                var customerQuery by remember { mutableStateOf("") }
-                val context = LocalContext.current
+                val overlaySuppressed = remember { mutableStateOf(false) }
+
+                var currentMonth by rememberSaveable { mutableStateOf(0) }
+                var currentYear by rememberSaveable { mutableStateOf(0) }
+                var baseMonth by rememberSaveable { mutableStateOf(0) }
+                var baseYear by rememberSaveable { mutableStateOf(0) }
+
+                var selectedDate by remember { mutableStateOf<LocalDate?>(null) }
+                var summaryDate by remember { mutableStateOf<LocalDate?>(null) }
+                var quickAddDate by remember { mutableStateOf<LocalDate?>(null) }
+
+                var customerQuery by rememberSaveable { mutableStateOf("") }
+                var paymentIntakeText by rememberSaveable { mutableStateOf<String?>(null) }
+                var moneyTabName by rememberSaveable { mutableStateOf(MoneyTab.Mpesa.name) }
+                var manualCustomerId by rememberSaveable { mutableStateOf<Long?>(null) }
+                var showMoreSheet by rememberSaveable { mutableStateOf(false) }
+                var selectedTopLevelRoute by rememberSaveable { mutableStateOf(AppRoutes.Calendar) }
+
                 var importContacts by remember { mutableStateOf<List<ImportContact>>(emptyList()) }
                 var selectedContactPhones by remember { mutableStateOf<Set<String>>(emptySet()) }
                 var isContactsLoading by remember { mutableStateOf(false) }
-                var paymentIntakeText by remember { mutableStateOf<String?>(null) }
-                var paymentReturnScreen by remember { mutableStateOf<Screen>(Screen.Calendar) }
-                var paymentHistoryReturnScreen by remember { mutableStateOf<Screen>(Screen.Calendar) }
+                val dayDrafts = remember { mutableStateMapOf<LocalDate, OrderDraft>() }
+
                 var hasRecordPermission by remember {
                     mutableStateOf(
                         ContextCompat.checkSelfPermission(
@@ -110,8 +157,16 @@ class MainActivity : ComponentActivity() {
                         ) == PackageManager.PERMISSION_GRANTED
                     )
                 }
-                val overlaySuppressed = remember { mutableStateOf(false) }
+
                 val updatePrefs = remember { UpdatePreferences(context) }
+                var showUpdateDialog by remember { mutableStateOf(false) }
+                val navController = rememberNavController()
+                val navBackStackEntry by navController.currentBackStackEntryAsState()
+                val currentRoute = navBackStackEntry?.destination?.route
+                val activeTopLevelRoute = topLevelRouteFor(currentRoute) ?: selectedTopLevelRoute
+
+                val moneyTab = runCatching { MoneyTab.valueOf(moneyTabName) }.getOrDefault(MoneyTab.Mpesa)
+
                 val updateNotes = remember {
                     listOf(
                         "Share M-PESA messages from Messages directly into the app.",
@@ -123,13 +178,16 @@ class MainActivity : ComponentActivity() {
                         "Faster voice calculator responses when adding totals."
                     )
                 }
-                var showUpdateDialog by remember { mutableStateOf(false) }
 
                 val contactsPermissionLauncher = rememberLauncherForActivityResult(
                     ActivityResultContracts.RequestPermission()
                 ) { granted: Boolean ->
                     if (granted) {
-                        screen = Screen.ImportContacts
+                        navToImportContacts(
+                            context = context,
+                            onNavigate = { route -> navigateTopLevel(navController, route, resetToRoot = true) },
+                            onOpen = { navController.navigate(AppRoutes.ImportContacts) }
+                        )
                     } else {
                         Toast.makeText(
                             context,
@@ -138,41 +196,28 @@ class MainActivity : ComponentActivity() {
                         ).show()
                     }
                 }
-                val openImportContacts = {
-                    val hasPermission =
-                        ContextCompat.checkSelfPermission(
-                            context,
-                            Manifest.permission.READ_CONTACTS
-                        ) == PackageManager.PERMISSION_GRANTED
-                    if (hasPermission) {
-                        screen = Screen.ImportContacts
-                    } else {
-                        contactsPermissionLauncher.launch(Manifest.permission.READ_CONTACTS)
-                    }
-                }
 
                 val recordPermissionLauncher = rememberLauncherForActivityResult(
                     ActivityResultContracts.RequestPermission()
                 ) { granted: Boolean ->
                     hasRecordPermission = granted
                 }
-                val dayDrafts = remember { mutableStateMapOf<LocalDate, OrderDraft>() }
 
-                val calendarDays by viewModel.calendarDays.collectAsState()
-                val monthTotal by viewModel.monthTotal.collectAsState()
-                val monthBadgeCount by viewModel.monthBadgeCount.collectAsState()
-                val ordersForDate by viewModel.ordersForDate.collectAsState()
-                val dayTotal by viewModel.dayTotal.collectAsState()
-                val orderCustomerNames by viewModel.orderCustomerNames.collectAsState()
-                val orderPaidAmounts by viewModel.orderPaidAmounts.collectAsState()
-                val monthSnapshots by viewModel.monthSnapshots.collectAsState()
-                val summaryOrders by viewModel.summaryOrders.collectAsState()
-                val summaryTotal by viewModel.summaryTotal.collectAsState()
-                val summaryCustomerNames by viewModel.summaryCustomerNames.collectAsState()
-                val unpaidOrders by viewModel.unpaidOrders.collectAsState()
-                val unpaidPaidAmounts by viewModel.unpaidPaidAmounts.collectAsState()
-                val unpaidCustomerNames by viewModel.unpaidCustomerNames.collectAsState()
-                val creditPrompt by viewModel.creditPrompt.collectAsState()
+                val calendarDays by orderViewModel.calendarDays.collectAsState()
+                val monthTotal by orderViewModel.monthTotal.collectAsState()
+                val monthBadgeCount by orderViewModel.monthBadgeCount.collectAsState()
+                val ordersForDate by orderViewModel.ordersForDate.collectAsState()
+                val dayTotal by orderViewModel.dayTotal.collectAsState()
+                val orderCustomerNames by orderViewModel.orderCustomerNames.collectAsState()
+                val orderPaidAmounts by orderViewModel.orderPaidAmounts.collectAsState()
+                val monthSnapshots by orderViewModel.monthSnapshots.collectAsState()
+                val summaryOrders by orderViewModel.summaryOrders.collectAsState()
+                val summaryTotal by orderViewModel.summaryTotal.collectAsState()
+                val summaryCustomerNames by orderViewModel.summaryCustomerNames.collectAsState()
+                val unpaidOrders by orderViewModel.unpaidOrders.collectAsState()
+                val unpaidPaidAmounts by orderViewModel.unpaidPaidAmounts.collectAsState()
+                val unpaidCustomerNames by orderViewModel.unpaidCustomerNames.collectAsState()
+                val creditPrompt by orderViewModel.creditPrompt.collectAsState()
 
                 val customerSummaries by customerViewModel.summaries.collectAsState()
                 val customerDetail by customerViewModel.customer.collectAsState()
@@ -182,62 +227,16 @@ class MainActivity : ComponentActivity() {
                 val customerOrders by customerViewModel.orders.collectAsState()
                 val customerOrderLabels by customerViewModel.orderLabels.collectAsState()
 
-                var selectedDate by remember { mutableStateOf<LocalDate?>(null) }
-                var summaryDate by remember { mutableStateOf<LocalDate?>(null) }
-                var quickAddDate by remember { mutableStateOf<LocalDate?>(null) }
                 var pendingCreditPrompt by remember { mutableStateOf<OrderCreditPrompt?>(null) }
                 val incomingIntent by launchIntent
                 val today = remember {
                     Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date
                 }
-                val openPaymentIntake: (String?, Screen) -> Unit = openPaymentIntake@{ sharedText, returnTo ->
-                    val isActive = screen is Screen.PaymentIntake
-                    if (!isActive) {
-                        val safeReturn =
-                            if (returnTo is Screen.PaymentIntake) Screen.Calendar else returnTo
-                        paymentReturnScreen = safeReturn
-                    }
-                    if (!sharedText.isNullOrBlank()) {
-                        if (isActive) {
-                            paymentIntakeViewModel.appendRawText(sharedText)
-                            return@openPaymentIntake
-                        }
-                        paymentIntakeText = sharedText
-                    } else if (!isActive) {
-                        paymentIntakeViewModel.setRawText("")
-                        paymentIntakeText = null
-                    }
-                    if (!isActive) {
-                        screen = Screen.PaymentIntake(sharedText)
-                    }
-                }
-                val openPaymentHistory: (PaymentHistoryFilter) -> Unit = { filter ->
-                    val isActive = screen is Screen.PaymentIntakeHistory
-                    if (!isActive) {
-                        val safeReturn =
-                            if (screen is Screen.PaymentIntakeHistory) Screen.Calendar else screen
-                        paymentHistoryReturnScreen = safeReturn
-                    }
-                    screen = Screen.PaymentIntakeHistory(filter = filter, focusReceiptId = null)
-                }
-                val openPaymentHistoryForReceipt: (Long) -> Unit = { receiptId ->
-                    val isActive = screen is Screen.PaymentIntakeHistory
-                    if (!isActive) {
-                        val safeReturn =
-                            if (screen is Screen.PaymentIntakeHistory) Screen.Calendar else screen
-                        paymentHistoryReturnScreen = safeReturn
-                    }
-                    screen = Screen.PaymentIntakeHistory(
-                        filter = PaymentHistoryFilter.All,
-                        focusReceiptId = receiptId
-                    )
-                }
 
-                LaunchedEffect(screen) {
-                    if (screen == Screen.Calendar &&
-                        updatePrefs.shouldShowUpdate(BuildConfig.VERSION_NAME)
-                    ) {
-                        showUpdateDialog = true
+                LaunchedEffect(currentMonth, currentYear) {
+                    if (currentMonth > 0 && currentYear > 0) {
+                        orderViewModel.loadMonth(month = currentMonth, year = currentYear)
+                        orderViewModel.prefetchAdjacentMonths(year = currentYear, month = currentMonth)
                     }
                 }
 
@@ -256,119 +255,41 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
-                LaunchedEffect(currentMonth, currentYear) {
-                    if (currentMonth > 0 && currentYear > 0) {
-                        viewModel.loadMonth(month = currentMonth, year = currentYear)
-                        viewModel.prefetchAdjacentMonths(year = currentYear, month = currentMonth)
+                LaunchedEffect(activeTopLevelRoute) {
+                    if (activeTopLevelRoute == AppRoutes.Calendar &&
+                        updatePrefs.shouldShowUpdate(BuildConfig.VERSION_NAME)
+                    ) {
+                        showUpdateDialog = true
                     }
-                }
-
-                LaunchedEffect(incomingIntent) {
-                    val intent = incomingIntent ?: return@LaunchedEffect
-                    when (intent.action) {
-                        AppIntents.ACTION_SHOW_TODAY -> {
-                            selectedDate = today
-                            viewModel.loadOrdersForDate(today)
-                            screen = Screen.Day(today)
-                        }
-                        AppIntents.ACTION_SHOW_DAY -> {
-                            val targetDate =
-                                intent.getStringExtra(AppIntents.EXTRA_TARGET_DATE)?.let {
-                                    runCatching { LocalDate.parse(it) }.getOrNull()
-                                } ?: today
-                            selectedDate = targetDate
-                            viewModel.loadOrdersForDate(targetDate)
-                            screen = Screen.Day(targetDate)
-                        }
-                        AppIntents.ACTION_SHOW_UNPAID -> {
-                            viewModel.loadUnpaidOrders()
-                            screen = Screen.Unpaid
-                        }
-                        AppIntents.ACTION_SHOW_SUMMARY -> {
-                            summaryDate =
-                                intent.getStringExtra(AppIntents.EXTRA_TARGET_DATE)?.let {
-                                    runCatching { LocalDate.parse(it) }.getOrNull()
-                                } ?: today
-                            screen = Screen.Summary
-                        }
-                        AppIntents.ACTION_NEW_ORDER -> {
-                            selectedDate = today
-                            quickAddDate = today
-                            screen = Screen.Calendar
-                        }
-                        Intent.ACTION_SEND,
-                        Intent.ACTION_SEND_MULTIPLE -> {
-                            val sharedText = extractSharedText(intent) ?: return@LaunchedEffect
-                            openPaymentIntake(sharedText, screen)
-                        }
-                    }
-                }
-
-                LaunchedEffect(screen, customerQuery) {
-                    val currentScreen = screen
-                    if (currentScreen is Screen.CustomerList) {
-                        customerViewModel.searchCustomers(customerQuery)
-                    }
-                }
-
-                LaunchedEffect(screen) {
-                    val currentScreen = screen
-                    if (currentScreen is Screen.CustomerDetail) {
-                        customerViewModel.loadCustomer(currentScreen.customerId)
-                    }
-                }
-
-                LaunchedEffect(screen) {
-                    val currentScreen = screen
-                    if (currentScreen is Screen.ImportContacts) {
-                        isContactsLoading = true
-                        importContacts =
-                            withContext(Dispatchers.IO) {
-                                loadAllContacts(context)
-                            }
-                        selectedContactPhones = emptySet()
-                        isContactsLoading = false
-                    }
-                }
-
-                LaunchedEffect(screen) {
-                    val currentScreen = screen
-                    if (currentScreen is Screen.Unpaid) {
-                        viewModel.loadUnpaidOrders()
-                    }
-                }
-
-                if (showUpdateDialog) {
-                    AlertDialog(
-                        onDismissRequest = {
-                            showUpdateDialog = false
-                            updatePrefs.markVersionSeen(BuildConfig.VERSION_NAME)
-                        },
-                        title = { Text("What's new") },
-                        text = {
-                            Column {
-                                updateNotes.forEach { note ->
-                                    Text(text = "- $note")
-                                }
-                            }
-                        },
-                        confirmButton = {
-                            TextButton(
-                                onClick = {
-                                    showUpdateDialog = false
-                                    updatePrefs.markVersionSeen(BuildConfig.VERSION_NAME)
-                                }
-                            ) {
-                                Text("Got it")
-                            }
-                        }
-                    )
                 }
 
                 LaunchedEffect(creditPrompt) {
                     if (creditPrompt != null) {
                         pendingCreditPrompt = creditPrompt
                     }
+                }
+
+                val openImportContacts: () -> Unit = {
+                    val hasPermission =
+                        ContextCompat.checkSelfPermission(
+                            context,
+                            Manifest.permission.READ_CONTACTS
+                        ) == PackageManager.PERMISSION_GRANTED
+                    if (hasPermission) {
+                        navController.navigate(AppRoutes.ImportContacts)
+                    } else {
+                        contactsPermissionLauncher.launch(Manifest.permission.READ_CONTACTS)
+                    }
+                }
+
+                val refreshAfterPayments: () -> Unit = {
+                    if (currentMonth > 0 && currentYear > 0) {
+                        orderViewModel.loadMonth(month = currentMonth, year = currentYear)
+                    }
+                    orderViewModel.loadUnpaidOrders()
+                    selectedDate?.let { orderViewModel.loadOrdersForDate(it) }
+                    WidgetUpdater.enqueue(context)
+                    NotificationScheduler.enqueueNow(context)
                 }
 
                 val voiceCalcAccess =
@@ -382,6 +303,58 @@ class MainActivity : ComponentActivity() {
                         )
                     }
 
+                LaunchedEffect(incomingIntent) {
+                    val intent = incomingIntent ?: return@LaunchedEffect
+                    when (intent.action) {
+                        AppIntents.ACTION_SHOW_TODAY -> {
+                            selectedDate = today
+                            selectedTopLevelRoute = AppRoutes.Calendar
+                            navController.navigate(AppRoutes.day(today))
+                        }
+                        AppIntents.ACTION_SHOW_DAY -> {
+                            val targetDate =
+                                intent.getStringExtra(AppIntents.EXTRA_TARGET_DATE)?.let {
+                                    runCatching { LocalDate.parse(it) }.getOrNull()
+                                } ?: today
+                            selectedDate = targetDate
+                            selectedTopLevelRoute = AppRoutes.Calendar
+                            navController.navigate(AppRoutes.day(targetDate))
+                        }
+                        AppIntents.ACTION_SHOW_UNPAID -> {
+                            selectedTopLevelRoute = AppRoutes.Orders
+                            navigateTopLevel(navController, AppRoutes.Orders, resetToRoot = true)
+                        }
+                        AppIntents.ACTION_SHOW_SUMMARY -> {
+                            summaryDate =
+                                intent.getStringExtra(AppIntents.EXTRA_TARGET_DATE)?.let {
+                                    runCatching { LocalDate.parse(it) }.getOrNull()
+                                } ?: today
+                            selectedTopLevelRoute = AppRoutes.Calendar
+                            navController.navigate(AppRoutes.Summary)
+                        }
+                        AppIntents.ACTION_NEW_ORDER -> {
+                            selectedDate = today
+                            quickAddDate = today
+                            selectedTopLevelRoute = AppRoutes.Calendar
+                            navigateTopLevel(navController, AppRoutes.Calendar, resetToRoot = true)
+                        }
+                        Intent.ACTION_SEND,
+                        Intent.ACTION_SEND_MULTIPLE -> {
+                            val sharedText = extractSharedText(intent) ?: return@LaunchedEffect
+                            if (currentRoute == AppRoutes.Money && moneyTab == MoneyTab.Mpesa) {
+                                paymentIntakeViewModel.appendRawText(sharedText)
+                            } else {
+                                paymentIntakeText = sharedText
+                                moneyTabName = MoneyTab.Mpesa.name
+                                selectedTopLevelRoute = AppRoutes.Money
+                                navController.navigate(AppRoutes.Money) {
+                                    launchSingleTop = true
+                                }
+                            }
+                        }
+                    }
+                }
+
                 CompositionLocalProvider(
                     LocalAmountFieldRegistry provides amountRegistry,
                     LocalVoiceCalcAccess provides voiceCalcAccess,
@@ -389,333 +362,450 @@ class MainActivity : ComponentActivity() {
                     LocalVoiceInputRouter provides voiceRouter
                 ) {
                     Box(modifier = Modifier.fillMaxSize()) {
-                        when (val active = screen) {
-                            Screen.Calendar -> {
-                                CalendarScreen(
-                                    days = calendarDays,
-                                    currentYear = currentYear,
-                                    currentMonth = currentMonth,
-                                    baseYear = baseYear,
-                                    baseMonth = baseMonth,
-                                    monthSnapshots = monthSnapshots,
-                                    monthTotal = monthTotal,
-                                    monthBadgeCount = monthBadgeCount,
-                                    selectedDate = selectedDate,
-                                    onSelectDate = { selectedDate = it },
-                                    onSaveOrder = { date, notes, total, name, phone, pickupTime ->
-                                        viewModel.saveOrder(
-                                            date = date,
-                                            notes = notes,
-                                            totalAmount = total,
-                                            customerName = name,
-                                            customerPhone = phone,
-                                            pickupTime = pickupTime,
-                                            existingOrderId = null
-                                        )
-                                        WidgetUpdater.enqueue(context)
-                                        NotificationScheduler.enqueueNow(context)
-                                    },
-                                    searchCustomers = { query -> viewModel.searchCustomers(query) },
-                                    onCustomersClick = { screen = Screen.CustomerList },
-                                    onSummaryClick = {
-                                        val date = selectedDate ?: today
-                                        summaryDate = date
-                                        screen = Screen.Summary
-                                    },
-                                    onMonthSettled = { year, month ->
-                                        currentYear = year
-                                        currentMonth = month
-                                    },
-                                    onOpenDay = { date ->
-                                        viewModel.loadOrdersForDate(date)
-                                        screen = Screen.Day(date)
-                                    },
-                                    openQuickAddDate = quickAddDate,
-                                    onQuickAddConsumed = { quickAddDate = null }
-                                )
+                        val windowSizeClass = calculateWindowSizeClass(this@MainActivity)
+                        val topLevelDestinations = listOf(
+                            TopLevelDestination(AppRoutes.Calendar, "Calendar", Icons.Filled.CalendarToday),
+                            TopLevelDestination(AppRoutes.Orders, "Orders", Icons.Filled.ListAlt),
+                            TopLevelDestination(AppRoutes.Customers, "Customers", Icons.Filled.People),
+                            TopLevelDestination(AppRoutes.Money, "Money", Icons.Filled.Payments)
+                        )
+
+                        val moreActions = listOf(
+                            MoreAction("Summary", Icons.Filled.ReceiptLong) {
+                                showMoreSheet = false
+                                selectedTopLevelRoute = AppRoutes.Calendar
+                                navController.navigate(AppRoutes.Summary)
+                            },
+                            MoreAction("Ledger", Icons.Filled.ReceiptLong) {
+                                showMoreSheet = false
+                                moneyTabName = MoneyTab.Ledger.name
+                                selectedTopLevelRoute = AppRoutes.Money
+                                navController.navigate(AppRoutes.Money) { launchSingleTop = true }
+                            },
+                            MoreAction("Payment history", Icons.Filled.Payments) {
+                                showMoreSheet = false
+                                selectedTopLevelRoute = AppRoutes.Money
+                                navigateToPaymentHistory(navController, PaymentHistoryFilter.All, null)
+                            },
+                            MoreAction("Backup & restore", Icons.Filled.Settings) {
+                                showMoreSheet = false
+                                navController.navigate(AppRoutes.Backup)
+                            },
+                            MoreAction("Notifications", Icons.Filled.Notifications) {
+                                showMoreSheet = false
+                                navController.navigate(AppRoutes.Notifications)
+                            },
+                            MoreAction("Import contacts", Icons.Filled.PersonAdd) {
+                                showMoreSheet = false
+                                openImportContacts()
                             }
-                            is Screen.Day -> {
-                                DayDetailScreen(
-                                    date = active.date,
-                                    orders = ordersForDate,
-                                    dayTotal = dayTotal,
-                                    customerNames = orderCustomerNames,
-                                    orderPaidAmounts = orderPaidAmounts,
-                                    onBack = { screen = Screen.Calendar },
-                                    onSaveOrder = { notes, total, name, phone, pickupTime, orderId ->
-                                        viewModel.saveOrder(
-                                            date = active.date,
-                                            notes = notes,
-                                            totalAmount = total,
-                                            customerName = name,
-                                            customerPhone = phone,
-                                            pickupTime = pickupTime,
-                                            existingOrderId = orderId
-                                        )
-                                        WidgetUpdater.enqueue(context)
-                                        NotificationScheduler.enqueueNow(context)
-                                    },
-                                    onDeleteOrder = { orderId ->
-                                        viewModel.cancelOrder(orderId, active.date)
-                                        WidgetUpdater.enqueue(context)
-                                        NotificationScheduler.enqueueNow(context)
-                                    },
-                                    loadOrderPaymentAllocations = { orderId ->
-                                        viewModel.loadOrderPaymentAllocations(orderId)
-                                    },
-                                    loadMoveOrderOptions = { customerId, excludeOrderId ->
-                                        viewModel.loadMoveOrderOptions(customerId, excludeOrderId)
-                                    },
-                                    onDeleteOrderWithPayments = { orderId, date, allocationIds, action, target, moveFull ->
-                                        val result = viewModel.deleteOrderWithPayments(
-                                            orderId = orderId,
-                                            date = date,
-                                            allocationIds = allocationIds,
-                                            action = action,
-                                            target = target,
-                                            moveFullReceipts = moveFull
-                                        )
-                                        if (result) {
+                        )
+
+                        AppScaffold(
+                            windowSizeClass = windowSizeClass,
+                            destinations = topLevelDestinations,
+                            selectedRoute = activeTopLevelRoute,
+                            onDestinationSelected = { route ->
+                                selectedTopLevelRoute = route
+                                navigateTopLevel(navController, route, resetToRoot = true)
+                            },
+                            showMoreSheet = showMoreSheet,
+                            onOpenMore = { showMoreSheet = true },
+                            onDismissMore = { showMoreSheet = false },
+                            moreActions = moreActions
+                        ) { padding ->
+                            NavHost(
+                                navController = navController,
+                                startDestination = AppRoutes.Calendar,
+                                modifier = Modifier.fillMaxSize().padding(padding)
+                            ) {
+                                composable(AppRoutes.Calendar) {
+                                    CalendarScreen(
+                                        days = calendarDays,
+                                        currentYear = currentYear,
+                                        currentMonth = currentMonth,
+                                        baseYear = baseYear,
+                                        baseMonth = baseMonth,
+                                        monthSnapshots = monthSnapshots,
+                                        monthTotal = monthTotal,
+                                        monthBadgeCount = monthBadgeCount,
+                                        selectedDate = selectedDate,
+                                        onSelectDate = { selectedDate = it },
+                                        onOpenDay = { date ->
+                                            selectedDate = date
+                                            navController.navigate(AppRoutes.day(date))
+                                        },
+                                        onSaveOrder = { date, notes, total, name, phone, pickupTime ->
+                                            orderViewModel.saveOrder(
+                                                date = date,
+                                                notes = notes,
+                                                totalAmount = total,
+                                                customerName = name,
+                                                customerPhone = phone,
+                                                pickupTime = pickupTime,
+                                                existingOrderId = null
+                                            )
                                             WidgetUpdater.enqueue(context)
                                             NotificationScheduler.enqueueNow(context)
-                                        }
-                                        result
-                                    },
-                                    onOrderPaymentHistory = { orderId ->
-                                        openPaymentHistory(PaymentHistoryFilter.Order(orderId))
-                                    },
-                                    onReceivePayment = {
-                                        openPaymentIntake(null, Screen.Day(active.date))
-                                    },
-                                    loadCustomerById = { id -> viewModel.getCustomerById(id) },
-                                    searchCustomers = { query -> viewModel.searchCustomers(query) },
-                                    draft = dayDrafts[active.date],
-                                    onDraftChange = { updated ->
-                                        if (updated == null) {
-                                            dayDrafts.remove(active.date)
-                                        } else {
-                                            dayDrafts[active.date] = updated
-                                        }
-                                    }
-                                )
-                            }
-                            Screen.Summary -> {
-                                BackHandler { screen = Screen.Calendar }
-                                SummaryScreen(
-                                    monthLabel = monthLabel(currentYear, currentMonth),
-                                    monthTotal = monthTotal,
-                                    initialDate = summaryDate ?: selectedDate ?: today,
-                                    orders = summaryOrders,
-                                    rangeTotal = summaryTotal,
-                                    customerNames = summaryCustomerNames,
-                                    onAnchorDateChange = { updated -> summaryDate = updated },
-                                    onLoadRange = { start, end ->
-                                        viewModel.loadSummaryRange(startInclusive = start, endExclusive = end)
-                                    },
-                                    onLedgerClick = { screen = Screen.Ledger },
-                                    onBackupClick = { screen = Screen.Backup },
-                                    onNotificationsClick = { screen = Screen.Notifications },
-                                    onBack = { screen = Screen.Calendar }
-                                )
-                            }
-                            Screen.Backup -> {
-                                BackHandler { screen = Screen.Summary }
-                                BackupSettingsScreen(
-                                    onBack = { screen = Screen.Summary },
-                                    onImportContacts = openImportContacts
-                                )
-                            }
-                            Screen.CustomerList -> {
-                                BackHandler { screen = Screen.Calendar }
-                                CustomerListScreen(
-                                    query = customerQuery,
-                                    summaries = customerSummaries,
-                                    onQueryChange = { customerQuery = it },
-                                    onCustomerClick = { id ->
-                                        screen = Screen.CustomerDetail(id)
-                                    },
-                                    onAddCustomer = openImportContacts,
-                                    onPaymentHistory = { customerId ->
-                                        openPaymentHistory(PaymentHistoryFilter.Customer(customerId))
-                                    },
-                                    onBack = { screen = Screen.Calendar }
-                                )
-                            }
-                            Screen.ImportContacts -> {
-                                BackHandler { screen = Screen.CustomerList }
-                                ImportContactsScreen(
-                                    contacts = importContacts,
-                                    selectedPhones = selectedContactPhones,
-                                    isLoading = isContactsLoading,
-                                    onBack = { screen = Screen.CustomerList },
-                                    onToggleSelect = { phone ->
-                                        selectedContactPhones =
-                                            if (selectedContactPhones.contains(phone)) {
-                                                selectedContactPhones - phone
-                                            } else {
-                                                selectedContactPhones + phone
-                                            }
-                                    },
-                                    onToggleSelectAll = {
-                                        val allPhones = importContacts.map { it.phone }.toSet()
-                                        selectedContactPhones =
-                                            if (selectedContactPhones.size == allPhones.size) {
-                                                emptySet()
-                                            } else {
-                                                allPhones
-                                            }
-                                    },
-                                    onImport = {
-                                        if (selectedContactPhones.isEmpty()) {
-                                            Toast.makeText(
-                                                context,
-                                                "Select at least one contact to import",
-                                                Toast.LENGTH_SHORT
-                                            ).show()
-                                        } else {
-                                            val contactsByPhone =
-                                                importContacts.associateBy { it.phone }
-                                            selectedContactPhones.forEach { phone ->
-                                                val contact = contactsByPhone[phone] ?: return@forEach
-                                                customerViewModel.importCustomer(contact.name, contact.phone)
-                                            }
-                                            screen = Screen.CustomerList
-                                        }
-                                    }
-                                )
-                            }
-                            is Screen.CustomerDetail -> {
-                                BackHandler { screen = Screen.CustomerList }
-                                CustomerDetailScreen(
-                                    customer = customerDetail,
-                                    ledger = customerLedger,
-                                    balance = customerBalance,
-                                    financeSummary = customerFinanceSummary,
-                                    orders = customerOrders,
-                                    orderLabels = customerOrderLabels,
-                                    onBack = { screen = Screen.CustomerList },
-                                    onRecordPayment = { amount, method, note, orderId ->
-                                        customerViewModel.recordPayment(
-                                            customerId = active.customerId,
-                                            amount = amount,
-                                            method = method,
-                                            note = note,
-                                            orderId = orderId
-                                        )
-                                        viewModel.loadUnpaidOrders()
-                                        WidgetUpdater.enqueue(context)
-                                        NotificationScheduler.enqueueNow(context)
-                                    },
-                                    onPaymentHistory = { customerId ->
-                                        openPaymentHistory(PaymentHistoryFilter.Customer(customerId))
-                                    },
-                                    onReceivePayment = {
-                                        openPaymentIntake(null, Screen.CustomerDetail(active.customerId))
-                                    },
-                                    onOrderPaymentHistory = { orderId ->
-                                        openPaymentHistory(PaymentHistoryFilter.Order(orderId))
-                                    },
-                                    onUpdateOrderStatusOverride = { orderId, override ->
-                                        customerViewModel.setOrderStatusOverride(orderId, override)
-                                        viewModel.loadUnpaidOrders()
-                                        WidgetUpdater.enqueue(context)
-                                        NotificationScheduler.enqueueNow(context)
-                                    },
-                                    onWriteOffOrder = { orderId ->
-                                        customerViewModel.writeOffOrder(orderId)
-                                        viewModel.loadUnpaidOrders()
-                                        WidgetUpdater.enqueue(context)
-                                        NotificationScheduler.enqueueNow(context)
-                                    }
-                                )
-                            }
-                            Screen.Unpaid -> {
-                                BackHandler { screen = Screen.Calendar }
-                                UnpaidOrdersScreen(
-                                    orders = unpaidOrders,
-                                    paidAmounts = unpaidPaidAmounts,
-                                    customerNames = unpaidCustomerNames,
-                                    onBack = { screen = Screen.Calendar },
-                                    onOpenDay = { date ->
+                                        },
+                                        searchCustomers = { query -> orderViewModel.searchCustomers(query) },
+                                        onCustomersClick = {
+                                            selectedTopLevelRoute = AppRoutes.Customers
+                                            navigateTopLevel(navController, AppRoutes.Customers, resetToRoot = true)
+                                        },
+                                        onSummaryClick = { showMoreSheet = true },
+                                        onMonthSettled = { year, month ->
+                                            currentYear = year
+                                            currentMonth = month
+                                        },
+                                        openQuickAddDate = quickAddDate,
+                                        onQuickAddConsumed = { quickAddDate = null }
+                                    )
+                                }
+
+                                composable(
+                                    route = AppRoutes.Day,
+                                    arguments = listOf(navArgument(AppRoutes.ARG_DATE) { type = NavType.StringType })
+                                ) { entry ->
+                                    val dateArg = entry.arguments?.getString(AppRoutes.ARG_DATE)
+                                    val date = dateArg?.let { runCatching { LocalDate.parse(it) }.getOrNull() } ?: today
+                                    LaunchedEffect(date) {
                                         selectedDate = date
-                                        viewModel.loadOrdersForDate(date)
-                                        screen = Screen.Day(date)
-                                    },
-                                    onReceivePayment = {
-                                        openPaymentIntake(null, Screen.Unpaid)
+                                        orderViewModel.loadOrdersForDate(date)
                                     }
-                                )
-                            }
-                            Screen.Notifications -> {
-                                BackHandler { screen = Screen.Summary }
-                                NotificationSettingsScreen(onBack = { screen = Screen.Summary })
-                            }
-                            Screen.Ledger -> {
-                                BackHandler { screen = Screen.Summary }
-                                LedgerScreen(
-                                    viewModel = ledgerViewModel,
-                                    onBack = { screen = Screen.Summary }
-                                )
-                            }
-                            is Screen.PaymentIntake -> {
-                                BackHandler { screen = paymentReturnScreen }
-                                PaymentIntakeScreen(
-                                    viewModel = paymentIntakeViewModel,
-                                    initialText = active.sharedText ?: paymentIntakeText,
-                                    onClose = {
-                                        paymentIntakeText = null
-                                        screen = paymentReturnScreen
-                                    },
-                                    onApplied = {
-                                        if (currentMonth > 0 && currentYear > 0) {
-                                            viewModel.loadMonth(month = currentMonth, year = currentYear)
+                                    DayDetailScreen(
+                                        date = date,
+                                        orders = ordersForDate,
+                                        dayTotal = dayTotal,
+                                        customerNames = orderCustomerNames,
+                                        orderPaidAmounts = orderPaidAmounts,
+                                        onBack = { navController.popBackStack() },
+                                        onSaveOrder = { notes, total, name, phone, pickupTime, orderId ->
+                                            orderViewModel.saveOrder(
+                                                date = date,
+                                                notes = notes,
+                                                totalAmount = total,
+                                                customerName = name,
+                                                customerPhone = phone,
+                                                pickupTime = pickupTime,
+                                                existingOrderId = orderId
+                                            )
+                                            WidgetUpdater.enqueue(context)
+                                            NotificationScheduler.enqueueNow(context)
+                                        },
+                                        onDeleteOrder = { orderId ->
+                                            orderViewModel.cancelOrder(orderId, date)
+                                            WidgetUpdater.enqueue(context)
+                                            NotificationScheduler.enqueueNow(context)
+                                        },
+                                        loadOrderPaymentAllocations = { orderId ->
+                                            orderViewModel.loadOrderPaymentAllocations(orderId)
+                                        },
+                                        loadMoveOrderOptions = { customerId, excludeOrderId ->
+                                            orderViewModel.loadMoveOrderOptions(customerId, excludeOrderId)
+                                        },
+                                        onDeleteOrderWithPayments = { orderId, day, allocationIds, action, target, moveFull ->
+                                            val result = orderViewModel.deleteOrderWithPayments(
+                                                orderId = orderId,
+                                                date = day,
+                                                allocationIds = allocationIds,
+                                                action = action,
+                                                target = target,
+                                                moveFullReceipts = moveFull
+                                            )
+                                            if (result) {
+                                                WidgetUpdater.enqueue(context)
+                                                NotificationScheduler.enqueueNow(context)
+                                            }
+                                            result
+                                        },
+                                        onOrderPaymentHistory = { orderId ->
+                                            navigateToPaymentHistory(
+                                                navController,
+                                                PaymentHistoryFilter.Order(orderId),
+                                                null
+                                            )
+                                        },
+                                        onReceivePayment = { order ->
+                                            manualCustomerId = order.customerId
+                                            moneyTabName = MoneyTab.Manual.name
+                                            selectedTopLevelRoute = AppRoutes.Money
+                                            navController.navigate(AppRoutes.Money) { launchSingleTop = true }
+                                        },
+                                        loadCustomerById = { id -> orderViewModel.getCustomerById(id) },
+                                        searchCustomers = { query -> orderViewModel.searchCustomers(query) },
+                                        draft = dayDrafts[date],
+                                        onDraftChange = { updated ->
+                                            if (updated == null) {
+                                                dayDrafts.remove(date)
+                                            } else {
+                                                dayDrafts[date] = updated
+                                            }
                                         }
-                                        viewModel.loadUnpaidOrders()
-                                        WidgetUpdater.enqueue(context)
-                                        NotificationScheduler.enqueueNow(context)
-                                        paymentIntakeText = null
-                                        screen = paymentReturnScreen
-                                    },
-                                    onAppliedInPlace = {
-                                        if (currentMonth > 0 && currentYear > 0) {
-                                            viewModel.loadMonth(month = currentMonth, year = currentYear)
-                                        }
-                                        viewModel.loadUnpaidOrders()
-                                        WidgetUpdater.enqueue(context)
-                                        NotificationScheduler.enqueueNow(context)
-                                    },
-                                    onOpenReceiptHistory = openPaymentHistoryForReceipt
-                                )
-                            }
-                            is Screen.PaymentIntakeHistory -> {
-                                BackHandler { screen = paymentHistoryReturnScreen }
-                                PaymentIntakeHistoryScreen(
-                                    viewModel = paymentHistoryViewModel,
-                                    filter = active.filter,
-                                    focusReceiptId = active.focusReceiptId,
-                                    onBack = { screen = paymentHistoryReturnScreen },
-                                    onRemoved = {
-                                        if (currentMonth > 0 && currentYear > 0) {
-                                            viewModel.loadMonth(month = currentMonth, year = currentYear)
-                                        }
-                                        viewModel.loadUnpaidOrders()
-                                        val returnScreen = paymentHistoryReturnScreen
-                                        if (returnScreen is Screen.CustomerDetail) {
-                                            customerViewModel.loadCustomer(returnScreen.customerId)
-                                        }
-                                        if (returnScreen is Screen.Day) {
-                                            viewModel.loadOrdersForDate(returnScreen.date)
-                                        }
-                                        WidgetUpdater.enqueue(context)
-                                        NotificationScheduler.enqueueNow(context)
+                                    )
+                                }
+
+                                composable(AppRoutes.Orders) {
+                                    LaunchedEffect(Unit) { orderViewModel.loadUnpaidOrders() }
+                                    UnpaidOrdersScreen(
+                                        orders = unpaidOrders,
+                                        paidAmounts = unpaidPaidAmounts,
+                                        customerNames = unpaidCustomerNames,
+                                        onBack = { navController.popBackStack() },
+                                        onOpenDay = { date ->
+                                            selectedDate = date
+                                            navController.navigate(AppRoutes.day(date))
+                                        },
+                                        onReceivePayment = { order ->
+                                            manualCustomerId = order.customerId
+                                            moneyTabName = MoneyTab.Manual.name
+                                            selectedTopLevelRoute = AppRoutes.Money
+                                            navController.navigate(AppRoutes.Money) { launchSingleTop = true }
+                                        },
+                                        title = "Orders",
+                                        showBack = false
+                                    )
+                                }
+
+                                composable(AppRoutes.Customers) {
+                                    LaunchedEffect(customerQuery) {
+                                        customerViewModel.searchCustomers(customerQuery)
                                     }
-                                )
+                                    CustomerListScreen(
+                                        query = customerQuery,
+                                        summaries = customerSummaries,
+                                        onQueryChange = { customerQuery = it },
+                                        onCustomerClick = { id ->
+                                            navController.navigate(AppRoutes.customerDetail(id))
+                                        },
+                                        onBack = { navController.popBackStack() },
+                                        onAddCustomer = openImportContacts,
+                                        onPaymentHistory = { customerId ->
+                                            navigateToPaymentHistory(
+                                                navController,
+                                                PaymentHistoryFilter.Customer(customerId),
+                                                null
+                                            )
+                                        },
+                                        showBack = false
+                                    )
+                                }
+
+                                composable(
+                                    route = AppRoutes.CustomerDetail,
+                                    arguments = listOf(navArgument(AppRoutes.ARG_CUSTOMER_ID) { type = NavType.LongType })
+                                ) { entry ->
+                                    val customerId = entry.arguments?.getLong(AppRoutes.ARG_CUSTOMER_ID) ?: return@composable
+                                    LaunchedEffect(customerId) {
+                                        customerViewModel.loadCustomer(customerId)
+                                    }
+                                    CustomerDetailScreen(
+                                        customer = customerDetail,
+                                        ledger = customerLedger,
+                                        balance = customerBalance,
+                                        financeSummary = customerFinanceSummary,
+                                        orders = customerOrders,
+                                        orderLabels = customerOrderLabels,
+                                        onBack = { navController.popBackStack() },
+                                        onPaymentHistory = { id ->
+                                            navigateToPaymentHistory(
+                                                navController,
+                                                PaymentHistoryFilter.Customer(id),
+                                                null
+                                            )
+                                        },
+                                        onReceivePayment = {
+                                            manualCustomerId = customerId
+                                            moneyTabName = MoneyTab.Manual.name
+                                            selectedTopLevelRoute = AppRoutes.Money
+                                            navController.navigate(AppRoutes.Money) { launchSingleTop = true }
+                                        },
+                                        onOrderPaymentHistory = { orderId ->
+                                            navigateToPaymentHistory(
+                                                navController,
+                                                PaymentHistoryFilter.Order(orderId),
+                                                null
+                                            )
+                                        },
+                                        onUpdateOrderStatusOverride = { orderId, override ->
+                                            customerViewModel.setOrderStatusOverride(orderId, override)
+                                            refreshAfterPayments()
+                                        },
+                                        onWriteOffOrder = { orderId ->
+                                            customerViewModel.writeOffOrder(orderId)
+                                            refreshAfterPayments()
+                                        }
+                                    )
+                                }
+
+                                composable(AppRoutes.ImportContacts) {
+                                    LaunchedEffect(Unit) {
+                                        isContactsLoading = true
+                                        importContacts = withContext(Dispatchers.IO) {
+                                            loadAllContacts(context)
+                                        }
+                                        selectedContactPhones = emptySet()
+                                        isContactsLoading = false
+                                    }
+                                    ImportContactsScreen(
+                                        contacts = importContacts,
+                                        selectedPhones = selectedContactPhones,
+                                        isLoading = isContactsLoading,
+                                        onBack = { navController.popBackStack() },
+                                        onToggleSelect = { phone ->
+                                            selectedContactPhones =
+                                                if (selectedContactPhones.contains(phone)) {
+                                                    selectedContactPhones - phone
+                                                } else {
+                                                    selectedContactPhones + phone
+                                                }
+                                        },
+                                        onToggleSelectAll = {
+                                            val allPhones = importContacts.map { it.phone }.toSet()
+                                            selectedContactPhones =
+                                                if (selectedContactPhones.size == allPhones.size) {
+                                                    emptySet()
+                                                } else {
+                                                    allPhones
+                                                }
+                                        },
+                                        onImport = {
+                                            if (selectedContactPhones.isEmpty()) {
+                                                Toast.makeText(
+                                                    context,
+                                                    "Select at least one contact to import",
+                                                    Toast.LENGTH_SHORT
+                                                ).show()
+                                            } else {
+                                                val contactsByPhone = importContacts.associateBy { it.phone }
+                                                selectedContactPhones.forEach { phone ->
+                                                    val contact = contactsByPhone[phone] ?: return@forEach
+                                                    customerViewModel.importCustomer(contact.name, contact.phone)
+                                                }
+                                                navController.popBackStack()
+                                            }
+                                        }
+                                    )
+                                }
+
+                                composable(AppRoutes.Money) {
+                                    MoneyScreen(
+                                        selectedTab = moneyTab,
+                                        onTabChange = { moneyTabName = it.name },
+                                        paymentIntakeViewModel = paymentIntakeViewModel,
+                                        customerViewModel = customerViewModel,
+                                        ledgerViewModel = ledgerViewModel,
+                                        initialText = paymentIntakeText,
+                                        manualCustomerId = manualCustomerId,
+                                        onManualContextConsumed = {
+                                            manualCustomerId = null
+                                        },
+                                        onManualSaved = { refreshAfterPayments() },
+                                        onApplied = {
+                                            paymentIntakeText = null
+                                            refreshAfterPayments()
+                                        },
+                                        onAppliedInPlace = { refreshAfterPayments() },
+                                        onOpenReceiptHistory = { receiptId ->
+                                            navigateToPaymentHistory(
+                                                navController,
+                                                PaymentHistoryFilter.All,
+                                                receiptId
+                                            )
+                                        }
+                                    )
+                                }
+                                composable(
+                                    route = "${AppRoutes.PaymentHistoryAll}?${AppRoutes.ARG_FOCUS_RECEIPT_ID}={${AppRoutes.ARG_FOCUS_RECEIPT_ID}}",
+                                    arguments = listOf(
+                                        navArgument(AppRoutes.ARG_FOCUS_RECEIPT_ID) {
+                                            type = NavType.LongType
+                                            defaultValue = -1L
+                                        }
+                                    )
+                                ) { entry ->
+                                    val focusId = entry.arguments
+                                        ?.getLong(AppRoutes.ARG_FOCUS_RECEIPT_ID)
+                                        ?.takeIf { it > 0 }
+                                    PaymentIntakeHistoryScreen(
+                                        viewModel = paymentHistoryViewModel,
+                                        filter = PaymentHistoryFilter.All,
+                                        focusReceiptId = focusId,
+                                        onBack = { navController.popBackStack() },
+                                        onRemoved = { refreshAfterPayments() }
+                                    )
+                                }
+
+                                composable(
+                                    route = AppRoutes.PaymentHistoryCustomer,
+                                    arguments = listOf(navArgument(AppRoutes.ARG_CUSTOMER_ID) { type = NavType.LongType })
+                                ) { entry ->
+                                    val customerId = entry.arguments?.getLong(AppRoutes.ARG_CUSTOMER_ID) ?: return@composable
+                                    PaymentIntakeHistoryScreen(
+                                        viewModel = paymentHistoryViewModel,
+                                        filter = PaymentHistoryFilter.Customer(customerId),
+                                        focusReceiptId = null,
+                                        onBack = { navController.popBackStack() },
+                                        onRemoved = {
+                                            refreshAfterPayments()
+                                            customerViewModel.loadCustomer(customerId)
+                                        }
+                                    )
+                                }
+
+                                composable(
+                                    route = AppRoutes.PaymentHistoryOrder,
+                                    arguments = listOf(navArgument(AppRoutes.ARG_ORDER_ID) { type = NavType.LongType })
+                                ) { entry ->
+                                    val orderId = entry.arguments?.getLong(AppRoutes.ARG_ORDER_ID) ?: return@composable
+                                    PaymentIntakeHistoryScreen(
+                                        viewModel = paymentHistoryViewModel,
+                                        filter = PaymentHistoryFilter.Order(orderId),
+                                        focusReceiptId = null,
+                                        onBack = { navController.popBackStack() },
+                                        onRemoved = { refreshAfterPayments() }
+                                    )
+                                }
+
+                                composable(AppRoutes.Summary) {
+                                    SummaryScreen(
+                                        monthLabel = monthLabel(currentYear, currentMonth),
+                                        monthTotal = monthTotal,
+                                        initialDate = summaryDate ?: selectedDate ?: today,
+                                        orders = summaryOrders,
+                                        rangeTotal = summaryTotal,
+                                        customerNames = summaryCustomerNames,
+                                        onAnchorDateChange = { updated -> summaryDate = updated },
+                                        onLoadRange = { start, end ->
+                                            orderViewModel.loadSummaryRange(startInclusive = start, endExclusive = end)
+                                        },
+                                        onLedgerClick = {
+                                            moneyTabName = MoneyTab.Ledger.name
+                                            selectedTopLevelRoute = AppRoutes.Money
+                                            navController.navigate(AppRoutes.Money) { launchSingleTop = true }
+                                        },
+                                        onBackupClick = { navController.navigate(AppRoutes.Backup) },
+                                        onNotificationsClick = { navController.navigate(AppRoutes.Notifications) },
+                                        onBack = { navController.popBackStack() }
+                                    )
+                                }
+
+                                composable(AppRoutes.Backup) {
+                                    BackupSettingsScreen(
+                                        onBack = { navController.popBackStack() },
+                                        onImportContacts = openImportContacts
+                                    )
+                                }
+
+                                composable(AppRoutes.Notifications) {
+                                    NotificationSettingsScreen(onBack = { navController.popBackStack() })
+                                }
                             }
                         }
 
                         VoiceCalculatorOverlay(
                             hasPermission = hasRecordPermission,
-                            onRequestPermission = voiceCalcAccess.onRequestPermission,
+                            onRequestPermission = { recordPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO) },
                             isSuppressed = overlaySuppressed.value,
                             defaultIdleYDp = 72.dp
                         )
@@ -724,7 +814,7 @@ class MainActivity : ComponentActivity() {
                             AlertDialog(
                                 onDismissRequest = {
                                     pendingCreditPrompt = null
-                                    viewModel.clearCreditPrompt()
+                                    orderViewModel.clearCreditPrompt()
                                 },
                                 title = { Text("Apply available credit?") },
                                 text = {
@@ -735,10 +825,11 @@ class MainActivity : ComponentActivity() {
                                 confirmButton = {
                                     TextButton(onClick = {
                                         pendingCreditPrompt = null
-                                        viewModel.applyAvailableCreditToOrder(
+                                        orderViewModel.applyAvailableCreditToOrder(
                                             orderId = prompt.orderId,
                                             customerId = prompt.customerId
                                         )
+                                        refreshAfterPayments()
                                     }) {
                                         Text("Apply credit")
                                     }
@@ -746,9 +837,36 @@ class MainActivity : ComponentActivity() {
                                 dismissButton = {
                                     TextButton(onClick = {
                                         pendingCreditPrompt = null
-                                        viewModel.clearCreditPrompt()
+                                        orderViewModel.clearCreditPrompt()
                                     }) {
                                         Text("Skip")
+                                    }
+                                }
+                            )
+                        }
+
+                        if (showUpdateDialog) {
+                            AlertDialog(
+                                onDismissRequest = {
+                                    showUpdateDialog = false
+                                    updatePrefs.markVersionSeen(BuildConfig.VERSION_NAME)
+                                },
+                                title = { Text("What's new") },
+                                text = {
+                                    Column {
+                                        updateNotes.forEach { note ->
+                                            Text(text = "- $note")
+                                        }
+                                    }
+                                },
+                                confirmButton = {
+                                    TextButton(
+                                        onClick = {
+                                            showUpdateDialog = false
+                                            updatePrefs.markVersionSeen(BuildConfig.VERSION_NAME)
+                                        }
+                                    ) {
+                                        Text("Got it")
                                     }
                                 }
                             )
@@ -764,23 +882,79 @@ class MainActivity : ComponentActivity() {
         launchIntent.value = intent
     }
 }
+private fun topLevelRouteFor(route: String?): String? {
+    return when {
+        route == null -> null
+        route == AppRoutes.Calendar -> AppRoutes.Calendar
+        route.startsWith("day/") -> AppRoutes.Calendar
+        route == AppRoutes.Summary -> AppRoutes.Calendar
+        route == AppRoutes.Orders -> AppRoutes.Orders
+        route == AppRoutes.Customers -> AppRoutes.Customers
+        route.startsWith("customer/") -> AppRoutes.Customers
+        route == AppRoutes.ImportContacts -> AppRoutes.Customers
+        route == AppRoutes.Money -> AppRoutes.Money
+        route.startsWith("payment_history/") -> AppRoutes.Money
+        else -> null
+    }
+}
 
-private sealed class Screen {
-    data object Calendar : Screen()
-    data class Day(val date: LocalDate) : Screen()
-    data object Summary : Screen()
-    data object Backup : Screen()
-    data object Unpaid : Screen()
-    data object Notifications : Screen()
-    data object Ledger : Screen()
-    data object CustomerList : Screen()
-    data object ImportContacts : Screen()
-    data class CustomerDetail(val customerId: Long) : Screen()
-    data class PaymentIntake(val sharedText: String?) : Screen()
-    data class PaymentIntakeHistory(
-        val filter: PaymentHistoryFilter,
-        val focusReceiptId: Long? = null
-    ) : Screen()
+private fun navigateTopLevel(
+    navController: NavHostController,
+    route: String,
+    resetToRoot: Boolean = false
+) {
+    val currentRoute = navController.currentBackStackEntry?.destination?.route
+    if (resetToRoot) {
+        if (currentRoute == route) {
+            return
+        }
+        navController.navigate(route) {
+            popUpTo(navController.graph.findStartDestination().id) {
+                inclusive = true
+                saveState = false
+            }
+            launchSingleTop = true
+            restoreState = false
+        }
+        return
+    }
+    navController.navigate(route) {
+        popUpTo(navController.graph.findStartDestination().id) {
+            saveState = true
+        }
+        launchSingleTop = true
+        restoreState = true
+    }
+}
+
+private fun navigateToPaymentHistory(
+    navController: NavHostController,
+    filter: PaymentHistoryFilter,
+    focusReceiptId: Long?
+) {
+    val route = when (filter) {
+        PaymentHistoryFilter.All -> AppRoutes.paymentHistoryAll(focusReceiptId)
+        is PaymentHistoryFilter.Customer -> AppRoutes.paymentHistoryCustomer(filter.customerId)
+        is PaymentHistoryFilter.Order -> AppRoutes.paymentHistoryOrder(filter.orderId)
+    }
+    navController.navigate(route)
+}
+
+private fun navToImportContacts(
+    context: Context,
+    onNavigate: (String) -> Unit,
+    onOpen: () -> Unit
+) {
+    val hasPermission =
+        ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.READ_CONTACTS
+        ) == PackageManager.PERMISSION_GRANTED
+    if (hasPermission) {
+        onOpen()
+    } else {
+        onNavigate(AppRoutes.Customers)
+    }
 }
 
 private fun monthLabel(year: Int, month: Int): String {
@@ -803,7 +977,7 @@ private fun monthLabel(year: Int, month: Int): String {
     return "$monthName $year"
 }
 
-private fun loadAllContacts(context: Context): List<ImportContact> {
+private suspend fun loadAllContacts(context: Context): List<ImportContact> {
     val resolver = context.contentResolver
     val projection = arrayOf(
         ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME,

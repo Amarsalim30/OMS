@@ -48,6 +48,7 @@ android {
 dependencies {
     // Room components
     implementation(libs.androidx.room.runtime)
+    implementation(libs.androidx.compose.foundation)
     ksp(libs.androidx.room.compiler)
 
     // Kotlin Extensions and Coroutines support for Room
@@ -76,7 +77,12 @@ dependencies {
     implementation(libs.androidx.ui)
     implementation(libs.androidx.ui.graphics)
     implementation(libs.androidx.ui.tooling.preview)
+    implementation("androidx.compose.foundation:foundation")
     implementation(libs.androidx.material3)
+    implementation(libs.androidx.navigation.compose)
+    implementation(libs.androidx.lifecycle.viewmodel.compose)
+    implementation(libs.androidx.material3.window.size)
+    implementation("androidx.compose.runtime:runtime-saveable")
     implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.compose.runtime:runtime-livedata")
 
