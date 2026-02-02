@@ -451,10 +451,6 @@ class MainActivity : ComponentActivity() {
                                             NotificationScheduler.enqueueNow(context)
                                         },
                                         searchCustomers = { query -> orderViewModel.searchCustomers(query) },
-                                        onCustomersClick = {
-                                            selectedTopLevelRoute = AppRoutes.Customers
-                                            navigateTopLevel(navController, AppRoutes.Customers, resetToRoot = true)
-                                        },
                                         onSummaryClick = { showMoreSheet = true },
                                         onMonthSettled = { year, month ->
                                             currentYear = year

@@ -40,7 +40,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.BarChart
-import androidx.compose.material.icons.filled.People
+import androidx.compose.material.icons.filled.ChevronLeft
+import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
@@ -127,7 +128,6 @@ fun CalendarScreen(
     onOpenDay: (LocalDate) -> Unit,
     onSaveOrder: (LocalDate, String, BigDecimal, String, String, String?) -> Unit,
     searchCustomers: suspend (String) -> List<CustomerEntity>,
-    onCustomersClick: () -> Unit,
     onSummaryClick: () -> Unit,
     onMonthSettled: (Int, Int) -> Unit,
     openQuickAddDate: LocalDate?,
@@ -252,6 +252,18 @@ fun CalendarScreen(
         topBar = {
             CalendarTopAppBar(
                 monthTitle = monthTitle,
+                onPrevMonth = {
+                    scope.launch {
+                        val targetPage = (pagerState.currentPage - 1).coerceAtLeast(0)
+                        pagerState.animateScrollToPage(targetPage)
+                    }
+                },
+                onNextMonth = {
+                    scope.launch {
+                        val targetPage = (pagerState.currentPage + 1).coerceAtMost(pageCount - 1)
+                        pagerState.animateScrollToPage(targetPage)
+                    }
+                },
                 onToday = {
                     scope.launch {
                         val jump = monthOffset(anchorYear, anchorMonth, today.year, today.monthNumber)
@@ -259,18 +271,7 @@ fun CalendarScreen(
                         onSelectDate(today)
                     }
                 },
-                onCustomersClick = onCustomersClick,
                 onSummaryClick = onSummaryClick
-            )
-        },
-        bottomBar = {
-            BottomActionBar(
-                selectedDate = selectedDate,
-                onViewClick = { date ->
-                    onSelectDate(date)
-                    onOpenDay(date)
-                },
-                modifier = Modifier
             )
         },
         floatingActionButton = {
@@ -294,8 +295,7 @@ fun CalendarScreen(
         ) {
             MonthSummaryCard(
                 monthTotal = displayedMonthTotal,
-                dueCount = displayedBadgeCount,
-                onSummaryClick = onSummaryClick
+                dueCount = displayedBadgeCount
             )
 
             WeekdayHeaderRow()
@@ -684,9 +684,10 @@ fun CalendarScreen(
 @OptIn(ExperimentalMaterial3Api::class)
 private fun CalendarTopAppBar(
     monthTitle: String,
+    onPrevMonth: () -> Unit,
+    onNextMonth: () -> Unit,
     onToday: () -> Unit,
-    onSummaryClick: () -> Unit,
-    onCustomersClick: () -> Unit
+    onSummaryClick: () -> Unit
 ) {
     CenterAlignedTopAppBar(
         title = {
@@ -705,11 +706,14 @@ private fun CalendarTopAppBar(
             }
         },
         actions = {
+            IconButton(onClick = onPrevMonth) {
+                Icon(imageVector = Icons.Filled.ChevronLeft, contentDescription = "Previous month")
+            }
+            IconButton(onClick = onNextMonth) {
+                Icon(imageVector = Icons.Filled.ChevronRight, contentDescription = "Next month")
+            }
             IconButton(onClick = onToday) {
                 Icon(imageVector = Icons.Filled.CalendarToday, contentDescription = "Today")
-            }
-            IconButton(onClick = onCustomersClick) {
-                Icon(imageVector = Icons.Filled.People, contentDescription = "Customers")
             }
         }
     )
@@ -718,8 +722,7 @@ private fun CalendarTopAppBar(
 @Composable
 private fun MonthSummaryCard(
     monthTotal: BigDecimal?,
-    dueCount: Int,
-    onSummaryClick: () -> Unit
+    dueCount: Int
 ) {
     Column(
         modifier = Modifier
@@ -756,9 +759,6 @@ private fun MonthSummaryCard(
                             modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
                         )
                     }
-                }
-                TextButton(onClick = onSummaryClick) {
-                    Text("Summary")
                 }
             }
         }
@@ -904,11 +904,8 @@ fun DayCell(
             MaterialTheme.colorScheme.primary
         }
     val handleClick = {
-        if (isSelected && hasOrders) {
-            onOpenDay(day.date)
-        } else {
-            onSelectDate(day.date)
-        }
+        onSelectDate(day.date)
+        onOpenDay(day.date)
     }
 
     Surface(
