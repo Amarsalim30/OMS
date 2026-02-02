@@ -49,6 +49,7 @@ import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -80,6 +81,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
@@ -103,6 +105,7 @@ import com.zeynbakers.order_management_system.core.ui.LocalVoiceOverlaySuppresse
 import com.zeynbakers.order_management_system.core.ui.LocalVoiceInputRouter
 import com.zeynbakers.order_management_system.core.ui.VoiceTarget
 import com.zeynbakers.order_management_system.core.ui.VoiceCalculatorOverlay
+import com.zeynbakers.order_management_system.core.calendar.CalendarPreferences
 import com.zeynbakers.order_management_system.customer.data.CustomerEntity
 import java.math.BigDecimal
 import kotlinx.coroutines.flow.collectLatest
@@ -156,6 +159,9 @@ fun CalendarScreen(
     var suggestions by remember { mutableStateOf<List<CustomerEntity>>(emptyList()) }
     var isMonthPickerOpen by remember { mutableStateOf(false) }
     var isLegendOpen by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+    val calendarPrefs = remember { CalendarPreferences(context) }
+    var weekStartPreference by remember { mutableStateOf(calendarPrefs.readWeekStart()) }
     val overlaySuppressed = LocalVoiceOverlaySuppressed.current
     val voiceCalcAccess = LocalVoiceCalcAccess.current
     val voiceRouter = LocalVoiceInputRouter.current
@@ -200,6 +206,8 @@ fun CalendarScreen(
     val today = remember {
         Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date
     }
+    val systemWeekStart = remember { Calendar.getInstance(Locale.getDefault()).firstDayOfWeek }
+    val weekStart = weekStartPreference ?: systemWeekStart
     val anchorYear =
         when {
             baseYear > 0 -> baseYear
@@ -338,7 +346,7 @@ fun CalendarScreen(
                 onLegendClick = { isLegendOpen = true }
             )
 
-            WeekdayHeaderRow()
+            WeekdayHeaderRow(weekStart = weekStart)
 
             Box(modifier = Modifier.weight(1f, fill = true)) {
                 HorizontalPager(
@@ -358,14 +366,14 @@ fun CalendarScreen(
                             else -> emptyMap()
                         }
                     }
-                    val monthDays = remember(pageYear, pageMonth, snapshot, orderData, today) {
-                        snapshot?.days
-                            ?: buildMonthGrid(
-                                year = pageYear,
-                                month = pageMonth,
-                                today = today,
-                                orderData = orderData
-                            )
+                    val monthDays = remember(pageYear, pageMonth, orderData, today, weekStart) {
+                        buildMonthGrid(
+                            year = pageYear,
+                            month = pageMonth,
+                            today = today,
+                            orderData = orderData,
+                            weekStart = weekStart
+                        )
                     }
 
                     MonthGrid(
@@ -400,7 +408,15 @@ fun CalendarScreen(
     }
 
     if (isLegendOpen) {
-        LegendInfoSheet(onDismiss = { isLegendOpen = false })
+        LegendInfoSheet(
+            weekStart = weekStart,
+            systemWeekStart = systemWeekStart,
+            onDismiss = { isLegendOpen = false },
+            onWeekStartChange = { selection ->
+                weekStartPreference = selection
+                calendarPrefs.setWeekStart(selection)
+            }
+        )
     }
 
     if (isQuickAddOpen && activeDate != null) {
@@ -965,7 +981,12 @@ private fun MonthSummaryCard(
 
 @Composable
 @OptIn(ExperimentalMaterial3Api::class)
-private fun LegendInfoSheet(onDismiss: () -> Unit) {
+private fun LegendInfoSheet(
+    weekStart: Int,
+    systemWeekStart: Int,
+    onDismiss: () -> Unit,
+    onWeekStartChange: (Int?) -> Unit
+) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -993,6 +1014,28 @@ private fun LegendInfoSheet(onDismiss: () -> Unit) {
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+            Text(
+                text = "Week starts on",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FilterChip(
+                    selected = weekStart == systemWeekStart,
+                    onClick = { onWeekStartChange(null) },
+                    label = { Text("System") }
+                )
+                FilterChip(
+                    selected = weekStart == Calendar.MONDAY,
+                    onClick = { onWeekStartChange(Calendar.MONDAY) },
+                    label = { Text("Mon") }
+                )
+                FilterChip(
+                    selected = weekStart == Calendar.SUNDAY,
+                    onClick = { onWeekStartChange(Calendar.SUNDAY) },
+                    label = { Text("Sun") }
+                )
+            }
         }
     }
 }
@@ -1031,13 +1074,11 @@ private fun LegendItem(label: String, state: PaymentState) {
 }
 
 @Composable
-private fun WeekdayHeaderRow() {
+private fun WeekdayHeaderRow(weekStart: Int) {
     val locale = Locale.getDefault()
-    val calendar = Calendar.getInstance(locale)
-    val firstDay = calendar.firstDayOfWeek
     val dayLabels = DateFormatSymbols(locale).shortWeekdays
     val dayOrder = (0 until 7).map { offset ->
-        ((firstDay - 1 + offset) % 7) + 1
+        ((weekStart - 1 + offset) % 7) + 1
     }
     val labels = dayOrder.map { dayLabels[it] }
     Row(
@@ -1304,13 +1345,17 @@ private fun buildMonthGrid(
     year: Int,
     month: Int,
     today: LocalDate,
-    orderData: Map<LocalDate, CalendarDayUi>
+    orderData: Map<LocalDate, CalendarDayUi>,
+    weekStart: Int
 ): List<CalendarDayUi> {
     val start = LocalDate(year, month, 1)
     val daysInMonth = daysInMonth(year, month)
     val endOfMonth = LocalDate(year, month, daysInMonth)
-    val leadingDays = start.dayOfWeek.ordinal
-    val trailingDays = 6 - endOfMonth.dayOfWeek.ordinal
+    val firstDayIndex = weekStart
+    val startIndex = calendarDayIndex(start)
+    val endIndex = calendarDayIndex(endOfMonth)
+    val leadingDays = (startIndex - firstDayIndex + 7) % 7
+    val trailingDays = (6 - ((endIndex - firstDayIndex + 7) % 7) + 7) % 7
     val gridStart = start.plus(-leadingDays, DateTimeUnit.DAY)
 
     val totalDays = leadingDays + daysInMonth + trailingDays
@@ -1329,6 +1374,18 @@ private fun buildMonthGrid(
                 paymentState = null
             )
         }
+    }
+}
+
+private fun calendarDayIndex(date: LocalDate): Int {
+    return when (date.dayOfWeek.ordinal) {
+        0 -> Calendar.MONDAY
+        1 -> Calendar.TUESDAY
+        2 -> Calendar.WEDNESDAY
+        3 -> Calendar.THURSDAY
+        4 -> Calendar.FRIDAY
+        5 -> Calendar.SATURDAY
+        else -> Calendar.SUNDAY
     }
 }
 
