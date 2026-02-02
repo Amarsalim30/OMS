@@ -39,8 +39,8 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CalendarToday
-import androidx.compose.material.icons.filled.ReceiptLong
-import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.BarChart
+import androidx.compose.material.icons.filled.People
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
@@ -701,7 +701,7 @@ private fun CalendarTopAppBar(
         },
         navigationIcon = {
             IconButton(onClick = onSummaryClick) {
-                Icon(imageVector = Icons.Filled.ReceiptLong, contentDescription = "Summary")
+                Icon(imageVector = Icons.Filled.BarChart, contentDescription = "Summary")
             }
         },
         actions = {
@@ -709,7 +709,7 @@ private fun CalendarTopAppBar(
                 Icon(imageVector = Icons.Filled.CalendarToday, contentDescription = "Today")
             }
             IconButton(onClick = onCustomersClick) {
-                Icon(imageVector = Icons.Filled.Search, contentDescription = "Customers")
+                Icon(imageVector = Icons.Filled.People, contentDescription = "Customers")
             }
         }
     )

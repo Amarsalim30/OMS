@@ -17,10 +17,11 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AccountBalanceWallet
+import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.ListAlt
 import androidx.compose.material.icons.filled.Notifications
-import androidx.compose.material.icons.filled.Payments
 import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.ReceiptLong
@@ -368,22 +369,22 @@ class MainActivity : ComponentActivity() {
                             TopLevelDestination(AppRoutes.Calendar, "Calendar", Icons.Filled.CalendarToday),
                             TopLevelDestination(AppRoutes.Orders, "Orders", Icons.Filled.ListAlt),
                             TopLevelDestination(AppRoutes.Customers, "Customers", Icons.Filled.People),
-                            TopLevelDestination(AppRoutes.Money, "Money", Icons.Filled.Payments)
+                            TopLevelDestination(AppRoutes.Money, "Money", Icons.Filled.AccountBalanceWallet)
                         )
 
                         val moreActions = listOf(
-                            MoreAction("Summary", Icons.Filled.ReceiptLong) {
+                            MoreAction("Summary", Icons.Filled.BarChart) {
                                 showMoreSheet = false
                                 selectedTopLevelRoute = AppRoutes.Calendar
                                 navController.navigate(AppRoutes.Summary)
                             },
-                            MoreAction("Statements", Icons.Filled.ReceiptLong) {
+                            MoreAction("Statements", Icons.Filled.AccountBalanceWallet) {
                                 showMoreSheet = false
                                 moneyTabName = MoneyTab.Ledger.name
                                 selectedTopLevelRoute = AppRoutes.Money
                                 navController.navigate(AppRoutes.Money) { launchSingleTop = true }
                             },
-                            MoreAction("Payment history", Icons.Filled.Payments) {
+                            MoreAction("Payment history", Icons.Filled.ReceiptLong) {
                                 showMoreSheet = false
                                 selectedTopLevelRoute = AppRoutes.Money
                                 navigateToPaymentHistory(navController, PaymentHistoryFilter.All, null)

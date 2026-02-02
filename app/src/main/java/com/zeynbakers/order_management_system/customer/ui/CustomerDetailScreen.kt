@@ -528,18 +528,18 @@ private fun LedgerHeader(
     Column(modifier = Modifier.fillMaxWidth()) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Icon(
-                imageVector = Icons.AutoMirrored.Filled.ReceiptLong,
-                contentDescription = "Ledger",
+                imageVector = Icons.Outlined.AccountBalanceWallet,
+                contentDescription = "Statement",
                 tint = MaterialTheme.colorScheme.primary
             )
             Spacer(Modifier.width(8.dp))
-            Text(text = "Ledger", style = MaterialTheme.typography.titleMedium)
+            Text(text = "Statement", style = MaterialTheme.typography.titleMedium)
         }
         Spacer(Modifier.height(8.dp))
         OutlinedTextField(
             value = ledgerQuery,
             onValueChange = onQueryChange,
-            label = { Text("Search ledger") },
+            label = { Text("Search statement") },
             placeholder = { Text("Notes, amount, date") },
             singleLine = true,
             modifier = Modifier.fillMaxWidth()
