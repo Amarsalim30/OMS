@@ -373,22 +373,6 @@ class MainActivity : ComponentActivity() {
                         )
 
                         val moreActions = listOf(
-                            MoreAction("Summary", Icons.Filled.BarChart) {
-                                showMoreSheet = false
-                                selectedTopLevelRoute = AppRoutes.Calendar
-                                navController.navigate(AppRoutes.Summary)
-                            },
-                            MoreAction("Statements", Icons.Filled.AccountBalanceWallet) {
-                                showMoreSheet = false
-                                moneyTabName = MoneyTab.Ledger.name
-                                selectedTopLevelRoute = AppRoutes.Money
-                                navController.navigate(AppRoutes.Money) { launchSingleTop = true }
-                            },
-                            MoreAction("Payment history", Icons.Filled.ReceiptLong) {
-                                showMoreSheet = false
-                                selectedTopLevelRoute = AppRoutes.Money
-                                navigateToPaymentHistory(navController, PaymentHistoryFilter.All, null)
-                            },
                             MoreAction("Backup & restore", Icons.Filled.Settings) {
                                 showMoreSheet = false
                                 navController.navigate(AppRoutes.Backup)
@@ -451,7 +435,7 @@ class MainActivity : ComponentActivity() {
                                             NotificationScheduler.enqueueNow(context)
                                         },
                                         searchCustomers = { query -> orderViewModel.searchCustomers(query) },
-                                        onSummaryClick = { showMoreSheet = true },
+                                        onSummaryClick = { navController.navigate(AppRoutes.Summary) },
                                         onMonthSettled = { year, month ->
                                             currentYear = year
                                             currentMonth = month
@@ -787,13 +771,6 @@ class MainActivity : ComponentActivity() {
                                         onLoadRange = { start, end ->
                                             orderViewModel.loadSummaryRange(startInclusive = start, endExclusive = end)
                                         },
-                                        onLedgerClick = {
-                                            moneyTabName = MoneyTab.Ledger.name
-                                            selectedTopLevelRoute = AppRoutes.Money
-                                            navController.navigate(AppRoutes.Money) { launchSingleTop = true }
-                                        },
-                                        onBackupClick = { navController.navigate(AppRoutes.Backup) },
-                                        onNotificationsClick = { navController.navigate(AppRoutes.Notifications) },
                                         onBack = { navController.popBackStack() }
                                     )
                                 }

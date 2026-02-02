@@ -2,17 +2,18 @@ package com.zeynbakers.order_management_system.order.ui
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.combinedClickable
 import android.util.Log
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -29,22 +30,25 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.ChevronLeft
 import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -52,6 +56,7 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.ModalBottomSheetProperties
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -100,6 +105,8 @@ import com.zeynbakers.order_management_system.core.ui.VoiceTarget
 import com.zeynbakers.order_management_system.core.ui.VoiceCalculatorOverlay
 import com.zeynbakers.order_management_system.customer.data.CustomerEntity
 import java.math.BigDecimal
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import kotlinx.datetime.Clock
@@ -109,6 +116,10 @@ import kotlinx.datetime.Month
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.plus
 import kotlinx.datetime.toLocalDateTime
+import java.text.DateFormatSymbols
+import java.util.Calendar
+import java.util.Locale
+import java.math.RoundingMode
 
 private const val TAG_SHEET_BACK = "SheetBack"
 
@@ -143,18 +154,26 @@ fun CalendarScreen(
     var totalError by remember { mutableStateOf<String?>(null) }
     var customerError by remember { mutableStateOf<String?>(null) }
     var suggestions by remember { mutableStateOf<List<CustomerEntity>>(emptyList()) }
+    var isMonthPickerOpen by remember { mutableStateOf(false) }
+    var isLegendOpen by remember { mutableStateOf(false) }
     val overlaySuppressed = LocalVoiceOverlaySuppressed.current
     val voiceCalcAccess = LocalVoiceCalcAccess.current
     val voiceRouter = LocalVoiceInputRouter.current
     val scope = rememberCoroutineScope()
 
-    LaunchedEffect(customerName, customerPhone) {
-        val query = when {
-            customerName.isNotBlank() -> customerName
-            customerPhone.isNotBlank() -> customerPhone
-            else -> ""
+    LaunchedEffect(Unit) {
+        snapshotFlow {
+            when {
+                customerName.isNotBlank() -> customerName
+                customerPhone.isNotBlank() -> customerPhone
+                else -> ""
+            }
         }
-        suggestions = if (query.isBlank()) emptyList() else searchCustomers(query)
+            .debounce(250)
+            .distinctUntilChanged()
+            .collectLatest { query ->
+                suggestions = if (query.isBlank()) emptyList() else searchCustomers(query)
+            }
     }
 
     LaunchedEffect(isQuickAddOpen) {
@@ -246,24 +265,32 @@ fun CalendarScreen(
             }
         }
     }
+    val hasOrdersInVisibleMonth by remember(
+        visibleSnapshot,
+        visibleMonth,
+        currentYear,
+        currentMonth,
+        days
+    ) {
+        derivedStateOf {
+            val snapshot = visibleSnapshot
+            when {
+                snapshot != null ->
+                    snapshot.days.any { it.isInCurrentMonth && it.orderCount > 0 }
+                visibleMonth.first == currentYear && visibleMonth.second == currentMonth ->
+                    days.any { it.isInCurrentMonth && it.orderCount > 0 }
+                else -> false
+            }
+        }
+    }
 
     Scaffold(
         contentWindowInsets = WindowInsets(0),
         topBar = {
             CalendarTopAppBar(
                 monthTitle = monthTitle,
-                onPrevMonth = {
-                    scope.launch {
-                        val targetPage = (pagerState.currentPage - 1).coerceAtLeast(0)
-                        pagerState.animateScrollToPage(targetPage)
-                    }
-                },
-                onNextMonth = {
-                    scope.launch {
-                        val targetPage = (pagerState.currentPage + 1).coerceAtMost(pageCount - 1)
-                        pagerState.animateScrollToPage(targetPage)
-                    }
-                },
+                todayDay = today.dayOfMonth,
+                onMonthPickerClick = { isMonthPickerOpen = true },
                 onToday = {
                     scope.launch {
                         val jump = monthOffset(anchorYear, anchorMonth, today.year, today.monthNumber)
@@ -275,7 +302,7 @@ fun CalendarScreen(
             )
         },
         floatingActionButton = {
-            FloatingActionButton(
+            SmallFloatingActionButton(
                 onClick = {
                     val date = selectedDate ?: today
                     if (selectedDate == null) {
@@ -295,7 +322,20 @@ fun CalendarScreen(
         ) {
             MonthSummaryCard(
                 monthTotal = displayedMonthTotal,
-                dueCount = displayedBadgeCount
+                dueCount = displayedBadgeCount,
+                hasOrders = hasOrdersInVisibleMonth,
+                onDueClick = onSummaryClick,
+                onAddOrder = {
+                    val targetDate =
+                        if (visibleMonth.first == today.year && visibleMonth.second == today.monthNumber) {
+                            today
+                        } else {
+                            LocalDate(visibleMonth.first, visibleMonth.second, 1)
+                        }
+                    onSelectDate(targetDate)
+                    isQuickAddOpen = true
+                },
+                onLegendClick = { isLegendOpen = true }
             )
 
             WeekdayHeaderRow()
@@ -342,6 +382,25 @@ fun CalendarScreen(
                 }
             }
         }
+    }
+
+    if (isMonthPickerOpen) {
+        MonthPickerSheet(
+            initialYear = visibleMonth.first,
+            initialMonth = visibleMonth.second,
+            onDismiss = { isMonthPickerOpen = false },
+            onMonthSelected = { year, month ->
+                val jump = monthOffset(anchorYear, anchorMonth, year, month)
+                scope.launch {
+                    pagerState.animateScrollToPage(baseIndex + jump)
+                }
+                isMonthPickerOpen = false
+            }
+        )
+    }
+
+    if (isLegendOpen) {
+        LegendInfoSheet(onDismiss = { isLegendOpen = false })
     }
 
     if (isQuickAddOpen && activeDate != null) {
@@ -402,21 +461,7 @@ fun CalendarScreen(
                     .fillMaxWidth()
                     .fillMaxHeight(0.9f)
             ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .fillMaxHeight()
-                        .imePadding()
-                        .navigationBarsPadding()
-                        .verticalScroll(rememberScrollState())
-                        .padding(12.dp)
-                ) {
-                    Text(
-                        text = "Add order on ${activeDate.dayOfMonth} ${activeDate.month.name.lowercase().replaceFirstChar { it.uppercase() }}",
-                        style = MaterialTheme.typography.titleMedium
-                    )
-            Spacer(Modifier.height(6.dp))
-
+                val listState = rememberLazyListState()
                 val trimmedNotes = notes.trim()
                 val parsedTotal = totalText.trim().takeIf { it.isNotEmpty() }?.let {
                     runCatching { BigDecimal(it) }.getOrNull()
@@ -477,191 +522,214 @@ fun CalendarScreen(
                     }
                 }
 
-                OutlinedTextField(
-                    value = notes,
-                    onValueChange = {
-                        notes = it
-                        notesError = null
-                    },
-                    label = { Text("Notes (required)") },
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
-                    keyboardActions = KeyboardActions(onNext = { totalRequester.requestFocus() }),
+                LazyColumn(
+                    state = listState,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .focusRequester(notesRequester)
-                        .onFocusChanged { state ->
-                            if (state.isFocused) {
-                                voiceRouter.onFocusTarget(VoiceTarget.Notes)
-                            }
-                        }
-                )
-                notesError?.let {
-                    Text(text = it, color = MaterialTheme.colorScheme.error)
-                }
-
-                Spacer(Modifier.height(6.dp))
-
-                val setTotalText by rememberUpdatedState<(String) -> Unit>({ totalText = it })
-                OutlinedTextField(
-                    value = totalText,
-                    onValueChange = {
-                        val filtered = it.filter { ch -> ch.isDigit() || ch == '.' }
-                        if (filtered.count { ch -> ch == '.' } <= 1) {
-                            totalText = filtered
-                        }
-                        totalError = null
-                    },
-                    label = { Text("Total amount (KES)") },
-                    supportingText = {
-                        when {
-                            parsedTotal == null && totalText.isNotBlank() -> Text("Enter a valid total")
-                            formattedTotal != null -> Text("Will save as $formattedTotal")
-                        }
-                    },
-                    keyboardOptions = KeyboardOptions(
-                        keyboardType = KeyboardType.Decimal,
-                        imeAction = ImeAction.Next
-                    ),
-                    keyboardActions = KeyboardActions(onNext = { pickupRequester.requestFocus() }),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .focusRequester(totalRequester)
-                        .onFocusChanged { state ->
-                            if (state.isFocused) {
-                                amountRegistry.update(setTotalText)
-                                voiceRouter.onFocusTarget(VoiceTarget.Total)
-                            }
-                        }
-                )
-                totalError?.let {
-                    Text(text = it, color = MaterialTheme.colorScheme.error)
-                }
-
-                Spacer(Modifier.height(6.dp))
-
-                OutlinedTextField(
-                    value = pickupTimeText,
-                    onValueChange = {
-                        val filtered = it.filter { ch -> ch.isDigit() || ch == ':' || ch == '.' }
-                        if (filtered.length <= 5) {
-                            pickupTimeText = filtered
-                        }
-                    },
-                    label = { Text("Pickup time (optional)") },
-                    placeholder = { Text("09:00") },
-                    isError = isPickupTimeInvalid,
-                    supportingText = {
-                        if (isPickupTimeInvalid) {
-                            Text("Use HH:MM (e.g., 09:30 or 930).")
-                        }
-                    },
-                    keyboardOptions = KeyboardOptions(
-                        keyboardType = KeyboardType.Number,
-                        imeAction = ImeAction.Next
-                    ),
-                    keyboardActions = KeyboardActions(onNext = { nameRequester.requestFocus() }),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .focusRequester(pickupRequester)
-                )
-
-                Spacer(Modifier.height(6.dp))
-
-                Text(text = "Customer (optional)", style = MaterialTheme.typography.titleSmall)
-                OutlinedTextField(
-                    value = customerName,
-                    onValueChange = {
-                        customerName = it
-                        customerError = null
-                    },
-                    label = { Text("Customer name") },
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
-                    keyboardActions = KeyboardActions(onNext = { phoneRequester.requestFocus() }),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .focusRequester(nameRequester)
-                )
-                Spacer(Modifier.height(6.dp))
-                OutlinedTextField(
-                    value = customerPhone,
-                    onValueChange = {
-                        customerPhone = it
-                        customerError = null
-                    },
-                    label = { Text("Customer phone") },
-                    keyboardOptions = KeyboardOptions(
-                        keyboardType = KeyboardType.Phone,
-                        imeAction = ImeAction.Done
-                    ),
-                    keyboardActions = KeyboardActions(
-                        onDone = {
-                            focusManager.clearFocus()
-                            if (canSave) {
-                                submitOrder()
-                            }
-                        }
-                    ),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .focusRequester(phoneRequester)
-                )
-
-                if (suggestions.isNotEmpty()) {
-                    Spacer(Modifier.height(4.dp))
-                    Column(
-                        modifier = Modifier
-                            .heightIn(max = 180.dp)
-                            .verticalScroll(rememberScrollState())
-                    ) {
-                        suggestions.forEach { customer ->
-                            TextButton(
-                                onClick = {
-                                    customerName = customer.name
-                                    customerPhone = customer.phone
-                                    suggestions = emptyList()
+                        .fillMaxHeight()
+                        .imePadding()
+                        .navigationBarsPadding()
+                        .padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    item {
+                        Text(
+                            text = "Add order on ${activeDate.dayOfMonth} ${activeDate.month.name.lowercase().replaceFirstChar { it.uppercase() }}",
+                            style = MaterialTheme.typography.titleMedium
+                        )
+                    }
+                    item {
+                        OutlinedTextField(
+                            value = notes,
+                            onValueChange = {
+                                notes = it
+                                notesError = null
+                            },
+                            label = { Text("Notes (required)") },
+                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                            keyboardActions = KeyboardActions(onNext = { totalRequester.requestFocus() }),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .focusRequester(notesRequester)
+                                .onFocusChanged { state ->
+                                    if (state.isFocused) {
+                                        voiceRouter.onFocusTarget(VoiceTarget.Notes)
+                                    }
                                 }
+                        )
+                    }
+                    item {
+                        notesError?.let {
+                            Text(text = it, color = MaterialTheme.colorScheme.error)
+                        }
+                    }
+                    item {
+                        val setTotalText by rememberUpdatedState<(String) -> Unit>({ totalText = it })
+                        OutlinedTextField(
+                            value = totalText,
+                            onValueChange = {
+                                val filtered = it.filter { ch -> ch.isDigit() || ch == '.' }
+                                if (filtered.count { ch -> ch == '.' } <= 1) {
+                                    totalText = filtered
+                                }
+                                totalError = null
+                            },
+                            label = { Text("Total amount (KES)") },
+                            supportingText = {
+                                when {
+                                    parsedTotal == null && totalText.isNotBlank() -> Text("Enter a valid total")
+                                    formattedTotal != null -> Text("Will save as $formattedTotal")
+                                }
+                            },
+                            keyboardOptions = KeyboardOptions(
+                                keyboardType = KeyboardType.Decimal,
+                                imeAction = ImeAction.Next
+                            ),
+                            keyboardActions = KeyboardActions(onNext = { pickupRequester.requestFocus() }),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .focusRequester(totalRequester)
+                                .onFocusChanged { state ->
+                                    if (state.isFocused) {
+                                        amountRegistry.update(setTotalText)
+                                        voiceRouter.onFocusTarget(VoiceTarget.Total)
+                                    }
+                                }
+                        )
+                    }
+                    item {
+                        totalError?.let {
+                            Text(text = it, color = MaterialTheme.colorScheme.error)
+                        }
+                    }
+                    item {
+                        OutlinedTextField(
+                            value = pickupTimeText,
+                            onValueChange = {
+                                val filtered = it.filter { ch -> ch.isDigit() || ch == ':' || ch == '.' }
+                                if (filtered.length <= 5) {
+                                    pickupTimeText = filtered
+                                }
+                            },
+                            label = { Text("Pickup time (optional)") },
+                            placeholder = { Text("09:00") },
+                            isError = isPickupTimeInvalid,
+                            supportingText = {
+                                if (isPickupTimeInvalid) {
+                                    Text("Use HH:MM (e.g., 09:30 or 930).")
+                                }
+                            },
+                            keyboardOptions = KeyboardOptions(
+                                keyboardType = KeyboardType.Number,
+                                imeAction = ImeAction.Next
+                            ),
+                            keyboardActions = KeyboardActions(onNext = { nameRequester.requestFocus() }),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .focusRequester(pickupRequester)
+                        )
+                    }
+                    item {
+                        Text(text = "Customer (optional)", style = MaterialTheme.typography.titleSmall)
+                    }
+                    item {
+                        OutlinedTextField(
+                            value = customerName,
+                            onValueChange = {
+                                customerName = it
+                                customerError = null
+                            },
+                            label = { Text("Customer name") },
+                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
+                            keyboardActions = KeyboardActions(onNext = { phoneRequester.requestFocus() }),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .focusRequester(nameRequester)
+                        )
+                    }
+                    item {
+                        OutlinedTextField(
+                            value = customerPhone,
+                            onValueChange = {
+                                customerPhone = it
+                                customerError = null
+                            },
+                            label = { Text("Customer phone") },
+                            keyboardOptions = KeyboardOptions(
+                                keyboardType = KeyboardType.Phone,
+                                imeAction = ImeAction.Done
+                            ),
+                            keyboardActions = KeyboardActions(
+                                onDone = {
+                                    focusManager.clearFocus()
+                                    if (canSave) {
+                                        submitOrder()
+                                    }
+                                }
+                            ),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .focusRequester(phoneRequester)
+                        )
+                    }
+                    if (suggestions.isNotEmpty()) {
+                        item {
+                            Column(
+                                modifier = Modifier
+                                    .heightIn(max = 180.dp)
+                                    .verticalScroll(rememberScrollState())
                             ) {
-                                Text("${customer.name} - ${customer.phone}")
+                                suggestions.forEach { customer ->
+                                    TextButton(
+                                        onClick = {
+                                            customerName = customer.name
+                                            customerPhone = customer.phone
+                                            suggestions = emptyList()
+                                        }
+                                    ) {
+                                        Text("${customer.name} - ${customer.phone}")
+                                    }
+                                }
                             }
                         }
                     }
-                }
-
-                customerError?.let {
-                    Text(text = it, color = MaterialTheme.colorScheme.error)
-                }
-
-                Spacer(Modifier.height(8.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        TextButton(
-                            onClick = { dismissSheet() }
-                        ) {
-                            Text("Cancel")
+                    item {
+                        customerError?.let {
+                            Text(text = it, color = MaterialTheme.colorScheme.error)
                         }
-                        TextButton(
-                            onClick = {
-                                notes = ""
-                                totalText = ""
-                                customerName = ""
-                                customerPhone = ""
-                                pickupTimeText = ""
-                                notesError = null
-                                totalError = null
-                                customerError = null
+                    }
+                    item {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            TextButton(
+                                onClick = { dismissSheet() }
+                            ) {
+                                Text("Cancel")
                             }
-                        ) {
-                            Text("Clear")
-                        }
-                        TextButton(
-                            onClick = {
-                                submitOrder()
-                            },
-                            enabled = canSave
-                        ) {
-                            Text("Save")
+                            TextButton(
+                                onClick = {
+                                    notes = ""
+                                    totalText = ""
+                                    customerName = ""
+                                    customerPhone = ""
+                                    pickupTimeText = ""
+                                    notesError = null
+                                    totalError = null
+                                    customerError = null
+                                }
+                            ) {
+                                Text("Clear")
+                            }
+                            TextButton(
+                                onClick = {
+                                    submitOrder()
+                                },
+                                enabled = canSave
+                            ) {
+                                Text("Save")
+                            }
                         }
                     }
                 }
@@ -684,21 +752,27 @@ fun CalendarScreen(
 @OptIn(ExperimentalMaterial3Api::class)
 private fun CalendarTopAppBar(
     monthTitle: String,
-    onPrevMonth: () -> Unit,
-    onNextMonth: () -> Unit,
+    todayDay: Int,
+    onMonthPickerClick: () -> Unit,
     onToday: () -> Unit,
     onSummaryClick: () -> Unit
 ) {
     CenterAlignedTopAppBar(
         title = {
-            Text(
-                text = monthTitle,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.SemiBold,
-                maxLines = 1,
-                softWrap = false,
-                overflow = TextOverflow.Ellipsis
-            )
+            TextButton(
+                onClick = onMonthPickerClick,
+                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
+            ) {
+                Text(
+                    text = monthTitle,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 1,
+                    softWrap = false,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Icon(imageVector = Icons.Filled.ArrowDropDown, contentDescription = "Select month")
+            }
         },
         navigationIcon = {
             IconButton(onClick = onSummaryClick) {
@@ -706,23 +780,124 @@ private fun CalendarTopAppBar(
             }
         },
         actions = {
-            IconButton(onClick = onPrevMonth) {
-                Icon(imageVector = Icons.Filled.ChevronLeft, contentDescription = "Previous month")
-            }
-            IconButton(onClick = onNextMonth) {
-                Icon(imageVector = Icons.Filled.ChevronRight, contentDescription = "Next month")
-            }
             IconButton(onClick = onToday) {
-                Icon(imageVector = Icons.Filled.CalendarToday, contentDescription = "Today")
+                Box(modifier = Modifier.size(24.dp)) {
+                    Icon(
+                        imageVector = Icons.Filled.CalendarToday,
+                        contentDescription = "Today",
+                        modifier = Modifier.fillMaxSize()
+                    )
+                    Text(
+                        text = todayDay.toString(),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(top = 5.dp)
+                    )
+                }
             }
         }
     )
 }
 
 @Composable
+@OptIn(ExperimentalMaterial3Api::class)
+private fun MonthPickerSheet(
+    initialYear: Int,
+    initialMonth: Int,
+    onDismiss: () -> Unit,
+    onMonthSelected: (Int, Int) -> Unit
+) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val locale = Locale.getDefault()
+    var pickerYear by remember { mutableStateOf(initialYear) }
+    val monthList = remember { Month.values().toList() }
+    val monthLabels = remember(locale) { DateFormatSymbols(locale).shortMonths }
+
+    LaunchedEffect(initialYear) {
+        pickerYear = initialYear
+    }
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                IconButton(onClick = { pickerYear -= 1 }) {
+                    Icon(imageVector = Icons.Filled.ChevronLeft, contentDescription = "Previous year")
+                }
+                Text(
+                    text = pickerYear.toString(),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold
+                )
+                IconButton(onClick = { pickerYear += 1 }) {
+                    Icon(imageVector = Icons.Filled.ChevronRight, contentDescription = "Next year")
+                }
+            }
+            LazyVerticalGrid(
+                columns = GridCells.Fixed(3),
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                items(monthList) { month ->
+                    val monthNumber = month.ordinal + 1
+                    val isSelected = pickerYear == initialYear && monthNumber == initialMonth
+                    val label = monthLabels.getOrNull(monthNumber - 1)?.takeIf { it.isNotBlank() }
+                        ?: month.name.lowercase().replaceFirstChar { it.uppercase() }
+                    Surface(
+                        color =
+                            if (isSelected) {
+                                MaterialTheme.colorScheme.primaryContainer
+                            } else {
+                                MaterialTheme.colorScheme.surfaceVariant
+                            },
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 44.dp)
+                            .clickable { onMonthSelected(pickerYear, monthNumber) }
+                    ) {
+                        Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                            Text(
+                                text = label,
+                                style = MaterialTheme.typography.labelLarge,
+                                color =
+                                    if (isSelected) {
+                                        MaterialTheme.colorScheme.onPrimaryContainer
+                                    } else {
+                                        MaterialTheme.colorScheme.onSurface
+                                    }
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
 private fun MonthSummaryCard(
     monthTotal: BigDecimal?,
-    dueCount: Int
+    dueCount: Int,
+    hasOrders: Boolean,
+    onDueClick: () -> Unit,
+    onAddOrder: () -> Unit,
+    onLegendClick: () -> Unit
 ) {
     Column(
         modifier = Modifier
@@ -747,23 +922,78 @@ private fun MonthSummaryCard(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                if (dueCount > 0) {
+                if (!hasOrders) {
                     Surface(
                         shape = RoundedCornerShape(999.dp),
-                        color = MaterialTheme.colorScheme.errorContainer
+                        color = MaterialTheme.colorScheme.surfaceVariant
                     ) {
                         Text(
-                            text = "Due $dueCount",
+                            text = "No orders",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                        )
+                    }
+                    TextButton(onClick = onAddOrder) {
+                        Text("Add order")
+                    }
+                } else if (dueCount > 0) {
+                    Surface(
+                        shape = RoundedCornerShape(999.dp),
+                        color = MaterialTheme.colorScheme.errorContainer,
+                        modifier = Modifier.clickable(role = Role.Button) { onDueClick() }
+                    ) {
+                        Text(
+                            text = "Unpaid $dueCount",
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.onErrorContainer,
                             modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
                         )
                     }
                 }
+                IconButton(onClick = onLegendClick) {
+                    Icon(
+                        imageVector = Icons.Filled.Info,
+                        contentDescription = "Payment status info",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
         }
-        Spacer(Modifier.height(4.dp))
-        StatusLegendRow()
+    }
+}
+
+@Composable
+@OptIn(ExperimentalMaterial3Api::class)
+private fun LegendInfoSheet(onDismiss: () -> Unit) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(
+                text = "Payment status",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.SemiBold
+            )
+            StatusLegendRow()
+            Text(
+                text = "Unpaid includes partial balances.",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Text(
+                text = "Tip: Tap a day to view details. Long-press to add an order.",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
     }
 }
 
@@ -789,7 +1019,7 @@ private fun LegendItem(label: String, state: PaymentState) {
         Surface(
             color = paymentStateColor(state),
             shape = CircleShape,
-            modifier = Modifier.size(6.dp)
+            modifier = Modifier.size(8.dp)
         ) {}
         Spacer(Modifier.width(6.dp))
         Text(
@@ -802,7 +1032,14 @@ private fun LegendItem(label: String, state: PaymentState) {
 
 @Composable
 private fun WeekdayHeaderRow() {
-    val labels = listOf("M", "T", "W", "T", "F", "S", "S")
+    val locale = Locale.getDefault()
+    val calendar = Calendar.getInstance(locale)
+    val firstDay = calendar.firstDayOfWeek
+    val dayLabels = DateFormatSymbols(locale).shortWeekdays
+    val dayOrder = (0 until 7).map { offset ->
+        ((firstDay - 1 + offset) % 7) + 1
+    }
+    val labels = dayOrder.map { dayLabels[it] }
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -810,10 +1047,11 @@ private fun WeekdayHeaderRow() {
         horizontalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         labels.forEachIndexed { index, label ->
+            val dayIndex = dayOrder[index]
             val color =
-                when (index) {
-                    5 -> MaterialTheme.colorScheme.primary
-                    6 -> MaterialTheme.colorScheme.error
+                when (dayIndex) {
+                    Calendar.SATURDAY -> MaterialTheme.colorScheme.primary
+                    Calendar.SUNDAY -> MaterialTheme.colorScheme.error
                     else -> MaterialTheme.colorScheme.onSurfaceVariant
                 }
             Text(
@@ -836,25 +1074,37 @@ private fun MonthGrid(
     onQuickAdd: (LocalDate) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    LazyVerticalGrid(
-        columns = GridCells.Fixed(7),
-        modifier = modifier,
-        userScrollEnabled = true,
-        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
-        verticalArrangement = Arrangement.spacedBy(4.dp)
-    ) {
-        items(items = days, key = { it.date.toString() }) { day ->
-            DayCell(
-                day = day,
-                isSelected = selectedDate == day.date,
-                onSelectDate = onSelectDate,
-                onOpenDay = onOpenDay,
-                onQuickAdd = onQuickAdd,
-                modifier = Modifier
-                    .sizeIn(minWidth = 48.dp, minHeight = 48.dp)
-                    .aspectRatio(1f)
-            )
+    val verticalPadding = 4.dp
+    val horizontalPadding = 10.dp
+    val spacing = 3.dp
+    BoxWithConstraints(modifier = modifier) {
+        val rows = (days.size / 7).coerceAtLeast(1)
+        val availableHeight = maxHeight - (verticalPadding * 2) - (spacing * (rows - 1))
+        val sixRowHeight = (maxHeight - (verticalPadding * 2) - (spacing * 5)) / 6
+        val cellHeight = (availableHeight / rows)
+            .coerceAtMost(sixRowHeight)
+            .coerceAtLeast(48.dp)
+        LazyVerticalGrid(
+            columns = GridCells.Fixed(7),
+            modifier = Modifier.fillMaxSize(),
+            userScrollEnabled = true,
+            contentPadding = PaddingValues(horizontal = horizontalPadding, vertical = verticalPadding),
+            horizontalArrangement = Arrangement.spacedBy(spacing),
+            verticalArrangement = Arrangement.spacedBy(spacing)
+        ) {
+            items(items = days, key = { it.date.toString() }) { day ->
+                DayCell(
+                    day = day,
+                    isSelected = selectedDate == day.date,
+                    onSelectDate = onSelectDate,
+                    onOpenDay = onOpenDay,
+                    onQuickAdd = onQuickAdd,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(cellHeight)
+                        .heightIn(min = 48.dp)
+                )
+            }
         }
     }
 }
@@ -873,17 +1123,30 @@ fun DayCell(
     val markerStates = remember(day.orderStates, day.orderCount, day.paymentState) {
         resolveMarkerStates(day)
     }
-    val overflowCount = (markerStates.size - 3).coerceAtLeast(0)
-    val markersToShow = markerStates.take(3)
     val dayDescription = remember(day, markerStates, isSelected) {
         buildDayContentDescription(day, markerStates, isSelected)
     }
     val dayTag = remember(day) { "day-cell-${day.date}" }
+    val compactTotal = if (hasOrders) formatKesCompact(day.totalAmount) else null
+    val statusTextColor =
+        when (day.paymentState) {
+            PaymentState.UNPAID -> paymentStateColor(PaymentState.UNPAID)
+            PaymentState.PAID -> paymentStateColor(PaymentState.PAID)
+            PaymentState.PARTIAL -> paymentStateColor(PaymentState.PARTIAL)
+            PaymentState.OVERPAID -> paymentStateColor(PaymentState.OVERPAID)
+            null -> MaterialTheme.colorScheme.onSurfaceVariant
+        }
     val containerColor =
+        when {
+            isSelected -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f)
+            day.isToday -> MaterialTheme.colorScheme.secondaryContainer
+            else -> MaterialTheme.colorScheme.surface
+        }
+    val selectionBorder =
         if (isSelected) {
-            MaterialTheme.colorScheme.primaryContainer
+            BorderStroke(1.dp, MaterialTheme.colorScheme.primary)
         } else {
-            MaterialTheme.colorScheme.surface
+            null
         }
     val baseTextColor =
         if (isSelected) {
@@ -895,7 +1158,7 @@ fun DayCell(
         if (day.isInCurrentMonth) {
             baseTextColor
         } else {
-            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
         }
     val todayRingColor =
         if (isSelected) {
@@ -916,81 +1179,50 @@ fun DayCell(
                 role = Role.Button
                 selected = isSelected
             }
-            .alpha(if (day.isInCurrentMonth) 1f else 0.45f)
+            .alpha(if (day.isInCurrentMonth) 1f else 0.8f)
             .combinedClickable(
                 enabled = day.isInCurrentMonth,
+                onClickLabel = "Open day",
+                onLongClickLabel = "Quick add order",
                 onClick = { handleClick() },
                 onLongClick = { onQuickAdd(day.date) }
             ),
         color = containerColor,
+        border = selectionBorder,
         shape = RoundedCornerShape(16.dp),
-        tonalElevation = if (isSelected) 2.dp else 0.dp
+        tonalElevation = 0.dp
     ) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(horizontal = 6.dp, vertical = 4.dp),
-            verticalArrangement = Arrangement.SpaceBetween
+                .padding(horizontal = 6.dp, vertical = 3.dp),
+            verticalArrangement = Arrangement.spacedBy(2.dp)
         ) {
-            Surface(
-                shape = CircleShape,
-                color = Color.Transparent,
-                border = if (day.isToday) BorderStroke(1.5.dp, todayRingColor) else null,
-                modifier = Modifier.size(28.dp)
-            ) {
-                Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                    Text(
-                        text = day.date.dayOfMonth.toString(),
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = FontWeight.SemiBold,
-                        color = dayTextColor,
-                        maxLines = 1
-                    )
+            Box(modifier = Modifier.fillMaxWidth()) {
+                Surface(
+                    shape = CircleShape,
+                    color = Color.Transparent,
+                    border = if (day.isToday) BorderStroke(1.5.dp, todayRingColor) else null,
+                    modifier = Modifier.size(28.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                        Text(
+                            text = day.date.dayOfMonth.toString(),
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.SemiBold,
+                            color = dayTextColor,
+                            maxLines = 1
+                        )
+                    }
                 }
             }
             if (hasOrders) {
-                DayMarkers(
-                    markers = markersToShow,
-                    overflowCount = overflowCount,
-                    tag = "day-markers-${day.date}"
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun DayMarkers(
-    markers: List<PaymentState>,
-    overflowCount: Int,
-    tag: String
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(12.dp)
-            .testTag(tag),
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        markers.forEach { state ->
-            Surface(
-                color = paymentStateColor(state),
-                shape = CircleShape,
-                modifier = Modifier.size(6.dp)
-            ) {}
-        }
-        if (overflowCount > 0) {
-            Surface(
-                shape = RoundedCornerShape(999.dp),
-                color = MaterialTheme.colorScheme.surfaceVariant,
-                modifier = Modifier.testTag("$tag-overflow")
-            ) {
                 Text(
-                    text = "+$overflowCount",
+                    text = "${day.orderCount} • $compactTotal",
                     style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 1.dp)
+                    color = statusTextColor,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
                 )
             }
         }
@@ -1000,10 +1232,31 @@ private fun DayMarkers(
 @Composable
 private fun paymentStateColor(state: PaymentState): Color {
     return when (state) {
-        PaymentState.PAID -> MaterialTheme.colorScheme.tertiary
-        PaymentState.PARTIAL -> MaterialTheme.colorScheme.secondary
-        PaymentState.UNPAID -> MaterialTheme.colorScheme.error
-        PaymentState.OVERPAID -> MaterialTheme.colorScheme.primary
+        PaymentState.UNPAID -> Color(0xFFE53935)
+        PaymentState.PAID -> Color(0xFF2E7D32)
+        PaymentState.PARTIAL -> Color(0xFFFFA000)
+        PaymentState.OVERPAID -> Color(0xFF5C6BC0)
+    }
+}
+
+private fun formatKesCompact(amount: BigDecimal): String {
+    val rounded = amount.setScale(0, RoundingMode.HALF_UP).toLong()
+    val abs = kotlin.math.abs(rounded)
+    val sign = if (rounded < 0) "-" else ""
+    return when {
+        abs >= 1_000_000 -> sign + formatOneDecimal(abs, 1_000_000, "m")
+        abs >= 1_000 -> sign + formatOneDecimal(abs, 1_000, "k")
+        else -> "$sign$abs"
+    }
+}
+
+private fun formatOneDecimal(value: Long, divisor: Long, suffix: String): String {
+    val whole = value / divisor
+    val remainder = (value % divisor) / (divisor / 10)
+    return if (remainder == 0L) {
+        "$whole$suffix"
+    } else {
+        "$whole.$remainder$suffix"
     }
 }
 
@@ -1045,56 +1298,6 @@ private fun buildDayContentDescription(
         builder.append(", selected")
     }
     return builder.toString()
-}
-
-@Composable
-private fun BottomActionBar(
-    selectedDate: LocalDate?,
-    onViewClick: (LocalDate) -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val dateLabel = selectedDate?.let { "${it.dayOfMonth} ${it.month.name.lowercase().replaceFirstChar { c -> c.uppercase() }}" }
-        ?: "Select a day"
-    val isEnabled = selectedDate != null
-    Surface(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 6.dp),
-        shape = RoundedCornerShape(16.dp),
-        tonalElevation = 1.dp,
-        color = MaterialTheme.colorScheme.surfaceVariant
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 8.dp)
-                .padding(end = 60.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = "Selected day",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Text(
-                    text = dateLabel,
-                    style = MaterialTheme.typography.bodyMedium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                TextButton(
-                    onClick = { selectedDate?.let { onViewClick(it) } },
-                    enabled = isEnabled
-                ) {
-                    Text("View day")
-                }
-            }
-        }
-    }
 }
 
 private fun buildMonthGrid(
