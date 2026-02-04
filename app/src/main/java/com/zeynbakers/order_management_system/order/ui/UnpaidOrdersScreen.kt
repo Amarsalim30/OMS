@@ -49,6 +49,7 @@ import androidx.compose.ui.unit.sp
 import com.zeynbakers.order_management_system.core.util.formatKes
 import com.zeynbakers.order_management_system.order.data.OrderEntity
 import java.math.BigDecimal
+import java.math.RoundingMode
 import java.time.format.DateTimeFormatter
 import kotlinx.datetime.Clock
 import kotlinx.datetime.LocalDate
@@ -77,10 +78,34 @@ fun UnpaidOrdersScreen(
                     acc + (order.totalAmount - paid)
                 }
             }
+    val today = remember {
+        Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date
+    }
+    // Sort Newest -> Oldest for row ordering inside dates
+    val sortedOrders =
+            remember(orders) {
+                orders.sortedWith(
+                    compareByDescending<OrderEntity> { it.orderDate }
+                        .thenByDescending { it.createdAt }
+                )
+            }
     // Group by LocalDate
-    val grouped = remember(orders) { orders.groupBy { it.orderDate } }
-    // Sort Newest -> Oldest so the list "Starts with Today"
-    val dates = remember(grouped) { grouped.keys.sortedDescending() }
+    val grouped = remember(sortedOrders) { sortedOrders.groupBy { it.orderDate } }
+    // Headers: today first, then future dates (desc), then past dates (desc)
+    val dates =
+            remember(sortedOrders, today) {
+                sortedOrders.map { it.orderDate }
+                    .distinct()
+                    .sortedWith(
+                        compareByDescending<LocalDate> { date ->
+                            when {
+                                date == today -> 2
+                                date > today -> 1
+                                else -> 0
+                            }
+                        }.thenByDescending { it }
+                    )
+            }
 
     Scaffold(
             contentWindowInsets = WindowInsets(0),
@@ -284,8 +309,13 @@ private fun UnpaidOrderRow(
             val total = order.totalAmount
             val progress =
                     if (total > BigDecimal.ZERO) {
-                        paidAmount.toFloat() / total.toFloat()
+                        paidAmount
+                            .divide(total, 4, RoundingMode.HALF_UP)
+                            .toFloat()
+                            .coerceIn(0f, 1f)
                     } else 0f
+            val displayBalance = if (balance < BigDecimal.ZERO) balance.abs() else balance
+            val isOverpaid = balance < BigDecimal.ZERO
 
             Column {
                 LinearProgressIndicator(
@@ -311,13 +341,23 @@ private fun UnpaidOrderRow(
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
 
-                    // Due (Right) - Highlighted
+                    // Due/Credit (Right) - Highlighted
                     Text(
-                            text = "Due: ${formatKes(balance)}",
+                            text =
+                                    if (isOverpaid) {
+                                        "Credit: ${formatKes(displayBalance)}"
+                                    } else {
+                                        "Due: ${formatKes(displayBalance)}"
+                                    },
                             style = MaterialTheme.typography.titleMedium,
                             fontFamily = FontFamily.Monospace, // Utility feel
                             fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.error
+                            color =
+                                    if (isOverpaid) {
+                                        MaterialTheme.colorScheme.primary
+                                    } else {
+                                        MaterialTheme.colorScheme.error
+                                    }
                     )
                 }
             }
@@ -371,7 +411,12 @@ private fun formatRelativeDate(date: LocalDate): String {
         else -> {
             // Using java.time.format for formatted string "Mon, 24 Oct"
             val javaDate = date.toJavaLocalDate()
-            val formatter = DateTimeFormatter.ofPattern("EEE, dd MMM")
+            val formatter =
+                if (date.year == today.year) {
+                    DateTimeFormatter.ofPattern("EEE, dd MMM")
+                } else {
+                    DateTimeFormatter.ofPattern("EEE, dd MMM yyyy")
+                }
             javaDate.format(formatter)
         }
     }
