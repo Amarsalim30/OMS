@@ -17,30 +17,36 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.outlined.CheckCircle
-import androidx.compose.material.icons.outlined.Person
-import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material.icons.outlined.Payments
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
+
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -57,6 +63,13 @@ import kotlinx.datetime.TimeZone
 import kotlinx.datetime.minus
 import kotlinx.datetime.toJavaLocalDate
 import kotlinx.datetime.toLocalDateTime
+
+private enum class OrdersFilter(val label: String) {
+    NEWEST("Newest"),
+    OLDEST("Oldest"),
+    LARGEST_DUE("Largest Due"),
+    OVERDUE("Overdue")
+}
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
@@ -81,30 +94,57 @@ fun UnpaidOrdersScreen(
     val today = remember {
         Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date
     }
-    // Sort Newest -> Oldest for row ordering inside dates
+    val selectedFilter = rememberSaveable { mutableStateOf(OrdersFilter.NEWEST) }
+    // Sort base order for row ordering inside dates
     val sortedOrders =
-            remember(orders) {
-                orders.sortedWith(
-                    compareByDescending<OrderEntity> { it.orderDate }
-                        .thenByDescending { it.createdAt }
-                )
+            remember(orders, paidAmounts, selectedFilter.value, today) {
+                val base =
+                        when (selectedFilter.value) {
+                            OrdersFilter.NEWEST ->
+                                    orders.sortedWith(
+                                            compareByDescending<OrderEntity> { it.orderDate }
+                                                    .thenByDescending { it.createdAt }
+                                    )
+                            OrdersFilter.OLDEST ->
+                                    orders.sortedWith(
+                                            compareBy<OrderEntity> { it.orderDate }.thenBy {
+                                                it.createdAt
+                                            }
+                                    )
+                            OrdersFilter.LARGEST_DUE ->
+                                    orders.sortedByDescending { order ->
+                                        val paid = paidAmounts[order.id] ?: BigDecimal.ZERO
+                                        order.totalAmount - paid
+                                    }
+                            OrdersFilter.OVERDUE ->
+                                    orders
+                                            .filter { it.orderDate < today }
+                                            .sortedWith(
+                                                    compareBy<OrderEntity> { it.orderDate }.thenBy {
+                                                        it.createdAt
+                                                    }
+                                            )
+                        }
+                base
             }
     // Group by LocalDate
     val grouped = remember(sortedOrders) { sortedOrders.groupBy { it.orderDate } }
     // Headers: today first, then future dates (desc), then past dates (desc)
     val dates =
             remember(sortedOrders, today) {
-                sortedOrders.map { it.orderDate }
-                    .distinct()
-                    .sortedWith(
-                        compareByDescending<LocalDate> { date ->
-                            when {
-                                date == today -> 2
-                                date > today -> 1
-                                else -> 0
-                            }
-                        }.thenByDescending { it }
-                    )
+                sortedOrders
+                        .map { it.orderDate }
+                        .distinct()
+                        .sortedWith(
+                                compareByDescending<LocalDate> { date ->
+                                    when {
+                                        date == today -> 2
+                                        date > today -> 1
+                                        else -> 0
+                                    }
+                                }
+                                        .thenByDescending { it }
+                        )
             }
 
     Scaffold(
@@ -139,12 +179,26 @@ fun UnpaidOrdersScreen(
                 verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             item { SummaryCard(count = orders.size, totalOutstanding = totalOutstanding) }
+            item {
+                LazyRow(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    items(OrdersFilter.values(), key = { it.name }) { filter ->
+                        FilterChip(
+                                selected = selectedFilter.value == filter,
+                                onClick = { selectedFilter.value = filter },
+                                label = { Text(filter.label) }
+                        )
+                    }
+                }
+            }
 
             if (orders.isEmpty()) {
                 item { EmptyState(text = "All caught up! No unpaid orders.") }
             } else {
                 dates.forEach { date ->
-                    stickyHeader { StickyDateHeader(date = date) }
+                    stickyHeader { StickyDateHeader(date = date, today = today) }
                     items(grouped[date].orEmpty(), key = { it.id }) { order ->
                         val paid = paidAmounts[order.id] ?: BigDecimal.ZERO
                         val balance = order.totalAmount - paid
@@ -159,7 +213,8 @@ fun UnpaidOrdersScreen(
                                 paidAmount = paid,
                                 balance = balance,
                                 onOpenDay = { onOpenDay(order.orderDate) },
-                                onReceivePayment = { onReceivePayment(order) }
+                                onReceivePayment = { onReceivePayment(order) },
+                                today = today
                         )
                     }
                 }
@@ -174,212 +229,256 @@ private fun SummaryCard(count: Int, totalOutstanding: BigDecimal) {
             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
             colors =
                     CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceVariant
+                            containerColor = MaterialTheme.colorScheme.primaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onPrimaryContainer
                     ),
-            shape = MaterialTheme.shapes.large
+            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+            shape = MaterialTheme.shapes.medium
     ) {
-        Row(modifier = Modifier.fillMaxWidth()) {
-            // Left accented strip
-            Box(
-                    modifier =
-                            Modifier.width(6.dp)
-                                    .height(100.dp) // Fixed height enough to cover content
-                                    .background(MaterialTheme.colorScheme.primary)
-            )
-
-            Column(modifier = Modifier.padding(16.dp).fillMaxWidth()) {
+        Row(
+                modifier = Modifier.fillMaxWidth().padding(16.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(
-                        text = "TOTAL OUTSTANDING",
+                        text = "Total Outstanding",
                         style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f),
-                        letterSpacing = 1.2.sp
+                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
                 )
-                Spacer(Modifier.height(8.dp))
                 Text(
                         text = formatKes(totalOutstanding),
-                        style = MaterialTheme.typography.displaySmall, // Large impact
+                        style = MaterialTheme.typography.headlineMedium,
                         fontWeight = FontWeight.Bold,
                         fontFamily = FontFamily.Monospace,
-                        color = MaterialTheme.colorScheme.onSurface
+                        letterSpacing = (-0.5).sp
                 )
-                Spacer(Modifier.height(8.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                            text = "$count orders pending",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.primary
-                    )
-                }
+            }
+            Surface(
+                    color = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary,
+                    shape = MaterialTheme.shapes.small
+            ) {
+                Text(
+                        text = "$count Orders",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                )
             }
         }
     }
 }
 
 @Composable
-private fun StickyDateHeader(date: LocalDate) {
+private fun StickyDateHeader(date: LocalDate, today: LocalDate) {
     val dateLabel = remember(date) { formatRelativeDate(date) }
+    val isOverdue = date < today
+    val isToday = date == today
+
+    val textColor =
+            when {
+                isToday -> MaterialTheme.colorScheme.primary
+                isOverdue -> MaterialTheme.colorScheme.error
+                else -> MaterialTheme.colorScheme.onSurfaceVariant
+            }
 
     Surface(
             modifier = Modifier.fillMaxWidth(),
-            color = MaterialTheme.colorScheme.background, // Match background for sticky effect
+            color =
+                    MaterialTheme.colorScheme
+                            .background, // Match scaffold background for sticky header
             tonalElevation = 0.dp
     ) {
-        Text(
-                text = dateLabel,
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
-        )
+        Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+                horizontalArrangement = Arrangement.Start,
+                verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                    text = dateLabel.uppercase(),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = textColor,
+                    fontWeight = FontWeight.Bold,
+                    letterSpacing = 1.sp
+            )
+            if (isOverdue) {
+                Spacer(modifier = Modifier.width(8.dp))
+                Icon(
+                        imageVector = Icons.Filled.Info,
+                        contentDescription = "Overdue",
+                        tint = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.size(14.dp)
+                )
+            }
+        }
     }
 }
 
 @Composable
 private fun UnpaidOrderRow(
+        modifier: Modifier = Modifier,
         order: OrderEntity,
         customerLabel: String?,
         paidAmount: BigDecimal,
         balance: BigDecimal,
         onOpenDay: () -> Unit,
-        onReceivePayment: () -> Unit
+        onReceivePayment: () -> Unit,
+        today: LocalDate
 ) {
-    Surface(
+    val haptic = LocalHapticFeedback.current
+    Card(
             modifier =
-                    Modifier.fillMaxWidth()
+                    modifier
+                            .fillMaxWidth()
                             .padding(horizontal = 16.dp, vertical = 4.dp)
                             .clickable(onClick = onOpenDay),
-            shape = MaterialTheme.shapes.medium,
-            color = MaterialTheme.colorScheme.surfaceVariant,
-            tonalElevation = 0.dp
+            shape = MaterialTheme.shapes.small,
+            colors =
+                    CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surface,
+                    ),
+            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            // Header Row: Customer Name & Time
-            Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.weight(1f)
+        Column(modifier = Modifier.padding(12.dp)) {
+            Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
+                // Avatar / Icon
+                Surface(
+                        shape = MaterialTheme.shapes.medium, // Squircle
+                        color = MaterialTheme.colorScheme.primaryContainer,
+                        modifier = Modifier.size(40.dp)
                 ) {
-                    if (customerLabel == null) {
-                        // Walk-in Icon
-                        Icon(
-                                imageVector = Icons.Outlined.Person,
-                                contentDescription = "Walk-in",
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(20.dp)
-                        )
-                        Spacer(Modifier.width(8.dp))
+                    Box(contentAlignment = Alignment.Center) {
                         Text(
-                                text = "Walk-in",
+                                text = getInitials(customerLabel ?: "Walk-in"),
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                color = MaterialTheme.colorScheme.onPrimaryContainer
                         )
-                    } else {
-                        Text(
-                                text = customerLabel,
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.primary, // Highlight customer
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.width(12.dp))
+
+                // Main Content
+                Column(modifier = Modifier.weight(1f)) {
+                    Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment =
+                                    Alignment.Top // Align top to handle multiline names vs amount
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                    text = customerLabel ?: "Walk-in",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                            )
+                            if (order.notes.isNotBlank()) {
+                                Text(
+                                        text = order.notes,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.width(8.dp))
+
+                        // Amount & Status
+                        Column(horizontalAlignment = Alignment.End) {
+                            Text(
+                                    text = formatKes(balance),
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    fontFamily = FontFamily.Monospace,
+                                    color =
+                                            if (balance < BigDecimal.ZERO)
+                                                    MaterialTheme.colorScheme.primary // Credit
+                                            else MaterialTheme.colorScheme.error // Due
+                            )
+                            if (paidAmount > BigDecimal.ZERO) {
+                                Text(
+                                        text = "paid ${formatKes(paidAmount)}",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
                     }
                 }
             }
 
-            Spacer(Modifier.height(4.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
-            // Notes / Product
-            if (order.notes.isNotBlank()) {
-                Text(
-                        text = order.notes,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis
-                )
-                Spacer(Modifier.height(12.dp))
-            }
+            // Footer: Progress + Action
+            Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+            ) {
+                val progress =
+                        if (order.totalAmount > BigDecimal.ZERO) {
+                            paidAmount
+                                    .divide(order.totalAmount, 4, RoundingMode.HALF_UP)
+                                    .toFloat()
+                                    .coerceIn(0f, 1f)
+                        } else 0f
 
-            // Financial Utility Section
-            val total = order.totalAmount
-            val progress =
-                    if (total > BigDecimal.ZERO) {
-                        paidAmount
-                            .divide(total, 4, RoundingMode.HALF_UP)
-                            .toFloat()
-                            .coerceIn(0f, 1f)
-                    } else 0f
-            val displayBalance = if (balance < BigDecimal.ZERO) balance.abs() else balance
-            val isOverpaid = balance < BigDecimal.ZERO
-
-            Column {
                 LinearProgressIndicator(
                         progress = { progress },
-                        modifier = Modifier.fillMaxWidth().height(6.dp),
-                        color = MaterialTheme.colorScheme.primary,
-                        trackColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.1f),
+                        modifier = Modifier.weight(1f).height(6.dp),
+                        color = MaterialTheme.colorScheme.tertiary, // Green/Money color
+                        trackColor = MaterialTheme.colorScheme.surfaceVariant,
                         strokeCap = StrokeCap.Round,
                 )
 
-                Spacer(Modifier.height(8.dp))
+                Spacer(modifier = Modifier.width(12.dp))
 
-                Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                // Quick Action
+                Surface(
+                        color = MaterialTheme.colorScheme.tertiaryContainer,
+                        shape = MaterialTheme.shapes.small,
+                        modifier = Modifier.clickable {
+                            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                            onReceivePayment()
+                        }
                 ) {
-                    // Paid (Left)
-                    Text(
-                            text = "Paid: ${formatKes(paidAmount)}",
-                            style = MaterialTheme.typography.bodySmall,
-                            fontFamily = FontFamily.Monospace,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-
-                    // Due/Credit (Right) - Highlighted
-                    Text(
-                            text =
-                                    if (isOverpaid) {
-                                        "Credit: ${formatKes(displayBalance)}"
-                                    } else {
-                                        "Due: ${formatKes(displayBalance)}"
-                                    },
-                            style = MaterialTheme.typography.titleMedium,
-                            fontFamily = FontFamily.Monospace, // Utility feel
-                            fontWeight = FontWeight.Bold,
-                            color =
-                                    if (isOverpaid) {
-                                        MaterialTheme.colorScheme.primary
-                                    } else {
-                                        MaterialTheme.colorScheme.error
-                                    }
-                    )
+                    Row(
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                                imageVector = Icons.Outlined.Payments,
+                                contentDescription = "Pay",
+                                tint = MaterialTheme.colorScheme.onTertiaryContainer,
+                                modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                                text = "PAY",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onTertiaryContainer
+                        )
+                    }
                 }
-            }
-
-            Spacer(Modifier.height(16.dp))
-
-            // Actions Footer
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                // Future: Call button if phone exists
-
-                OutlinedButton(
-                        onClick = onReceivePayment,
-                        modifier = Modifier.height(36.dp),
-                        contentPadding = PaddingValues(horizontal = 16.dp),
-                        colors =
-                                ButtonDefaults.outlinedButtonColors(
-                                        contentColor = MaterialTheme.colorScheme.onSurface
-                                )
-                ) { Text("Record Payment") }
             }
         }
     }
+}
+
+private fun getInitials(name: String): String {
+    return name.split(" ")
+            .filter { it.isNotBlank() }
+            .take(2)
+            .mapNotNull { it.firstOrNull() }
+            .joinToString("")
+            .uppercase()
 }
 
 @Composable
@@ -412,11 +511,11 @@ private fun formatRelativeDate(date: LocalDate): String {
             // Using java.time.format for formatted string "Mon, 24 Oct"
             val javaDate = date.toJavaLocalDate()
             val formatter =
-                if (date.year == today.year) {
-                    DateTimeFormatter.ofPattern("EEE, dd MMM")
-                } else {
-                    DateTimeFormatter.ofPattern("EEE, dd MMM yyyy")
-                }
+                    if (date.year == today.year) {
+                        DateTimeFormatter.ofPattern("EEE, dd MMM")
+                    } else {
+                        DateTimeFormatter.ofPattern("EEE, dd MMM yyyy")
+                    }
             javaDate.format(formatter)
         }
     }
