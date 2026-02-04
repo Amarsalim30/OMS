@@ -1180,8 +1180,7 @@ fun DayCell(
     val containerColor =
         when {
             isSelected -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f)
-            day.isToday -> MaterialTheme.colorScheme.secondaryContainer
-            else -> MaterialTheme.colorScheme.surface
+            else -> MaterialTheme.colorScheme.background
         }
     val selectionBorder =
         if (isSelected) {
