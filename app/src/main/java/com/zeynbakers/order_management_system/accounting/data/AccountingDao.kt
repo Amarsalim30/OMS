@@ -314,7 +314,7 @@ interface AccountingDao {
             END), 0) as balance
         FROM customers c
         LEFT JOIN account_entries a ON a.customerId = c.id
-        WHERE c.name LIKE :query OR c.phone LIKE :query
+        WHERE c.isArchived = 0 AND (c.name LIKE :query OR c.phone LIKE :query)
         GROUP BY c.id
         ORDER BY c.name
         """

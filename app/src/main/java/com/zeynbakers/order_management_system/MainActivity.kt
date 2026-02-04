@@ -83,7 +83,7 @@ import com.zeynbakers.order_management_system.core.ui.VoiceCalculatorOverlay
 import com.zeynbakers.order_management_system.core.ui.VoiceInputRouter
 import com.zeynbakers.order_management_system.core.ui.theme.Order_management_systemTheme
 import com.zeynbakers.order_management_system.core.util.formatKes
-import com.zeynbakers.order_management_system.core.util.normalizePhoneNumber
+import com.zeynbakers.order_management_system.core.util.normalizePhoneNumberE164
 import com.zeynbakers.order_management_system.core.updates.UpdatePreferences
 import com.zeynbakers.order_management_system.core.widget.WidgetUpdater
 import com.zeynbakers.order_management_system.customer.ui.CustomerAccountsViewModel
@@ -544,6 +544,7 @@ class MainActivity : ComponentActivity() {
                                             selectedTopLevelRoute = AppRoutes.Money
                                             navController.navigate(AppRoutes.Money) { launchSingleTop = true }
                                         },
+                                        onSettingsClick = { showMoreSheet = true },
                                         title = "Orders",
                                         showBack = false
                                     )
@@ -568,6 +569,28 @@ class MainActivity : ComponentActivity() {
                                                 PaymentHistoryFilter.Customer(customerId),
                                                 null
                                             )
+                                        },
+                                        onRecordPayment = { customerId ->
+                                            manualCustomerId = customerId
+                                            moneyTabName = MoneyTab.Manual.name
+                                            selectedTopLevelRoute = AppRoutes.Money
+                                            navController.navigate(AppRoutes.Money) { launchSingleTop = true }
+                                        },
+                                        onAddOrder = {
+                                            val targetDate = today
+                                            selectedDate = targetDate
+                                            quickAddDate = targetDate
+                                            selectedTopLevelRoute = AppRoutes.Calendar
+                                            navigateTopLevel(navController, AppRoutes.Calendar, resetToRoot = true)
+                                        },
+                                        onArchiveCustomer = { customerId ->
+                                            customerViewModel.archiveCustomer(customerId)
+                                        },
+                                        onRestoreCustomer = { customerId ->
+                                            customerViewModel.unarchiveCustomer(customerId)
+                                        },
+                                        onDeleteCustomer = { customerId ->
+                                            customerViewModel.deleteCustomer(customerId)
                                         },
                                         showBack = false
                                     )
@@ -648,13 +671,16 @@ class MainActivity : ComponentActivity() {
                                                     selectedContactPhones + phone
                                                 }
                                         },
-                                        onToggleSelectAll = {
-                                            val allPhones = importContacts.map { it.phone }.toSet()
+                                        onToggleSelectAll = { visiblePhones ->
+                                            val visibleSet = visiblePhones.toSet()
+                                            val allVisibleSelected =
+                                                visibleSet.isNotEmpty() &&
+                                                    visibleSet.all { selectedContactPhones.contains(it) }
                                             selectedContactPhones =
-                                                if (selectedContactPhones.size == allPhones.size) {
-                                                    emptySet()
+                                                if (allVisibleSelected) {
+                                                    selectedContactPhones - visibleSet
                                                 } else {
-                                                    allPhones
+                                                    selectedContactPhones + visibleSet
                                                 }
                                         },
                                         onImport = {
@@ -987,8 +1013,8 @@ private suspend fun loadAllContacts(context: Context): List<ImportContact> {
         while (phones.moveToNext()) {
             val rawName = phones.getString(nameIndex) ?: ""
             val rawNumber = phones.getString(numberIndex) ?: ""
-            val cleanNumber = normalizePhoneNumber(rawNumber)
-            if (cleanNumber.isBlank() || !seen.add(cleanNumber)) continue
+            val cleanNumber = normalizePhoneNumberE164(rawNumber) ?: continue
+            if (!seen.add(cleanNumber)) continue
             val displayName = rawName.trim().ifBlank { cleanNumber }
             results.add(ImportContact(name = displayName, phone = cleanNumber))
         }

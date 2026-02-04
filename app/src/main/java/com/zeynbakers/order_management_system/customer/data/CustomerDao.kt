@@ -20,11 +20,20 @@ interface CustomerDao {
     @Delete
     suspend fun delete(customer: CustomerEntity)
 
+    @Query("UPDATE customers SET isArchived = 1 WHERE id = :id")
+    suspend fun archiveById(id: Long)
+
+    @Query("UPDATE customers SET isArchived = 0 WHERE id = :id")
+    suspend fun unarchiveById(id: Long)
+
     @Query("SELECT * FROM customers WHERE id = :id")
     suspend fun getById(id: Long): CustomerEntity?
 
     @Query("SELECT * FROM customers WHERE phone = :phone LIMIT 1")
     suspend fun getByPhone(phone: String): CustomerEntity?
+
+    @Query("SELECT * FROM customers WHERE phone IN (:phones) LIMIT 1")
+    suspend fun getByPhones(phones: List<String>): CustomerEntity?
 
     @Query("SELECT * FROM customers WHERE id IN (:ids)")
     suspend fun getByIds(ids: List<Long>): List<CustomerEntity>
@@ -32,7 +41,7 @@ interface CustomerDao {
     @Query(
         """
         SELECT * FROM customers
-        WHERE name LIKE :query OR phone LIKE :query
+        WHERE isArchived = 0 AND (name LIKE :query OR phone LIKE :query)
         ORDER BY name
         LIMIT 5
         """

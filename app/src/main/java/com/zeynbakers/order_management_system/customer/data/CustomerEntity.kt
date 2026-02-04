@@ -13,5 +13,6 @@ data class CustomerEntity(
     val id: Long = 0,
 
     val name: String,
-    val phone: String
+    val phone: String,
+    val isArchived: Boolean = false
 )

@@ -9,6 +9,8 @@ import com.zeynbakers.order_management_system.accounting.domain.PaymentReceiptPr
 import com.zeynbakers.order_management_system.accounting.domain.ReceiptAllocation
 import com.zeynbakers.order_management_system.core.db.AppDatabase
 import com.zeynbakers.order_management_system.core.util.formatOrderLabelWithId
+import com.zeynbakers.order_management_system.core.util.normalizePhoneNumberE164
+import com.zeynbakers.order_management_system.core.util.expandPhoneCandidates
 import com.zeynbakers.order_management_system.customer.data.CustomerEntity
 import com.zeynbakers.order_management_system.order.data.OrderDao
 import com.zeynbakers.order_management_system.order.data.OrderEntity
@@ -515,17 +517,29 @@ class OrderViewModel(private val database: AppDatabase) : ViewModel() {
     }
 
     private suspend fun resolveCustomerId(name: String, phone: String): Long? {
-        if (phone.isBlank()) return null
+        val normalizedPhone = normalizePhoneNumberE164(phone) ?: return null
 
-        val cleanName = name.ifBlank { phone }
-        val existing = customerDao.getByPhone(phone)
+        val cleanName = name.ifBlank { normalizedPhone }
+        val exactMatch = customerDao.getByPhone(normalizedPhone)
+        val existing =
+            exactMatch ?: customerDao.getByPhones(expandPhoneCandidates(phone))
         return if (existing != null) {
-            if (name.isNotBlank() && existing.name != name) {
-                customerDao.update(existing.copy(name = name))
+            val canUpdatePhone =
+                existing.phone != normalizedPhone &&
+                    exactMatch == null &&
+                    customerDao.getByPhone(normalizedPhone) == null
+            val updated =
+                existing.copy(
+                    name = if (name.isNotBlank()) name else existing.name,
+                    phone = if (canUpdatePhone) normalizedPhone else existing.phone,
+                    isArchived = false
+                )
+            if (updated != existing) {
+                customerDao.update(updated)
             }
             existing.id
         } else {
-            customerDao.insert(CustomerEntity(name = cleanName, phone = phone))
+            customerDao.insert(CustomerEntity(name = cleanName, phone = normalizedPhone))
         }
     }
 

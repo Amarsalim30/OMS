@@ -11,6 +11,8 @@ import com.zeynbakers.order_management_system.accounting.domain.PaymentReceiptPr
 import com.zeynbakers.order_management_system.accounting.domain.ReceiptAllocation
 import com.zeynbakers.order_management_system.core.db.AppDatabase
 import com.zeynbakers.order_management_system.core.util.formatOrderLabelWithId
+import com.zeynbakers.order_management_system.core.util.normalizePhoneNumberE164
+import com.zeynbakers.order_management_system.core.util.expandPhoneCandidates
 import com.zeynbakers.order_management_system.customer.data.CustomerEntity
 import com.zeynbakers.order_management_system.order.data.OrderEntity
 import com.zeynbakers.order_management_system.order.data.OrderStatus
@@ -63,28 +65,59 @@ class CustomerAccountsViewModel(private val database: AppDatabase) : ViewModel()
     fun searchCustomers(query: String) {
         viewModelScope.launch {
             lastQuery = query
-            val pattern = "%${query.trim()}%"
-            _summaries.value = accountingDao.getCustomerAccountSummaries(pattern)
+            refreshSummaries()
         }
     }
 
     fun importCustomer(name: String, phone: String) {
         viewModelScope.launch {
-            val cleanPhone = phone.trim()
-            if (cleanPhone.isBlank()) return@launch
-            val cleanName = name.trim().ifBlank { cleanPhone }
+            val normalizedPhone = normalizePhoneNumberE164(phone) ?: return@launch
+            val cleanName = name.trim().ifBlank { normalizedPhone }
 
-            val existing = customerDao.getByPhone(cleanPhone)
+            val exactMatch = customerDao.getByPhone(normalizedPhone)
+            val existing =
+                exactMatch ?: customerDao.getByPhones(expandPhoneCandidates(phone))
             if (existing != null) {
-                if (existing.name != cleanName) {
-                    customerDao.update(existing.copy(name = cleanName))
+                val canUpdatePhone =
+                    existing.phone != normalizedPhone &&
+                        exactMatch == null &&
+                        customerDao.getByPhone(normalizedPhone) == null
+                val updated =
+                    existing.copy(
+                        name = if (cleanName.isNotBlank()) cleanName else existing.name,
+                        phone = if (canUpdatePhone) normalizedPhone else existing.phone,
+                        isArchived = false
+                    )
+                if (updated != existing) {
+                    customerDao.update(updated)
                 }
             } else {
-                customerDao.insert(CustomerEntity(name = cleanName, phone = cleanPhone))
+                customerDao.insert(CustomerEntity(name = cleanName, phone = normalizedPhone))
             }
 
-            val pattern = "%${lastQuery.trim()}%"
-            _summaries.value = accountingDao.getCustomerAccountSummaries(pattern)
+            refreshSummaries()
+        }
+    }
+
+    fun archiveCustomer(customerId: Long) {
+        viewModelScope.launch {
+            customerDao.archiveById(customerId)
+            refreshSummaries()
+        }
+    }
+
+    fun unarchiveCustomer(customerId: Long) {
+        viewModelScope.launch {
+            customerDao.unarchiveById(customerId)
+            refreshSummaries()
+        }
+    }
+
+    fun deleteCustomer(customerId: Long) {
+        viewModelScope.launch {
+            val customer = customerDao.getById(customerId) ?: return@launch
+            customerDao.delete(customer)
+            refreshSummaries()
         }
     }
 
@@ -284,5 +317,10 @@ class CustomerAccountsViewModel(private val database: AppDatabase) : ViewModel()
         val cutoff = orderDate.plus(1, DateTimeUnit.MONTH)
         val today = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date
         return today >= cutoff
+    }
+
+    private suspend fun refreshSummaries() {
+        val pattern = "%${lastQuery.trim()}%"
+        _summaries.value = accountingDao.getCustomerAccountSummaries(pattern)
     }
 }

@@ -1,3 +1,5 @@
+@file:OptIn(kotlinx.coroutines.FlowPreview::class)
+
 package com.zeynbakers.order_management_system.customer.ui
 
 import androidx.compose.foundation.horizontalScroll
@@ -47,6 +49,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -67,6 +70,8 @@ import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.plus
 import kotlinx.datetime.toLocalDateTime
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.distinctUntilChanged
 import android.content.Intent
 import android.net.Uri
 
@@ -90,6 +95,7 @@ fun CustomerDetailScreen(
     var orderFilter by remember { mutableStateOf(OrderFilter.All) }
     var ledgerFilter by remember { mutableStateOf(LedgerFilter.All) }
     var ledgerQuery by remember { mutableStateOf("") }
+    var debouncedLedgerQuery by remember { mutableStateOf("") }
     var visibleLedgerMonths by remember { mutableStateOf(3) }
     val expandedLedgerMonths = remember { mutableStateMapOf<String, Boolean>() }
 
@@ -97,8 +103,15 @@ fun CustomerDetailScreen(
         derivedStateOf { filterOrders(orders, orderFilter) }
     }
 
-    val filteredLedger by remember(ledger, ledgerFilter, ledgerQuery) {
-        derivedStateOf { filterLedger(ledger, ledgerFilter, ledgerQuery) }
+    LaunchedEffect(Unit) {
+        snapshotFlow { ledgerQuery }
+            .debounce(300)
+            .distinctUntilChanged()
+            .collect { debouncedLedgerQuery = it }
+    }
+
+    val filteredLedger by remember(ledger, ledgerFilter, debouncedLedgerQuery) {
+        derivedStateOf { filterLedger(ledger, ledgerFilter, debouncedLedgerQuery) }
     }
 
     val ledgerSections = remember(filteredLedger) { buildLedgerSections(filteredLedger) }
@@ -243,8 +256,8 @@ private fun BalanceCard(
             "Balance"
         } else {
             when {
-                netBalance > BigDecimal.ZERO -> "Balance due"
-                netBalance < BigDecimal.ZERO -> "Extra available"
+                netBalance > BigDecimal.ZERO -> "Owes"
+                netBalance < BigDecimal.ZERO -> "Credit"
                 else -> "Settled"
             }
         }
@@ -270,7 +283,7 @@ private fun BalanceCard(
                 Spacer(Modifier.height(8.dp))
                 SummaryRow(label = "Orders total", amount = formatKes(orderTotal))
                 SummaryRow(label = "Payments applied", amount = formatKes(paidToOrders))
-                SummaryRow(label = "Extra credit", amount = formatKes(availableCredit.max(BigDecimal.ZERO)))
+                SummaryRow(label = "Credit available", amount = formatKes(availableCredit.max(BigDecimal.ZERO)))
                 if (availableCredit > BigDecimal.ZERO) {
                     Spacer(Modifier.height(4.dp))
                     Text(

@@ -228,6 +228,12 @@ object DatabaseProvider {
         }
     }
 
+    private val migration8To9 = object : Migration(8, 9) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE customers ADD COLUMN isArchived INTEGER NOT NULL DEFAULT 0")
+        }
+    }
+
     fun getDatabase(context: Context): AppDatabase {
         return instance ?: synchronized(this) {
             val db = Room.databaseBuilder(
@@ -241,7 +247,8 @@ object DatabaseProvider {
                 migration4To5,
                 migration5To6,
                 migration6To7,
-                migration7To8
+                migration7To8,
+                migration8To9
             ).build()
             instance = db
             db

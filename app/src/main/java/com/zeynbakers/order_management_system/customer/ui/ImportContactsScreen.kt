@@ -15,18 +15,20 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.outlined.RadioButtonUnchecked
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconToggleButton
+import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -45,11 +47,10 @@ fun ImportContactsScreen(
     isLoading: Boolean,
     onBack: () -> Unit,
     onToggleSelect: (String) -> Unit,
-    onToggleSelectAll: () -> Unit,
+    onToggleSelectAll: (List<String>) -> Unit,
     onImport: () -> Unit
 ) {
     val selectedCount = selectedPhones.size
-    val allSelected = contacts.isNotEmpty() && selectedCount == contacts.size
     var query by rememberSaveable { mutableStateOf("") }
     val filteredContacts =
         contacts.filter { contact ->
@@ -57,22 +58,48 @@ fun ImportContactsScreen(
             if (lowered.isBlank()) return@filter true
             contact.name.lowercase().contains(lowered) || contact.phone.contains(lowered)
         }
+    val visiblePhones = filteredContacts.map { it.phone }
+    val allVisibleSelected =
+        visiblePhones.isNotEmpty() && visiblePhones.all { selectedPhones.contains(it) }
+    val isFiltered = query.isNotBlank() && filteredContacts.size != contacts.size
 
     Scaffold(
         contentWindowInsets = WindowInsets(0),
         topBar = {
             CenterAlignedTopAppBar(
                 title = { Text(text = "Import contacts") },
-                navigationIcon = { TextButton(onClick = onBack) { Text("Back") } },
-                actions = {
-                    TextButton(
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = "Back"
+                        )
+                    }
+                }
+            )
+        },
+        bottomBar = {
+            Surface(tonalElevation = 2.dp) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(12.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "$selectedCount selected",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Button(
                         onClick = onImport,
                         enabled = selectedCount > 0
                     ) {
                         Text(text = "Import ($selectedCount)")
                     }
                 }
-            )
+            }
         }
     ) { padding ->
         Column(
@@ -117,8 +144,9 @@ fun ImportContactsScreen(
             }
 
             SelectAllRow(
-                selected = allSelected,
-                onToggle = onToggleSelectAll
+                label = if (isFiltered) "Select all (visible)" else "Select all",
+                selected = allVisibleSelected,
+                onToggle = { onToggleSelectAll(visiblePhones) }
             )
 
             Spacer(Modifier.height(8.dp))
@@ -133,7 +161,7 @@ fun ImportContactsScreen(
             }
 
             LazyColumn(
-                contentPadding = PaddingValues(bottom = 24.dp),
+                contentPadding = PaddingValues(bottom = 80.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 items(filteredContacts, key = { it.phone }) { contact ->
@@ -150,6 +178,7 @@ fun ImportContactsScreen(
 
 @Composable
 private fun SelectAllRow(
+    label: String,
     selected: Boolean,
     onToggle: () -> Unit
 ) {
@@ -170,7 +199,7 @@ private fun SelectAllRow(
                 contentDescription = "Select all"
             )
             Spacer(Modifier.size(8.dp))
-            Text(text = "Select all", style = MaterialTheme.typography.titleMedium)
+            Text(text = label, style = MaterialTheme.typography.titleMedium)
         }
     }
 }

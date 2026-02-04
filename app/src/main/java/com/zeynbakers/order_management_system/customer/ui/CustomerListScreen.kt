@@ -5,6 +5,8 @@
 
 package com.zeynbakers.order_management_system.customer.ui
 
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
@@ -36,6 +38,7 @@ import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material3.Button
 import androidx.compose.material3.CenterAlignedTopAppBar
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
@@ -45,6 +48,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -55,11 +61,13 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -68,6 +76,7 @@ import com.zeynbakers.order_management_system.core.util.formatKes
 import java.math.BigDecimal
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.launch
 
 @Composable
 fun CustomerListScreen(
@@ -78,8 +87,11 @@ fun CustomerListScreen(
     onBack: () -> Unit,
     onAddCustomer: () -> Unit = {},
     onPaymentHistory: (Long) -> Unit = {},
+    onRecordPayment: (Long) -> Unit = {},
     onAddOrder: (Long) -> Unit = {},
     onEditCustomer: (Long) -> Unit = {},
+    onArchiveCustomer: (Long) -> Unit = {},
+    onRestoreCustomer: (Long) -> Unit = {},
     onDeleteCustomer: (Long) -> Unit = {},
     showBack: Boolean = true
 ) {
@@ -91,8 +103,11 @@ fun CustomerListScreen(
         onBack = onBack,
         onAddCustomer = onAddCustomer,
         onPaymentHistory = onPaymentHistory,
+        onRecordPayment = onRecordPayment,
         onAddOrder = onAddOrder,
         onEditCustomer = onEditCustomer,
+        onArchiveCustomer = onArchiveCustomer,
+        onRestoreCustomer = onRestoreCustomer,
         onDeleteCustomer = onDeleteCustomer,
         showBack = showBack
     )
@@ -107,8 +122,11 @@ private fun CustomersScreenM3(
     onBack: () -> Unit,
     onAddCustomer: () -> Unit,
     onPaymentHistory: (Long) -> Unit,
+    onRecordPayment: (Long) -> Unit,
     onAddOrder: (Long) -> Unit,
     onEditCustomer: (Long) -> Unit,
+    onArchiveCustomer: (Long) -> Unit,
+    onRestoreCustomer: (Long) -> Unit,
     onDeleteCustomer: (Long) -> Unit,
     showBack: Boolean
 ) {
@@ -116,7 +134,14 @@ private fun CustomersScreenM3(
     var selectedFilter by rememberSaveable { mutableStateOf(CustomerFilter.All) }
     var selectedSort by rememberSaveable { mutableStateOf(CustomerSort.BalanceDesc) }
     var isSortMenuOpen by remember { mutableStateOf(false) }
+    var hideZeroBalances by rememberSaveable { mutableStateOf(true) }
+    var showInactive by rememberSaveable { mutableStateOf(false) }
     var longPressedCustomer by remember { mutableStateOf<CustomerAccountSummary?>(null) }
+    var pendingArchiveCustomer by remember { mutableStateOf<CustomerAccountSummary?>(null) }
+    var pendingDeleteCustomer by remember { mutableStateOf<CustomerAccountSummary?>(null) }
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+    val context = LocalContext.current
 
     LaunchedEffect(query) {
         if (queryText != query) {
@@ -131,15 +156,33 @@ private fun CustomersScreenM3(
             .collect { onQueryChange(it) }
     }
 
-    val filteredCustomers by remember(summaries, selectedFilter, selectedSort) {
+    val filteredCustomers by remember(
+        summaries,
+        selectedFilter,
+        selectedSort,
+        hideZeroBalances,
+        showInactive
+    ) {
         derivedStateOf {
-            val filtered = summaries.filter { summary ->
+            val base = summaries.filter { summary ->
+                val hasTransactions =
+                    summary.billed != BigDecimal.ZERO || summary.paid != BigDecimal.ZERO
+                if (!showInactive && !hasTransactions) return@filter false
+                true
+            }
+            val filtered = base.filter { summary ->
                 when (selectedFilter) {
                     CustomerFilter.All -> true
                     CustomerFilter.Owing -> summary.balance > BigDecimal.ZERO
                     CustomerFilter.Credit -> summary.balance < BigDecimal.ZERO
                     CustomerFilter.Settled -> summary.balance == BigDecimal.ZERO
                 }
+            }.filter { summary ->
+                if (selectedFilter != CustomerFilter.All || !hideZeroBalances) return@filter true
+                val hasTransactions =
+                    summary.billed != BigDecimal.ZERO || summary.paid != BigDecimal.ZERO
+                if (!hasTransactions) return@filter true
+                summary.balance != BigDecimal.ZERO
             }
             when (selectedSort) {
                 CustomerSort.BalanceDesc -> filtered.sortedByDescending { it.balance }
@@ -151,10 +194,10 @@ private fun CustomersScreenM3(
 
     Scaffold(
         contentWindowInsets = WindowInsets(0),
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             CustomersTopBar(
                 onBack = onBack,
-                onMore = { isSortMenuOpen = true },
                 showBack = showBack
             )
         }
@@ -187,6 +230,26 @@ private fun CustomersScreenM3(
                     isSortMenuOpen = false
                 }
             )
+
+            Spacer(Modifier.height(6.dp))
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                FilterChip(
+                    selected = hideZeroBalances,
+                    onClick = { hideZeroBalances = !hideZeroBalances },
+                    label = { Text("Hide zero balances") }
+                )
+                FilterChip(
+                    selected = showInactive,
+                    onClick = { showInactive = !showInactive },
+                    label = { Text("Show inactive (no orders)") }
+                )
+            }
 
             Spacer(Modifier.height(6.dp))
 
@@ -232,6 +295,9 @@ private fun CustomersScreenM3(
 
     longPressedCustomer?.let { customer ->
         val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+        val hasTransactions =
+            customer.billed != BigDecimal.ZERO || customer.paid != BigDecimal.ZERO
+        val hasPhone = customer.phone.isNotBlank()
         ModalBottomSheet(
             onDismissRequest = { longPressedCustomer = null },
             sheetState = sheetState
@@ -242,6 +308,22 @@ private fun CustomersScreenM3(
                     style = MaterialTheme.typography.titleMedium
                 )
                 Spacer(Modifier.height(6.dp))
+                ActionRow(label = "Record payment", onClick = {
+                    onRecordPayment(customer.customerId)
+                    longPressedCustomer = null
+                })
+                ActionRow(label = "New order", onClick = {
+                    onAddOrder(customer.customerId)
+                    longPressedCustomer = null
+                })
+                ActionRow(
+                    label = "Message",
+                    enabled = hasPhone,
+                    onClick = {
+                        launchSms(context, customer.phone)
+                        longPressedCustomer = null
+                    }
+                )
                 ActionRow(label = "View details", onClick = {
                     onCustomerClick(customer.customerId)
                     longPressedCustomer = null
@@ -250,27 +332,82 @@ private fun CustomersScreenM3(
                     onPaymentHistory(customer.customerId)
                     longPressedCustomer = null
                 })
-                ActionRow(label = "Add order", onClick = {
-                    onAddOrder(customer.customerId)
-                    longPressedCustomer = null
-                })
                 ActionRow(label = "Edit customer", onClick = {
                     onEditCustomer(customer.customerId)
                     longPressedCustomer = null
                 })
-                ActionRow(label = "Delete", onClick = {
-                    onDeleteCustomer(customer.customerId)
-                    longPressedCustomer = null
-                })
+                Spacer(Modifier.height(6.dp))
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(1.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant
+                ) {}
+                val destructiveLabel = if (hasTransactions) "Archive" else "Delete"
+                ActionRow(
+                    label = destructiveLabel,
+                    textColor = MaterialTheme.colorScheme.error,
+                    onClick = {
+                        if (hasTransactions) {
+                            pendingArchiveCustomer = customer
+                        } else {
+                            pendingDeleteCustomer = customer
+                        }
+                        longPressedCustomer = null
+                    }
+                )
             }
         }
+    }
+
+    pendingArchiveCustomer?.let { customer ->
+        AlertDialog(
+            onDismissRequest = { pendingArchiveCustomer = null },
+            title = { Text("Archive customer?") },
+            text = { Text("Archived customers are hidden from lists, but their history stays.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    onArchiveCustomer(customer.customerId)
+                    pendingArchiveCustomer = null
+                    scope.launch {
+                        val result =
+                            snackbarHostState.showSnackbar(
+                                message = "Customer archived",
+                                actionLabel = "Undo"
+                            )
+                        if (result == SnackbarResult.ActionPerformed) {
+                            onRestoreCustomer(customer.customerId)
+                        }
+                    }
+                }) { Text("Archive") }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingArchiveCustomer = null }) { Text("Cancel") }
+            }
+        )
+    }
+
+    pendingDeleteCustomer?.let { customer ->
+        AlertDialog(
+            onDismissRequest = { pendingDeleteCustomer = null },
+            title = { Text("Delete customer?") },
+            text = { Text("This will remove the customer permanently.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    onDeleteCustomer(customer.customerId)
+                    pendingDeleteCustomer = null
+                }) { Text("Delete") }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingDeleteCustomer = null }) { Text("Cancel") }
+            }
+        )
     }
 }
 
 @Composable
 private fun CustomersTopBar(
     onBack: () -> Unit,
-    onMore: () -> Unit,
     showBack: Boolean
 ) {
     CenterAlignedTopAppBar(
@@ -278,7 +415,7 @@ private fun CustomersTopBar(
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(text = "Customers", style = MaterialTheme.typography.titleLarge)
                 Text(
-                    text = "Search and manage balances",
+                    text = "Find customers and collect payments",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -287,11 +424,6 @@ private fun CustomersTopBar(
         navigationIcon = {
             if (showBack) {
                 TextButton(onClick = onBack) { Text("Back") }
-            }
-        },
-        actions = {
-            IconButton(onClick = onMore) {
-                Icon(imageVector = Icons.Filled.MoreVert, contentDescription = "More")
             }
         }
     )
@@ -347,17 +479,17 @@ private fun FilterSortBar(
             FilterChip(
                 selected = selectedFilter == CustomerFilter.Owing,
                 onClick = { onFilterChange(CustomerFilter.Owing) },
-                label = { Text("Due") }
+                label = { Text("Owes") }
             )
             FilterChip(
                 selected = selectedFilter == CustomerFilter.Credit,
                 onClick = { onFilterChange(CustomerFilter.Credit) },
-                label = { Text("Extra") }
+                label = { Text("Credit") }
             )
             FilterChip(
                 selected = selectedFilter == CustomerFilter.Settled,
                 onClick = { onFilterChange(CustomerFilter.Settled) },
-                label = { Text("Clear") }
+                label = { Text("Settled") }
             )
         }
 
@@ -483,9 +615,9 @@ private fun CustomerRowItem(
 private fun BalanceChip(balance: BigDecimal) {
     val (label, color) =
         when {
-            balance > BigDecimal.ZERO -> "Due" to MaterialTheme.colorScheme.errorContainer
-            balance < BigDecimal.ZERO -> "Extra" to MaterialTheme.colorScheme.tertiaryContainer
-            else -> "Clear" to MaterialTheme.colorScheme.secondaryContainer
+            balance > BigDecimal.ZERO -> "Owes" to MaterialTheme.colorScheme.errorContainer
+            balance < BigDecimal.ZERO -> "Credit" to MaterialTheme.colorScheme.tertiaryContainer
+            else -> "Settled" to MaterialTheme.colorScheme.secondaryContainer
         }
     Surface(
         color = color,
@@ -547,19 +679,31 @@ private fun EmptyCustomersState(
 }
 
 @Composable
-private fun ActionRow(label: String, onClick: () -> Unit) {
+private fun ActionRow(
+    label: String,
+    onClick: () -> Unit,
+    enabled: Boolean = true,
+    textColor: androidx.compose.ui.graphics.Color? = null
+) {
+    val resolvedColor = textColor ?: MaterialTheme.colorScheme.onSurface
+    val displayColor =
+        if (enabled) resolvedColor else MaterialTheme.colorScheme.onSurfaceVariant
     Surface(
         modifier = Modifier
             .fillMaxWidth()
             .heightIn(min = 48.dp)
-            .clickable { onClick() },
+            .clickable(enabled = enabled) { onClick() },
         color = MaterialTheme.colorScheme.surface
     ) {
         Row(
             modifier = Modifier.padding(vertical = 10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(text = label, style = MaterialTheme.typography.bodyLarge)
+            Text(
+                text = label,
+                style = MaterialTheme.typography.bodyLarge,
+                color = displayColor
+            )
         }
     }
 }
@@ -575,6 +719,13 @@ private enum class CustomerSort {
     BalanceDesc,
     BalanceAsc,
     NameAsc
+}
+
+private fun launchSms(context: android.content.Context, phone: String) {
+    if (phone.isBlank()) return
+    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("sms:$phone"))
+        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    context.startActivity(intent)
 }
 
 
