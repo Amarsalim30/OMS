@@ -1,0 +1,38 @@
+package com.zeynbakers.order_management_system.core.navigation
+
+import kotlinx.datetime.LocalDate
+
+object AppRoutes {
+    const val Calendar = "calendar"
+    const val Orders = "orders"
+    const val Customers = "customers"
+    const val Money = "money"
+    const val Summary = "summary"
+    const val Backup = "backup"
+    const val Notifications = "notifications"
+    const val ImportContacts = "import_contacts"
+
+    const val Day = "day/{date}"
+    const val CustomerDetail = "customer/{customerId}"
+
+    const val PaymentHistoryAll = "payment_history/all"
+    const val PaymentHistoryCustomer = "payment_history/customer/{customerId}"
+    const val PaymentHistoryOrder = "payment_history/order/{orderId}"
+
+    const val ARG_DATE = "date"
+    const val ARG_CUSTOMER_ID = "customerId"
+    const val ARG_ORDER_ID = "orderId"
+    const val ARG_FOCUS_RECEIPT_ID = "focusReceiptId"
+
+    fun day(date: LocalDate): String = "day/${date}"
+    fun customerDetail(customerId: Long): String = "customer/$customerId"
+    fun paymentHistoryCustomer(customerId: Long): String = "payment_history/customer/$customerId"
+    fun paymentHistoryOrder(orderId: Long): String = "payment_history/order/$orderId"
+    fun paymentHistoryAll(focusReceiptId: Long? = null): String {
+        return if (focusReceiptId == null) {
+            PaymentHistoryAll
+        } else {
+            "${PaymentHistoryAll}?${ARG_FOCUS_RECEIPT_ID}=$focusReceiptId"
+        }
+    }
+}

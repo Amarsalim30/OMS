@@ -1,0 +1,1035 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Payment Intake – M-PESA</title>
+  <style>
+    :root{
+      --bg:#0b0f14;
+      --surface:#111824;
+      --surface2:#141f2e;
+      --card:#121a26;
+      --muted:#9fb0c3;
+      --text:#e8f0fb;
+      --line:rgba(255,255,255,.08);
+      --brand:#7bb4ff;
+      --brand2:#a7d0ff;
+      --good:#36d399;
+      --warn:#fbbf24;
+      --bad:#fb7185;
+
+      --r12:12px;
+      --r16:16px;
+
+      --shadow: 0 10px 30px rgba(0,0,0,.35);
+      --focus: 0 0 0 3px rgba(123,180,255,.35);
+      --maxw: 920px;
+      --tap: 44px;
+    }
+
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{
+      margin:0;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, "Noto Sans", "Liberation Sans", sans-serif;
+      background: radial-gradient(1200px 800px at 30% -10%, rgba(123,180,255,.14), transparent 60%),
+                  radial-gradient(900px 600px at 90% 10%, rgba(251,191,36,.08), transparent 60%),
+                  var(--bg);
+      color:var(--text);
+      -webkit-font-smoothing:antialiased;
+      -moz-osx-font-smoothing:grayscale;
+    }
+
+    /* Layout */
+    .app{
+      min-height:100vh;
+      display:flex;
+      flex-direction:column;
+    }
+    .topbar{
+      position:sticky; top:0; z-index:50;
+      background: linear-gradient(to bottom, rgba(11,15,20,.9), rgba(11,15,20,.6));
+      backdrop-filter: blur(10px);
+      border-bottom:1px solid var(--line);
+    }
+    .topbar-inner{
+      max-width:var(--maxw);
+      margin:0 auto;
+      padding:10px 14px;
+      display:flex;
+      align-items:center;
+      gap:10px;
+    }
+    .title{
+      font-weight:700;
+      letter-spacing:.2px;
+      font-size:14px;
+      color:var(--brand2);
+      user-select:none;
+    }
+    .tabs{
+      margin-left:auto;
+      display:flex;
+      gap:8px;
+      padding:4px;
+      border:1px solid var(--line);
+      border-radius:999px;
+      background:rgba(255,255,255,.03);
+    }
+    .tab{
+      height:34px;
+      padding:0 12px;
+      border-radius:999px;
+      border:0;
+      background:transparent;
+      color:var(--muted);
+      cursor:pointer;
+      font-weight:600;
+      font-size:13px;
+      outline:none;
+    }
+    .tab[aria-selected="true"]{
+      background:rgba(123,180,255,.14);
+      color:var(--text);
+    }
+    .content{
+      width:100%;
+      max-width:var(--maxw);
+      margin:0 auto;
+      padding:12px 14px 88px; /* bottom bar spacing */
+      display:flex;
+      flex-direction:column;
+      gap:10px;
+    }
+
+    /* Cards */
+    .card{
+      background: linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,.02));
+      border:1px solid var(--line);
+      border-radius:var(--r16);
+      box-shadow: var(--shadow);
+    }
+    .card-inner{ padding:12px; }
+
+    /* Input card */
+    .input-head{
+      display:flex;
+      align-items:center;
+      gap:10px;
+    }
+    .input-head h2{
+      margin:0;
+      font-size:14px;
+      font-weight:700;
+      letter-spacing:.2px;
+    }
+    .input-head .spacer{ margin-left:auto; }
+    .icon-btn{
+      width:36px; height:36px;
+      border-radius:10px;
+      border:1px solid var(--line);
+      background:rgba(255,255,255,.03);
+      color:var(--text);
+      display:grid;
+      place-items:center;
+      cursor:pointer;
+      outline:none;
+    }
+    .icon-btn:hover{ background:rgba(255,255,255,.05) }
+    .icon-btn:focus{ box-shadow:var(--focus) }
+
+    .field{
+      margin-top:10px;
+      display:flex;
+      flex-direction:column;
+      gap:6px;
+    }
+    .label{
+      font-size:12px;
+      color:var(--muted);
+      font-weight:600;
+    }
+    textarea, input[type="text"], input[type="number"]{
+      width:100%;
+      border-radius:14px;
+      border:1px solid var(--line);
+      background: rgba(255,255,255,.03);
+      color:var(--text);
+      padding:10px 12px;
+      outline:none;
+      font-size:14px;
+    }
+    textarea{ min-height:92px; resize:vertical; line-height:1.35; }
+    textarea:focus, input:focus{ box-shadow:var(--focus); border-color:rgba(123,180,255,.4); }
+    .help{
+      font-size:12px;
+      color:var(--muted);
+      line-height:1.3;
+      display:flex;
+      gap:8px;
+      align-items:center;
+    }
+    .dot{
+      width:6px; height:6px; border-radius:99px; background:rgba(123,180,255,.8);
+      box-shadow:0 0 0 4px rgba(123,180,255,.12);
+    }
+
+    /* Summary + filters bar */
+    .bar{
+      display:flex;
+      align-items:center;
+      gap:10px;
+      padding:10px 12px;
+      border-radius:var(--r16);
+      border:1px solid var(--line);
+      background: rgba(255,255,255,.02);
+      position:sticky; top:56px; z-index:40; /* below topbar */
+      backdrop-filter: blur(10px);
+    }
+    .stats{
+      display:flex; flex-wrap:wrap;
+      gap:8px;
+      align-items:center;
+      min-width:0;
+    }
+    .pill{
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
+      padding:6px 10px;
+      border-radius:999px;
+      border:1px solid var(--line);
+      background:rgba(255,255,255,.03);
+      font-size:12px;
+      color:var(--muted);
+      white-space:nowrap;
+    }
+    .pill strong{ color:var(--text); font-weight:800; }
+    .pill.good{ border-color:rgba(54,211,153,.35); background:rgba(54,211,153,.08); }
+    .pill.warn{ border-color:rgba(251,191,36,.35); background:rgba(251,191,36,.08); }
+    .pill.bad{ border-color:rgba(251,113,133,.35); background:rgba(251,113,133,.08); }
+
+    .filters{
+      margin-left:auto;
+      display:flex;
+      gap:6px;
+      overflow:auto;
+      padding-bottom:2px;
+    }
+    .chip{
+      height:32px;
+      padding:0 10px;
+      border-radius:999px;
+      border:1px solid var(--line);
+      background:rgba(255,255,255,.03);
+      color:var(--muted);
+      cursor:pointer;
+      font-weight:700;
+      font-size:12px;
+      outline:none;
+      white-space:nowrap;
+    }
+    .chip[aria-pressed="true"]{
+      background:rgba(123,180,255,.14);
+      color:var(--text);
+      border-color:rgba(123,180,255,.35);
+    }
+    .chip:focus{ box-shadow:var(--focus) }
+
+    /* List */
+    .list{ display:flex; flex-direction:column; gap:8px; }
+    .row{
+      display:flex;
+      gap:10px;
+      padding:12px;
+      border-radius:var(--r16);
+      border:1px solid var(--line);
+      background:rgba(255,255,255,.02);
+      cursor:pointer;
+      outline:none;
+    }
+    .row:hover{ background:rgba(255,255,255,.03); }
+    .row:focus{ box-shadow:var(--focus); }
+    .check{
+      width:22px; height:22px; margin-top:2px;
+      border-radius:6px;
+      border:1px solid var(--line);
+      background:rgba(255,255,255,.02);
+      display:grid; place-items:center;
+      flex:0 0 auto;
+    }
+    .check[data-checked="true"]{
+      border-color:rgba(123,180,255,.6);
+      background:rgba(123,180,255,.18);
+    }
+    .check svg{ opacity:.9; }
+    .meta{
+      min-width:0;
+      flex:1 1 auto;
+      display:flex;
+      flex-direction:column;
+      gap:4px;
+    }
+    .line1{
+      display:flex;
+      gap:8px;
+      align-items:baseline;
+      min-width:0;
+    }
+    .amount{
+      font-weight:900;
+      letter-spacing:.2px;
+    }
+    .small{
+      color:var(--muted);
+      font-size:12px;
+      white-space:nowrap;
+    }
+    .code{
+      color:var(--muted);
+      font-size:12px;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      white-space:nowrap;
+      min-width:0;
+    }
+    .sender{
+      font-size:13px;
+      color:var(--text);
+      overflow:hidden;
+      text-overflow:ellipsis;
+      white-space:nowrap;
+    }
+    .status{
+      flex:0 0 auto;
+      display:flex;
+      flex-direction:column;
+      align-items:flex-end;
+      gap:8px;
+    }
+    .tag{
+      font-size:12px;
+      font-weight:800;
+      padding:6px 10px;
+      border-radius:999px;
+      border:1px solid var(--line);
+      color:var(--text);
+      background:rgba(255,255,255,.03);
+      white-space:nowrap;
+    }
+    .tag.ready{ border-color:rgba(54,211,153,.45); background:rgba(54,211,153,.10); }
+    .tag.needs{ border-color:rgba(251,191,36,.45); background:rgba(251,191,36,.10); }
+    .tag.dup{ border-color:rgba(251,113,133,.45); background:rgba(251,113,133,.10); }
+
+    /* Bottom bar */
+    .bottom{
+      position:fixed; left:0; right:0; bottom:0;
+      border-top:1px solid var(--line);
+      background:rgba(11,15,20,.75);
+      backdrop-filter: blur(10px);
+      z-index:60;
+    }
+    .bottom-inner{
+      max-width:var(--maxw);
+      margin:0 auto;
+      padding:10px 14px;
+      display:flex;
+      align-items:center;
+      gap:10px;
+    }
+    .ready-total{
+      font-size:13px;
+      color:var(--muted);
+      font-weight:700;
+      min-width:0;
+    }
+    .ready-total strong{ color:var(--text); font-weight:900; }
+    .primary{
+      margin-left:auto;
+      height:44px;
+      min-width:140px;
+      padding:0 16px;
+      border-radius:999px;
+      border:0;
+      background:linear-gradient(180deg, rgba(123,180,255,1), rgba(123,180,255,.82));
+      color:#07101c;
+      font-weight:900;
+      cursor:pointer;
+      outline:none;
+      box-shadow: 0 10px 25px rgba(123,180,255,.18);
+    }
+    .primary:disabled{
+      opacity:.45;
+      cursor:not-allowed;
+      box-shadow:none;
+    }
+    .primary:focus{ box-shadow: var(--focus); }
+
+    /* Modal bottom sheet */
+    .sheet-backdrop{
+      position:fixed; inset:0;
+      background:rgba(0,0,0,.55);
+      display:none;
+      z-index:80;
+    }
+    .sheet-backdrop[data-open="true"]{ display:block; }
+    .sheet{
+      position:absolute;
+      left:0; right:0; bottom:0;
+      max-width:var(--maxw);
+      margin:0 auto;
+      background: linear-gradient(180deg, rgba(18,26,38,1), rgba(15,22,34,1));
+      border:1px solid var(--line);
+      border-bottom:0;
+      border-radius:18px 18px 0 0;
+      box-shadow: var(--shadow);
+      max-height:78vh;
+      overflow:auto;
+    }
+    .sheet-head{
+      padding:10px 12px;
+      display:flex;
+      gap:10px;
+      align-items:center;
+      border-bottom:1px solid var(--line);
+      position:sticky; top:0;
+      background:rgba(18,26,38,.9);
+      backdrop-filter: blur(10px);
+    }
+    .grab{
+      width:44px; height:4px;
+      border-radius:999px;
+      background:rgba(255,255,255,.18);
+      margin:2px auto 8px;
+    }
+    .sheet-title{
+      font-weight:900;
+      font-size:14px;
+      flex:1;
+      min-width:0;
+      overflow:hidden;
+      text-overflow:ellipsis;
+      white-space:nowrap;
+    }
+    .sheet-body{ padding:12px; display:flex; flex-direction:column; gap:10px; }
+    .choice{
+      border:1px solid var(--line);
+      background:rgba(255,255,255,.02);
+      border-radius:14px;
+      padding:10px;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:10px;
+      cursor:pointer;
+      outline:none;
+    }
+    .choice:hover{ background:rgba(255,255,255,.03); }
+    .choice:focus{ box-shadow:var(--focus); }
+    .choice strong{ font-weight:900; }
+    .choice small{ color:var(--muted); font-weight:700; }
+    .sheet-actions{
+      display:flex;
+      gap:10px;
+      padding:12px;
+      border-top:1px solid var(--line);
+      position:sticky; bottom:0;
+      background:rgba(18,26,38,.92);
+      backdrop-filter: blur(10px);
+    }
+    .secondary{
+      height:44px;
+      padding:0 14px;
+      border-radius:999px;
+      border:1px solid var(--line);
+      background:rgba(255,255,255,.03);
+      color:var(--text);
+      font-weight:900;
+      cursor:pointer;
+      outline:none;
+      flex:1;
+    }
+    .secondary:focus{ box-shadow:var(--focus) }
+    .confirm{
+      height:44px;
+      padding:0 14px;
+      border-radius:999px;
+      border:0;
+      background:linear-gradient(180deg, rgba(54,211,153,1), rgba(54,211,153,.85));
+      color:#051311;
+      font-weight:900;
+      cursor:pointer;
+      outline:none;
+      flex:1.2;
+    }
+    .confirm:focus{ box-shadow:var(--focus) }
+
+    /* Manual form panel */
+    .grid{
+      display:grid;
+      grid-template-columns:1fr;
+      gap:10px;
+    }
+    .seg{
+      display:flex; gap:6px;
+      border:1px solid var(--line);
+      border-radius:999px;
+      padding:4px;
+      background:rgba(255,255,255,.02);
+      width:max-content;
+    }
+    .seg button{
+      height:34px;
+      padding:0 12px;
+      border-radius:999px;
+      border:0;
+      background:transparent;
+      color:var(--muted);
+      cursor:pointer;
+      font-weight:900;
+      outline:none;
+    }
+    .seg button[aria-pressed="true"]{
+      background:rgba(123,180,255,.14);
+      color:var(--text);
+    }
+
+    /* Helpers */
+    .hidden{ display:none !important; }
+    .sr-only{
+      position:absolute; width:1px; height:1px; padding:0; margin:-1px;
+      overflow:hidden; clip:rect(0,0,0,0); white-space:nowrap; border:0;
+    }
+
+    @media (min-width:760px){
+      textarea{ min-height:110px; }
+      .grid{ grid-template-columns: 1.2fr .8fr; }
+    }
+  </style>
+</head>
+
+<body>
+<div class="app">
+  <!-- Top bar -->
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div class="title">Payment Intake</div>
+      <nav class="tabs" role="tablist" aria-label="Intake tabs">
+        <button class="tab" role="tab" aria-selected="true" data-tab="mpesa">M-PESA</button>
+        <button class="tab" role="tab" aria-selected="false" data-tab="manual">Manual</button>
+        <button class="tab" role="tab" aria-selected="false" data-tab="ledger">Ledger</button>
+      </nav>
+    </div>
+  </header>
+
+  <main class="content">
+    <!-- M-PESA TAB -->
+    <section id="tab-mpesa">
+      <!-- Input -->
+      <div class="card">
+        <div class="card-inner">
+          <div class="input-head">
+            <h2>Paste M-PESA messages</h2>
+            <div class="spacer"></div>
+            <button class="icon-btn" id="btnPaste" title="Paste from clipboard" aria-label="Paste from clipboard">
+              <!-- clipboard icon -->
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                <path d="M9 4h6m-6 0a2 2 0 0 0-2 2v1h10V6a2 2 0 0 0-2-2m-6 0h6M7 7h10v13a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2V7Z" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+              </svg>
+            </button>
+            <button class="icon-btn" id="btnClear" title="Clear" aria-label="Clear">
+              <!-- X icon -->
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+                <path d="M18 6 6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+              </svg>
+            </button>
+          </div>
+
+          <div class="field">
+            <div class="label">Received text</div>
+            <textarea id="rawText" placeholder="Paste one or more messages here…"></textarea>
+            <div class="help"><span class="dot"></span>Blank line between each message.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Status + filters -->
+      <div class="bar" aria-label="Status and filters">
+        <div class="stats" id="stats">
+          <span class="pill"><span>Detected</span> <strong id="sDetected">0</strong></span>
+          <span class="pill good"><span>Ready</span> <strong id="sReady">0</strong></span>
+          <span class="pill warn"><span>Needs</span> <strong id="sNeeds">0</strong></span>
+          <span class="pill bad"><span>Dup</span> <strong id="sDup">0</strong></span>
+        </div>
+        <div class="filters" role="toolbar" aria-label="Filters">
+          <button class="chip" aria-pressed="true" data-filter="all">All</button>
+          <button class="chip" aria-pressed="false" data-filter="ready">Ready</button>
+          <button class="chip" aria-pressed="false" data-filter="needs">Needs</button>
+          <button class="chip" aria-pressed="false" data-filter="dup">Duplicates</button>
+          <button class="chip" aria-pressed="false" data-filter="selected">Selected</button>
+        </div>
+      </div>
+
+      <!-- List -->
+      <div class="list" id="list" aria-label="Detected transactions">
+        <!-- rows inserted by JS -->
+      </div>
+    </section>
+
+    <!-- MANUAL TAB -->
+    <section id="tab-manual" class="hidden">
+      <div class="card">
+        <div class="card-inner">
+          <div class="input-head">
+            <h2>Record payment manually</h2>
+          </div>
+
+          <div class="grid">
+            <div>
+              <div class="field">
+                <div class="label">Customer</div>
+                <input type="text" id="mCustomer" placeholder="Search name or phone…" />
+              </div>
+
+              <div class="field">
+                <div class="label">Note (optional)</div>
+                <input type="text" id="mNote" placeholder="e.g. deposit, balance, delivery fee…" />
+              </div>
+
+              <div class="field">
+                <div class="label">Allocation</div>
+                <div class="seg" role="group" aria-label="Allocation mode">
+                  <button type="button" aria-pressed="true" data-alloc="oldest">Oldest orders</button>
+                  <button type="button" aria-pressed="false" data-alloc="pick">Pick order</button>
+                  <button type="button" aria-pressed="false" data-alloc="credit">Customer credit</button>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <div class="field">
+                <div class="label">Amount (KES)</div>
+                <input type="number" id="mAmount" placeholder="0" inputmode="numeric" />
+              </div>
+
+              <div class="field">
+                <div class="label">Method</div>
+                <div class="seg" role="group" aria-label="Payment method">
+                  <button type="button" aria-pressed="true" data-method="mpesa">M-PESA</button>
+                  <button type="button" aria-pressed="false" data-method="cash">Cash</button>
+                  <button type="button" aria-pressed="false" data-method="bank">Bank</button>
+                </div>
+              </div>
+
+              <div style="height:10px;"></div>
+              <button class="primary" id="btnSaveManual" style="width:100%;">Save payment</button>
+            </div>
+          </div>
+
+          <div class="help" style="margin-top:10px;">
+            <span class="dot"></span>Keep manual entry fast: customer + amount + method, then save.
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- LEDGER TAB -->
+    <section id="tab-ledger" class="hidden">
+      <div class="card">
+        <div class="card-inner">
+          <div class="input-head">
+            <h2>Ledger (preview)</h2>
+          </div>
+          <div class="help" style="margin-top:8px;">
+            <span class="dot"></span>Ledger view is usually a separate screen: totals, recent payments, balances.
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <!-- Bottom action bar -->
+  <div class="bottom" role="region" aria-label="Apply bar">
+    <div class="bottom-inner">
+      <div class="ready-total">
+        <strong id="readyKes">KES 0</strong> ready · <span id="readyCount">0</span> payments
+      </div>
+      <button class="primary" id="btnApply" disabled>Apply ready (0)</button>
+    </div>
+  </div>
+
+  <!-- Bottom sheet -->
+  <div class="sheet-backdrop" id="sheetBackdrop" aria-hidden="true">
+    <div class="sheet" role="dialog" aria-modal="true" aria-label="Match payment">
+      <div class="grab"></div>
+      <div class="sheet-head">
+        <div class="sheet-title" id="sheetTitle">Match payment</div>
+        <button class="icon-btn" id="sheetClose" aria-label="Close">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+            <path d="M18 6 6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+        </button>
+      </div>
+      <div class="sheet-body" id="sheetBody">
+        <!-- choices inserted by JS -->
+      </div>
+      <div class="sheet-actions">
+        <button class="secondary" id="btnSkip">Skip</button>
+        <button class="confirm" id="btnConfirm">Confirm match</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // ---------- Demo Data (replace with real parsed results) ----------
+  const demoTx = [
+    {
+      id: "UADOIGA3DP",
+      amount: 100,
+      sender: "ZAINAB OMAR • 0722320847",
+      time: "13 Jan, 15:09",
+      status: "needs", // ready | needs | dup
+      selected: false,
+      suggestions: [
+        {label: "Jan 28 – 30 books", confidence: 40, balance: 750},
+        {label: "Feb 3 – meatpie 30", confidence: 40, balance: 1600},
+        {label: "Feb 4 – kanzu 30", confidence: 40, balance: 3000},
+      ]
+    },
+    {
+      id: "UASOI3SQDP",
+      amount: 100,
+      sender: "ZAINAB OMAR • 0722320847",
+      time: "13 Jan, 15:09",
+      status: "ready",
+      selected: true,
+      suggestions: [
+        {label: "Feb 4 – kanzu 30", confidence: 86, balance: 3000},
+      ]
+    },
+    {
+      id: "UAXXX999",
+      amount: 250,
+      sender: "ALI ABDI • 0712…",
+      time: "12 Jan, 10:02",
+      status: "dup",
+      selected: false,
+      suggestions: []
+    }
+  ];
+
+  // ---------- State ----------
+  let tx = structuredClone(demoTx);
+  let filter = "all";
+  let openTxId = null;
+  let chosenSuggestionIndex = null;
+
+  // ---------- Helpers ----------
+  const k = (n)=> `KES ${Number(n).toLocaleString()}`;
+  const byId = (id)=> document.getElementById(id);
+
+  function computeCounts(list){
+    const detected = list.length;
+    const ready = list.filter(t=>t.status==="ready").length;
+    const needs = list.filter(t=>t.status==="needs").length;
+    const dup = list.filter(t=>t.status==="dup").length;
+    return {detected, ready, needs, dup};
+  }
+  function readyTotals(list){
+    const readyList = list.filter(t=>t.status==="ready");
+    const sum = readyList.reduce((a,b)=>a + b.amount, 0);
+    return {count: readyList.length, amount: sum};
+  }
+  function filteredList(){
+    if(filter==="all") return tx;
+    if(filter==="ready") return tx.filter(t=>t.status==="ready");
+    if(filter==="needs") return tx.filter(t=>t.status==="needs");
+    if(filter==="dup") return tx.filter(t=>t.status==="dup");
+    if(filter==="selected") return tx.filter(t=>t.selected);
+    return tx;
+  }
+
+  // ---------- Rendering ----------
+  function renderStats(){
+    const c = computeCounts(tx);
+    byId("sDetected").textContent = c.detected;
+    byId("sReady").textContent = c.ready;
+    byId("sNeeds").textContent = c.needs;
+    byId("sDup").textContent = c.dup;
+
+    const rt = readyTotals(tx);
+    byId("readyKes").textContent = k(rt.amount);
+    byId("readyCount").textContent = rt.count;
+    const btn = byId("btnApply");
+    btn.disabled = rt.count === 0;
+    btn.textContent = `Apply ready (${rt.count})`;
+  }
+
+  function statusTag(status){
+    if(status==="ready") return `<span class="tag ready">Ready</span>`;
+    if(status==="needs") return `<span class="tag needs">Needs customer</span>`;
+    return `<span class="tag dup">Duplicate</span>`;
+  }
+
+  function renderList(){
+    const list = byId("list");
+    const items = filteredList();
+
+    if(items.length === 0){
+      list.innerHTML = `
+        <div class="card">
+          <div class="card-inner">
+            <div class="help"><span class="dot"></span>No payments in this view.</div>
+          </div>
+        </div>`;
+      return;
+    }
+
+    list.innerHTML = items.map(t=>{
+      const checked = t.selected ? "true":"false";
+      const canSelect = (t.status==="ready");
+      return `
+        <div class="row" tabindex="0" role="button" aria-label="Open ${t.id}" data-open="${t.id}">
+          <div class="check" data-checked="${checked}" data-check="${t.id}" title="${canSelect ? "Select" : "Only ready payments can be selected"}">
+            ${t.selected ? `
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+                <path d="M20 6 9 17l-5-5" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>` : ``}
+          </div>
+
+          <div class="meta">
+            <div class="line1">
+              <div class="amount">${k(t.amount)}</div>
+              <div class="code">${t.id}</div>
+              <div class="small">${t.time}</div>
+            </div>
+            <div class="sender">${t.sender}</div>
+          </div>
+
+          <div class="status">
+            ${statusTag(t.status)}
+            <span class="small">${t.status==="dup" ? "Recorded" : "Tap to match"}</span>
+          </div>
+        </div>
+      `;
+    }).join("");
+
+    // checkbox click (prevent opening sheet)
+    list.querySelectorAll("[data-check]").forEach(el=>{
+      el.addEventListener("click", (e)=>{
+        e.stopPropagation();
+        const id = el.getAttribute("data-check");
+        const item = tx.find(t=>t.id===id);
+        if(!item || item.status!=="ready") return;
+        item.selected = !item.selected;
+        renderAll();
+      });
+    });
+
+    // open sheet
+    list.querySelectorAll("[data-open]").forEach(el=>{
+      el.addEventListener("click", ()=>{
+        openSheet(el.getAttribute("data-open"));
+      });
+      el.addEventListener("keydown", (ev)=>{
+        if(ev.key==="Enter" || ev.key===" "){
+          ev.preventDefault();
+          openSheet(el.getAttribute("data-open"));
+        }
+      });
+    });
+  }
+
+  function renderAll(){
+    renderStats();
+    renderList();
+  }
+
+  // ---------- Sheet ----------
+  function openSheet(id){
+    const item = tx.find(t=>t.id===id);
+    if(!item) return;
+    openTxId = id;
+    chosenSuggestionIndex = null;
+
+    byId("sheetTitle").textContent = `${k(item.amount)} from ${item.sender}`;
+    const body = byId("sheetBody");
+
+    if(item.status === "dup"){
+      body.innerHTML = `
+        <div class="help"><span class="dot"></span>This payment looks like a duplicate (already recorded).</div>
+        <div class="choice" tabindex="0">
+          <div>
+            <strong>View receipt</strong><br/>
+            <small>Open existing receipt details</small>
+          </div>
+          <small>›</small>
+        </div>
+        <div class="choice" tabindex="0">
+          <div>
+            <strong>Move payment</strong><br/>
+            <small>Re-assign to another customer/order</small>
+          </div>
+          <small>›</small>
+        </div>
+      `;
+      byId("btnConfirm").textContent = "Close";
+      byId("btnSkip").textContent = "Close";
+    } else if(item.suggestions && item.suggestions.length){
+      body.innerHTML = `
+        <div class="help"><span class="dot"></span>Choose the best match (or use search).</div>
+        ${item.suggestions.map((s, idx)=>`
+          <div class="choice" tabindex="0" data-sug="${idx}">
+            <div>
+              <strong>${s.label}</strong><br/>
+              <small>${s.confidence}% match · balance ${k(s.balance)}</small>
+            </div>
+            <small>Tap</small>
+          </div>
+        `).join("")}
+        <div class="choice" tabindex="0" data-search="1">
+          <div>
+            <strong>Search customer / order</strong><br/>
+            <small>Type name or phone to find the right record</small>
+          </div>
+          <small>›</small>
+        </div>
+      `;
+
+      body.querySelectorAll("[data-sug]").forEach(el=>{
+        el.addEventListener("click", ()=>{
+          chosenSuggestionIndex = Number(el.getAttribute("data-sug"));
+          body.querySelectorAll("[data-sug]").forEach(x=> x.style.borderColor = "var(--line)");
+          el.style.borderColor = "rgba(123,180,255,.55)";
+        });
+      });
+
+      byId("btnConfirm").textContent = "Confirm match";
+      byId("btnSkip").textContent = "Skip";
+    } else {
+      body.innerHTML = `
+        <div class="help"><span class="dot"></span>No suggestions yet. Use search to match customer/order.</div>
+        <div class="choice" tabindex="0" data-search="1">
+          <div>
+            <strong>Search customer / order</strong><br/>
+            <small>Type name or phone</small>
+          </div>
+          <small>›</small>
+        </div>
+      `;
+      byId("btnConfirm").textContent = "Mark as needs";
+      byId("btnSkip").textContent = "Close";
+    }
+
+    const backdrop = byId("sheetBackdrop");
+    backdrop.dataset.open = "true";
+    backdrop.setAttribute("aria-hidden", "false");
+  }
+
+  function closeSheet(){
+    openTxId = null;
+    chosenSuggestionIndex = null;
+    const backdrop = byId("sheetBackdrop");
+    backdrop.dataset.open = "false";
+    backdrop.setAttribute("aria-hidden", "true");
+  }
+
+  byId("sheetClose").addEventListener("click", closeSheet);
+  byId("sheetBackdrop").addEventListener("click", (e)=>{
+    if(e.target.id === "sheetBackdrop") closeSheet();
+  });
+  byId("btnSkip").addEventListener("click", closeSheet);
+
+  byId("btnConfirm").addEventListener("click", ()=>{
+    if(!openTxId) return;
+    const item = tx.find(t=>t.id===openTxId);
+    if(!item) return;
+
+    if(item.status === "dup"){
+      closeSheet();
+      return;
+    }
+
+    // Demo behavior: if a suggestion selected, mark ready + selected
+    if(item.suggestions?.length && chosenSuggestionIndex !== null){
+      item.status = "ready";
+      item.selected = true;
+    }
+    renderAll();
+    closeSheet();
+  });
+
+  // ---------- Filters ----------
+  document.querySelectorAll(".chip").forEach(btn=>{
+    btn.addEventListener("click", ()=>{
+      document.querySelectorAll(".chip").forEach(b=>b.setAttribute("aria-pressed","false"));
+      btn.setAttribute("aria-pressed","true");
+      filter = btn.getAttribute("data-filter");
+      renderList();
+    });
+  });
+
+  // ---------- Tabs ----------
+  document.querySelectorAll(".tab").forEach(t=>{
+    t.addEventListener("click", ()=>{
+      document.querySelectorAll(".tab").forEach(x=>x.setAttribute("aria-selected","false"));
+      t.setAttribute("aria-selected","true");
+      const which = t.getAttribute("data-tab");
+      byId("tab-mpesa").classList.toggle("hidden", which!=="mpesa");
+      byId("tab-manual").classList.toggle("hidden", which!=="manual");
+      byId("tab-ledger").classList.toggle("hidden", which!=="ledger");
+    });
+  });
+
+  // ---------- Input actions ----------
+  byId("btnClear").addEventListener("click", ()=>{
+    byId("rawText").value = "";
+  });
+
+  byId("btnPaste").addEventListener("click", async ()=>{
+    // Real clipboard requires https + user gesture. This demo tries and falls back.
+    try{
+      const t = await navigator.clipboard.readText();
+      if(t && t.trim()){
+        byId("rawText").value = (byId("rawText").value ? (byId("rawText").value + "\n\n") : "") + t.trim();
+      } else {
+        alert("Clipboard is empty.");
+      }
+    }catch{
+      alert("Clipboard access not available here. Paste manually.");
+    }
+  });
+
+  byId("btnApply").addEventListener("click", ()=>{
+    const ready = tx.filter(t=>t.status==="ready");
+    if(!ready.length) return;
+    alert(`Applying ${ready.length} ready payments (${k(ready.reduce((a,b)=>a+b.amount,0))})`);
+  });
+
+  // Manual segmented controls
+  document.querySelectorAll('[data-method]').forEach(b=>{
+    b.addEventListener('click', ()=>{
+      const wrap = b.parentElement;
+      wrap.querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed','false'));
+      b.setAttribute('aria-pressed','true');
+    });
+  });
+  document.querySelectorAll('[data-alloc]').forEach(b=>{
+    b.addEventListener('click', ()=>{
+      const wrap = b.parentElement;
+      wrap.querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed','false'));
+      b.setAttribute('aria-pressed','true');
+    });
+  });
+
+  byId("btnSaveManual").addEventListener("click", ()=>{
+    alert("Saved (demo). In app: validate customer + amount then persist receipt.");
+  });
+
+  // Initial render
+  renderAll();
+</script>
+</body>
+</html>
