@@ -1,6 +1,7 @@
 package com.zeynbakers.order_management_system.core.updates
 
 import android.content.Context
+import androidx.core.content.edit
 
 class UpdatePreferences(context: Context) {
     private val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -11,7 +12,7 @@ class UpdatePreferences(context: Context) {
     }
 
     fun markVersionSeen(versionName: String) {
-        prefs.edit().putString(KEY_LAST_VERSION, versionName).apply()
+        prefs.edit { putString(KEY_LAST_VERSION, versionName) }
     }
 
     companion object {

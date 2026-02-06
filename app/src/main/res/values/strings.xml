@@ -8,4 +8,9 @@
     <string name="shortcut_today">Today</string>
     <string name="shortcut_unpaid">Unpaid</string>
     <string name="widget_today_unpaid_desc">Today and unpaid snapshot</string>
+    <string name="widget_today_count_default">Today: 0</string>
+    <string name="widget_today_empty">No orders today</string>
+    <string name="widget_unpaid_count_default">Unpaid: 0</string>
+    <string name="widget_action_unpaid">Unpaid</string>
+    <string name="widget_action_add">Add</string>
 </resources>

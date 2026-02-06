@@ -55,6 +55,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.core.net.toUri
 import com.zeynbakers.order_management_system.accounting.data.AccountEntryEntity
 import com.zeynbakers.order_management_system.accounting.data.EntryType
 import com.zeynbakers.order_management_system.core.ui.rememberCurrentDate
@@ -72,7 +73,6 @@ import kotlinx.datetime.plus
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import android.content.Intent
-import android.net.Uri
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -653,12 +653,12 @@ private fun LedgerRow(entry: AccountEntryEntity, orderLabels: Map<Long, String>)
 }
 
 private fun launchDial(context: android.content.Context, phone: String) {
-    val intent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:$phone")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    val intent = Intent(Intent.ACTION_DIAL, "tel:$phone".toUri()).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
     context.startActivity(intent)
 }
 
 private fun launchSms(context: android.content.Context, phone: String) {
-    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("sms:$phone")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    val intent = Intent(Intent.ACTION_VIEW, "sms:$phone".toUri()).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
     context.startActivity(intent)
 }
 

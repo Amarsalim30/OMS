@@ -1,6 +1,5 @@
 package com.zeynbakers.order_management_system.accounting.ui
 
-import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -25,6 +24,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -38,7 +39,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.zeynbakers.order_management_system.accounting.data.PaymentAllocationStatus
@@ -60,7 +60,7 @@ fun PaymentIntakeHistoryScreen(
     onRemoved: () -> Unit
 ) {
     val scope = rememberCoroutineScope()
-    val context = LocalContext.current
+    val snackbarHostState = remember { SnackbarHostState() }
     val listState = rememberLazyListState()
     val items by viewModel.history.collectAsState()
     val header by viewModel.header.collectAsState()
@@ -104,6 +104,7 @@ fun PaymentIntakeHistoryScreen(
 
     Scaffold(
         contentWindowInsets = WindowInsets(0),
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = { Text(screenTitle) },
@@ -178,7 +179,7 @@ fun PaymentIntakeHistoryScreen(
                     voidReason = ""
                     scope.launch {
                         val result = viewModel.onVoidReceipt(target, reason)
-                        Toast.makeText(context, result.message, Toast.LENGTH_SHORT).show()
+                        snackbarHostState.showSnackbar(result.message)
                         viewModel.load(filter)
                         onRemoved()
                     }
@@ -268,7 +269,7 @@ fun PaymentIntakeHistoryScreen(
                                 } else {
                                     viewModel.onMoveReceipt(target, allocation)
                                 }
-                            Toast.makeText(context, result.message, Toast.LENGTH_SHORT).show()
+                            snackbarHostState.showSnackbar(result.message)
                             viewModel.load(filter)
                             onRemoved()
                         }

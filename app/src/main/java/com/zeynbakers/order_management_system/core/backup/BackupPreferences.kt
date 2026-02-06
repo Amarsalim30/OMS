@@ -1,6 +1,7 @@
 package com.zeynbakers.order_management_system.core.backup
 
 import android.content.Context
+import androidx.core.content.edit
 
 class BackupPreferences(context: Context) {
     private val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -29,23 +30,23 @@ class BackupPreferences(context: Context) {
     }
 
     fun setAutoEnabled(enabled: Boolean) {
-        prefs.edit().putBoolean(KEY_AUTO_ENABLED, enabled).apply()
+        prefs.edit { putBoolean(KEY_AUTO_ENABLED, enabled) }
     }
 
     fun setTargetType(type: BackupTargetType) {
-        prefs.edit().putString(KEY_TARGET_TYPE, type.name).apply()
+        prefs.edit { putString(KEY_TARGET_TYPE, type.name) }
     }
 
     fun setTargetUri(uri: String?) {
-        prefs.edit().putString(KEY_TARGET_URI, uri).apply()
+        prefs.edit { putString(KEY_TARGET_URI, uri) }
     }
 
     fun setLastResult(status: BackupStatus, message: String?, time: Long) {
-        prefs.edit()
-            .putString(KEY_LAST_STATUS, status.name)
-            .putString(KEY_LAST_MESSAGE, message)
-            .putLong(KEY_LAST_BACKUP_TIME, time)
-            .apply()
+        prefs.edit {
+            putString(KEY_LAST_STATUS, status.name)
+            putString(KEY_LAST_MESSAGE, message)
+            putLong(KEY_LAST_BACKUP_TIME, time)
+        }
     }
 
     companion object {

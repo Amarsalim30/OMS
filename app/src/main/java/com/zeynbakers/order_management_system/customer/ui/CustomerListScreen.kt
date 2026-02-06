@@ -1,4 +1,5 @@
 @file:OptIn(
+    androidx.compose.foundation.layout.ExperimentalLayoutApi::class,
     androidx.compose.material3.ExperimentalMaterial3Api::class,
     kotlinx.coroutines.FlowPreview::class
 )
@@ -6,14 +7,13 @@
 package com.zeynbakers.order_management_system.customer.ui
 
 import android.content.Intent
-import android.net.Uri
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -26,7 +26,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -71,6 +70,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.core.net.toUri
 import com.zeynbakers.order_management_system.accounting.data.CustomerAccountSummary
 import com.zeynbakers.order_management_system.core.util.formatKes
 import java.math.BigDecimal
@@ -213,7 +213,6 @@ private fun CustomersScreenM3(
             FilterSortBar(
                 selectedFilter = selectedFilter,
                 onFilterChange = { selectedFilter = it },
-                selectedSort = selectedSort,
                 onSortMenuToggle = { isSortMenuOpen = !isSortMenuOpen }
             )
 
@@ -229,11 +228,10 @@ private fun CustomersScreenM3(
 
             Spacer(Modifier.height(6.dp))
 
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(rememberScrollState()),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            FlowRow(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 FilterChip(
                     selected = hideZeroBalances,
@@ -281,7 +279,15 @@ private fun CustomersScreenM3(
                             customer = customer,
                             onClick = { onCustomerClick(customer.customerId) },
                             onLongClick = { longPressedCustomer = customer },
-                            onMenuClick = { longPressedCustomer = customer }
+                            onMenuClick = { longPressedCustomer = customer },
+                            onRecordPayment = { onRecordPayment(customer.customerId) },
+                            onAddOrder = { onAddOrder(customer.customerId) },
+                            onMessage = {
+                                if (customer.phone.isNotBlank()) {
+                                    launchSms(context, customer.phone)
+                                }
+                            },
+                            hasPhone = customer.phone.isNotBlank()
                         )
                     }
                 }
@@ -429,18 +435,14 @@ private fun SearchField(
 private fun FilterSortBar(
     selectedFilter: CustomerFilter,
     onFilterChange: (CustomerFilter) -> Unit,
-    selectedSort: CustomerSort,
     onSortMenuToggle: () -> Unit
 ) {
-    Row(
+    Column(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
+        verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        Row(
-            modifier = Modifier
-                .weight(1f)
-                .horizontalScroll(rememberScrollState()),
+        FlowRow(
+            modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             FilterChip(
@@ -465,8 +467,14 @@ private fun FilterSortBar(
             )
         }
 
-        IconButton(onClick = onSortMenuToggle) {
-            Icon(imageVector = Icons.AutoMirrored.Filled.Sort, contentDescription = "Sort")
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.End,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            IconButton(onClick = onSortMenuToggle) {
+                Icon(imageVector = Icons.AutoMirrored.Filled.Sort, contentDescription = "Sort")
+            }
         }
     }
 }
@@ -515,7 +523,11 @@ private fun CustomerRowItem(
     customer: CustomerAccountSummary,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
-    onMenuClick: () -> Unit
+    onMenuClick: () -> Unit,
+    onRecordPayment: () -> Unit,
+    onAddOrder: () -> Unit,
+    onMessage: () -> Unit,
+    hasPhone: Boolean
 ) {
     val name = customer.name.ifBlank { "Unknown Customer" }
     val initials = name.trim().split(" ").take(2).mapNotNull { it.firstOrNull() }.joinToString("")
@@ -571,6 +583,28 @@ private fun CustomerRowItem(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
+                Spacer(Modifier.height(4.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    TextButton(
+                        onClick = onRecordPayment,
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
+                    ) {
+                        Text("Pay")
+                    }
+                    TextButton(
+                        onClick = onAddOrder,
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
+                    ) {
+                        Text("Order")
+                    }
+                    TextButton(
+                        onClick = onMessage,
+                        enabled = hasPhone,
+                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
+                    ) {
+                        Text("Message")
+                    }
+                }
             }
 
             Spacer(Modifier.width(6.dp))
@@ -695,7 +729,7 @@ private enum class CustomerSort {
 
 private fun launchSms(context: android.content.Context, phone: String) {
     if (phone.isBlank()) return
-    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("sms:$phone"))
+    val intent = Intent(Intent.ACTION_VIEW, "sms:$phone".toUri())
         .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
     context.startActivity(intent)
 }

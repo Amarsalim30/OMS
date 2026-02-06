@@ -1,7 +1,7 @@
 package com.zeynbakers.order_management_system.core.backup
 
 import android.content.Context
-import android.net.Uri
+import androidx.core.net.toUri
 import androidx.documentfile.provider.DocumentFile
 import androidx.room.Database
 import androidx.room.withTransaction
@@ -189,14 +189,14 @@ object BackupManager {
     }
 
     private fun openSafOutput(context: Context, uriString: String?, fileName: String): OutputStream? {
-        val uri = uriString?.let { runCatching { Uri.parse(it) }.getOrNull() } ?: return null
+        val uri = uriString?.toUri() ?: return null
         val tree = DocumentFile.fromTreeUri(context, uri) ?: return null
         val target = tree.createFile("application/zip", fileName) ?: return null
         return context.contentResolver.openOutputStream(target.uri)
     }
 
     private fun openSafInput(context: Context, uriString: String): java.io.InputStream? {
-        val uri = runCatching { Uri.parse(uriString) }.getOrNull() ?: return null
+        val uri = uriString.toUri()
         return context.contentResolver.openInputStream(uri)
     }
 

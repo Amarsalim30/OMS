@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.os.Build
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
@@ -167,7 +168,17 @@ class ReminderWorker(
                 .setAutoCancel(true)
                 .build()
 
-        NotificationManagerCompat.from(appContext).notify(DUE_REMINDER_ID, notification)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(
+                appContext,
+                Manifest.permission.POST_NOTIFICATIONS
+            ) != PackageManager.PERMISSION_GRANTED
+        ) {
+            return
+        }
+        val manager = NotificationManagerCompat.from(appContext)
+        if (!manager.areNotificationsEnabled()) return
+        runCatching { manager.notify(DUE_REMINDER_ID, notification) }
     }
 
     private fun sendDailySummary(date: LocalDate, totalOrders: Int, unpaidCount: Int) {
@@ -188,7 +199,17 @@ class ReminderWorker(
                 .setAutoCancel(true)
                 .build()
 
-        NotificationManagerCompat.from(appContext).notify(DAILY_SUMMARY_ID, notification)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            ContextCompat.checkSelfPermission(
+                appContext,
+                Manifest.permission.POST_NOTIFICATIONS
+            ) != PackageManager.PERMISSION_GRANTED
+        ) {
+            return
+        }
+        val manager = NotificationManagerCompat.from(appContext)
+        if (!manager.areNotificationsEnabled()) return
+        runCatching { manager.notify(DAILY_SUMMARY_ID, notification) }
     }
 
     private fun resolveDueAtMillis(order: OrderEntity, timeZone: TimeZone): Long {
@@ -218,7 +239,7 @@ class ReminderWorker(
     }
 
     private fun canPostNotifications(context: Context): Boolean {
-        return if (android.os.Build.VERSION.SDK_INT < 33) {
+        return if (Build.VERSION.SDK_INT < 33) {
             true
         } else {
             ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) ==

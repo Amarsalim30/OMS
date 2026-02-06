@@ -19,9 +19,9 @@ import com.zeynbakers.order_management_system.accounting.ui.CustomerStatementsSc
 import com.zeynbakers.order_management_system.customer.ui.CustomerAccountsViewModel
 
 enum class MoneyTab {
-    Mpesa,
-    Manual,
-    Ledger
+    Collect,
+    Record,
+    Statements
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -48,18 +48,18 @@ fun MoneyScreen(
             Column(modifier = androidx.compose.ui.Modifier.statusBarsPadding()) {
                 TabRow(selectedTabIndex = selectedTab.ordinal) {
                     Tab(
-                        selected = selectedTab == MoneyTab.Mpesa,
-                        onClick = { onTabChange(MoneyTab.Mpesa) },
-                        text = { Text("M-PESA") }
+                        selected = selectedTab == MoneyTab.Collect,
+                        onClick = { onTabChange(MoneyTab.Collect) },
+                        text = { Text("Collect") }
                     )
                     Tab(
-                        selected = selectedTab == MoneyTab.Manual,
-                        onClick = { onTabChange(MoneyTab.Manual) },
-                        text = { Text("Manual") }
+                        selected = selectedTab == MoneyTab.Record,
+                        onClick = { onTabChange(MoneyTab.Record) },
+                        text = { Text("Record") }
                     )
                     Tab(
-                        selected = selectedTab == MoneyTab.Ledger,
-                        onClick = { onTabChange(MoneyTab.Ledger) },
+                        selected = selectedTab == MoneyTab.Statements,
+                        onClick = { onTabChange(MoneyTab.Statements) },
                         text = { Text("Statements") }
                     )
                 }
@@ -67,7 +67,7 @@ fun MoneyScreen(
         }
     ) { padding ->
         when (selectedTab) {
-            MoneyTab.Mpesa -> {
+            MoneyTab.Collect -> {
                 MpesaImportScreen(
                     viewModel = paymentIntakeViewModel,
                     initialText = initialText,
@@ -79,7 +79,7 @@ fun MoneyScreen(
                     externalPadding = padding
                 )
             }
-            MoneyTab.Manual -> {
+            MoneyTab.Record -> {
                 ManualPaymentScreen(
                     customerViewModel = customerViewModel,
                     initialCustomerId = manualCustomerId,
@@ -89,7 +89,7 @@ fun MoneyScreen(
                     externalPadding = padding
                 )
             }
-            MoneyTab.Ledger -> {
+            MoneyTab.Statements -> {
                 CustomerStatementsScreen(
                     customerViewModel = customerViewModel,
                     ledgerViewModel = ledgerViewModel,

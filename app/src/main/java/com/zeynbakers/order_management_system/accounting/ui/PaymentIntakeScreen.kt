@@ -2,7 +2,6 @@
 
 package com.zeynbakers.order_management_system.accounting.ui
 
-import android.widget.Toast
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -40,6 +39,8 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -58,7 +59,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalClipboardManager
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
@@ -79,9 +79,9 @@ fun MpesaImportScreen(
     showTopBar: Boolean = true,
     externalPadding: PaddingValues = PaddingValues(0.dp)
 ) {
-    val context = LocalContext.current
     val clipboardManager = LocalClipboardManager.current
     val scope = rememberCoroutineScope()
+    val snackbarHostState = remember { SnackbarHostState() }
     val rawText by viewModel.rawText.collectAsState()
     val transactions by viewModel.transactions.collectAsState()
     var rawExpanded by rememberSaveable { mutableStateOf(true) }
@@ -125,10 +125,11 @@ fun MpesaImportScreen(
             }
         }
 
-    val pasteFromClipboard = {
+    val pasteFromClipboard: () -> Unit = {
         val clip = clipboardManager.getText()?.text?.trim().orEmpty()
         if (clip.isBlank()) {
-            Toast.makeText(context, "Clipboard is empty", Toast.LENGTH_SHORT).show()
+            scope.launch { snackbarHostState.showSnackbar("Clipboard is empty") }
+            Unit
         } else if (rawText.isBlank()) {
             viewModel.setRawText(clip)
         } else {
@@ -155,6 +156,7 @@ fun MpesaImportScreen(
 
     Scaffold(
         contentWindowInsets = WindowInsets(0),
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             if (showTopBar) {
                 TopAppBar(
@@ -192,7 +194,7 @@ fun MpesaImportScreen(
                                         append(", ${summary.skippedNoCustomer} missing customer")
                                     }
                                 }
-                            Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+                            snackbarHostState.showSnackbar(message)
                             onApplied(summary)
                         }
                     }
@@ -427,13 +429,13 @@ fun MpesaImportScreen(
                 if (target != null) {
                     onOpenReceiptHistory(target)
                 } else {
-                    Toast.makeText(context, "Receipt not found", Toast.LENGTH_SHORT).show()
+                    scope.launch { snackbarHostState.showSnackbar("Receipt not found") }
                 }
             },
             onMoveExisting = {
                 scope.launch {
                     val result = viewModel.reallocateExistingReceipt(activeItem.key)
-                    Toast.makeText(context, result.message, Toast.LENGTH_SHORT).show()
+                    snackbarHostState.showSnackbar(result.message)
                 }
             },
             onDismiss = { activeKey = null }

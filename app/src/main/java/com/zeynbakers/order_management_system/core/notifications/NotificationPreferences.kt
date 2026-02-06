@@ -1,6 +1,7 @@
 package com.zeynbakers.order_management_system.core.notifications
 
 import android.content.Context
+import androidx.core.content.edit
 import kotlinx.datetime.LocalDate
 
 data class NotificationSettings(
@@ -20,15 +21,15 @@ class NotificationPreferences(context: Context) {
     }
 
     fun setEnabled(enabled: Boolean) {
-        prefs.edit().putBoolean(KEY_ENABLED, enabled).apply()
+        prefs.edit { putBoolean(KEY_ENABLED, enabled) }
     }
 
     fun setLeadTimeMinutes(minutes: Int) {
-        prefs.edit().putInt(KEY_LEAD_TIME_MINUTES, minutes).apply()
+        prefs.edit { putInt(KEY_LEAD_TIME_MINUTES, minutes) }
     }
 
     fun setDailySummaryEnabled(enabled: Boolean) {
-        prefs.edit().putBoolean(KEY_DAILY_SUMMARY_ENABLED, enabled).apply()
+        prefs.edit { putBoolean(KEY_DAILY_SUMMARY_ENABLED, enabled) }
     }
 
     fun wasSummarySentFor(date: LocalDate): Boolean {
@@ -36,7 +37,7 @@ class NotificationPreferences(context: Context) {
     }
 
     fun markSummarySent(date: LocalDate) {
-        prefs.edit().putString(KEY_LAST_SUMMARY_DATE, date.toString()).apply()
+        prefs.edit { putString(KEY_LAST_SUMMARY_DATE, date.toString()) }
     }
 
     fun wasOrderReminded(orderId: Long, dueDate: LocalDate, leadTimeMinutes: Int): Boolean {
@@ -48,7 +49,7 @@ class NotificationPreferences(context: Context) {
         val key = buildReminderKey(orderId, dueDate, leadTimeMinutes)
         val updated = (prefs.getStringSet(KEY_DUE_REMINDER_HISTORY, emptySet()) ?: emptySet()).toMutableSet()
         updated.add(key)
-        prefs.edit().putStringSet(KEY_DUE_REMINDER_HISTORY, updated).apply()
+        prefs.edit { putStringSet(KEY_DUE_REMINDER_HISTORY, updated) }
     }
 
     fun pruneReminderHistory(cutoffDate: LocalDate) {
@@ -61,7 +62,7 @@ class NotificationPreferences(context: Context) {
                 val date = runCatching { LocalDate.parse(parts[1]) }.getOrNull() ?: return@filter false
                 date >= cutoffDate
             }.toSet()
-        prefs.edit().putStringSet(KEY_DUE_REMINDER_HISTORY, filtered).apply()
+        prefs.edit { putStringSet(KEY_DUE_REMINDER_HISTORY, filtered) }
     }
 
     private fun buildReminderKey(orderId: Long, dueDate: LocalDate, leadTimeMinutes: Int): String {

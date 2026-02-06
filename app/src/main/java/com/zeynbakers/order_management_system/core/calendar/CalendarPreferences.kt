@@ -1,6 +1,7 @@
 package com.zeynbakers.order_management_system.core.calendar
 
 import android.content.Context
+import androidx.core.content.edit
 import java.util.Calendar
 
 class CalendarPreferences(context: Context) {
@@ -12,13 +13,13 @@ class CalendarPreferences(context: Context) {
     }
 
     fun setWeekStart(value: Int?) {
-        prefs.edit().apply {
+        prefs.edit {
             if (value == null) {
                 remove(KEY_WEEK_START)
             } else {
                 putInt(KEY_WEEK_START, value)
             }
-        }.apply()
+        }
     }
 
     companion object {

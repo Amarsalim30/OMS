@@ -6,7 +6,6 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Bundle
 import android.provider.ContactsContract
-import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
@@ -20,13 +19,15 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.CalendarToday
-import androidx.compose.material.icons.filled.ListAlt
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.ReceiptLong
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.automirrored.filled.ListAlt
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.windowsizeclass.ExperimentalMaterial3WindowSizeClassApi
@@ -38,8 +39,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalContext
@@ -47,26 +50,19 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
-import androidx.navigation.NavType
-import androidx.navigation.compose.NavHost
-import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
-import androidx.navigation.navArgument
 import com.zeynbakers.order_management_system.accounting.ui.LedgerViewModel
-import com.zeynbakers.order_management_system.accounting.ui.PaymentIntakeHistoryScreen
 import com.zeynbakers.order_management_system.accounting.ui.PaymentIntakeHistoryViewModel
 import com.zeynbakers.order_management_system.accounting.ui.PaymentIntakeViewModel
 import com.zeynbakers.order_management_system.accounting.ui.PaymentHistoryFilter
 import com.zeynbakers.order_management_system.core.backup.BackupScheduler
-import com.zeynbakers.order_management_system.core.backup.BackupSettingsScreen
 import com.zeynbakers.order_management_system.core.db.DatabaseProvider
 import com.zeynbakers.order_management_system.core.navigation.AppIntents
 import com.zeynbakers.order_management_system.core.navigation.AppRoutes
 import com.zeynbakers.order_management_system.core.navigation.AppShortcuts
 import com.zeynbakers.order_management_system.core.navigation.extractSharedText
 import com.zeynbakers.order_management_system.core.notifications.NotificationScheduler
-import com.zeynbakers.order_management_system.core.notifications.NotificationSettingsScreen
 import com.zeynbakers.order_management_system.core.ui.AmountFieldRegistry
 import com.zeynbakers.order_management_system.core.ui.AppScaffold
 import com.zeynbakers.order_management_system.core.ui.AppViewModelFactory
@@ -74,7 +70,6 @@ import com.zeynbakers.order_management_system.core.ui.LocalAmountFieldRegistry
 import com.zeynbakers.order_management_system.core.ui.LocalVoiceCalcAccess
 import com.zeynbakers.order_management_system.core.ui.LocalVoiceInputRouter
 import com.zeynbakers.order_management_system.core.ui.LocalVoiceOverlaySuppressed
-import com.zeynbakers.order_management_system.core.ui.MoneyScreen
 import com.zeynbakers.order_management_system.core.ui.MoneyTab
 import com.zeynbakers.order_management_system.core.ui.MoreAction
 import com.zeynbakers.order_management_system.core.ui.TopLevelDestination
@@ -87,18 +82,12 @@ import com.zeynbakers.order_management_system.core.util.normalizePhoneNumberE164
 import com.zeynbakers.order_management_system.core.updates.UpdatePreferences
 import com.zeynbakers.order_management_system.core.widget.WidgetUpdater
 import com.zeynbakers.order_management_system.customer.ui.CustomerAccountsViewModel
-import com.zeynbakers.order_management_system.customer.ui.CustomerDetailScreen
-import com.zeynbakers.order_management_system.customer.ui.CustomerListScreen
 import com.zeynbakers.order_management_system.customer.ui.ImportContact
-import com.zeynbakers.order_management_system.customer.ui.ImportContactsScreen
-import com.zeynbakers.order_management_system.order.ui.CalendarScreen
-import com.zeynbakers.order_management_system.order.ui.DayDetailScreen
 import com.zeynbakers.order_management_system.order.ui.OrderCreditPrompt
 import com.zeynbakers.order_management_system.order.ui.OrderDraft
 import com.zeynbakers.order_management_system.order.ui.OrderViewModel
-import com.zeynbakers.order_management_system.order.ui.SummaryScreen
-import com.zeynbakers.order_management_system.order.ui.UnpaidOrdersScreen
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.datetime.Clock
 import kotlinx.datetime.LocalDate
@@ -128,6 +117,8 @@ class MainActivity : ComponentActivity() {
                 val amountRegistry = remember { AmountFieldRegistry() }
                 val voiceRouter = remember { VoiceInputRouter(onApplyTotal = amountRegistry::applyAmount) }
                 val overlaySuppressed = remember { mutableStateOf(false) }
+                val appSnackbarHostState = remember { SnackbarHostState() }
+                val scope = rememberCoroutineScope()
 
                 var currentMonth by rememberSaveable { mutableStateOf(0) }
                 var currentYear by rememberSaveable { mutableStateOf(0) }
@@ -140,7 +131,7 @@ class MainActivity : ComponentActivity() {
 
                 var customerQuery by rememberSaveable { mutableStateOf("") }
                 var paymentIntakeText by rememberSaveable { mutableStateOf<String?>(null) }
-                var moneyTabName by rememberSaveable { mutableStateOf(MoneyTab.Mpesa.name) }
+                var moneyTabName by rememberSaveable { mutableStateOf(MoneyTab.Collect.name) }
                 var manualCustomerId by rememberSaveable { mutableStateOf<Long?>(null) }
                 var statementCustomerId by rememberSaveable { mutableStateOf<Long?>(null) }
                 var showMoreSheet by rememberSaveable { mutableStateOf(false) }
@@ -167,7 +158,7 @@ class MainActivity : ComponentActivity() {
                 val currentRoute = navBackStackEntry?.destination?.route
                 val activeTopLevelRoute = topLevelRouteFor(currentRoute) ?: selectedTopLevelRoute
 
-                val moneyTab = runCatching { MoneyTab.valueOf(moneyTabName) }.getOrDefault(MoneyTab.Mpesa)
+                val moneyTab = runCatching { MoneyTab.valueOf(moneyTabName) }.getOrDefault(MoneyTab.Collect)
 
                 val updateNotes = remember {
                     listOf(
@@ -191,11 +182,9 @@ class MainActivity : ComponentActivity() {
                             onOpen = { navController.navigate(AppRoutes.ImportContacts) }
                         )
                     } else {
-                        Toast.makeText(
-                            context,
-                            "Contacts permission is required to import customers",
-                            Toast.LENGTH_SHORT
-                        ).show()
+                        scope.launch {
+                            appSnackbarHostState.showSnackbar("Contacts permission is required to import customers")
+                        }
                     }
                 }
 
@@ -345,11 +334,11 @@ class MainActivity : ComponentActivity() {
                         Intent.ACTION_SEND,
                         Intent.ACTION_SEND_MULTIPLE -> {
                             val sharedText = extractSharedText(intent) ?: return@LaunchedEffect
-                            if (currentRoute == AppRoutes.Money && moneyTab == MoneyTab.Mpesa) {
+                            if (currentRoute == AppRoutes.Money && moneyTab == MoneyTab.Collect) {
                                 paymentIntakeViewModel.appendRawText(sharedText)
                             } else {
                                 paymentIntakeText = sharedText
-                                moneyTabName = MoneyTab.Mpesa.name
+                                moneyTabName = MoneyTab.Collect.name
                                 selectedTopLevelRoute = AppRoutes.Money
                                 navController.navigate(AppRoutes.Money) {
                                     launchSingleTop = true
@@ -369,9 +358,9 @@ class MainActivity : ComponentActivity() {
                         val windowSizeClass = calculateWindowSizeClass(this@MainActivity)
                         val topLevelDestinations = listOf(
                             TopLevelDestination(AppRoutes.Calendar, "Calendar", Icons.Filled.CalendarToday),
-                            TopLevelDestination(AppRoutes.Orders, "Orders", Icons.Filled.ListAlt),
+                            TopLevelDestination(AppRoutes.Orders, "Orders", Icons.AutoMirrored.Filled.ListAlt),
                             TopLevelDestination(AppRoutes.Customers, "Customers", Icons.Filled.People),
-                            TopLevelDestination(AppRoutes.Money, "Money", Icons.Filled.AccountBalanceWallet)
+                            TopLevelDestination(AppRoutes.Money, "Accounts", Icons.Filled.AccountBalanceWallet)
                         )
 
                         val moreActions = listOf(
@@ -389,6 +378,119 @@ class MainActivity : ComponentActivity() {
                             }
                         )
 
+                        val calendarState = AppCalendarState(
+                            calendarDays = calendarDays,
+                            currentYear = currentYear,
+                            currentMonth = currentMonth,
+                            baseYear = baseYear,
+                            baseMonth = baseMonth,
+                            monthSnapshots = monthSnapshots,
+                            monthTotal = monthTotal,
+                            monthBadgeCount = monthBadgeCount,
+                            selectedDate = selectedDate,
+                            summaryDate = summaryDate,
+                            quickAddDate = quickAddDate,
+                            ordersForDate = ordersForDate,
+                            dayTotal = dayTotal,
+                            orderCustomerNames = orderCustomerNames,
+                            orderPaidAmounts = orderPaidAmounts,
+                            summaryOrders = summaryOrders,
+                            summaryTotal = summaryTotal,
+                            summaryCustomerNames = summaryCustomerNames,
+                            dayDrafts = dayDrafts
+                        )
+
+                        val ordersState = AppOrdersState(
+                            unpaidOrders = unpaidOrders,
+                            unpaidPaidAmounts = unpaidPaidAmounts,
+                            unpaidCustomerNames = unpaidCustomerNames
+                        )
+
+                        val customersState = AppCustomersState(
+                            customerSummaries = customerSummaries,
+                            customerDetail = customerDetail,
+                            customerLedger = customerLedger,
+                            customerBalance = customerBalance,
+                            customerFinanceSummary = customerFinanceSummary,
+                            customerOrders = customerOrders,
+                            customerOrderLabels = customerOrderLabels,
+                            customerQuery = customerQuery,
+                            importContacts = importContacts,
+                            selectedContactPhones = selectedContactPhones,
+                            isContactsLoading = isContactsLoading
+                        )
+
+                        val accountsState = AppAccountsState(
+                            moneyTab = moneyTab,
+                            paymentIntakeText = paymentIntakeText,
+                            manualCustomerId = manualCustomerId,
+                            statementCustomerId = statementCustomerId
+                        )
+
+                        val calendarCallbacks = AppCalendarCallbacks(
+                            onSelectedDateChange = { selectedDate = it },
+                            onSummaryDateChange = { summaryDate = it },
+                            onQuickAddDateChange = { quickAddDate = it },
+                            onMonthSettled = { year, month ->
+                                currentYear = year
+                                currentMonth = month
+                            }
+                        )
+
+                        val customersCallbacks = AppCustomersCallbacks(
+                            onCustomerQueryChange = { customerQuery = it },
+                            onImportContactsChange = { importContacts = it },
+                            onSelectedContactPhonesChange = { selectedContactPhones = it },
+                            onContactsLoadingChange = { isContactsLoading = it }
+                        )
+
+                        val accountsCallbacks = AppAccountsCallbacks(
+                            onMoneyTabChange = { moneyTabName = it.name },
+                            onPaymentIntakeTextChange = { paymentIntakeText = it },
+                            onManualCustomerIdChange = { manualCustomerId = it },
+                            onStatementCustomerIdChange = { statementCustomerId = it }
+                        )
+
+                        val navigationActions = AppFeatureNavigationActions(
+                            onOpenMore = { showMoreSheet = true },
+                            openImportContacts = openImportContacts,
+                            navigateToMoneyRecord = { customerId ->
+                                manualCustomerId = customerId
+                                moneyTabName = MoneyTab.Record.name
+                                selectedTopLevelRoute = AppRoutes.Money
+                                navController.navigate(AppRoutes.Money) { launchSingleTop = true }
+                            },
+                            navigateToMoneyStatements = { customerId ->
+                                statementCustomerId = customerId
+                                moneyTabName = MoneyTab.Statements.name
+                                selectedTopLevelRoute = AppRoutes.Money
+                                navController.navigate(AppRoutes.Money) { launchSingleTop = true }
+                            },
+                            navigateToCalendarQuickAdd = { targetDate ->
+                                selectedDate = targetDate
+                                quickAddDate = targetDate
+                                selectedTopLevelRoute = AppRoutes.Calendar
+                                navigateTopLevel(navController, AppRoutes.Calendar, resetToRoot = true)
+                            },
+                            navigateToPaymentHistory = { filter, focusReceiptId ->
+                                navigateToPaymentHistory(navController, filter, focusReceiptId)
+                            }
+                        )
+
+                        val supportActions = AppFeatureSupportActions(
+                            refreshAfterPayments = refreshAfterPayments,
+                            currentDate = currentDate,
+                            monthLabel = ::monthLabel,
+                            onShowMessage = { message ->
+                                scope.launch { appSnackbarHostState.showSnackbar(message) }
+                            },
+                            loadContacts = {
+                                withContext(Dispatchers.IO) {
+                                    loadAllContacts(context)
+                                }
+                            }
+                        )
+
                         AppScaffold(
                             windowSizeClass = windowSizeClass,
                             destinations = topLevelDestinations,
@@ -402,418 +504,32 @@ class MainActivity : ComponentActivity() {
                             onDismissMore = { showMoreSheet = false },
                             moreActions = moreActions
                         ) { padding ->
-                            NavHost(
+                            AppFeatureNavHost(
                                 navController = navController,
-                                startDestination = AppRoutes.Calendar,
-                                modifier = Modifier.fillMaxSize().padding(padding)
-                            ) {
-                                composable(AppRoutes.Calendar) {
-                                    CalendarScreen(
-                                        days = calendarDays,
-                                        currentYear = currentYear,
-                                        currentMonth = currentMonth,
-                                        baseYear = baseYear,
-                                        baseMonth = baseMonth,
-                                        monthSnapshots = monthSnapshots,
-                                        monthTotal = monthTotal,
-                                        monthBadgeCount = monthBadgeCount,
-                                        selectedDate = selectedDate,
-                                        onSelectDate = { selectedDate = it },
-                                        onOpenDay = { date ->
-                                            selectedDate = date
-                                            navController.navigate(AppRoutes.day(date))
-                                        },
-                                        onSaveOrder = { date, notes, total, name, phone, pickupTime ->
-                                            orderViewModel.saveOrder(
-                                                date = date,
-                                                notes = notes,
-                                                totalAmount = total,
-                                                customerName = name,
-                                                customerPhone = phone,
-                                                pickupTime = pickupTime,
-                                                existingOrderId = null
-                                            )
-                                            WidgetUpdater.enqueue(context)
-                                            NotificationScheduler.enqueueNow(context)
-                                        },
-                                        searchCustomers = { query -> orderViewModel.searchCustomers(query) },
-                                        onSummaryClick = { navController.navigate(AppRoutes.Summary) },
-                                        onMonthSettled = { year, month ->
-                                            currentYear = year
-                                            currentMonth = month
-                                        },
-                                        openQuickAddDate = quickAddDate,
-                                        onQuickAddConsumed = { quickAddDate = null }
-                                    )
-                                }
-
-                                composable(
-                                    route = AppRoutes.Day,
-                                    arguments = listOf(navArgument(AppRoutes.ARG_DATE) { type = NavType.StringType })
-                                ) { entry ->
-                                    val dateArg = entry.arguments?.getString(AppRoutes.ARG_DATE)
-                                    val date =
-                                        dateArg?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
-                                            ?: currentDate()
-                                    LaunchedEffect(date) {
-                                        selectedDate = date
-                                        orderViewModel.loadOrdersForDate(date)
-                                    }
-                                    DayDetailScreen(
-                                        date = date,
-                                        orders = ordersForDate,
-                                        dayTotal = dayTotal,
-                                        customerNames = orderCustomerNames,
-                                        orderPaidAmounts = orderPaidAmounts,
-                                        onBack = { navController.popBackStack() },
-                                        onSaveOrder = { notes, total, name, phone, pickupTime, orderId ->
-                                            orderViewModel.saveOrder(
-                                                date = date,
-                                                notes = notes,
-                                                totalAmount = total,
-                                                customerName = name,
-                                                customerPhone = phone,
-                                                pickupTime = pickupTime,
-                                                existingOrderId = orderId
-                                            )
-                                            WidgetUpdater.enqueue(context)
-                                            NotificationScheduler.enqueueNow(context)
-                                        },
-                                        onDeleteOrder = { orderId ->
-                                            orderViewModel.cancelOrder(orderId, date)
-                                            WidgetUpdater.enqueue(context)
-                                            NotificationScheduler.enqueueNow(context)
-                                        },
-                                        loadOrderPaymentAllocations = { orderId ->
-                                            orderViewModel.loadOrderPaymentAllocations(orderId)
-                                        },
-                                        loadMoveOrderOptions = { customerId, excludeOrderId ->
-                                            orderViewModel.loadMoveOrderOptions(customerId, excludeOrderId)
-                                        },
-                                        onDeleteOrderWithPayments = { orderId, day, allocationIds, action, target, moveFull ->
-                                            val result = orderViewModel.deleteOrderWithPayments(
-                                                orderId = orderId,
-                                                date = day,
-                                                allocationIds = allocationIds,
-                                                action = action,
-                                                target = target,
-                                                moveFullReceipts = moveFull
-                                            )
-                                            if (result) {
-                                                WidgetUpdater.enqueue(context)
-                                                NotificationScheduler.enqueueNow(context)
-                                            }
-                                            result
-                                        },
-                                        onOrderPaymentHistory = { orderId ->
-                                            navigateToPaymentHistory(
-                                                navController,
-                                                PaymentHistoryFilter.Order(orderId),
-                                                null
-                                            )
-                                        },
-                                        onReceivePayment = { order ->
-                                            manualCustomerId = order.customerId
-                                            moneyTabName = MoneyTab.Manual.name
-                                            selectedTopLevelRoute = AppRoutes.Money
-                                            navController.navigate(AppRoutes.Money) { launchSingleTop = true }
-                                        },
-                                        loadCustomerById = { id -> orderViewModel.getCustomerById(id) },
-                                        searchCustomers = { query -> orderViewModel.searchCustomers(query) },
-                                        draft = dayDrafts[date],
-                                        onDraftChange = { updated ->
-                                            if (updated == null) {
-                                                dayDrafts.remove(date)
-                                            } else {
-                                                dayDrafts[date] = updated
-                                            }
-                                        }
-                                    )
-                                }
-
-                                composable(AppRoutes.Orders) {
-                                    LaunchedEffect(Unit) { orderViewModel.loadUnpaidOrders() }
-                                    UnpaidOrdersScreen(
-                                        orders = unpaidOrders,
-                                        paidAmounts = unpaidPaidAmounts,
-                                        customerNames = unpaidCustomerNames,
-                                        onBack = { navController.popBackStack() },
-                                        onOpenDay = { date ->
-                                            selectedDate = date
-                                            navController.navigate(AppRoutes.day(date))
-                                        },
-                                        onReceivePayment = { order ->
-                                            manualCustomerId = order.customerId
-                                            moneyTabName = MoneyTab.Manual.name
-                                            selectedTopLevelRoute = AppRoutes.Money
-                                            navController.navigate(AppRoutes.Money) { launchSingleTop = true }
-                                        },
-                                        onSettingsClick = { showMoreSheet = true },
-                                        title = "Orders",
-                                        showBack = false
-                                    )
-                                }
-
-                                composable(AppRoutes.Customers) {
-                                    LaunchedEffect(customerQuery) {
-                                        customerViewModel.searchCustomers(customerQuery)
-                                    }
-                                    CustomerListScreen(
-                                        query = customerQuery,
-                                        summaries = customerSummaries,
-                                        onQueryChange = { customerQuery = it },
-                                        onCustomerClick = { id ->
-                                            navController.navigate(AppRoutes.customerDetail(id))
-                                        },
-                                        onBack = { navController.popBackStack() },
-                                        onAddCustomer = openImportContacts,
-                                        onPaymentHistory = { customerId ->
-                                            navigateToPaymentHistory(
-                                                navController,
-                                                PaymentHistoryFilter.Customer(customerId),
-                                                null
-                                            )
-                                        },
-                                        onRecordPayment = { customerId ->
-                                            manualCustomerId = customerId
-                                            moneyTabName = MoneyTab.Manual.name
-                                            selectedTopLevelRoute = AppRoutes.Money
-                                            navController.navigate(AppRoutes.Money) { launchSingleTop = true }
-                                        },
-                                        onAddOrder = {
-                                            val targetDate = currentDate()
-                                            selectedDate = targetDate
-                                            quickAddDate = targetDate
-                                            selectedTopLevelRoute = AppRoutes.Calendar
-                                            navigateTopLevel(navController, AppRoutes.Calendar, resetToRoot = true)
-                                        },
-                                        onArchiveCustomer = { customerId ->
-                                            customerViewModel.archiveCustomer(customerId)
-                                        },
-                                        onRestoreCustomer = { customerId ->
-                                            customerViewModel.unarchiveCustomer(customerId)
-                                        },
-                                        showBack = false
-                                    )
-                                }
-
-                                composable(
-                                    route = AppRoutes.CustomerDetail,
-                                    arguments = listOf(navArgument(AppRoutes.ARG_CUSTOMER_ID) { type = NavType.LongType })
-                                ) { entry ->
-                                    val customerId = entry.arguments?.getLong(AppRoutes.ARG_CUSTOMER_ID) ?: return@composable
-                                    LaunchedEffect(customerId) {
-                                        customerViewModel.loadCustomer(customerId)
-                                    }
-                                    CustomerDetailScreen(
-                                        customer = customerDetail,
-                                        ledger = customerLedger,
-                                        balance = customerBalance,
-                                        financeSummary = customerFinanceSummary,
-                                        orders = customerOrders,
-                                        orderLabels = customerOrderLabels,
-                                        onBack = { navController.popBackStack() },
-                                        onPaymentHistory = { id ->
-                                            navigateToPaymentHistory(
-                                                navController,
-                                                PaymentHistoryFilter.Customer(id),
-                                                null
-                                            )
-                                        },
-                                        onOpenStatement = { id ->
-                                            statementCustomerId = id
-                                            moneyTabName = MoneyTab.Ledger.name
-                                            selectedTopLevelRoute = AppRoutes.Money
-                                            navController.navigate(AppRoutes.Money) { launchSingleTop = true }
-                                        },
-                                        onReceivePayment = {
-                                            manualCustomerId = customerId
-                                            moneyTabName = MoneyTab.Manual.name
-                                            selectedTopLevelRoute = AppRoutes.Money
-                                            navController.navigate(AppRoutes.Money) { launchSingleTop = true }
-                                        },
-                                        onOrderPaymentHistory = { orderId ->
-                                            navigateToPaymentHistory(
-                                                navController,
-                                                PaymentHistoryFilter.Order(orderId),
-                                                null
-                                            )
-                                        },
-                                        onUpdateOrderStatusOverride = { orderId, override ->
-                                            customerViewModel.setOrderStatusOverride(orderId, override)
-                                            refreshAfterPayments()
-                                        },
-                                        onWriteOffOrder = { orderId ->
-                                            customerViewModel.writeOffOrder(orderId)
-                                            refreshAfterPayments()
-                                        }
-                                    )
-                                }
-
-                                composable(AppRoutes.ImportContacts) {
-                                    LaunchedEffect(Unit) {
-                                        isContactsLoading = true
-                                        importContacts = withContext(Dispatchers.IO) {
-                                            loadAllContacts(context)
-                                        }
-                                        selectedContactPhones = emptySet()
-                                        isContactsLoading = false
-                                    }
-                                    ImportContactsScreen(
-                                        contacts = importContacts,
-                                        selectedPhones = selectedContactPhones,
-                                        isLoading = isContactsLoading,
-                                        onBack = { navController.popBackStack() },
-                                        onToggleSelect = { phone ->
-                                            selectedContactPhones =
-                                                if (selectedContactPhones.contains(phone)) {
-                                                    selectedContactPhones - phone
-                                                } else {
-                                                    selectedContactPhones + phone
-                                                }
-                                        },
-                                        onToggleSelectAll = { visiblePhones ->
-                                            val visibleSet = visiblePhones.toSet()
-                                            val allVisibleSelected =
-                                                visibleSet.isNotEmpty() &&
-                                                    visibleSet.all { selectedContactPhones.contains(it) }
-                                            selectedContactPhones =
-                                                if (allVisibleSelected) {
-                                                    selectedContactPhones - visibleSet
-                                                } else {
-                                                    selectedContactPhones + visibleSet
-                                                }
-                                        },
-                                        onImport = {
-                                            if (selectedContactPhones.isEmpty()) {
-                                                Toast.makeText(
-                                                    context,
-                                                    "Select at least one contact to import",
-                                                    Toast.LENGTH_SHORT
-                                                ).show()
-                                            } else {
-                                                val contactsByPhone = importContacts.associateBy { it.phone }
-                                                selectedContactPhones.forEach { phone ->
-                                                    val contact = contactsByPhone[phone] ?: return@forEach
-                                                    customerViewModel.importCustomer(contact.name, contact.phone)
-                                                }
-                                                navController.popBackStack()
-                                            }
-                                        }
-                                    )
-                                }
-
-                                composable(AppRoutes.Money) {
-                                    MoneyScreen(
-                                        selectedTab = moneyTab,
-                                        onTabChange = { moneyTabName = it.name },
-                                        paymentIntakeViewModel = paymentIntakeViewModel,
-                                        customerViewModel = customerViewModel,
-                                        ledgerViewModel = ledgerViewModel,
-                                        initialText = paymentIntakeText,
-                                        manualCustomerId = manualCustomerId,
-                                        statementCustomerId = statementCustomerId,
-                                        onManualContextConsumed = {
-                                            manualCustomerId = null
-                                        },
-                                        onStatementContextConsumed = {
-                                            statementCustomerId = null
-                                        },
-                                        onManualSaved = { refreshAfterPayments() },
-                                        onApplied = {
-                                            paymentIntakeText = null
-                                            refreshAfterPayments()
-                                        },
-                                        onAppliedInPlace = { refreshAfterPayments() },
-                                        onOpenReceiptHistory = { receiptId ->
-                                            navigateToPaymentHistory(
-                                                navController,
-                                                PaymentHistoryFilter.All,
-                                                receiptId
-                                            )
-                                        }
-                                    )
-                                }
-                                composable(
-                                    route = "${AppRoutes.PaymentHistoryAll}?${AppRoutes.ARG_FOCUS_RECEIPT_ID}={${AppRoutes.ARG_FOCUS_RECEIPT_ID}}",
-                                    arguments = listOf(
-                                        navArgument(AppRoutes.ARG_FOCUS_RECEIPT_ID) {
-                                            type = NavType.LongType
-                                            defaultValue = -1L
-                                        }
-                                    )
-                                ) { entry ->
-                                    val focusId = entry.arguments
-                                        ?.getLong(AppRoutes.ARG_FOCUS_RECEIPT_ID)
-                                        ?.takeIf { it > 0 }
-                                    PaymentIntakeHistoryScreen(
-                                        viewModel = paymentHistoryViewModel,
-                                        filter = PaymentHistoryFilter.All,
-                                        focusReceiptId = focusId,
-                                        onBack = { navController.popBackStack() },
-                                        onRemoved = { refreshAfterPayments() }
-                                    )
-                                }
-
-                                composable(
-                                    route = AppRoutes.PaymentHistoryCustomer,
-                                    arguments = listOf(navArgument(AppRoutes.ARG_CUSTOMER_ID) { type = NavType.LongType })
-                                ) { entry ->
-                                    val customerId = entry.arguments?.getLong(AppRoutes.ARG_CUSTOMER_ID) ?: return@composable
-                                    PaymentIntakeHistoryScreen(
-                                        viewModel = paymentHistoryViewModel,
-                                        filter = PaymentHistoryFilter.Customer(customerId),
-                                        focusReceiptId = null,
-                                        onBack = { navController.popBackStack() },
-                                        onRemoved = {
-                                            refreshAfterPayments()
-                                            customerViewModel.loadCustomer(customerId)
-                                        }
-                                    )
-                                }
-
-                                composable(
-                                    route = AppRoutes.PaymentHistoryOrder,
-                                    arguments = listOf(navArgument(AppRoutes.ARG_ORDER_ID) { type = NavType.LongType })
-                                ) { entry ->
-                                    val orderId = entry.arguments?.getLong(AppRoutes.ARG_ORDER_ID) ?: return@composable
-                                    PaymentIntakeHistoryScreen(
-                                        viewModel = paymentHistoryViewModel,
-                                        filter = PaymentHistoryFilter.Order(orderId),
-                                        focusReceiptId = null,
-                                        onBack = { navController.popBackStack() },
-                                        onRemoved = { refreshAfterPayments() }
-                                    )
-                                }
-
-                                composable(AppRoutes.Summary) {
-                                    SummaryScreen(
-                                        monthLabel = monthLabel(currentYear, currentMonth),
-                                        monthTotal = monthTotal,
-                                        initialDate = summaryDate ?: selectedDate ?: currentDate(),
-                                        orders = summaryOrders,
-                                        rangeTotal = summaryTotal,
-                                        customerNames = summaryCustomerNames,
-                                        onAnchorDateChange = { updated -> summaryDate = updated },
-                                        onLoadRange = { start, end ->
-                                            orderViewModel.loadSummaryRange(startInclusive = start, endExclusive = end)
-                                        },
-                                        onBack = { navController.popBackStack() }
-                                    )
-                                }
-
-                                composable(AppRoutes.Backup) {
-                                    BackupSettingsScreen(
-                                        onBack = { navController.popBackStack() },
-                                        onImportContacts = openImportContacts
-                                    )
-                                }
-
-                                composable(AppRoutes.Notifications) {
-                                    NotificationSettingsScreen(onBack = { navController.popBackStack() })
-                                }
-                            }
+                                modifier = Modifier.fillMaxSize().padding(padding),
+                                orderViewModel = orderViewModel,
+                                customerViewModel = customerViewModel,
+                                paymentIntakeViewModel = paymentIntakeViewModel,
+                                paymentHistoryViewModel = paymentHistoryViewModel,
+                                ledgerViewModel = ledgerViewModel,
+                                calendarState = calendarState,
+                                ordersState = ordersState,
+                                customersState = customersState,
+                                accountsState = accountsState,
+                                calendarCallbacks = calendarCallbacks,
+                                customersCallbacks = customersCallbacks,
+                                accountsCallbacks = accountsCallbacks,
+                                navigationActions = navigationActions,
+                                supportActions = supportActions
+                            )
                         }
+
+                        SnackbarHost(
+                            hostState = appSnackbarHostState,
+                            modifier = Modifier
+                                .align(Alignment.BottomCenter)
+                                .padding(horizontal = 12.dp, vertical = 10.dp)
+                        )
 
                         VoiceCalculatorOverlay(
                             hasPermission = hasRecordPermission,
@@ -1035,3 +751,4 @@ private suspend fun loadAllContacts(context: Context): List<ImportContact> {
 
     return results
 }
+

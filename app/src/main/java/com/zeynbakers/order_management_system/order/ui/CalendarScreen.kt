@@ -2,7 +2,6 @@ package com.zeynbakers.order_management_system.order.ui
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
-import android.util.Log
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
@@ -19,8 +18,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.imePadding
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.sizeIn
@@ -29,14 +26,10 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.lazy.rememberLazyListState
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material.icons.Icons
@@ -54,7 +47,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.ModalBottomSheetProperties
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SmallFloatingActionButton
@@ -73,18 +65,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.snapshotFlow
-import androidx.activity.compose.BackHandler
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalFocusManager
-import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -92,8 +77,6 @@ import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -105,7 +88,6 @@ import com.zeynbakers.order_management_system.core.ui.LocalVoiceCalcAccess
 import com.zeynbakers.order_management_system.core.ui.LocalVoiceOverlaySuppressed
 import com.zeynbakers.order_management_system.core.ui.LocalVoiceInputRouter
 import com.zeynbakers.order_management_system.core.ui.VoiceTarget
-import com.zeynbakers.order_management_system.core.ui.VoiceCalculatorOverlay
 import com.zeynbakers.order_management_system.core.calendar.CalendarPreferences
 import com.zeynbakers.order_management_system.customer.data.CustomerEntity
 import java.math.BigDecimal
@@ -123,8 +105,6 @@ import java.text.DateFormatSymbols
 import java.util.Calendar
 import java.util.Locale
 import java.math.RoundingMode
-
-private const val TAG_SHEET_BACK = "SheetBack"
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -418,346 +398,135 @@ fun CalendarScreen(
     }
 
     if (isQuickAddOpen && activeDate != null) {
-        val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-        val density = LocalDensity.current
-        val focusManager = LocalFocusManager.current
-        val keyboardController = LocalSoftwareKeyboardController.current
         val amountRegistry = LocalAmountFieldRegistry.current
-        val notesRequester = remember { FocusRequester() }
-        val totalRequester = remember { FocusRequester() }
-        val pickupRequester = remember { FocusRequester() }
-        val nameRequester = remember { FocusRequester() }
-        val phoneRequester = remember { FocusRequester() }
         val notesState by rememberUpdatedState(notes)
         val setNotes by rememberUpdatedState<(String) -> Unit>({ notes = it })
-        val imeVisible = WindowInsets.ime.getBottom(density) > 0
-        val imeVisibleState by rememberUpdatedState(imeVisible)
-        val keyboardControllerState by rememberUpdatedState(keyboardController)
-        val focusManagerState by rememberUpdatedState(focusManager)
         DisposableEffect(Unit) {
             voiceRouter.registerNotesTarget(getNotes = { notesState }, setNotes = setNotes)
             onDispose { voiceRouter.clearNotesTarget() }
         }
-        LaunchedEffect(activeDate) {
-            notesRequester.requestFocus()
+        val trimmedNotes = notes.trim()
+        val parsedTotal = totalText.trim().takeIf { it.isNotEmpty() }?.let {
+            runCatching { BigDecimal(it) }.getOrNull()
         }
-        val dismissSheet = {
-            keyboardController?.hide()
-            focusManager.clearFocus(force = true)
-            isQuickAddOpen = false
-        }
-        val handleBackPress: () -> Unit = {
-            val sheetOpen = isQuickAddOpen
-            if (Log.isLoggable(TAG_SHEET_BACK, Log.DEBUG)) {
-                Log.d(TAG_SHEET_BACK, "back pressed imeVisible=$imeVisibleState sheetOpen=$sheetOpen")
-            }
-            if (imeVisibleState) {
-                keyboardControllerState?.hide()
-                focusManagerState.clearFocus(force = true)
-            } else {
-                isQuickAddOpen = false
-            }
-        }
-        val handleDismissRequest: () -> Unit = {
-            if (Log.isLoggable(TAG_SHEET_BACK, Log.DEBUG)) {
-                Log.d(TAG_SHEET_BACK, "dismiss request imeVisible=$imeVisible sheetOpen=true")
-            }
-            dismissSheet()
-        }
-        ModalBottomSheet(
-            onDismissRequest = handleDismissRequest,
-            sheetState = sheetState,
-            properties = ModalBottomSheetProperties(shouldDismissOnBackPress = false)
-        ) {
-            BackHandler(onBack = handleBackPress)
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .fillMaxHeight(0.9f)
-            ) {
-                val listState = rememberLazyListState()
-                val trimmedNotes = notes.trim()
-                val parsedTotal = totalText.trim().takeIf { it.isNotEmpty() }?.let {
-                    runCatching { BigDecimal(it) }.getOrNull()
-                }
-                val formattedTotal = parsedTotal?.let { formatKes(it) }
-                val normalizedPickupTime =
-                    if (pickupTimeText.isBlank()) null else normalizePickupTime(pickupTimeText)
-                val isPickupTimeInvalid = pickupTimeText.isNotBlank() && normalizedPickupTime == null
-                val hasCustomerMismatch = customerName.isNotBlank() && customerPhone.isBlank()
-                val canSave =
-                    trimmedNotes.isNotEmpty() &&
-                        parsedTotal != null &&
-                        parsedTotal > BigDecimal.ZERO &&
-                        !hasCustomerMismatch &&
-                        !isPickupTimeInvalid
+        val formattedTotal = parsedTotal?.let { formatKes(it) }
+        val normalizedPickupTime =
+            if (pickupTimeText.isBlank()) null else normalizePickupTime(pickupTimeText)
+        val isPickupTimeInvalid = pickupTimeText.isNotBlank() && normalizedPickupTime == null
+        val hasCustomerMismatch = customerName.isNotBlank() && customerPhone.isBlank()
+        val canSave =
+            trimmedNotes.isNotEmpty() &&
+                parsedTotal != null &&
+                parsedTotal > BigDecimal.ZERO &&
+                !hasCustomerMismatch &&
+                !isPickupTimeInvalid
 
-                fun submitOrder() {
-                    when {
-                        trimmedNotes.isEmpty() -> {
-                            notesError = "Notes are required"
-                            totalError = null
-                            customerError = null
-                        }
-                        parsedTotal == null || parsedTotal <= BigDecimal.ZERO -> {
-                            notesError = null
-                            totalError = "Enter a valid total"
-                            customerError = null
-                        }
-                        hasCustomerMismatch -> {
-                            notesError = null
-                            totalError = null
-                            customerError = "Phone is required to attach a customer"
-                        }
-                        isPickupTimeInvalid -> {
-                            notesError = null
-                            totalError = null
-                            customerError = null
-                        }
-                        else -> {
-                            onSaveOrder(
-                                activeDate,
-                                trimmedNotes,
-                                parsedTotal,
-                                customerName.trim(),
-                                customerPhone.trim(),
-                                normalizedPickupTime
-                            )
-                            notes = ""
-                            totalText = ""
-                            customerName = ""
-                            customerPhone = ""
-                            pickupTimeText = ""
-                            notesError = null
-                            totalError = null
-                            customerError = null
-                            isQuickAddOpen = false
-                        }
-                    }
+        fun submitOrder() {
+            when {
+                trimmedNotes.isEmpty() -> {
+                    notesError = "Notes are required"
+                    totalError = null
+                    customerError = null
                 }
-
-                LazyColumn(
-                    state = listState,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .fillMaxHeight()
-                        .imePadding()
-                        .navigationBarsPadding()
-                        .padding(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    item {
-                        Text(
-                            text = "Add order on ${activeDate.dayOfMonth} ${activeDate.month.name.lowercase().replaceFirstChar { it.uppercase() }}",
-                            style = MaterialTheme.typography.titleMedium
-                        )
-                    }
-                    item {
-                        OutlinedTextField(
-                            value = notes,
-                            onValueChange = {
-                                notes = it
-                                notesError = null
-                            },
-                            label = { Text("Notes (required)") },
-                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
-                            keyboardActions = KeyboardActions(onNext = { totalRequester.requestFocus() }),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .focusRequester(notesRequester)
-                                .onFocusChanged { state ->
-                                    if (state.isFocused) {
-                                        voiceRouter.onFocusTarget(VoiceTarget.Notes)
-                                    }
-                                }
-                        )
-                    }
-                    item {
-                        notesError?.let {
-                            Text(text = it, color = MaterialTheme.colorScheme.error)
-                        }
-                    }
-                    item {
-                        val setTotalText by rememberUpdatedState<(String) -> Unit>({ totalText = it })
-                        OutlinedTextField(
-                            value = totalText,
-                            onValueChange = {
-                                val filtered = it.filter { ch -> ch.isDigit() || ch == '.' }
-                                if (filtered.count { ch -> ch == '.' } <= 1) {
-                                    totalText = filtered
-                                }
-                                totalError = null
-                            },
-                            label = { Text("Total amount (KES)") },
-                            supportingText = {
-                                when {
-                                    parsedTotal == null && totalText.isNotBlank() -> Text("Enter a valid total")
-                                    formattedTotal != null -> Text("Will save as $formattedTotal")
-                                }
-                            },
-                            keyboardOptions = KeyboardOptions(
-                                keyboardType = KeyboardType.Decimal,
-                                imeAction = ImeAction.Next
-                            ),
-                            keyboardActions = KeyboardActions(onNext = { pickupRequester.requestFocus() }),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .focusRequester(totalRequester)
-                                .onFocusChanged { state ->
-                                    if (state.isFocused) {
-                                        amountRegistry.update(setTotalText)
-                                        voiceRouter.onFocusTarget(VoiceTarget.Total)
-                                    }
-                                }
-                        )
-                    }
-                    item {
-                        totalError?.let {
-                            Text(text = it, color = MaterialTheme.colorScheme.error)
-                        }
-                    }
-                    item {
-                        OutlinedTextField(
-                            value = pickupTimeText,
-                            onValueChange = {
-                                val filtered = it.filter { ch -> ch.isDigit() || ch == ':' || ch == '.' }
-                                if (filtered.length <= 5) {
-                                    pickupTimeText = filtered
-                                }
-                            },
-                            label = { Text("Pickup time (optional)") },
-                            placeholder = { Text("09:00") },
-                            isError = isPickupTimeInvalid,
-                            supportingText = {
-                                if (isPickupTimeInvalid) {
-                                    Text("Use HH:MM (e.g., 09:30 or 930).")
-                                }
-                            },
-                            keyboardOptions = KeyboardOptions(
-                                keyboardType = KeyboardType.Number,
-                                imeAction = ImeAction.Next
-                            ),
-                            keyboardActions = KeyboardActions(onNext = { nameRequester.requestFocus() }),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .focusRequester(pickupRequester)
-                        )
-                    }
-                    item {
-                        Text(text = "Customer (optional)", style = MaterialTheme.typography.titleSmall)
-                    }
-                    item {
-                        OutlinedTextField(
-                            value = customerName,
-                            onValueChange = {
-                                customerName = it
-                                customerError = null
-                            },
-                            label = { Text("Customer name") },
-                            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
-                            keyboardActions = KeyboardActions(onNext = { phoneRequester.requestFocus() }),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .focusRequester(nameRequester)
-                        )
-                    }
-                    item {
-                        OutlinedTextField(
-                            value = customerPhone,
-                            onValueChange = {
-                                customerPhone = it
-                                customerError = null
-                            },
-                            label = { Text("Customer phone") },
-                            keyboardOptions = KeyboardOptions(
-                                keyboardType = KeyboardType.Phone,
-                                imeAction = ImeAction.Done
-                            ),
-                            keyboardActions = KeyboardActions(
-                                onDone = {
-                                    focusManager.clearFocus()
-                                    if (canSave) {
-                                        submitOrder()
-                                    }
-                                }
-                            ),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .focusRequester(phoneRequester)
-                        )
-                    }
-                    if (suggestions.isNotEmpty()) {
-                        item {
-                            Column(
-                                modifier = Modifier
-                                    .heightIn(max = 180.dp)
-                                    .verticalScroll(rememberScrollState())
-                            ) {
-                                suggestions.forEach { customer ->
-                                    TextButton(
-                                        onClick = {
-                                            customerName = customer.name
-                                            customerPhone = customer.phone
-                                            suggestions = emptyList()
-                                        }
-                                    ) {
-                                        Text("${customer.name} - ${customer.phone}")
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    item {
-                        customerError?.let {
-                            Text(text = it, color = MaterialTheme.colorScheme.error)
-                        }
-                    }
-                    item {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            TextButton(
-                                onClick = { dismissSheet() }
-                            ) {
-                                Text("Cancel")
-                            }
-                            TextButton(
-                                onClick = {
-                                    notes = ""
-                                    totalText = ""
-                                    customerName = ""
-                                    customerPhone = ""
-                                    pickupTimeText = ""
-                                    notesError = null
-                                    totalError = null
-                                    customerError = null
-                                }
-                            ) {
-                                Text("Clear")
-                            }
-                            TextButton(
-                                onClick = {
-                                    submitOrder()
-                                },
-                                enabled = canSave
-                            ) {
-                                Text("Save")
-                            }
-                        }
-                    }
+                parsedTotal == null || parsedTotal <= BigDecimal.ZERO -> {
+                    notesError = null
+                    totalError = "Enter a valid total"
+                    customerError = null
                 }
-
-                VoiceCalculatorOverlay(
-                    hasPermission = voiceCalcAccess.hasPermission,
-                    onRequestPermission = voiceCalcAccess.onRequestPermission,
-                    lockToRightOnIdle = true,
-                    lockToTopOnIdle = true,
-                    peekWidthDp = 18.dp,
-                    allowDrag = true
-                )
+                hasCustomerMismatch -> {
+                    notesError = null
+                    totalError = null
+                    customerError = "Phone is required to attach a customer"
+                }
+                isPickupTimeInvalid -> {
+                    notesError = null
+                    totalError = null
+                    customerError = null
+                }
+                else -> {
+                    onSaveOrder(
+                        activeDate,
+                        trimmedNotes,
+                        parsedTotal,
+                        customerName.trim(),
+                        customerPhone.trim(),
+                        normalizedPickupTime
+                    )
+                    notes = ""
+                    totalText = ""
+                    customerName = ""
+                    customerPhone = ""
+                    pickupTimeText = ""
+                    notesError = null
+                    totalError = null
+                    customerError = null
+                    isQuickAddOpen = false
+                }
             }
         }
+
+        OrderEditorSheet(
+            title = "Add order on ${activeDate.dayOfMonth} ${activeDate.month.name.lowercase().replaceFirstChar { it.uppercase() }}",
+            notes = notes,
+            onNotesChange = {
+                notes = it
+                notesError = null
+            },
+            notesError = notesError,
+            totalText = totalText,
+            onTotalTextChange = {
+                totalText = sanitizeAmountInput(it)
+                totalError = null
+            },
+            isTotalInvalid = parsedTotal == null && totalText.isNotBlank(),
+            totalSupportingText = when {
+                parsedTotal == null && totalText.isNotBlank() -> "Enter a valid total"
+                formattedTotal != null -> "Will save as $formattedTotal"
+                else -> null
+            },
+            totalError = totalError,
+            statusText = null,
+            pickupTimeText = pickupTimeText,
+            onPickupTimeChange = { pickupTimeText = sanitizePickupTimeInput(it) },
+            isPickupTimeInvalid = isPickupTimeInvalid,
+            customerName = customerName,
+            onCustomerNameChange = {
+                customerName = it
+                customerError = null
+            },
+            customerPhone = customerPhone,
+            onCustomerPhoneChange = {
+                customerPhone = it
+                customerError = null
+            },
+            suggestions = suggestions,
+            onSuggestionSelected = { customer ->
+                customerName = customer.name
+                customerPhone = customer.phone
+                suggestions = emptyList()
+            },
+            customerError = customerError,
+            canSave = canSave,
+            onSave = { submitOrder() },
+            onClear = {
+                notes = ""
+                totalText = ""
+                customerName = ""
+                customerPhone = ""
+                pickupTimeText = ""
+                notesError = null
+                totalError = null
+                customerError = null
+            },
+            onCancel = { isQuickAddOpen = false },
+            onNotesFocused = { voiceRouter.onFocusTarget(VoiceTarget.Notes) },
+            onTotalFocused = { setter ->
+                amountRegistry.update(setter)
+                voiceRouter.onFocusTarget(VoiceTarget.Total)
+            },
+            voiceHasPermission = voiceCalcAccess.hasPermission,
+            onRequestVoicePermission = voiceCalcAccess.onRequestPermission
+        )
     }
 }
 

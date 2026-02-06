@@ -1,6 +1,5 @@
 package com.zeynbakers.order_management_system.order.ui
 
-import android.util.Log
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -16,15 +15,11 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.imePadding
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
@@ -34,8 +29,6 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.ModalBottomSheetProperties
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
@@ -45,7 +38,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -59,17 +51,8 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.platform.LocalFocusManager
-import androidx.compose.ui.platform.LocalSoftwareKeyboardController
-import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -85,7 +68,6 @@ import com.zeynbakers.order_management_system.core.ui.LocalVoiceCalcAccess
 import com.zeynbakers.order_management_system.core.ui.LocalVoiceOverlaySuppressed
 import com.zeynbakers.order_management_system.core.ui.LocalVoiceInputRouter
 import com.zeynbakers.order_management_system.core.ui.VoiceTarget
-import com.zeynbakers.order_management_system.core.ui.VoiceCalculatorOverlay
 import com.zeynbakers.order_management_system.core.util.formatKes
 import com.zeynbakers.order_management_system.core.util.formatDateTime
 import com.zeynbakers.order_management_system.core.util.formatOrderLabelWithId
@@ -100,8 +82,6 @@ import java.util.Locale
 import kotlinx.datetime.LocalDate
 import kotlinx.coroutines.launch
 import androidx.compose.material3.FilterChip
-
-private const val TAG_SHEET_BACK = "SheetBack"
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -150,18 +130,11 @@ fun DayDetailScreen(
     var deleteMoveOrderOptions by remember { mutableStateOf<List<OrderMoveOption>>(emptyList()) }
     var deleteSelectedOrderId by remember { mutableStateOf<Long?>(null) }
     var deleteMoveFullReceipts by remember { mutableStateOf(true) }
-    val focusManager = LocalFocusManager.current
-    val keyboardController = LocalSoftwareKeyboardController.current
     val amountRegistry = LocalAmountFieldRegistry.current
     val voiceCalcAccess = LocalVoiceCalcAccess.current
     val overlaySuppressed = LocalVoiceOverlaySuppressed.current
     val voiceRouter = LocalVoiceInputRouter.current
     val scope = rememberCoroutineScope()
-    val notesRequester = remember { FocusRequester() }
-    val totalRequester = remember { FocusRequester() }
-    val pickupRequester = remember { FocusRequester() }
-    val nameRequester = remember { FocusRequester() }
-    val phoneRequester = remember { FocusRequester() }
     var orderFilter by rememberSaveable { mutableStateOf(DayOrderFilter.All) }
     var searchQuery by rememberSaveable(date) { mutableStateOf("") }
     val formatter = remember {
@@ -219,12 +192,6 @@ fun DayDetailScreen(
         val customer = loadCustomerById(customerId) ?: return@LaunchedEffect
         customerName = customer.name
         customerPhone = customer.phone
-    }
-
-    LaunchedEffect(isEditorOpen, editingOrderId) {
-        if (isEditorOpen) {
-            notesRequester.requestFocus()
-        }
     }
 
     LaunchedEffect(isEditorOpen) {
@@ -582,287 +549,70 @@ fun DayDetailScreen(
             }
         }
 
-        val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-        val density = LocalDensity.current
-        val imeVisible = WindowInsets.ime.getBottom(density) > 0
-        val imeVisibleState by rememberUpdatedState(imeVisible)
-        val keyboardControllerState by rememberUpdatedState(keyboardController)
-        val focusManagerState by rememberUpdatedState(focusManager)
-        val dismissSheet = {
-            keyboardController?.hide()
-            focusManager.clearFocus(force = true)
-            isEditorOpen = false
-        }
-        val handleBackPress: () -> Unit = {
-            val sheetOpen = isEditorOpen
-            if (Log.isLoggable(TAG_SHEET_BACK, Log.DEBUG)) {
-                Log.d(TAG_SHEET_BACK, "back pressed imeVisible=$imeVisibleState sheetOpen=$sheetOpen")
-            }
-            if (imeVisibleState) {
-                keyboardControllerState?.hide()
-                focusManagerState.clearFocus(force = true)
-            } else {
-                isEditorOpen = false
-            }
-        }
-        val handleDismissRequest: () -> Unit = {
-            if (Log.isLoggable(TAG_SHEET_BACK, Log.DEBUG)) {
-                Log.d(TAG_SHEET_BACK, "dismiss request imeVisible=$imeVisible sheetOpen=true")
-            }
-            dismissSheet()
-        }
-        ModalBottomSheet(
-            onDismissRequest = handleDismissRequest,
-            sheetState = sheetState,
-            properties = ModalBottomSheetProperties(shouldDismissOnBackPress = false)
-        ) {
-            BackHandler(onBack = handleBackPress)
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .fillMaxHeight(0.9f)
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .fillMaxHeight()
-                        .imePadding()
-                        .navigationBarsPadding()
-                        .verticalScroll(rememberScrollState())
-                        .padding(12.dp)
-                ) {
-                    Text(
-                        text = if (editingOrderId == null) "New Order" else "Edit Order",
-                        style = MaterialTheme.typography.titleLarge
-                    )
-                    Spacer(Modifier.height(8.dp))
-
-                OutlinedTextField(
-                    value = notes,
-                    onValueChange = {
-                        notes = it
-                        notesError = null
-                    },
-                    label = { Text("Notes (required)") },
-                    placeholder = { Text("Customer details, delivery time, etc.") },
-                    minLines = 2,
-                    maxLines = 3,
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
-                    keyboardActions = KeyboardActions(onNext = { totalRequester.requestFocus() }),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .focusRequester(notesRequester)
-                        .onFocusChanged { state ->
-                            if (state.isFocused) {
-                                voiceRouter.onFocusTarget(VoiceTarget.Notes)
-                            }
-                        }
-                )
-
-                notesError?.let {
-                    Text(text = it, color = MaterialTheme.colorScheme.error)
-                }
-
-                Spacer(Modifier.height(8.dp))
-
-                val setTotalText by rememberUpdatedState<(String) -> Unit>({ totalText = it })
-                OutlinedTextField(
-                    value = totalText,
-                    onValueChange = {
-                        val filtered = it.filter { ch -> ch.isDigit() || ch == '.' }
-                        if (filtered.count { ch -> ch == '.' } <= 1) {
-                            totalText = filtered
-                            totalError = null
-                        }
-                    },
-                    label = { Text("Total amount") },
-                    placeholder = { Text("KSh 0.00") },
-                    leadingIcon = { Text("KSh") },
-                    isError = isTotalInvalid,
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(
-                        keyboardType = KeyboardType.Decimal,
-                        imeAction = ImeAction.Next
-                    ),
-                    keyboardActions = KeyboardActions(onNext = { pickupRequester.requestFocus() }),
-                    supportingText = {
-                        when {
-                            isTotalInvalid -> Text("Enter a valid amount.")
-                            formattedTotal != null -> Text("Total: KSh $formattedTotal")
-                        }
-                    },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .focusRequester(totalRequester)
-                        .onFocusChanged { state ->
-                            if (state.isFocused) {
-                                amountRegistry.update(setTotalText)
-                                voiceRouter.onFocusTarget(VoiceTarget.Total)
-                            }
-                    }
-                )
-
-                totalError?.let {
-                    Text(text = it, color = MaterialTheme.colorScheme.error)
-                }
-
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    text = "Status: $statusText - Paid ${formatKes(paidAmount)} - Due ${formatKes(remaining)}",
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-
-                Spacer(Modifier.height(8.dp))
-
-                OutlinedTextField(
-                    value = pickupTimeText,
-                    onValueChange = {
-                        val filtered = it.filter { ch -> ch.isDigit() || ch == ':' || ch == '.' }
-                        if (filtered.length <= 5) {
-                            pickupTimeText = filtered
-                        }
-                    },
-                    label = { Text("Pickup time (optional)") },
-                    placeholder = { Text("09:00") },
-                    isError = isPickupTimeInvalid,
-                    supportingText = {
-                        if (isPickupTimeInvalid) {
-                            Text("Use HH:MM (e.g., 09:30 or 930).")
-                        }
-                    },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(
-                        keyboardType = KeyboardType.Number,
-                        imeAction = ImeAction.Next
-                    ),
-                    keyboardActions = KeyboardActions(onNext = { nameRequester.requestFocus() }),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .focusRequester(pickupRequester)
-                )
-
-                Spacer(Modifier.height(8.dp))
-                Text(text = "Customer (optional)", style = MaterialTheme.typography.titleMedium)
-
-                OutlinedTextField(
-                    value = customerName,
-                    onValueChange = {
-                        customerName = it
-                        customerError = null
-                    },
-                    label = { Text("Customer name") },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
-                    keyboardActions = KeyboardActions(onNext = { phoneRequester.requestFocus() }),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .focusRequester(nameRequester)
-                )
-
-                Spacer(Modifier.height(8.dp))
-
-                OutlinedTextField(
-                    value = customerPhone,
-                    onValueChange = {
-                        customerPhone = it
-                        customerError = null
-                    },
-                    label = { Text("Customer phone") },
-                    singleLine = true,
-                    keyboardOptions = KeyboardOptions(
-                        keyboardType = KeyboardType.Phone,
-                        imeAction = ImeAction.Done
-                    ),
-                    keyboardActions = KeyboardActions(
-                        onDone = {
-                            focusManager.clearFocus()
-                            if (canSave) {
-                                submitOrder()
-                            }
-                        }
-                    ),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .focusRequester(phoneRequester)
-                )
-
-                if (suggestions.isNotEmpty()) {
-                    Spacer(Modifier.height(6.dp))
-                    Text(text = "Suggestions", style = MaterialTheme.typography.labelLarge)
-                    Column(
-                        modifier = Modifier
-                            .heightIn(max = 180.dp)
-                            .verticalScroll(rememberScrollState())
-                    ) {
-                        suggestions.forEach { customer ->
-                            TextButton(
-                                onClick = {
-                                    customerName = customer.name
-                                    customerPhone = customer.phone
-                                    suggestions = emptyList()
-                                }
-                            ) {
-                                Text("${customer.name} - ${customer.phone}")
-                            }
-                        }
-                    }
-                }
-
-                customerError?.let {
-                    Text(text = it, color = MaterialTheme.colorScheme.error)
-                }
-
-                Spacer(Modifier.height(8.dp))
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        TextButton(onClick = { dismissSheet() }) {
-                            Text("Cancel")
-                        }
-                        TextButton(
-                            onClick = {
-                                notes = ""
-                                totalText = ""
-                                customerName = ""
-                                customerPhone = ""
-                                pickupTimeText = ""
-                                editingOrderId = null
-                                notesError = null
-                                totalError = null
-                                customerError = null
-                                onDraftChange(null)
-                            }
-                        ) {
-                            Text("Clear")
-                        }
-                    }
-
-                    Button(
-                        onClick = { submitOrder() },
-                        enabled = canSave
-                    ) {
-                        Text("Save")
-                    }
-                }
-
-                    Spacer(Modifier.height(8.dp))
-                }
-
-                VoiceCalculatorOverlay(
-                    hasPermission = voiceCalcAccess.hasPermission,
-                    onRequestPermission = voiceCalcAccess.onRequestPermission,
-                    lockToRightOnIdle = true,
-                    lockToTopOnIdle = true,
-                    peekWidthDp = 18.dp,
-                    allowDrag = true
-                )
-            }
-        }
+        OrderEditorSheet(
+            title = if (editingOrderId == null) "New Order" else "Edit Order",
+            notes = notes,
+            onNotesChange = {
+                notes = it
+                notesError = null
+            },
+            notesError = notesError,
+            totalText = totalText,
+            onTotalTextChange = {
+                totalText = sanitizeAmountInput(it)
+                totalError = null
+            },
+            isTotalInvalid = isTotalInvalid,
+            totalSupportingText = when {
+                isTotalInvalid -> "Enter a valid amount."
+                formattedTotal != null -> "Total: KSh $formattedTotal"
+                else -> null
+            },
+            totalError = totalError,
+            statusText = "Status: $statusText - Paid ${formatKes(paidAmount)} - Due ${formatKes(remaining)}",
+            pickupTimeText = pickupTimeText,
+            onPickupTimeChange = { pickupTimeText = sanitizePickupTimeInput(it) },
+            isPickupTimeInvalid = isPickupTimeInvalid,
+            customerName = customerName,
+            onCustomerNameChange = {
+                customerName = it
+                customerError = null
+            },
+            customerPhone = customerPhone,
+            onCustomerPhoneChange = {
+                customerPhone = it
+                customerError = null
+            },
+            suggestions = suggestions,
+            onSuggestionSelected = { customer ->
+                customerName = customer.name
+                customerPhone = customer.phone
+                suggestions = emptyList()
+            },
+            customerError = customerError,
+            canSave = canSave,
+            onSave = { submitOrder() },
+            onClear = {
+                notes = ""
+                totalText = ""
+                customerName = ""
+                customerPhone = ""
+                pickupTimeText = ""
+                editingOrderId = null
+                notesError = null
+                totalError = null
+                customerError = null
+                onDraftChange(null)
+            },
+            onCancel = { isEditorOpen = false },
+            onNotesFocused = { voiceRouter.onFocusTarget(VoiceTarget.Notes) },
+            onTotalFocused = { setter ->
+                amountRegistry.update(setter)
+                voiceRouter.onFocusTarget(VoiceTarget.Total)
+            },
+            voiceHasPermission = voiceCalcAccess.hasPermission,
+            onRequestVoicePermission = voiceCalcAccess.onRequestPermission
+        )
     }
 
     if (pendingDeleteOrder != null) {

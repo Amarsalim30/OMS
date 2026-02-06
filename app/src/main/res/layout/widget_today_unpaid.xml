@@ -18,7 +18,7 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="OrderBook"
+            android:text="@string/app_name"
             android:textColor="#111111"
             android:textSize="15sp"
             android:textStyle="bold" />
@@ -32,7 +32,7 @@
             android:paddingRight="10dp"
             android:paddingTop="4dp"
             android:paddingBottom="4dp"
-            android:text="Today: 0"
+            android:text="@string/widget_today_count_default"
             android:textColor="#1A1A1A"
             android:textSize="12sp"
             android:textStyle="bold" />
@@ -45,7 +45,7 @@
         android:layout_marginTop="8dp"
         android:ellipsize="end"
         android:maxLines="1"
-        android:text="No orders today"
+        android:text="@string/widget_today_empty"
         android:textColor="#1F1F1F"
         android:textSize="12sp" />
 
@@ -86,7 +86,7 @@
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_weight="1"
-            android:text="Unpaid: 0"
+            android:text="@string/widget_unpaid_count_default"
             android:textColor="#111111"
             android:textSize="12sp"
             android:textStyle="bold" />
@@ -100,7 +100,7 @@
             android:paddingRight="10dp"
             android:paddingTop="6dp"
             android:paddingBottom="6dp"
-            android:text="Unpaid"
+            android:text="@string/widget_action_unpaid"
             android:textColor="#1F1F1F"
             android:textSize="12sp"
             android:textStyle="bold" />
@@ -115,7 +115,7 @@
             android:paddingRight="10dp"
             android:paddingTop="6dp"
             android:paddingBottom="6dp"
-            android:text="Add"
+            android:text="@string/widget_action_add"
             android:textColor="#1F1F1F"
             android:textSize="12sp"
             android:textStyle="bold" />

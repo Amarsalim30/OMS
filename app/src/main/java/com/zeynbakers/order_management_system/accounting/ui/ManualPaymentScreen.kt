@@ -1,6 +1,5 @@
 package com.zeynbakers.order_management_system.accounting.ui
 
-import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -23,6 +22,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -35,12 +36,12 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -55,6 +56,7 @@ import com.zeynbakers.order_management_system.customer.ui.CustomerAccountsViewMo
 import com.zeynbakers.order_management_system.customer.ui.CustomerOrderUi
 import com.zeynbakers.order_management_system.customer.ui.OrderEffectiveStatus
 import java.math.BigDecimal
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -66,7 +68,6 @@ fun ManualPaymentScreen(
     showTopBar: Boolean = true,
     externalPadding: PaddingValues = PaddingValues(0.dp)
 ) {
-    val context = LocalContext.current
     val amountRegistry = LocalAmountFieldRegistry.current
     val voiceRouter = LocalVoiceInputRouter.current
     val customer by customerViewModel.customer.collectAsState()
@@ -82,6 +83,8 @@ fun ManualPaymentScreen(
     var selectedMethod by rememberSaveable { mutableStateOf(PaymentMethod.CASH) }
     var customerQuery by rememberSaveable { mutableStateOf("") }
     var showOrderSheet by remember { mutableStateOf(false) }
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
 
     LaunchedEffect(initialCustomerId) {
         if (initialCustomerId != null) {
@@ -140,6 +143,7 @@ fun ManualPaymentScreen(
 
     Scaffold(
         contentWindowInsets = WindowInsets(0),
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             if (showTopBar) {
                 TopAppBar(
@@ -173,7 +177,9 @@ fun ManualPaymentScreen(
                                 orderId = selectedOrderId
                             )
                             onPaymentRecorded()
-                            Toast.makeText(context, "Payment saved", Toast.LENGTH_SHORT).show()
+                            scope.launch {
+                                snackbarHostState.showSnackbar("Payment saved")
+                            }
                             amountText = ""
                             noteText = ""
                             amountError = null
@@ -378,7 +384,7 @@ fun ManualPaymentScreen(
                                     showOrderSheet = false
                                 }
                             ) {
-                                Text("$label • Due ${formatKes(outstanding)}")
+                                Text("$label - Due ${formatKes(outstanding)}")
                             }
                         }
                     }

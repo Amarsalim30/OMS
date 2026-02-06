@@ -48,7 +48,7 @@ object AppShortcuts {
         return ShortcutInfoCompat.Builder(context, id)
             .setShortLabel(label)
             .setLongLabel(label)
-            .setIcon(IconCompat.createWithResource(context, R.mipmap.ic_launcher))
+            .setIcon(IconCompat.createWithResource(context, R.mipmap.ic_launcher_foreground))
             .setIntent(intent)
             .build()
     }
