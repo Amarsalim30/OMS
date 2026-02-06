@@ -92,7 +92,6 @@ fun CustomerListScreen(
     onEditCustomer: (Long) -> Unit = {},
     onArchiveCustomer: (Long) -> Unit = {},
     onRestoreCustomer: (Long) -> Unit = {},
-    onDeleteCustomer: (Long) -> Unit = {},
     showBack: Boolean = true
 ) {
     CustomersScreenM3(
@@ -108,7 +107,6 @@ fun CustomerListScreen(
         onEditCustomer = onEditCustomer,
         onArchiveCustomer = onArchiveCustomer,
         onRestoreCustomer = onRestoreCustomer,
-        onDeleteCustomer = onDeleteCustomer,
         showBack = showBack
     )
 }
@@ -127,7 +125,6 @@ private fun CustomersScreenM3(
     onEditCustomer: (Long) -> Unit,
     onArchiveCustomer: (Long) -> Unit,
     onRestoreCustomer: (Long) -> Unit,
-    onDeleteCustomer: (Long) -> Unit,
     showBack: Boolean
 ) {
     var queryText by rememberSaveable { mutableStateOf(query) }
@@ -138,7 +135,6 @@ private fun CustomersScreenM3(
     var showInactive by rememberSaveable { mutableStateOf(false) }
     var longPressedCustomer by remember { mutableStateOf<CustomerAccountSummary?>(null) }
     var pendingArchiveCustomer by remember { mutableStateOf<CustomerAccountSummary?>(null) }
-    var pendingDeleteCustomer by remember { mutableStateOf<CustomerAccountSummary?>(null) }
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
@@ -295,8 +291,6 @@ private fun CustomersScreenM3(
 
     longPressedCustomer?.let { customer ->
         val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-        val hasTransactions =
-            customer.billed != BigDecimal.ZERO || customer.paid != BigDecimal.ZERO
         val hasPhone = customer.phone.isNotBlank()
         ModalBottomSheet(
             onDismissRequest = { longPressedCustomer = null },
@@ -343,16 +337,11 @@ private fun CustomersScreenM3(
                         .height(1.dp),
                     color = MaterialTheme.colorScheme.surfaceVariant
                 ) {}
-                val destructiveLabel = if (hasTransactions) "Archive" else "Delete"
                 ActionRow(
-                    label = destructiveLabel,
+                    label = "Archive",
                     textColor = MaterialTheme.colorScheme.error,
                     onClick = {
-                        if (hasTransactions) {
-                            pendingArchiveCustomer = customer
-                        } else {
-                            pendingDeleteCustomer = customer
-                        }
+                        pendingArchiveCustomer = customer
                         longPressedCustomer = null
                     }
                 )
@@ -383,23 +372,6 @@ private fun CustomersScreenM3(
             },
             dismissButton = {
                 TextButton(onClick = { pendingArchiveCustomer = null }) { Text("Cancel") }
-            }
-        )
-    }
-
-    pendingDeleteCustomer?.let { customer ->
-        AlertDialog(
-            onDismissRequest = { pendingDeleteCustomer = null },
-            title = { Text("Delete customer?") },
-            text = { Text("This will remove the customer permanently.") },
-            confirmButton = {
-                TextButton(onClick = {
-                    onDeleteCustomer(customer.customerId)
-                    pendingDeleteCustomer = null
-                }) { Text("Delete") }
-            },
-            dismissButton = {
-                TextButton(onClick = { pendingDeleteCustomer = null }) { Text("Cancel") }
             }
         )
     }

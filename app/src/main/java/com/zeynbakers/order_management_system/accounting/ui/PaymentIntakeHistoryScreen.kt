@@ -65,6 +65,7 @@ fun PaymentIntakeHistoryScreen(
     val items by viewModel.history.collectAsState()
     val header by viewModel.header.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
+    val error by viewModel.error.collectAsState()
     val screenTitle =
         when (filter) {
             PaymentHistoryFilter.All -> "Payments"
@@ -125,7 +126,12 @@ fun PaymentIntakeHistoryScreen(
                 Spacer(modifier = Modifier.height(6.dp))
             }
 
-            if (!isLoading && items.isEmpty()) {
+            error?.let { message ->
+                ErrorHistoryState(message = message)
+                Spacer(modifier = Modifier.height(6.dp))
+            }
+
+            if (!isLoading && items.isEmpty() && error == null) {
                 EmptyHistoryState()
             } else {
                 LazyColumn(
@@ -411,6 +417,24 @@ private fun EmptyHistoryState() {
             text = "No payments yet.",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(14.dp)
+        )
+    }
+}
+
+@Composable
+private fun ErrorHistoryState(message: String) {
+    Surface(
+        tonalElevation = 1.dp,
+        shape = MaterialTheme.shapes.medium,
+        color = MaterialTheme.colorScheme.errorContainer
+    ) {
+        Text(
+            text = message,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onErrorContainer,
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(14.dp)

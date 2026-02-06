@@ -28,7 +28,6 @@ data class OrderEntity(
     val statusOverride: OrderStatusOverride? = null,
 
     val totalAmount: BigDecimal,
-    val amountPaid: BigDecimal = BigDecimal.ZERO,
 
     val customerId: Long? = null
 )

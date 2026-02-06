@@ -36,6 +36,7 @@ import java.util.Locale
 import java.util.zip.ZipEntry
 import java.util.zip.ZipInputStream
 import java.util.zip.ZipOutputStream
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.datetime.LocalDate
@@ -48,6 +49,8 @@ object BackupManager {
     private const val BACKUP_DIR_NAME = "backups"
     private const val MAX_APP_PRIVATE_BACKUPS = 7
     private const val DEFAULT_STAGE = "Preparing"
+    // Legacy-only backup field. Keep for backward-compatible import until schema retirement is complete.
+    private const val LEGACY_AMOUNT_PAID_FIELD = "amountPaid"
 
     suspend fun runBackup(
         context: Context,
@@ -104,9 +107,15 @@ object BackupManager {
                 }
             prefs.setLastResult(BackupStatus.Success, message, now)
             BackupResult(success = true, message = message)
-        } catch (t: Throwable) {
+        } catch (t: CancellationException) {
+            throw t
+        } catch (t: Exception) {
             prefs.setLastResult(BackupStatus.Failed, t.message, now)
-            BackupResult(success = false, message = t.message, shouldRetry = true)
+            BackupResult(
+                success = false,
+                message = t.message,
+                shouldRetry = isRetryableBackupException(t)
+            )
         }
     }
 
@@ -138,8 +147,14 @@ object BackupManager {
             }
             progress?.invoke(100, "Restore complete")
             BackupResult(success = true, message = "Restore complete")
-        } catch (t: Throwable) {
-            BackupResult(success = false, message = t.message, shouldRetry = true)
+        } catch (t: CancellationException) {
+            throw t
+        } catch (t: Exception) {
+            BackupResult(
+                success = false,
+                message = t.message,
+                shouldRetry = isRetryableBackupException(t)
+            )
         }
     }
 
@@ -280,7 +295,6 @@ object BackupManager {
                     .put("status", order.status.name)
                     .put("statusOverride", order.statusOverride?.name ?: JSONObject.NULL)
                     .put("totalAmount", order.totalAmount.toPlainString())
-                    .put("amountPaid", order.amountPaid.toPlainString())
                     .put("customerId", order.customerId ?: JSONObject.NULL)
             )
         }
@@ -431,6 +445,9 @@ object BackupManager {
         return result
     }
 
+    internal fun readBackupPayloadsForTest(inputStream: InputStream): Map<String, String> =
+        readZipEntries(inputStream)
+
     private fun readEntryText(zip: ZipInputStream): String {
         val buffer = ByteArray(4_096)
         val output = ByteArrayOutputStream()
@@ -476,7 +493,9 @@ object BackupManager {
                 }
             val customerId =
                 if (!obj.has("customerId") || obj.isNull("customerId")) null else obj.getLong("customerId")
-            val amountPaid = obj.optString("amountPaid", "0")
+            val totalAmount = parseRequiredDecimal(obj.optString("totalAmount", ""), "orders.totalAmount", index)
+            // Legacy field in older backups; intentionally ignored now that orders.amountPaid is retired.
+            obj.optString(LEGACY_AMOUNT_PAID_FIELD, "")
             OrderEntity(
                 id = obj.getLong("id"),
                 orderDate = LocalDate.parse(obj.getString("orderDate")),
@@ -486,8 +505,7 @@ object BackupManager {
                 pickupTime = pickupTime,
                 status = status,
                 statusOverride = statusOverride,
-                totalAmount = BigDecimal(obj.getString("totalAmount")),
-                amountPaid = BigDecimal(amountPaid),
+                totalAmount = totalAmount,
                 customerId = customerId
             )
         }
@@ -497,13 +515,14 @@ object BackupManager {
         val array = parseArray(payload) ?: return emptyList()
         return (0 until array.length()).map { index ->
             val obj = array.getJSONObject(index)
+            val unitPrice = parseRequiredDecimal(obj.optString("unitPrice", ""), "order_items.unitPrice", index)
             OrderItemEntity(
                 id = obj.getLong("id"),
                 orderId = obj.getLong("orderId"),
                 name = obj.getString("name"),
                 category = ItemCategory.valueOf(obj.getString("category")),
                 quantity = obj.getInt("quantity"),
-                unitPrice = BigDecimal(obj.getString("unitPrice"))
+                unitPrice = unitPrice
             )
         }
     }
@@ -514,12 +533,13 @@ object BackupManager {
             val obj = array.getJSONObject(index)
             val orderId = if (obj.isNull("orderId")) null else obj.getLong("orderId")
             val customerId = if (obj.isNull("customerId")) null else obj.getLong("customerId")
+            val amount = parseRequiredDecimal(obj.optString("amount", ""), "account_entries.amount", index)
             AccountEntryEntity(
                 id = obj.getLong("id"),
                 orderId = orderId,
                 customerId = customerId,
                 type = EntryType.valueOf(obj.getString("type")),
-                amount = BigDecimal(obj.getString("amount")),
+                amount = amount,
                 date = obj.getLong("date"),
                 description = obj.getString("description")
             )
@@ -530,10 +550,11 @@ object BackupManager {
         val array = parseArray(payload) ?: return emptyList()
         return (0 until array.length()).map { index ->
             val obj = array.getJSONObject(index)
+            val amount = parseRequiredDecimal(obj.optString("amount", ""), "payments.amount", index)
             PaymentEntity(
                 id = obj.getLong("id"),
                 orderId = obj.getLong("orderId"),
-                amount = BigDecimal(obj.getString("amount")),
+                amount = amount,
                 method = PaymentMethod.valueOf(obj.getString("method")),
                 paidAt = obj.getLong("paidAt")
             )
@@ -554,9 +575,10 @@ object BackupManager {
             val note = if (obj.isNull("note")) null else obj.getString("note")
             val voidedAt = if (obj.isNull("voidedAt")) null else obj.getLong("voidedAt")
             val voidReason = if (obj.isNull("voidReason")) null else obj.getString("voidReason")
+            val amount = parseRequiredDecimal(obj.optString("amount", ""), "payment_receipts.amount", index)
             PaymentReceiptEntity(
                 id = obj.getLong("id"),
-                amount = BigDecimal(obj.getString("amount")),
+                amount = amount,
                 receivedAt = obj.getLong("receivedAt"),
                 method = PaymentMethod.valueOf(obj.getString("method")),
                 transactionCode = transactionCode,
@@ -584,12 +606,13 @@ object BackupManager {
             val reversalEntryId = if (obj.isNull("reversalEntryId")) null else obj.getLong("reversalEntryId")
             val voidedAt = if (obj.isNull("voidedAt")) null else obj.getLong("voidedAt")
             val voidReason = if (obj.isNull("voidReason")) null else obj.getString("voidReason")
+            val amount = parseRequiredDecimal(obj.optString("amount", ""), "payment_allocations.amount", index)
             PaymentAllocationEntity(
                 id = obj.getLong("id"),
                 receiptId = obj.getLong("receiptId"),
                 orderId = orderId,
                 customerId = customerId,
-                amount = BigDecimal(obj.getString("amount")),
+                amount = amount,
                 type = PaymentAllocationType.valueOf(obj.getString("type")),
                 status = PaymentAllocationStatus.valueOf(obj.getString("status")),
                 accountEntryId = accountEntryId,
@@ -613,11 +636,12 @@ object BackupManager {
             val customerId = if (obj.isNull("customerId")) null else obj.getLong("customerId")
             val orderId = if (obj.isNull("orderId")) null else obj.getLong("orderId")
             val accountEntryId = if (obj.isNull("accountEntryId")) null else obj.getLong("accountEntryId")
+            val amount = parseRequiredDecimal(obj.optString("amount", ""), "mpesa_transactions.amount", index)
             LegacyMpesaTransaction(
                 id = obj.getLong("id"),
                 transactionCode = transactionCode,
                 hash = obj.getString("hash"),
-                amount = BigDecimal(obj.getString("amount")),
+                amount = amount,
                 senderName = senderName,
                 senderPhone = senderPhone,
                 receivedAt = obj.getLong("receivedAt"),
@@ -678,6 +702,46 @@ object BackupManager {
     private fun parseArray(payload: String?): JSONArray? {
         if (payload.isNullOrBlank()) return null
         return runCatching { JSONArray(payload) }.getOrNull()
+    }
+
+    private fun parseRequiredDecimal(raw: String?, field: String, index: Int): BigDecimal {
+        return parseBackupDecimal(raw)
+            ?: throw IllegalArgumentException("Invalid decimal for $field at index $index: '$raw'")
+    }
+
+    internal fun parseBackupDecimal(raw: String?): BigDecimal? {
+        if (raw == null) return null
+        val compact = raw.trim().replace(" ", "").replace("\u00A0", "")
+        if (compact.isEmpty()) return null
+        val normalized =
+            when {
+                compact.contains(',') && compact.contains('.') -> {
+                    if (compact.lastIndexOf(',') > compact.lastIndexOf('.')) {
+                        compact.replace(".", "").replace(',', '.')
+                    } else {
+                        compact.replace(",", "")
+                    }
+                }
+                compact.contains(',') -> {
+                    if (Regex("^-?\\d{1,3}(,\\d{3})+$").matches(compact)) {
+                        compact.replace(",", "")
+                    } else {
+                        compact.replace(',', '.')
+                    }
+                }
+                else -> compact
+        }
+        return normalized.toBigDecimalOrNull()
+    }
+
+    internal fun isRetryableBackupException(error: Exception): Boolean {
+        return when (error) {
+            is java.io.IOException -> true
+            is SecurityException -> false
+            is IllegalArgumentException -> false
+            is IllegalStateException -> false
+            else -> false
+        }
     }
 
     private data class LegacyMpesaTransaction(

@@ -52,17 +52,15 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.zeynbakers.order_management_system.core.ui.rememberCurrentDate
 import com.zeynbakers.order_management_system.core.util.formatKes
 import com.zeynbakers.order_management_system.order.data.OrderEntity
 import java.math.BigDecimal
 import java.math.RoundingMode
 import java.time.format.DateTimeFormatter
-import kotlinx.datetime.Clock
 import kotlinx.datetime.LocalDate
-import kotlinx.datetime.TimeZone
 import kotlinx.datetime.minus
 import kotlinx.datetime.toJavaLocalDate
-import kotlinx.datetime.toLocalDateTime
 
 private enum class OrdersFilter(val label: String) {
     NEWEST("Newest"),
@@ -91,9 +89,7 @@ fun UnpaidOrdersScreen(
                     acc + (order.totalAmount - paid)
                 }
             }
-    val today = remember {
-        Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date
-    }
+    val today = rememberCurrentDate()
     val selectedFilter = rememberSaveable { mutableStateOf(OrdersFilter.NEWEST) }
     // Sort base order for row ordering inside dates
     val sortedOrders =
@@ -272,7 +268,7 @@ private fun SummaryCard(count: Int, totalOutstanding: BigDecimal) {
 
 @Composable
 private fun StickyDateHeader(date: LocalDate, today: LocalDate) {
-    val dateLabel = remember(date) { formatRelativeDate(date) }
+    val dateLabel = remember(date, today) { formatRelativeDate(date, today) }
     val isOverdue = date < today
     val isToday = date == today
 
@@ -502,8 +498,7 @@ private fun EmptyState(text: String) {
     }
 }
 
-private fun formatRelativeDate(date: LocalDate): String {
-    val today = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date
+private fun formatRelativeDate(date: LocalDate, today: LocalDate): String {
     return when (date) {
         today -> "Today"
         today.minus(kotlinx.datetime.DatePeriod(days = 1)) -> "Yesterday"

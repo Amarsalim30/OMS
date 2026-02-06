@@ -115,8 +115,7 @@ class CustomerAccountsViewModel(private val database: AppDatabase) : ViewModel()
 
     fun deleteCustomer(customerId: Long) {
         viewModelScope.launch {
-            val customer = customerDao.getById(customerId) ?: return@launch
-            customerDao.delete(customer)
+            customerDao.archiveById(customerId)
             refreshSummaries()
         }
     }

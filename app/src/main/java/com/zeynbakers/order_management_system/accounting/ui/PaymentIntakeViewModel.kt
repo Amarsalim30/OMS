@@ -22,6 +22,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.datetime.Clock
@@ -232,8 +233,7 @@ class PaymentIntakeViewModel(private val database: AppDatabase) : ViewModel() {
 
     fun selectCustomer(key: String, customerId: Long?) {
         viewModelScope.launch(Dispatchers.IO) {
-            val current = _transactions.value
-            val item = current.firstOrNull { it.key == key } ?: return@launch
+            val item = _transactions.value.firstOrNull { it.key == key } ?: return@launch
             val today = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date
             val forcedCustomer =
                 customerId?.let { id -> customerDao.getById(id) }
@@ -269,21 +269,24 @@ class PaymentIntakeViewModel(private val database: AppDatabase) : ViewModel() {
                     AllocationMode.CUSTOMER_CREDIT,
                     AllocationMode.OLDEST_ORDERS -> selectedCustomerId != null
                 }
-            val updated =
-                item.copy(
-                    suggestedCustomerId = forcedCustomer?.id,
-                    suggestedCustomerName = forcedCustomer?.name,
-                    customerConfidence = if (forcedCustomer != null) 100 else 0,
-                    orderSuggestions = suggestion.orderSuggestions,
-                    selectedOrderId = selectedOrderId,
-                    selectedCustomerId = selectedCustomerId,
-                    allocationMode = allocationMode,
-                    selected = item.duplicateState == DuplicateState.NONE && canApply
-                )
-            _transactions.value =
-                current.map { entry ->
-                    if (entry.key == key) updated else entry
+            _transactions.update { latest ->
+                latest.map { entry ->
+                    if (entry.key != key) {
+                        entry
+                    } else {
+                        entry.copy(
+                            suggestedCustomerId = forcedCustomer?.id,
+                            suggestedCustomerName = forcedCustomer?.name,
+                            customerConfidence = if (forcedCustomer != null) 100 else 0,
+                            orderSuggestions = suggestion.orderSuggestions,
+                            selectedOrderId = selectedOrderId,
+                            selectedCustomerId = selectedCustomerId,
+                            allocationMode = allocationMode,
+                            selected = entry.duplicateState == DuplicateState.NONE && canApply
+                        )
+                    }
                 }
+            }
         }
     }
 

@@ -17,14 +17,22 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.ShoppingBag
+import androidx.compose.material.icons.filled.MoneyOff
+import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.outlined.Payments
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
@@ -48,18 +56,19 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.zeynbakers.order_management_system.accounting.data.AccountEntryEntity
 import com.zeynbakers.order_management_system.accounting.data.CustomerAccountSummary
 import com.zeynbakers.order_management_system.accounting.data.EntryType
+import com.zeynbakers.order_management_system.core.ui.rememberCurrentDate
 import com.zeynbakers.order_management_system.core.util.formatDateTime
 import com.zeynbakers.order_management_system.core.util.formatKes
 import com.zeynbakers.order_management_system.customer.ui.CustomerAccountsViewModel
 import java.math.BigDecimal
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.datetime.Clock
 import kotlinx.datetime.Instant
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
@@ -111,9 +120,7 @@ fun CustomerStatementsScreen(
     val ledger by customerViewModel.ledger.collectAsState()
     val orderLabels by customerViewModel.orderLabels.collectAsState()
 
-    val today = remember {
-        Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date
-    }
+    val today = rememberCurrentDate()
     val monthOptions = remember(today) { buildMonthOptions(today) }
 
     var queryText by rememberSaveable { mutableStateOf("") }
@@ -124,6 +131,7 @@ fun CustomerStatementsScreen(
     var customStart by rememberSaveable { mutableStateOf("") }
     var customEnd by rememberSaveable { mutableStateOf("") }
     var showAllLedger by rememberSaveable { mutableStateOf(false) }
+    var showReversals by rememberSaveable { mutableStateOf(false) }
     var isMenuOpen by remember { mutableStateOf(false) }
 
     LaunchedEffect(initialCustomerId) {
@@ -196,7 +204,7 @@ fun CustomerStatementsScreen(
         )
     }
 
-    val filteredEntries by remember(statementEntries, range) {
+    val filteredEntries by remember(statementEntries, range, showReversals) {
         derivedStateOf {
             if (!range.isValid) {
                 emptyList()
@@ -204,7 +212,8 @@ fun CustomerStatementsScreen(
                 statementEntries.filter { entry ->
                     val afterStart = range.start?.let { entry.date >= it } ?: true
                     val beforeEnd = range.end?.let { entry.date <= it } ?: true
-                    afterStart && beforeEnd
+                    val typeMatch = showReversals || entry.entry.type != EntryType.REVERSAL
+                    afterStart && beforeEnd && typeMatch
                 }
             }
         }
@@ -336,6 +345,8 @@ fun CustomerStatementsScreen(
                         customerName = customerName,
                         phone = phone,
                         rangeLabel = range.label,
+                        showReversals = showReversals,
+                        onToggleReversals = { showReversals = !showReversals },
                         onChangeCustomer = { activeCustomerId = null },
                         onOpenAllLedger = { showAllLedger = true }
                     )
@@ -366,6 +377,7 @@ fun CustomerStatementsScreen(
                         payments = totals.payments,
                         writeOffs = totals.writeOffs,
                         reversals = totals.reversals,
+                        showReversals = showReversals,
                         closingBalance = closingBalance
                     )
                 }
@@ -392,9 +404,13 @@ private fun StatementHeader(
     customerName: String,
     phone: String,
     rangeLabel: String,
+    showReversals: Boolean,
+    onToggleReversals: () -> Unit,
     onChangeCustomer: () -> Unit,
     onOpenAllLedger: () -> Unit
 ) {
+    var showMenu by remember { mutableStateOf(false) }
+
     Column(modifier = Modifier.fillMaxWidth()) {
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -410,8 +426,24 @@ private fun StatementHeader(
                 )
             }
             TextButton(onClick = onChangeCustomer) { Text("Change") }
-            IconButton(onClick = onOpenAllLedger) {
+            IconButton(onClick = { showMenu = true }) {
                 Icon(imageVector = Icons.Filled.MoreVert, contentDescription = "More")
+            }
+            DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
+                DropdownMenuItem(
+                    text = { Text(if (showReversals) "Hide reversals" else "Show reversals") },
+                    onClick = {
+                        onToggleReversals()
+                        showMenu = false
+                    }
+                )
+                DropdownMenuItem(
+                    text = { Text("All customers ledger") },
+                    onClick = {
+                        onOpenAllLedger()
+                        showMenu = false
+                    }
+                )
             }
         }
         Spacer(Modifier.height(4.dp))
@@ -522,6 +554,7 @@ private fun StatementSummaryCard(
     payments: BigDecimal,
     writeOffs: BigDecimal,
     reversals: BigDecimal,
+    showReversals: Boolean,
     closingBalance: BigDecimal
 ) {
     Surface(
@@ -533,10 +566,12 @@ private fun StatementSummaryCard(
             Text(text = "Statement summary", style = MaterialTheme.typography.titleSmall)
             Spacer(Modifier.height(6.dp))
             SummaryRow(label = "Opening balance", amount = formatKes(openingBalance))
-            SummaryRow(label = "Charges", amount = formatKes(charges))
-            SummaryRow(label = "Payments", amount = formatKes(payments))
-            SummaryRow(label = "Write-offs", amount = formatKes(writeOffs))
-            SummaryRow(label = "Reversals", amount = formatKes(reversals))
+            SummaryRow(label = "Charges (+)", amount = formatKes(charges))
+            SummaryRow(label = "Payments (-)", amount = formatKes(payments))
+            SummaryRow(label = "Write-offs (-)", amount = formatKes(writeOffs))
+            if (showReversals) {
+                SummaryRow(label = "Reversals", amount = formatKes(reversals))
+            }
             Spacer(Modifier.height(4.dp))
             SummaryRow(label = "Closing balance", amount = formatKes(closingBalance))
         }
@@ -566,49 +601,91 @@ private fun StatementEntryRow(entry: StatementEntryUi, orderLabel: String?) {
             entry.runningBalance < BigDecimal.ZERO -> MaterialTheme.colorScheme.tertiary
             else -> MaterialTheme.colorScheme.onSurfaceVariant
         }
+    
+    val icon = when (entry.entry.type) {
+        EntryType.DEBIT -> Icons.Filled.ShoppingBag
+        EntryType.CREDIT -> Icons.Outlined.Payments
+        EntryType.WRITE_OFF -> Icons.Filled.MoneyOff
+        EntryType.REVERSAL -> Icons.Filled.Warning
+    }
 
-    Surface(
-        tonalElevation = 1.dp,
+    Card(
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         shape = MaterialTheme.shapes.medium,
         modifier = Modifier.fillMaxWidth()
     ) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(12.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.Top
         ) {
+            Surface(
+                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                shape = MaterialTheme.shapes.small,
+                modifier = Modifier.padding(top = 2.dp)
+            ) {
+                 Icon(
+                     imageVector = icon,
+                     contentDescription = null,
+                     modifier = Modifier.padding(4.dp).size(16.dp),
+                     tint = MaterialTheme.colorScheme.onSurfaceVariant
+                 )
+            }
+            
+            Spacer(Modifier.width(12.dp))
+            
             Column(modifier = Modifier.weight(1f)) {
-                Text(text = formatDateTime(entry.entry.date), style = MaterialTheme.typography.labelSmall)
-                Text(text = typeLabel, style = MaterialTheme.typography.labelMedium, color = amountColor)
-                orderLabel?.let {
+                Row(
+                   modifier = Modifier.fillMaxWidth(),
+                   horizontalArrangement = Arrangement.SpaceBetween 
+                ) {
                     Text(
-                        text = it,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                        text = typeLabel,
+                        style = MaterialTheme.typography.titleSmall,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = "$sign ${formatKes(entry.entry.amount)}",
+                        style = MaterialTheme.typography.titleSmall,
+                        color = amountColor,
+                        fontWeight = FontWeight.Bold
                     )
                 }
-                Text(
-                    text = entry.entry.description,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-            Spacer(Modifier.width(8.dp))
-            Column(horizontalAlignment = Alignment.End) {
-                Text(
-                    text = "$sign ${formatKes(entry.entry.amount)}",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = amountColor
-                )
-                Text(
-                    text = "Bal $balanceSign${formatKes(entry.runningBalance.abs())}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = balanceColor
-                )
+                
+                Row(
+                   modifier = Modifier.fillMaxWidth(),
+                   horizontalArrangement = Arrangement.SpaceBetween 
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                         Text(text = formatDateTime(entry.entry.date), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                         
+                         orderLabel?.let {
+                            Text(
+                                text = it,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                        if (entry.entry.description.isNotBlank()) {
+                            Text(
+                                text = entry.entry.description,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+                    
+                    Text(
+                        text = "Bal $balanceSign${formatKes(entry.runningBalance.abs())}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = balanceColor,
+                        modifier = Modifier.padding(start = 8.dp)
+                    )
+                }
             }
         }
     }
@@ -786,9 +863,9 @@ private fun signedAmount(entry: AccountEntryEntity): BigDecimal {
 
 private fun entryTypeLabel(type: EntryType, orderId: Long?): String {
     return when (type) {
-        EntryType.DEBIT -> "Order charge"
+        EntryType.DEBIT -> "Order" // Simplified from "Order charge"
         EntryType.CREDIT -> if (orderId == null) "Extra credit" else "Payment"
-        EntryType.WRITE_OFF -> "Write-off"
+        EntryType.WRITE_OFF -> "Bad Debt / Write-off" // Clearer label
         EntryType.REVERSAL -> if (orderId == null) "Credit reversal" else "Payment reversal"
     }
 }

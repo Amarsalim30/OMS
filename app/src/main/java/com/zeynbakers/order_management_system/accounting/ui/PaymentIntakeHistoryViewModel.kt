@@ -13,6 +13,7 @@ import com.zeynbakers.order_management_system.core.db.AppDatabase
 import com.zeynbakers.order_management_system.core.util.formatOrderLabelWithId
 import com.zeynbakers.order_management_system.order.data.OrderEntity
 import java.math.BigDecimal
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -85,14 +86,24 @@ class PaymentIntakeHistoryViewModel(private val database: AppDatabase) : ViewMod
 
     private val _isLoading = MutableStateFlow(false)
     val isLoading = _isLoading.asStateFlow()
+    private val _error = MutableStateFlow<String?>(null)
+    val error = _error.asStateFlow()
 
     fun load(filter: PaymentHistoryFilter) {
         viewModelScope.launch {
+            _error.value = null
             _isLoading.value = true
-            val result = withContext(Dispatchers.IO) { buildHistory(filter) }
-            _header.value = result.header
-            _history.value = result.items
-            _isLoading.value = false
+            try {
+                val result = withContext(Dispatchers.IO) { buildHistory(filter) }
+                _header.value = result.header
+                _history.value = result.items
+            } catch (t: CancellationException) {
+                throw t
+            } catch (t: Exception) {
+                _error.value = historyLoadErrorMessageOrNull(t)
+            } finally {
+                _isLoading.value = false
+            }
         }
     }
 
@@ -367,4 +378,9 @@ class PaymentIntakeHistoryViewModel(private val database: AppDatabase) : ViewMod
         val header: PaymentHistoryHeader?,
         val items: List<PaymentHistoryItemUi>
     )
+}
+
+internal fun historyLoadErrorMessageOrNull(throwable: Throwable): String? {
+    if (throwable is CancellationException) return null
+    return throwable.message ?: "Unable to load payment history."
 }

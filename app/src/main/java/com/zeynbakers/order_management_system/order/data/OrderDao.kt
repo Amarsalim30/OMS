@@ -50,9 +50,6 @@ interface OrderDao {
     @Query("SELECT SUM(totalAmount) FROM orders WHERE customerId = :customerId")
     suspend fun getTotalBilled(customerId: Long): BigDecimal?
 
-    @Query("SELECT SUM(amountPaid) FROM orders WHERE customerId = :customerId")
-    suspend fun getTotalPaid(customerId: Long): BigDecimal?
-
     @Query("SELECT IFNULL(SUM(totalAmount), 0) FROM orders WHERE orderDate = :date")
     suspend fun getTotalForDate(date: String): BigDecimal
 
@@ -89,15 +86,6 @@ interface OrderDao {
     AND status != 'CANCELLED'
 """)
 suspend fun totalBilled(customerId: Long): BigDecimal
-
-@Query("""
-    SELECT 
-        IFNULL(SUM(amountPaid), 0) 
-    FROM orders 
-    WHERE customerId = :customerId 
-    AND status != 'CANCELLED'
-""")
-suspend fun totalPaid(customerId: Long): BigDecimal
 
 @Query("""
     SELECT * FROM orders

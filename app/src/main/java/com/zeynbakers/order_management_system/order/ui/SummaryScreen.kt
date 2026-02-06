@@ -55,6 +55,7 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.Alignment
+import com.zeynbakers.order_management_system.core.ui.rememberCurrentDate
 import com.zeynbakers.order_management_system.core.util.formatKes
 import com.zeynbakers.order_management_system.order.data.OrderEntity
 import com.zeynbakers.order_management_system.order.domain.OrderLineItem
@@ -70,7 +71,6 @@ import kotlinx.datetime.TimeZone
 import kotlinx.datetime.atStartOfDayIn
 import kotlinx.datetime.plus
 import kotlinx.datetime.toLocalDateTime
-import kotlinx.datetime.Clock
 
 private enum class SummaryRangeMode(val label: String) {
     DAY("Day"),
@@ -104,9 +104,7 @@ fun SummaryScreen(
     var isDatePickerOpen by remember { mutableStateOf(false) }
     var mode by remember { mutableStateOf(SummaryRangeMode.DAY) }
     var anchorDate by remember { mutableStateOf(initialDate) }
-    val today = remember {
-        Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date
-    }
+    val today = rememberCurrentDate()
 
     LaunchedEffect(initialDate) {
         anchorDate = initialDate

@@ -1,5 +1,6 @@
 package com.zeynbakers.order_management_system.order.ui
 
+import androidx.room.withTransaction
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.zeynbakers.order_management_system.accounting.data.AccountingDao
@@ -103,90 +104,139 @@ class OrderViewModel(private val database: AppDatabase) : ViewModel() {
         existingOrderId: Long?
     ) {
         viewModelScope.launch {
-            val now = Clock.System.now().toEpochMilliseconds()
-            val cleanNotes = notes.trim()
-            val normalizedPickupTime = pickupTime?.trim()?.takeIf { it.isNotBlank() }
-            val existingOrder =
-                if (existingOrderId != null && existingOrderId != 0L) {
-                    orderDao.getOrderById(existingOrderId)
-                } else {
-                    null
+            val result =
+                database.withTransaction {
+                    saveOrderTransactional(
+                        date = date,
+                        notes = notes,
+                        totalAmount = totalAmount,
+                        customerName = customerName,
+                        customerPhone = customerPhone,
+                        pickupTime = pickupTime,
+                        existingOrderId = existingOrderId
+                    )
                 }
-            val isNewOrder = existingOrder == null
-            val resolvedCustomerId = resolveCustomerId(customerName.trim(), customerPhone.trim())
-            val customerId =
-                if (existingOrder != null && resolvedCustomerId == null) {
-                    // Avoid corrupting existing ledgers by unassigning the customer on edit.
-                    existingOrder.customerId
-                } else {
-                    resolvedCustomerId
-                }
+            result.creditPrompt?.let { _creditPrompt.value = it }
+            loadOrdersForDate(result.date)
+            refreshMonthTotals()
+        }
+    }
 
-            val updatedOrder =
-                (existingOrder
-                        ?: OrderEntity(
-                            orderDate = date,
-                            notes = cleanNotes,
-                            totalAmount = totalAmount,
-                            customerId = customerId
-                        ))
-                    .copy(
+    private suspend fun saveOrderTransactional(
+        date: LocalDate,
+        notes: String,
+        totalAmount: BigDecimal,
+        customerName: String,
+        customerPhone: String,
+        pickupTime: String?,
+        existingOrderId: Long?
+    ): SaveOrderResult {
+        val now = Clock.System.now().toEpochMilliseconds()
+        val cleanNotes = notes.trim()
+        val normalizedPickupTime = pickupTime?.trim()?.takeIf { it.isNotBlank() }
+        val existingOrder =
+            if (existingOrderId != null && existingOrderId != 0L) {
+                orderDao.getOrderById(existingOrderId)
+            } else {
+                null
+            }
+        val isNewOrder = existingOrder == null
+        val resolvedCustomerId = resolveCustomerId(customerName.trim(), customerPhone.trim())
+        val customerId =
+            if (existingOrder != null && resolvedCustomerId == null) {
+                // Avoid corrupting existing ledgers by unassigning the customer on edit.
+                existingOrder.customerId
+            } else {
+                resolvedCustomerId
+            }
+
+        val updatedOrder =
+            (existingOrder
+                    ?: OrderEntity(
                         orderDate = date,
                         notes = cleanNotes,
                         totalAmount = totalAmount,
-                        customerId = customerId,
-                        pickupTime = normalizedPickupTime,
-                        updatedAt = now
-                    )
+                        customerId = customerId
+                    ))
+                .copy(
+                    orderDate = date,
+                    notes = cleanNotes,
+                    totalAmount = totalAmount,
+                    customerId = customerId,
+                    pickupTime = normalizedPickupTime,
+                    updatedAt = now
+                )
 
-            val orderId =
-                if (updatedOrder.id == 0L) {
-                    orderDao.insert(updatedOrder)
-                } else {
-                    orderDao.update(updatedOrder)
-                    updatedOrder.id
-                }
-
-            if (existingOrder?.customerId != null && customerId != null && existingOrder.customerId != customerId) {
-                accountingDao.updateCustomerIdForOrderEntries(orderId = orderId, customerId = customerId)
-            } else if (existingOrder?.customerId == null && customerId != null) {
-                accountingDao.updateCustomerIdForOrderEntries(orderId = orderId, customerId = customerId)
+        val orderId =
+            if (updatedOrder.id == 0L) {
+                orderDao.insert(updatedOrder)
+            } else {
+                orderDao.update(updatedOrder)
+                updatedOrder.id
             }
 
-            val savedOrder = updatedOrder.copy(id = orderId)
-            upsertAccountingEntry(savedOrder)
-            accountingDao.reconcileOrderSettlementToTotal(
-                orderId = orderId,
-                customerId = customerId,
-                orderTotal = savedOrder.totalAmount,
-                now = now
-            )
-            if (isNewOrder && customerId != null) {
-                val financeTotals = accountingDao.getCustomerFinanceTotals(customerId)
-                val availableCredit = financeTotals.extraCredit ?: BigDecimal.ZERO
-                if (availableCredit > BigDecimal.ZERO) {
-                    val customerName = customerId?.let { customerDao.getById(it)?.name }
-                    val orderLabel =
-                        formatOrderLabelWithId(
-                            orderId = orderId,
-                            date = savedOrder.orderDate,
-                            customerName = customerName,
-                            notes = savedOrder.notes,
-                            totalAmount = savedOrder.totalAmount
-                        )
-                    _creditPrompt.value =
-                        OrderCreditPrompt(
-                            orderId = orderId,
-                            customerId = customerId,
-                            availableCredit = availableCredit,
-                            orderLabel = orderLabel
-                        )
-                }
-            }
-
-            loadOrdersForDate(date)
-            refreshMonthTotals()
+        if (existingOrder?.customerId != null && customerId != null && existingOrder.customerId != customerId) {
+            accountingDao.updateCustomerIdForOrderEntries(orderId = orderId, customerId = customerId)
+        } else if (existingOrder?.customerId == null && customerId != null) {
+            accountingDao.updateCustomerIdForOrderEntries(orderId = orderId, customerId = customerId)
         }
+
+        val savedOrder = updatedOrder.copy(id = orderId)
+        upsertAccountingEntry(savedOrder)
+        accountingDao.reconcileOrderSettlementToTotal(
+            orderId = orderId,
+            customerId = customerId,
+            orderTotal = savedOrder.totalAmount,
+            now = now
+        )
+        val creditPrompt =
+            buildCreditPromptIfEligible(
+                isNewOrder = isNewOrder,
+                existingOrder = existingOrder,
+                savedOrder = savedOrder,
+                orderId = orderId,
+                customerId = customerId
+            )
+
+        return SaveOrderResult(date = date, creditPrompt = creditPrompt)
+    }
+
+    private suspend fun buildCreditPromptIfEligible(
+        isNewOrder: Boolean,
+        existingOrder: OrderEntity?,
+        savedOrder: OrderEntity,
+        orderId: Long,
+        customerId: Long?
+    ): OrderCreditPrompt? {
+        val hasSettlementChange =
+            isNewOrder ||
+                existingOrder == null ||
+                existingOrder.customerId != customerId ||
+                existingOrder.totalAmount.compareTo(savedOrder.totalAmount) != 0
+        if (!hasSettlementChange || customerId == null) return null
+
+        val availableCredit = accountingDao.getCustomerFinanceTotals(customerId).extraCredit ?: BigDecimal.ZERO
+        val paidForOrder = accountingDao.getPaidForOrder(orderId)
+        val outstandingAfterSave = savedOrder.totalAmount - paidForOrder
+        if (!shouldPromptForAvailableCredit(customerId, availableCredit, outstandingAfterSave)) {
+            return null
+        }
+
+        val resolvedCustomerName = customerDao.getById(customerId)?.name
+        val orderLabel =
+            formatOrderLabelWithId(
+                orderId = orderId,
+                date = savedOrder.orderDate,
+                customerName = resolvedCustomerName,
+                notes = savedOrder.notes,
+                totalAmount = savedOrder.totalAmount
+            )
+        return OrderCreditPrompt(
+            orderId = orderId,
+            customerId = customerId,
+            availableCredit = availableCredit,
+            orderLabel = orderLabel
+        )
     }
 
     fun applyAvailableCreditToOrder(orderId: Long, customerId: Long) {
@@ -279,10 +329,9 @@ class OrderViewModel(private val database: AppDatabase) : ViewModel() {
 
     fun cancelOrder(orderId: Long, date: LocalDate) {
         viewModelScope.launch {
-            orderDao.markCancelled(orderId)
-            accountingDao.deleteDebitEntriesForOrder(orderId)
-            accountingDao.deleteWriteOffEntriesForOrder(orderId)
-            accountingDao.moveOrderCreditsToCustomerLevel(orderId)
+            database.withTransaction {
+                cancelOrderTransactional(orderId)
+            }
             loadOrdersForDate(date)
             refreshMonthTotals()
         }
@@ -353,46 +402,52 @@ class OrderViewModel(private val database: AppDatabase) : ViewModel() {
         target: ReceiptAllocation?,
         moveFullReceipts: Boolean
     ): Boolean {
-        val order = orderDao.getOrderById(orderId)
-        val orderLabel =
-            order?.let {
-                val customerName = it.customerId?.let { id -> customerDao.getById(id)?.name }
-                formatOrderLabelWithId(
-                    orderId = it.id,
-                    date = it.orderDate,
-                    customerName = customerName,
-                    notes = it.notes,
-                    totalAmount = it.totalAmount
-                )
-            } ?: "Order ID $orderId"
-        val description = "$orderLabel deleted"
-        when (action) {
-            OrderPaymentAction.MOVE -> {
-                if (allocationIds.isNotEmpty() && target != null) {
-                    receiptProcessor.moveAllocations(
-                        allocationIds = allocationIds,
-                        target = target,
-                        descriptionBase = description,
-                        moveFullReceipts = moveFullReceipts
+        database.withTransaction {
+            val order = orderDao.getOrderById(orderId)
+            val orderLabel =
+                order?.let {
+                    val customerName = it.customerId?.let { id -> customerDao.getById(id)?.name }
+                    formatOrderLabelWithId(
+                        orderId = it.id,
+                        date = it.orderDate,
+                        customerName = customerName,
+                        notes = it.notes,
+                        totalAmount = it.totalAmount
                     )
+                } ?: "Order ID $orderId"
+            val description = "$orderLabel deleted"
+            when (action) {
+                OrderPaymentAction.MOVE -> {
+                    if (allocationIds.isNotEmpty() && target != null) {
+                        receiptProcessor.moveAllocations(
+                            allocationIds = allocationIds,
+                            target = target,
+                            descriptionBase = description,
+                            moveFullReceipts = moveFullReceipts
+                        )
+                    }
+                }
+                OrderPaymentAction.VOID -> {
+                    if (allocationIds.isNotEmpty()) {
+                        receiptProcessor.voidAllocations(
+                            allocationIds = allocationIds,
+                            reason = "Order deleted"
+                        )
+                    }
                 }
             }
-            OrderPaymentAction.VOID -> {
-                if (allocationIds.isNotEmpty()) {
-                    receiptProcessor.voidAllocations(
-                        allocationIds = allocationIds,
-                        reason = "Order deleted"
-                    )
-                }
-            }
+            cancelOrderTransactional(orderId)
         }
+        loadOrdersForDate(date)
+        refreshMonthTotals()
+        return true
+    }
+
+    private suspend fun cancelOrderTransactional(orderId: Long) {
         orderDao.markCancelled(orderId)
         accountingDao.deleteDebitEntriesForOrder(orderId)
         accountingDao.deleteWriteOffEntriesForOrder(orderId)
         accountingDao.moveOrderCreditsToCustomerLevel(orderId)
-        loadOrdersForDate(date)
-        refreshMonthTotals()
-        return true
     }
 
     fun loadMonth(month: Int, year: Int) {
@@ -639,3 +694,19 @@ data class OrderCreditPrompt(
     val availableCredit: BigDecimal,
     val orderLabel: String
 )
+
+private data class SaveOrderResult(
+    val date: LocalDate,
+    val creditPrompt: OrderCreditPrompt?
+)
+
+internal fun shouldPromptForAvailableCredit(
+    customerId: Long?,
+    availableCredit: BigDecimal,
+    outstandingAfterSave: BigDecimal
+): Boolean {
+    if (customerId == null) return false
+    if (availableCredit <= BigDecimal.ZERO) return false
+    if (outstandingAfterSave <= BigDecimal.ZERO) return false
+    return true
+}

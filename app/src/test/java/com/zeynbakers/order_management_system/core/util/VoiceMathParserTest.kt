@@ -36,4 +36,10 @@ class VoiceMathParserTest {
     fun `rejects division by zero`() {
         assertNull(parseVoiceMath("10 / 0"))
     }
+
+    @Test
+    fun `supports unicode multiply and divide symbols`() {
+        assertValue("7 × 8", BigDecimal("56"))
+        assertValue("20 ÷ 5", BigDecimal("4"))
+    }
 }

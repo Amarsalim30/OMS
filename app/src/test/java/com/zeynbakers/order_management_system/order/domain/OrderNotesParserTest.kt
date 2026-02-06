@@ -56,5 +56,17 @@ class OrderNotesParserTest {
         assertEquals(listOf(OrderLineItem("Bread", BigDecimal("2"))), parsed.items)
         assertEquals(listOf("KES 1000"), parsed.unparsed)
     }
-}
 
+    @Test
+    fun `parses bullet and multiply symbols`() {
+        val parsed = parseOrderNotes("• Bread ×2\n• Muffins x3")
+        assertEquals(
+            listOf(
+                OrderLineItem("Bread", BigDecimal("2")),
+                OrderLineItem("Muffins", BigDecimal("3"))
+            ),
+            parsed.items
+        )
+        assertEquals(emptyList<String>(), parsed.unparsed)
+    }
+}

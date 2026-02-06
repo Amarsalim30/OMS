@@ -7,6 +7,32 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 
 object DatabaseProvider {
     private var instance: AppDatabase? = null
+    internal val SQL_CREATE_ORDERS_V10 =
+        """
+        CREATE TABLE IF NOT EXISTS orders_new (
+            id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+            orderDate TEXT NOT NULL,
+            createdAt INTEGER NOT NULL,
+            updatedAt INTEGER NOT NULL,
+            notes TEXT NOT NULL,
+            pickupTime TEXT,
+            status TEXT NOT NULL,
+            statusOverride TEXT,
+            totalAmount TEXT NOT NULL,
+            customerId INTEGER
+        )
+        """.trimIndent()
+    internal val SQL_COPY_ORDERS_TO_V10 =
+        """
+        INSERT INTO orders_new (id, orderDate, createdAt, updatedAt, notes, pickupTime, status, statusOverride, totalAmount, customerId)
+        SELECT id, orderDate, createdAt, updatedAt, notes, pickupTime, status, statusOverride, totalAmount, customerId
+        FROM orders
+        """.trimIndent()
+    internal const val SQL_DROP_ORDERS = "DROP TABLE orders"
+    internal const val SQL_RENAME_ORDERS_NEW = "ALTER TABLE orders_new RENAME TO orders"
+    internal const val SQL_INDEX_ORDERS_DATE = "CREATE INDEX IF NOT EXISTS index_orders_orderDate ON orders(orderDate)"
+    internal const val SQL_INDEX_ORDERS_CUSTOMER = "CREATE INDEX IF NOT EXISTS index_orders_customerId ON orders(customerId)"
+
     private val migration1To2 = object : Migration(1, 2) {
         override fun migrate(db: SupportSQLiteDatabase) {
             db.execSQL(
@@ -234,6 +260,17 @@ object DatabaseProvider {
         }
     }
 
+    private val migration9To10 = object : Migration(9, 10) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL(SQL_CREATE_ORDERS_V10)
+            db.execSQL(SQL_COPY_ORDERS_TO_V10)
+            db.execSQL(SQL_DROP_ORDERS)
+            db.execSQL(SQL_RENAME_ORDERS_NEW)
+            db.execSQL(SQL_INDEX_ORDERS_DATE)
+            db.execSQL(SQL_INDEX_ORDERS_CUSTOMER)
+        }
+    }
+
     fun getDatabase(context: Context): AppDatabase {
         return instance ?: synchronized(this) {
             val db = Room.databaseBuilder(
@@ -248,7 +285,8 @@ object DatabaseProvider {
                 migration5To6,
                 migration6To7,
                 migration7To8,
-                migration8To9
+                migration8To9,
+                migration9To10
             ).build()
             instance = db
             db

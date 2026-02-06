@@ -57,6 +57,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.zeynbakers.order_management_system.accounting.data.AccountEntryEntity
 import com.zeynbakers.order_management_system.accounting.data.EntryType
+import com.zeynbakers.order_management_system.core.ui.rememberCurrentDate
 import com.zeynbakers.order_management_system.core.util.formatDateTime
 import com.zeynbakers.order_management_system.core.util.formatKes
 import com.zeynbakers.order_management_system.customer.data.CustomerEntity
@@ -65,11 +66,9 @@ import java.math.BigDecimal
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
-import kotlinx.datetime.Clock
 import kotlinx.datetime.DateTimeUnit
-import kotlinx.datetime.TimeZone
+import kotlinx.datetime.LocalDate
 import kotlinx.datetime.plus
-import kotlinx.datetime.toLocalDateTime
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import android.content.Intent
@@ -388,11 +387,12 @@ private fun OrderRow(
     var menuExpanded by remember { mutableStateOf(false) }
     var pendingOverride by remember { mutableStateOf<OrderStatusOverride?>(null) }
     var confirmWriteOff by remember { mutableStateOf(false) }
+    val today = rememberCurrentDate()
     val primaryLine = buildOrderPrimaryLine(order)
     val notes = order.order.notes.ifBlank { "No notes" }.take(60)
     val chipLabel = orderStatusChipLabel(order)
     val chipColor = orderStatusChipColor(order)
-    val canWriteOff = canWriteOff(order)
+    val canWriteOff = canWriteOff(order, today)
 
     Surface(
         tonalElevation = 1.dp,
@@ -766,11 +766,10 @@ private fun orderStatusChipColor(order: CustomerOrderUi) =
         else -> MaterialTheme.colorScheme.tertiaryContainer
     }
 
-private fun canWriteOff(order: CustomerOrderUi): Boolean {
+private fun canWriteOff(order: CustomerOrderUi, today: LocalDate): Boolean {
     if (order.effectiveStatus != OrderEffectiveStatus.OPEN) return false
     if (order.paidAmount >= order.order.totalAmount) return false
     val cutoff = order.order.orderDate.plus(1, DateTimeUnit.MONTH)
-    val today = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date
     return today >= cutoff
 }
 

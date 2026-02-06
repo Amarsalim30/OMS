@@ -231,7 +231,7 @@ class MainActivity : ComponentActivity() {
 
                 var pendingCreditPrompt by remember { mutableStateOf<OrderCreditPrompt?>(null) }
                 val incomingIntent by launchIntent
-                val today = remember {
+                val currentDate: () -> LocalDate = {
                     Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date
                 }
 
@@ -309,18 +309,19 @@ class MainActivity : ComponentActivity() {
                     val intent = incomingIntent ?: return@LaunchedEffect
                     when (intent.action) {
                         AppIntents.ACTION_SHOW_TODAY -> {
-                            selectedDate = today
+                            val targetDate = currentDate()
+                            selectedDate = targetDate
                             selectedTopLevelRoute = AppRoutes.Calendar
-                            navController.navigate(AppRoutes.day(today))
+                            navigateCalendarExternal(navController, AppRoutes.day(targetDate))
                         }
                         AppIntents.ACTION_SHOW_DAY -> {
                             val targetDate =
                                 intent.getStringExtra(AppIntents.EXTRA_TARGET_DATE)?.let {
                                     runCatching { LocalDate.parse(it) }.getOrNull()
-                                } ?: today
+                                } ?: currentDate()
                             selectedDate = targetDate
                             selectedTopLevelRoute = AppRoutes.Calendar
-                            navController.navigate(AppRoutes.day(targetDate))
+                            navigateCalendarExternal(navController, AppRoutes.day(targetDate))
                         }
                         AppIntents.ACTION_SHOW_UNPAID -> {
                             selectedTopLevelRoute = AppRoutes.Orders
@@ -330,13 +331,14 @@ class MainActivity : ComponentActivity() {
                             summaryDate =
                                 intent.getStringExtra(AppIntents.EXTRA_TARGET_DATE)?.let {
                                     runCatching { LocalDate.parse(it) }.getOrNull()
-                                } ?: today
+                                } ?: currentDate()
                             selectedTopLevelRoute = AppRoutes.Calendar
-                            navController.navigate(AppRoutes.Summary)
+                            navigateCalendarExternal(navController, AppRoutes.Summary)
                         }
                         AppIntents.ACTION_NEW_ORDER -> {
-                            selectedDate = today
-                            quickAddDate = today
+                            val targetDate = currentDate()
+                            selectedDate = targetDate
+                            quickAddDate = targetDate
                             selectedTopLevelRoute = AppRoutes.Calendar
                             navigateTopLevel(navController, AppRoutes.Calendar, resetToRoot = true)
                         }
@@ -450,7 +452,9 @@ class MainActivity : ComponentActivity() {
                                     arguments = listOf(navArgument(AppRoutes.ARG_DATE) { type = NavType.StringType })
                                 ) { entry ->
                                     val dateArg = entry.arguments?.getString(AppRoutes.ARG_DATE)
-                                    val date = dateArg?.let { runCatching { LocalDate.parse(it) }.getOrNull() } ?: today
+                                    val date =
+                                        dateArg?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
+                                            ?: currentDate()
                                     LaunchedEffect(date) {
                                         selectedDate = date
                                         orderViewModel.loadOrdersForDate(date)
@@ -577,7 +581,7 @@ class MainActivity : ComponentActivity() {
                                             navController.navigate(AppRoutes.Money) { launchSingleTop = true }
                                         },
                                         onAddOrder = {
-                                            val targetDate = today
+                                            val targetDate = currentDate()
                                             selectedDate = targetDate
                                             quickAddDate = targetDate
                                             selectedTopLevelRoute = AppRoutes.Calendar
@@ -588,9 +592,6 @@ class MainActivity : ComponentActivity() {
                                         },
                                         onRestoreCustomer = { customerId ->
                                             customerViewModel.unarchiveCustomer(customerId)
-                                        },
-                                        onDeleteCustomer = { customerId ->
-                                            customerViewModel.deleteCustomer(customerId)
                                         },
                                         showBack = false
                                     )
@@ -789,7 +790,7 @@ class MainActivity : ComponentActivity() {
                                     SummaryScreen(
                                         monthLabel = monthLabel(currentYear, currentMonth),
                                         monthTotal = monthTotal,
-                                        initialDate = summaryDate ?: selectedDate ?: today,
+                                        initialDate = summaryDate ?: selectedDate ?: currentDate(),
                                         orders = summaryOrders,
                                         rangeTotal = summaryTotal,
                                         customerNames = summaryCustomerNames,
@@ -935,6 +936,18 @@ private fun navigateTopLevel(
         }
         launchSingleTop = true
         restoreState = true
+    }
+}
+
+private fun navigateCalendarExternal(
+    navController: NavHostController,
+    route: String
+) {
+    navigateTopLevel(navController, AppRoutes.Calendar, resetToRoot = true)
+    navController.navigate(route) {
+        popUpTo(AppRoutes.Calendar) { inclusive = false }
+        launchSingleTop = true
+        restoreState = false
     }
 }
 

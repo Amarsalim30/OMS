@@ -100,6 +100,7 @@ import androidx.compose.ui.unit.dp
 import com.zeynbakers.order_management_system.core.util.formatKes
 import com.zeynbakers.order_management_system.core.util.normalizePickupTime
 import com.zeynbakers.order_management_system.core.ui.LocalAmountFieldRegistry
+import com.zeynbakers.order_management_system.core.ui.rememberCurrentDate
 import com.zeynbakers.order_management_system.core.ui.LocalVoiceCalcAccess
 import com.zeynbakers.order_management_system.core.ui.LocalVoiceOverlaySuppressed
 import com.zeynbakers.order_management_system.core.ui.LocalVoiceInputRouter
@@ -112,7 +113,6 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
-import kotlinx.datetime.Clock
 import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.Month
@@ -203,9 +203,7 @@ fun CalendarScreen(
     val baseIndex = remember { 10_000 }
     val pageCount = remember { baseIndex * 2 }
     val pagerState = rememberPagerState(initialPage = baseIndex, pageCount = { pageCount })
-    val today = remember {
-        Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date
-    }
+    val today = rememberCurrentDate()
     val systemWeekStart = remember { Calendar.getInstance(Locale.getDefault()).firstDayOfWeek }
     val weekStart = weekStartPreference ?: systemWeekStart
     val anchorYear =
