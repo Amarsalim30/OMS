@@ -13,6 +13,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBars
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -181,7 +183,10 @@ fun UnpaidOrdersScreen(
             topBar = {
                 if (isSearchActive) {
                     Surface(
-                            modifier = Modifier.fillMaxWidth().height(64.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .windowInsetsPadding(WindowInsets.statusBars)
+                                .height(64.dp),
                             color = MaterialTheme.colorScheme.surface,
                             shadowElevation = 4.dp
                     ) {
@@ -292,7 +297,7 @@ fun UnpaidOrdersScreen(
                 )
             }
 
-            if (filteredOrders.isNotEmpty()) {
+            if (orders.isNotEmpty()) {
                 item {
                     LazyRow(
                             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),

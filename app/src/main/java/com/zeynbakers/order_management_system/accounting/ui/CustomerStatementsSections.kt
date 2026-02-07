@@ -4,9 +4,8 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.MoneyOff
-import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.ShoppingBag
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
@@ -16,7 +15,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -38,76 +36,83 @@ import kotlinx.datetime.Instant
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
+
 @Composable
 internal fun StatementHeader(
-    customerName: String,
-    phone: String,
-    rangeLabel: String,
-    hideAmounts: Boolean,
-    showReversals: Boolean,
-    onToggleHideAmounts: () -> Unit,
-    onToggleReversals: () -> Unit,
-    onChangeCustomer: () -> Unit,
-    onOpenAllLedger: () -> Unit
+        customerName: String,
+        phone: String,
+        rangeLabel: String,
+        hideAmounts: Boolean,
+        showReversals: Boolean,
+        onToggleHideAmounts: () -> Unit,
+        onToggleReversals: () -> Unit,
+        onChangeCustomer: () -> Unit,
+        onOpenAllLedger: () -> Unit
 ) {
     var showMenu by remember { mutableStateOf(false) }
 
     Column(modifier = Modifier.fillMaxWidth()) {
         Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
         ) {
             Column(modifier = Modifier.weight(1f)) {
-                Text(text = stringResource(R.string.money_statement_title), style = MaterialTheme.typography.titleLarge)
                 Text(
-                    text = rangeLabel,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                        text = stringResource(R.string.money_statement_title),
+                        style = MaterialTheme.typography.titleLarge
+                )
+                Text(
+                        text = rangeLabel,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
             IconButton(onClick = onToggleHideAmounts) {
                 Icon(
-                    imageVector =
-                        if (hideAmounts) {
-                            Icons.Filled.VisibilityOff
-                        } else {
-                            Icons.Filled.Visibility
-                        },
-                    contentDescription =
-                        if (hideAmounts) {
-                            stringResource(R.string.action_show_balances)
-                        } else {
-                            stringResource(R.string.action_hide_balances)
-                        }
+                        imageVector =
+                                if (hideAmounts) {
+                                    Icons.Filled.VisibilityOff
+                                } else {
+                                    Icons.Filled.Visibility
+                                },
+                        contentDescription =
+                                if (hideAmounts) {
+                                    stringResource(R.string.action_show_balances)
+                                } else {
+                                    stringResource(R.string.action_hide_balances)
+                                }
                 )
             }
             TextButton(onClick = onChangeCustomer) { Text(stringResource(R.string.action_change)) }
             IconButton(onClick = { showMenu = true }) {
-                Icon(imageVector = Icons.Filled.MoreVert, contentDescription = stringResource(R.string.action_more))
+                Icon(
+                        imageVector = Icons.Filled.MoreVert,
+                        contentDescription = stringResource(R.string.action_more)
+                )
             }
             DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
                 DropdownMenuItem(
-                    text = {
-                        Text(
-                            if (showReversals) {
-                                stringResource(R.string.action_hide_reversals)
-                            } else {
-                                stringResource(R.string.action_show_reversals)
-                            }
-                        )
-                    },
-                    onClick = {
-                        onToggleReversals()
-                        showMenu = false
-                    }
+                        text = {
+                            Text(
+                                    if (showReversals) {
+                                        stringResource(R.string.action_hide_reversals)
+                                    } else {
+                                        stringResource(R.string.action_show_reversals)
+                                    }
+                            )
+                        },
+                        onClick = {
+                            onToggleReversals()
+                            showMenu = false
+                        }
                 )
                 DropdownMenuItem(
-                    text = { Text(stringResource(R.string.money_advanced_ledger_title)) },
-                    onClick = {
-                        onOpenAllLedger()
-                        showMenu = false
-                    }
+                        text = { Text(stringResource(R.string.money_advanced_ledger_title)) },
+                        onClick = {
+                            onOpenAllLedger()
+                            showMenu = false
+                        }
                 )
             }
         }
@@ -115,9 +120,9 @@ internal fun StatementHeader(
         Text(text = customerName, style = MaterialTheme.typography.titleMedium)
         if (phone.isNotBlank()) {
             Text(
-                text = phone,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                    text = phone,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
     }
@@ -125,58 +130,67 @@ internal fun StatementHeader(
 
 @Composable
 internal fun RangeSelector(
-    rangeType: StatementRangeType,
-    onRangeTypeChange: (StatementRangeType) -> Unit,
-    monthOptions: List<MonthOption>,
-    selectedMonth: Int,
-    selectedYear: Int,
-    onMonthSelected: (Int, Int) -> Unit,
-    customStart: String,
-    customEnd: String,
-    onCustomStartChange: (String) -> Unit,
-    onCustomEndChange: (String) -> Unit,
-    dateInputPlaceholder: String
+        rangeType: StatementRangeType,
+        onRangeTypeChange: (StatementRangeType) -> Unit,
+        monthOptions: List<MonthOption>,
+        selectedMonth: Int,
+        selectedYear: Int,
+        onMonthSelected: (Int, Int) -> Unit,
+        customStart: String,
+        customEnd: String,
+        onCustomStartChange: (String) -> Unit,
+        onCustomEndChange: (String) -> Unit,
+        dateInputPlaceholder: String
 ) {
     var isMonthMenuOpen by remember { mutableStateOf(false) }
-    val selectedLabel = monthOptions
-        .firstOrNull { it.year == selectedYear && it.month == selectedMonth }
-        ?.label ?: "${monthName(selectedMonth)} $selectedYear"
+    val selectedLabel =
+            monthOptions.firstOrNull { it.year == selectedYear && it.month == selectedMonth }?.label
+                    ?: "${monthName(selectedMonth)} $selectedYear"
 
     Column(modifier = Modifier.fillMaxWidth()) {
         AppFilterRow(
-            options = rangeTypeOptions(),
-            selectedKey = rangeType.name,
-            onSelect = { onRangeTypeChange(StatementRangeType.valueOf(it)) }
+                options = rangeTypeOptions(),
+                selectedKey = rangeType.name,
+                onSelect = { onRangeTypeChange(StatementRangeType.valueOf(it)) }
         )
 
         if (rangeType == StatementRangeType.Month) {
             Spacer(Modifier.height(8.dp))
             Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { isMonthMenuOpen = true }
-                    .padding(vertical = 4.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                    modifier =
+                            Modifier.fillMaxWidth()
+                                    .clickable { isMonthMenuOpen = true }
+                                    .padding(vertical = 4.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
             ) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(text = stringResource(R.string.money_month), style = MaterialTheme.typography.labelLarge)
                     Text(
-                        text = selectedLabel,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                            text = stringResource(R.string.money_month),
+                            style = MaterialTheme.typography.labelLarge
+                    )
+                    Text(
+                            text = selectedLabel,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-                Icon(imageVector = Icons.Filled.KeyboardArrowDown, contentDescription = stringResource(R.string.money_select_month))
+                Icon(
+                        imageVector = Icons.Filled.KeyboardArrowDown,
+                        contentDescription = stringResource(R.string.money_select_month)
+                )
             }
-            DropdownMenu(expanded = isMonthMenuOpen, onDismissRequest = { isMonthMenuOpen = false }) {
+            DropdownMenu(
+                    expanded = isMonthMenuOpen,
+                    onDismissRequest = { isMonthMenuOpen = false }
+            ) {
                 monthOptions.forEach { option ->
                     DropdownMenuItem(
-                        text = { Text(option.label) },
-                        onClick = {
-                            onMonthSelected(option.year, option.month)
-                            isMonthMenuOpen = false
-                        }
+                            text = { Text(option.label) },
+                            onClick = {
+                                onMonthSelected(option.year, option.month)
+                                isMonthMenuOpen = false
+                            }
                     )
                 }
             }
@@ -186,20 +200,20 @@ internal fun RangeSelector(
             Spacer(Modifier.height(8.dp))
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedTextField(
-                    value = customStart,
-                    onValueChange = onCustomStartChange,
-                    label = { Text(stringResource(R.string.money_start_date)) },
-                    placeholder = { Text(dateInputPlaceholder) },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
+                        value = customStart,
+                        onValueChange = onCustomStartChange,
+                        label = { Text(stringResource(R.string.money_start_date)) },
+                        placeholder = { Text(dateInputPlaceholder) },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
                 )
                 OutlinedTextField(
-                    value = customEnd,
-                    onValueChange = onCustomEndChange,
-                    label = { Text(stringResource(R.string.money_end_date)) },
-                    placeholder = { Text(dateInputPlaceholder) },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
+                        value = customEnd,
+                        onValueChange = onCustomEndChange,
+                        label = { Text(stringResource(R.string.money_end_date)) },
+                        placeholder = { Text(dateInputPlaceholder) },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
                 )
             }
         }
@@ -208,47 +222,75 @@ internal fun RangeSelector(
 
 @Composable
 internal fun StatementSummaryCard(
-    openingBalance: BigDecimal,
-    charges: BigDecimal,
-    payments: BigDecimal,
-    writeOffs: BigDecimal,
-    reversals: BigDecimal,
-    hideAmounts: Boolean,
-    showReversals: Boolean,
-    closingBalance: BigDecimal
+        openingBalance: BigDecimal,
+        charges: BigDecimal,
+        payments: BigDecimal,
+        writeOffs: BigDecimal,
+        reversals: BigDecimal,
+        hideAmounts: Boolean,
+        showReversals: Boolean,
+        closingBalance: BigDecimal
 ) {
     AppCard {
         Column(modifier = Modifier.fillMaxWidth()) {
-            Text(text = stringResource(R.string.money_statement_summary_title), style = MaterialTheme.typography.titleSmall)
+            Text(
+                    text = stringResource(R.string.money_statement_summary_title),
+                    style = MaterialTheme.typography.titleSmall
+            )
             Spacer(Modifier.height(6.dp))
-            SummaryRow(label = stringResource(R.string.money_statement_opening_balance), amount = formatKes(openingBalance), hideAmounts = hideAmounts)
-            SummaryRow(label = stringResource(R.string.money_statement_charges), amount = formatKes(charges), hideAmounts = hideAmounts)
-            SummaryRow(label = stringResource(R.string.money_statement_payments), amount = formatKes(payments), hideAmounts = hideAmounts)
-            SummaryRow(label = stringResource(R.string.money_statement_write_offs), amount = formatKes(writeOffs), hideAmounts = hideAmounts)
+            SummaryRow(
+                    label = stringResource(R.string.money_statement_opening_balance),
+                    amount = formatKes(openingBalance),
+                    hideAmounts = hideAmounts
+            )
+            SummaryRow(
+                    label = stringResource(R.string.money_statement_charges),
+                    amount = formatKes(charges),
+                    hideAmounts = hideAmounts
+            )
+            SummaryRow(
+                    label = stringResource(R.string.money_statement_payments),
+                    amount = formatKes(payments),
+                    hideAmounts = hideAmounts
+            )
+            SummaryRow(
+                    label = stringResource(R.string.money_statement_write_offs),
+                    amount = formatKes(writeOffs),
+                    hideAmounts = hideAmounts
+            )
             if (showReversals) {
-                SummaryRow(label = stringResource(R.string.money_statement_reversals), amount = formatKes(reversals), hideAmounts = hideAmounts)
+                SummaryRow(
+                        label = stringResource(R.string.money_statement_reversals),
+                        amount = formatKes(reversals),
+                        hideAmounts = hideAmounts
+                )
             }
             Spacer(Modifier.height(4.dp))
-            SummaryRow(label = stringResource(R.string.money_statement_closing_balance), amount = formatKes(closingBalance), hideAmounts = hideAmounts)
+            SummaryRow(
+                    label = stringResource(R.string.money_statement_closing_balance),
+                    amount = formatKes(closingBalance),
+                    hideAmounts = hideAmounts
+            )
         }
     }
 }
 
 @Composable
 internal fun SummaryRow(label: String, amount: String, hideAmounts: Boolean) {
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween
-    ) {
-        Text(text = label, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
         Text(
-            text =
-                if (hideAmounts) {
-                    stringResource(R.string.money_amount_hidden)
-                } else {
-                    amount
-                },
-            style = MaterialTheme.typography.bodySmall
+                text = label,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Text(
+                text =
+                        if (hideAmounts) {
+                            stringResource(R.string.money_amount_hidden)
+                        } else {
+                            amount
+                        },
+                style = MaterialTheme.typography.bodySmall
         )
     }
 }
@@ -256,135 +298,141 @@ internal fun SummaryRow(label: String, amount: String, hideAmounts: Boolean) {
 @Composable
 internal fun rangeTypeOptions(): List<AppFilterOption> {
     return listOf(
-        AppFilterOption(StatementRangeType.All.name, stringResource(R.string.money_all_time)),
-        AppFilterOption(StatementRangeType.Month.name, stringResource(R.string.money_month)),
-        AppFilterOption(StatementRangeType.Custom.name, stringResource(R.string.money_custom))
+            AppFilterOption(StatementRangeType.All.name, stringResource(R.string.money_all_time)),
+            AppFilterOption(StatementRangeType.Month.name, stringResource(R.string.money_month)),
+            AppFilterOption(StatementRangeType.Custom.name, stringResource(R.string.money_custom))
     )
 }
 
 @Composable
 internal fun StatementEntryRow(
-    modifier: Modifier = Modifier,
-    entry: StatementEntryUi,
-    hideAmounts: Boolean,
-    orderLabel: String?
+        modifier: Modifier = Modifier,
+        entry: StatementEntryUi,
+        hideAmounts: Boolean,
+        orderLabel: String?
 ) {
     val typeLabel =
-        when (entry.entry.type) {
-            EntryType.DEBIT -> stringResource(R.string.money_entry_order)
-            EntryType.CREDIT -> if (entry.entry.orderId == null) {
-                stringResource(R.string.money_entry_extra_credit)
-            } else {
-                stringResource(R.string.money_entry_payment)
+            when (entry.entry.type) {
+                EntryType.DEBIT -> stringResource(R.string.money_entry_order)
+                EntryType.CREDIT ->
+                        if (entry.entry.orderId == null) {
+                            stringResource(R.string.money_entry_extra_credit)
+                        } else {
+                            stringResource(R.string.money_entry_payment)
+                        }
+                EntryType.WRITE_OFF -> stringResource(R.string.money_entry_bad_debt_writeoff)
+                EntryType.REVERSAL ->
+                        if (entry.entry.orderId == null) {
+                            stringResource(R.string.money_entry_credit_reversal)
+                        } else {
+                            stringResource(R.string.money_entry_payment_reversal)
+                        }
             }
-            EntryType.WRITE_OFF -> stringResource(R.string.money_entry_bad_debt_writeoff)
-            EntryType.REVERSAL -> if (entry.entry.orderId == null) {
-                stringResource(R.string.money_entry_credit_reversal)
-            } else {
-                stringResource(R.string.money_entry_payment_reversal)
-            }
-        }
     val amountColor = entryTypeColor(entry.entry.type)
-    val sign = if (entry.entry.type == EntryType.DEBIT || entry.entry.type == EntryType.REVERSAL) "+" else "-"
+    val sign =
+            if (entry.entry.type == EntryType.DEBIT || entry.entry.type == EntryType.REVERSAL) "+"
+            else "-"
     val balanceSign = if (entry.runningBalance < BigDecimal.ZERO) "-" else ""
     val balanceColor =
-        when {
-            entry.runningBalance > BigDecimal.ZERO -> MaterialTheme.colorScheme.error
-            entry.runningBalance < BigDecimal.ZERO -> MaterialTheme.colorScheme.tertiary
-            else -> MaterialTheme.colorScheme.onSurfaceVariant
-        }
-    
-    val icon = when (entry.entry.type) {
-        EntryType.DEBIT -> Icons.Filled.ShoppingBag
-        EntryType.CREDIT -> Icons.Outlined.Payments
-        EntryType.WRITE_OFF -> Icons.Filled.MoneyOff
-        EntryType.REVERSAL -> Icons.Filled.Warning
-    }
+            when {
+                entry.runningBalance > BigDecimal.ZERO -> MaterialTheme.colorScheme.error
+                entry.runningBalance < BigDecimal.ZERO -> MaterialTheme.colorScheme.tertiary
+                else -> MaterialTheme.colorScheme.onSurfaceVariant
+            }
+
+    val icon =
+            when (entry.entry.type) {
+                EntryType.DEBIT -> Icons.Filled.ShoppingBag
+                EntryType.CREDIT -> Icons.Outlined.Payments
+                EntryType.WRITE_OFF -> Icons.Filled.MoneyOff
+                EntryType.REVERSAL -> Icons.Filled.Warning
+            }
 
     AppCard(modifier = modifier) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.Top
-        ) {
+        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
             Surface(
-                color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                shape = MaterialTheme.shapes.small,
-                modifier = Modifier.padding(top = 2.dp)
+                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    shape = MaterialTheme.shapes.small,
+                    modifier = Modifier.padding(top = 2.dp)
             ) {
-                 Icon(
-                     imageVector = icon,
-                     contentDescription = null,
-                     modifier = Modifier.padding(4.dp).size(16.dp),
-                     tint = MaterialTheme.colorScheme.onSurfaceVariant
-                 )
+                Icon(
+                        imageVector = icon,
+                        contentDescription = null,
+                        modifier = Modifier.padding(4.dp).size(16.dp),
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
-            
+
             Spacer(Modifier.width(12.dp))
-            
+
             Column(modifier = Modifier.weight(1f)) {
                 Row(
-                   modifier = Modifier.fillMaxWidth(),
-                   horizontalArrangement = Arrangement.SpaceBetween 
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Text(
-                        text = typeLabel,
-                        style = MaterialTheme.typography.titleSmall,
-                        color = MaterialTheme.colorScheme.onSurface
+                            text = typeLabel,
+                            style = MaterialTheme.typography.titleSmall,
+                            color = MaterialTheme.colorScheme.onSurface
                     )
                     Text(
-                        text =
-                            if (hideAmounts) {
-                                stringResource(R.string.money_amount_hidden)
-                            } else {
-                                "$sign ${formatKes(entry.entry.amount)}"
-                            },
-                        style = MaterialTheme.typography.titleSmall,
-                        color = amountColor,
-                        fontWeight = FontWeight.Bold
+                            text =
+                                    if (hideAmounts) {
+                                        stringResource(R.string.money_amount_hidden)
+                                    } else {
+                                        "$sign ${formatKes(entry.entry.amount)}"
+                                    },
+                            style = MaterialTheme.typography.titleSmall,
+                            color = amountColor,
+                            fontWeight = FontWeight.Bold
                     )
                 }
-                
+
                 Row(
-                   modifier = Modifier.fillMaxWidth(),
-                   horizontalArrangement = Arrangement.SpaceBetween 
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
-                         Text(text = formatDateTime(entry.entry.date), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                         
-                         orderLabel?.let {
-                            Text(
-                                text = it,
+                        Text(
+                                text = formatDateTime(entry.entry.date),
                                 style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+
+                        orderLabel?.let {
+                            Text(
+                                    text = it,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                             )
                         }
                         if (entry.entry.description.isNotBlank()) {
                             Text(
-                                text = entry.entry.description,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
+                                    text = entry.entry.description,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
                             )
                         }
                     }
-                    
+
                     Text(
-                        text =
-                            if (hideAmounts) {
-                                stringResource(R.string.money_amount_hidden)
-                            } else {
-                                stringResource(
-                                    R.string.money_balance_label,
-                                    balanceSign,
-                                    formatKes(entry.runningBalance.abs())
-                                )
-                            },
-                        style = MaterialTheme.typography.labelSmall,
-                        color = balanceColor,
-                        modifier = Modifier.padding(start = 8.dp)
+                            text =
+                                    if (hideAmounts) {
+                                        stringResource(R.string.money_amount_hidden)
+                                    } else {
+                                        stringResource(
+                                                R.string.money_balance_label,
+                                                balanceSign,
+                                                formatKes(entry.runningBalance.abs())
+                                        )
+                                    },
+                            style = MaterialTheme.typography.labelSmall,
+                            color = balanceColor,
+                            modifier = Modifier.padding(start = 8.dp)
                     )
                 }
             }
@@ -394,58 +442,53 @@ internal fun StatementEntryRow(
 
 @Composable
 internal fun StatementCustomerRow(
-    customer: CustomerAccountSummary,
-    hideAmounts: Boolean,
-    onClick: () -> Unit
+        modifier: Modifier = Modifier,
+        customer: CustomerAccountSummary,
+        hideAmounts: Boolean,
+        onClick: () -> Unit
 ) {
     Surface(
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
-        shape = MaterialTheme.shapes.large,
-        modifier = Modifier
-            .fillMaxWidth()
-            .heightIn(min = 56.dp)
-            .clickable(onClick = onClick)
+            color = MaterialTheme.colorScheme.surfaceContainerLow,
+            shape = MaterialTheme.shapes.large,
+            modifier = modifier.fillMaxWidth().heightIn(min = 56.dp).clickable(onClick = onClick)
     ) {
-        Row(
-            modifier = Modifier.padding(10.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
+        Row(modifier = Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = customer.name.ifBlank { stringResource(R.string.customer_unknown) },
-                    style = MaterialTheme.typography.titleMedium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                        text = customer.name.ifBlank { stringResource(R.string.customer_unknown) },
+                        style = MaterialTheme.typography.titleMedium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                 )
                 if (customer.phone.isNotBlank()) {
                     Text(
-                        text = customer.phone,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
+                            text = customer.phone,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                     )
                 }
                 Spacer(Modifier.height(6.dp))
                 Text(
-                    text =
-                        if (hideAmounts) {
-                            stringResource(
-                                R.string.money_billed_paid,
-                                stringResource(R.string.money_amount_hidden),
-                                stringResource(R.string.money_amount_hidden)
-                            )
-                        } else {
-                            stringResource(
-                                R.string.money_billed_paid,
-                                formatKes(customer.billed),
-                                formatKes(customer.paid)
-                            )
-                        },
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                        text =
+                                if (hideAmounts) {
+                                    stringResource(
+                                            R.string.money_billed_paid,
+                                            stringResource(R.string.money_amount_hidden),
+                                            stringResource(R.string.money_amount_hidden)
+                                    )
+                                } else {
+                                    stringResource(
+                                            R.string.money_billed_paid,
+                                            formatKes(customer.billed),
+                                            formatKes(customer.paid)
+                                    )
+                                },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                 )
             }
             Spacer(Modifier.width(8.dp))
@@ -457,30 +500,36 @@ internal fun StatementCustomerRow(
 @Composable
 internal fun BalanceChip(balance: BigDecimal, hideAmounts: Boolean) {
     val (label, color) =
-        when {
-            balance > BigDecimal.ZERO -> stringResource(R.string.money_balance_due) to MaterialTheme.colorScheme.errorContainer
-            balance < BigDecimal.ZERO -> stringResource(R.string.money_balance_extra) to MaterialTheme.colorScheme.tertiaryContainer
-            else -> stringResource(R.string.money_balance_clear) to MaterialTheme.colorScheme.secondaryContainer
-        }
+            when {
+                balance > BigDecimal.ZERO ->
+                        stringResource(R.string.money_balance_due) to
+                                MaterialTheme.colorScheme.errorContainer
+                balance < BigDecimal.ZERO ->
+                        stringResource(R.string.money_balance_extra) to
+                                MaterialTheme.colorScheme.tertiaryContainer
+                else ->
+                        stringResource(R.string.money_balance_clear) to
+                                MaterialTheme.colorScheme.secondaryContainer
+            }
     Surface(
-        color = color,
-        shape = MaterialTheme.shapes.small,
-        modifier = Modifier.heightIn(min = 32.dp)
+            color = color,
+            shape = MaterialTheme.shapes.small,
+            modifier = Modifier.heightIn(min = 32.dp)
     ) {
         Row(
-            modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp),
-            verticalAlignment = Alignment.CenterVertically
+                modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically
         ) {
             Text(text = label, style = MaterialTheme.typography.labelSmall)
             Spacer(Modifier.width(4.dp))
             Text(
-                text =
-                    if (hideAmounts) {
-                        stringResource(R.string.money_amount_hidden)
-                    } else {
-                        formatKes(balance.abs())
-                    },
-                style = MaterialTheme.typography.labelLarge
+                    text =
+                            if (hideAmounts) {
+                                stringResource(R.string.money_amount_hidden)
+                            } else {
+                                formatKes(balance.abs())
+                            },
+                    style = MaterialTheme.typography.labelLarge
             )
         }
     }
@@ -490,20 +539,17 @@ internal fun BalanceChip(balance: BigDecimal, hideAmounts: Boolean) {
 internal fun InfoCard(text: String) {
     AppCard {
         Text(
-            text = text,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.fillMaxWidth()
+                text = text,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.fillMaxWidth()
         )
     }
 }
 
 @Composable
 internal fun EmptyState(text: String) {
-    AppEmptyState(
-        title = stringResource(R.string.money_statement_title),
-        body = text
-    )
+    AppEmptyState(title = stringResource(R.string.money_statement_title), body = text)
 }
 
 internal fun buildStatementEntries(entries: List<AccountEntryEntity>): List<StatementEntryUi> {
@@ -512,24 +558,25 @@ internal fun buildStatementEntries(entries: List<AccountEntryEntity>): List<Stat
     return sorted.map { entry ->
         running += signedAmount(entry)
         StatementEntryUi(
-            entry = entry,
-            date = Instant.fromEpochMilliseconds(entry.date)
-                .toLocalDateTime(TimeZone.currentSystemDefault())
-                .date,
-            runningBalance = running
+                entry = entry,
+                date =
+                        Instant.fromEpochMilliseconds(entry.date)
+                                .toLocalDateTime(TimeZone.currentSystemDefault())
+                                .date,
+                runningBalance = running
         )
     }
 }
 
 internal fun buildStatementRange(
-    rangeType: StatementRangeType,
-    selectedYear: Int,
-    selectedMonth: Int,
-    customStart: String,
-    customEnd: String,
-    customRangeLabel: String,
-    allTimeLabel: String,
-    rangeToSeparator: String
+        rangeType: StatementRangeType,
+        selectedYear: Int,
+        selectedMonth: Int,
+        customStart: String,
+        customEnd: String,
+        customRangeLabel: String,
+        allTimeLabel: String,
+        rangeToSeparator: String
 ): StatementRange {
     return when (rangeType) {
         StatementRangeType.All -> StatementRange(allTimeLabel, null, null, true)
@@ -577,12 +624,12 @@ internal fun signedAmount(entry: AccountEntryEntity): BigDecimal {
 
 @Composable
 internal fun entryTypeColor(type: EntryType) =
-    when (type) {
-        EntryType.DEBIT -> MaterialTheme.colorScheme.error
-        EntryType.CREDIT -> MaterialTheme.colorScheme.primary
-        EntryType.WRITE_OFF -> MaterialTheme.colorScheme.secondary
-        EntryType.REVERSAL -> MaterialTheme.colorScheme.tertiary
-    }
+        when (type) {
+            EntryType.DEBIT -> MaterialTheme.colorScheme.error
+            EntryType.CREDIT -> MaterialTheme.colorScheme.primary
+            EntryType.WRITE_OFF -> MaterialTheme.colorScheme.secondary
+            EntryType.REVERSAL -> MaterialTheme.colorScheme.tertiary
+        }
 
 internal fun buildMonthOptions(anchorDate: LocalDate, count: Int = 12): List<MonthOption> {
     val results = mutableListOf<MonthOption>()
@@ -631,4 +678,3 @@ internal fun monthName(month: Int): String {
         DateFormatSymbols.getInstance(Locale.getDefault()).months[0]
     }
 }
-

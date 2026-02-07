@@ -111,6 +111,8 @@
     <string name="customers_subtitle">Find customers and collect payments</string>
     <string name="customer_search_customers">Search customers</string>
     <string name="customer_name_or_phone">Name or phone</string>
+    <string name="customer_filter_label">Filter</string>
+    <string name="customer_sort_label">Sort</string>
     <string name="customer_hide_zero_balances">Hide zero balances</string>
     <string name="customer_show_inactive_no_orders">Show inactive (no orders)</string>
     <string name="customer_all_customers">All customers</string>
@@ -137,6 +139,9 @@
     <string name="customer_sort_balance_high_to_low">Balance: High to low</string>
     <string name="customer_sort_balance_low_to_high">Balance: Low to high</string>
     <string name="customer_sort_name_a_to_z">Name: A to Z</string>
+    <string name="customer_sort_balance_desc_short">Balance High-Low</string>
+    <string name="customer_sort_balance_asc_short">Balance Low-High</string>
+    <string name="customer_sort_name_asc_short">Name A-Z</string>
     <string name="customer_sort_selected">Selected</string>
     <string name="customer_billed_paid">Billed %1$s - Paid %2$s</string>
     <string name="customer_action_pay_short">Pay</string>
@@ -144,9 +149,13 @@
     <string name="customer_actions">Customer actions</string>
     <string name="customer_no_customers_icon">No customers</string>
     <string name="customer_no_customers_found">No customers found</string>
+    <string name="customer_no_customers_for_filters">No customers match these filters</string>
     <string name="customer_no_customers_yet">No customers yet</string>
     <string name="customer_try_different_search">Try a different search.</string>
+    <string name="customer_adjust_or_clear_filters">Adjust filters or clear them to see more customers.</string>
     <string name="customer_add_first">Add your first customer to get started.</string>
+    <string name="customer_reset_filters">Reset filters</string>
+    <string name="customer_filters_active">Filters active</string>
     <string name="customer_add">Add customer</string>
     <string name="summary_title">Summary</string>
     <string name="summary_range_day">Day</string>

@@ -23,23 +23,23 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material3.Button
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -73,8 +73,6 @@ import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
 import com.zeynbakers.order_management_system.R
 import com.zeynbakers.order_management_system.accounting.data.CustomerAccountSummary
-import com.zeynbakers.order_management_system.core.ui.components.AppFilterOption
-import com.zeynbakers.order_management_system.core.ui.components.AppFilterRow
 import com.zeynbakers.order_management_system.core.ui.LocalUiEventDispatcher
 import com.zeynbakers.order_management_system.core.ui.showSnackbar
 import com.zeynbakers.order_management_system.core.util.formatKes
@@ -133,22 +131,43 @@ private fun CustomersScreenM3(
     showBack: Boolean
 ) {
     var queryText by rememberSaveable { mutableStateOf(query) }
+    var isSearchActive by rememberSaveable { mutableStateOf(query.isNotBlank()) }
     var selectedFilter by rememberSaveable { mutableStateOf(CustomerFilter.All) }
     var selectedSort by rememberSaveable { mutableStateOf(CustomerSort.BalanceDesc) }
-    var isSortMenuOpen by remember { mutableStateOf(false) }
     var hideZeroBalances by rememberSaveable { mutableStateOf(true) }
     var showInactive by rememberSaveable { mutableStateOf(false) }
+    var showFilterSheet by rememberSaveable { mutableStateOf(false) }
+    var showSortSheet by rememberSaveable { mutableStateOf(false) }
     var longPressedCustomer by remember { mutableStateOf<CustomerAccountSummary?>(null) }
     var pendingArchiveCustomer by remember { mutableStateOf<CustomerAccountSummary?>(null) }
+    val hasActiveFilters by remember(selectedFilter, hideZeroBalances, showInactive) {
+        derivedStateOf {
+            selectedFilter != CustomerFilter.All || !hideZeroBalances || showInactive
+        }
+    }
+    val hasActiveControls by remember(hasActiveFilters, selectedSort) {
+        derivedStateOf {
+            hasActiveFilters || selectedSort != CustomerSort.BalanceDesc
+        }
+    }
     val uiEvents = LocalUiEventDispatcher.current
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val customerArchivedMessage = stringResource(R.string.customer_archived)
     val undoActionLabel = stringResource(R.string.action_undo)
+    val resetFiltersAndSort: () -> Unit = {
+        selectedFilter = CustomerFilter.All
+        selectedSort = CustomerSort.BalanceDesc
+        hideZeroBalances = true
+        showInactive = false
+    }
 
     LaunchedEffect(query) {
         if (queryText != query) {
             queryText = query
+        }
+        if (query.isNotBlank()) {
+            isSearchActive = true
         }
     }
 
@@ -198,10 +217,22 @@ private fun CustomersScreenM3(
     Scaffold(
         contentWindowInsets = WindowInsets(0),
         topBar = {
-            CustomersTopBar(
-                onBack = onBack,
-                showBack = showBack
-            )
+            if (isSearchActive) {
+                CustomerSearchTopBar(
+                    queryText = queryText,
+                    onQueryTextChange = { queryText = it },
+                    onBack = {
+                        isSearchActive = false
+                        queryText = ""
+                    }
+                )
+            } else {
+                CustomersTopBar(
+                    onBack = onBack,
+                    showBack = showBack,
+                    onSearchClick = { isSearchActive = true }
+                )
+            }
         }
     ) { padding ->
         Column(
@@ -209,46 +240,33 @@ private fun CustomersScreenM3(
                 .padding(padding)
                 .padding(start = 12.dp, end = 12.dp, top = 12.dp)
         ) {
-            SearchField(
-                queryText = queryText,
-                onQueryTextChange = { queryText = it }
-            )
-
-            Spacer(Modifier.height(6.dp))
-
-            FilterSortBar(
+            CustomerListControlRow(
                 selectedFilter = selectedFilter,
-                onFilterChange = { selectedFilter = it },
-                onSortMenuToggle = { isSortMenuOpen = !isSortMenuOpen }
-            )
-
-            SortMenu(
-                expanded = isSortMenuOpen,
                 selectedSort = selectedSort,
-                onDismiss = { isSortMenuOpen = false },
-                onSelect = {
-                    selectedSort = it
-                    isSortMenuOpen = false
-                }
+                hideZeroBalances = hideZeroBalances,
+                showInactive = showInactive,
+                onFilterClick = { showFilterSheet = true },
+                onSortClick = { showSortSheet = true },
+                onToggleHideZero = { hideZeroBalances = !hideZeroBalances },
+                onToggleShowInactive = { showInactive = !showInactive }
             )
 
-            Spacer(Modifier.height(6.dp))
-
-            FlowRow(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                FilterChip(
-                    selected = hideZeroBalances,
-                    onClick = { hideZeroBalances = !hideZeroBalances },
-                    label = { Text(stringResource(R.string.customer_hide_zero_balances)) }
-                )
-                FilterChip(
-                    selected = showInactive,
-                    onClick = { showInactive = !showInactive },
-                    label = { Text(stringResource(R.string.customer_show_inactive_no_orders)) }
-                )
+            if (hasActiveControls) {
+                Spacer(Modifier.height(6.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = stringResource(R.string.customer_filters_active),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    TextButton(onClick = resetFiltersAndSort) {
+                        Text(text = stringResource(R.string.customer_reset_filters))
+                    }
+                }
             }
 
             Spacer(Modifier.height(6.dp))
@@ -281,12 +299,14 @@ private fun CustomersScreenM3(
             if (filteredCustomers.isEmpty()) {
                 EmptyCustomersState(
                     isSearching = queryText.isNotBlank(),
+                    hasActiveFilters = hasActiveFilters,
+                    onClearFilters = resetFiltersAndSort,
                     onAddCustomer = onAddCustomer
                 )
             } else {
                 LazyColumn(
                     verticalArrangement = Arrangement.spacedBy(6.dp),
-                    contentPadding = PaddingValues(bottom = 0.dp)
+                    contentPadding = PaddingValues(bottom = 16.dp)
                 ) {
                     items(filteredCustomers, key = { it.customerId }) { customer ->
                         CustomerRowItem(
@@ -393,6 +413,22 @@ private fun CustomersScreenM3(
             dismissButton = {
                 TextButton(onClick = { pendingArchiveCustomer = null }) { Text(stringResource(R.string.action_cancel)) }
             }
+        )
+    }
+
+    if (showFilterSheet) {
+        CustomerFilterSheet(
+            selectedFilter = selectedFilter,
+            onSelect = { selectedFilter = it },
+            onDismiss = { showFilterSheet = false }
+        )
+    }
+
+    if (showSortSheet) {
+        CustomerSortSheet(
+            selectedSort = selectedSort,
+            onSelect = { selectedSort = it },
+            onDismiss = { showSortSheet = false }
         )
     }
 }
