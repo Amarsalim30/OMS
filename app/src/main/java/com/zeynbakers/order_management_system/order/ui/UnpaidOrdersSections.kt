@@ -46,7 +46,11 @@ import kotlinx.datetime.minus
 import kotlinx.datetime.toJavaLocalDate
 
 @Composable
-internal fun SummaryCard(count: Int, totalOutstanding: BigDecimal) {
+internal fun SummaryCard(
+    count: Int,
+    totalOutstanding: BigDecimal,
+    hideBalances: Boolean
+) {
     AppCard(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(4.dp),
@@ -60,7 +64,12 @@ internal fun SummaryCard(count: Int, totalOutstanding: BigDecimal) {
                     color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
                 )
                 Text(
-                    text = formatKes(totalOutstanding),
+                    text =
+                        if (hideBalances) {
+                            stringResource(R.string.money_amount_hidden)
+                        } else {
+                            formatKes(totalOutstanding)
+                        },
                     style = MaterialTheme.typography.headlineMedium,
                     fontWeight = FontWeight.Bold,
                     fontFamily = FontFamily.Monospace,
@@ -142,6 +151,7 @@ internal fun UnpaidOrderRow(
     customerLabel: String?,
     paidAmount: BigDecimal,
     balance: BigDecimal,
+    hideBalances: Boolean,
     onOpenDay: () -> Unit,
     onReceivePayment: () -> Unit
 ) {
@@ -203,7 +213,12 @@ internal fun UnpaidOrderRow(
 
                         Column(horizontalAlignment = Alignment.End) {
                             Text(
-                                text = formatKes(balance),
+                                text =
+                                    if (hideBalances) {
+                                        stringResource(R.string.money_amount_hidden)
+                                    } else {
+                                        formatKes(balance)
+                                    },
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold,
                                 fontFamily = FontFamily.Monospace,
@@ -216,7 +231,15 @@ internal fun UnpaidOrderRow(
                             )
                             if (paidAmount > BigDecimal.ZERO) {
                                 Text(
-                                    text = stringResource(R.string.unpaid_paid_amount, formatKes(paidAmount)),
+                                    text =
+                                        if (hideBalances) {
+                                            stringResource(
+                                                R.string.unpaid_paid_amount,
+                                                stringResource(R.string.money_amount_hidden)
+                                            )
+                                        } else {
+                                            stringResource(R.string.unpaid_paid_amount, formatKes(paidAmount))
+                                        },
                                     style = MaterialTheme.typography.labelSmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )

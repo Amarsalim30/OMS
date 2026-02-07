@@ -8,6 +8,8 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.MoneyOff
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.ShoppingBag
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.outlined.Payments
 import androidx.compose.material3.*
@@ -41,7 +43,9 @@ internal fun StatementHeader(
     customerName: String,
     phone: String,
     rangeLabel: String,
+    hideAmounts: Boolean,
     showReversals: Boolean,
+    onToggleHideAmounts: () -> Unit,
     onToggleReversals: () -> Unit,
     onChangeCustomer: () -> Unit,
     onOpenAllLedger: () -> Unit
@@ -60,6 +64,22 @@ internal fun StatementHeader(
                     text = rangeLabel,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            IconButton(onClick = onToggleHideAmounts) {
+                Icon(
+                    imageVector =
+                        if (hideAmounts) {
+                            Icons.Filled.VisibilityOff
+                        } else {
+                            Icons.Filled.Visibility
+                        },
+                    contentDescription =
+                        if (hideAmounts) {
+                            stringResource(R.string.action_show_balances)
+                        } else {
+                            stringResource(R.string.action_hide_balances)
+                        }
                 )
             }
             TextButton(onClick = onChangeCustomer) { Text(stringResource(R.string.action_change)) }
@@ -193,6 +213,7 @@ internal fun StatementSummaryCard(
     payments: BigDecimal,
     writeOffs: BigDecimal,
     reversals: BigDecimal,
+    hideAmounts: Boolean,
     showReversals: Boolean,
     closingBalance: BigDecimal
 ) {
@@ -200,27 +221,35 @@ internal fun StatementSummaryCard(
         Column(modifier = Modifier.fillMaxWidth()) {
             Text(text = stringResource(R.string.money_statement_summary_title), style = MaterialTheme.typography.titleSmall)
             Spacer(Modifier.height(6.dp))
-            SummaryRow(label = stringResource(R.string.money_statement_opening_balance), amount = formatKes(openingBalance))
-            SummaryRow(label = stringResource(R.string.money_statement_charges), amount = formatKes(charges))
-            SummaryRow(label = stringResource(R.string.money_statement_payments), amount = formatKes(payments))
-            SummaryRow(label = stringResource(R.string.money_statement_write_offs), amount = formatKes(writeOffs))
+            SummaryRow(label = stringResource(R.string.money_statement_opening_balance), amount = formatKes(openingBalance), hideAmounts = hideAmounts)
+            SummaryRow(label = stringResource(R.string.money_statement_charges), amount = formatKes(charges), hideAmounts = hideAmounts)
+            SummaryRow(label = stringResource(R.string.money_statement_payments), amount = formatKes(payments), hideAmounts = hideAmounts)
+            SummaryRow(label = stringResource(R.string.money_statement_write_offs), amount = formatKes(writeOffs), hideAmounts = hideAmounts)
             if (showReversals) {
-                SummaryRow(label = stringResource(R.string.money_statement_reversals), amount = formatKes(reversals))
+                SummaryRow(label = stringResource(R.string.money_statement_reversals), amount = formatKes(reversals), hideAmounts = hideAmounts)
             }
             Spacer(Modifier.height(4.dp))
-            SummaryRow(label = stringResource(R.string.money_statement_closing_balance), amount = formatKes(closingBalance))
+            SummaryRow(label = stringResource(R.string.money_statement_closing_balance), amount = formatKes(closingBalance), hideAmounts = hideAmounts)
         }
     }
 }
 
 @Composable
-internal fun SummaryRow(label: String, amount: String) {
+internal fun SummaryRow(label: String, amount: String, hideAmounts: Boolean) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
         Text(text = label, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Text(text = amount, style = MaterialTheme.typography.bodySmall)
+        Text(
+            text =
+                if (hideAmounts) {
+                    stringResource(R.string.money_amount_hidden)
+                } else {
+                    amount
+                },
+            style = MaterialTheme.typography.bodySmall
+        )
     }
 }
 
@@ -234,7 +263,12 @@ internal fun rangeTypeOptions(): List<AppFilterOption> {
 }
 
 @Composable
-internal fun StatementEntryRow(entry: StatementEntryUi, orderLabel: String?) {
+internal fun StatementEntryRow(
+    modifier: Modifier = Modifier,
+    entry: StatementEntryUi,
+    hideAmounts: Boolean,
+    orderLabel: String?
+) {
     val typeLabel =
         when (entry.entry.type) {
             EntryType.DEBIT -> stringResource(R.string.money_entry_order)
@@ -267,7 +301,7 @@ internal fun StatementEntryRow(entry: StatementEntryUi, orderLabel: String?) {
         EntryType.REVERSAL -> Icons.Filled.Warning
     }
 
-    AppCard {
+    AppCard(modifier = modifier) {
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.Top
@@ -298,7 +332,12 @@ internal fun StatementEntryRow(entry: StatementEntryUi, orderLabel: String?) {
                         color = MaterialTheme.colorScheme.onSurface
                     )
                     Text(
-                        text = "$sign ${formatKes(entry.entry.amount)}",
+                        text =
+                            if (hideAmounts) {
+                                stringResource(R.string.money_amount_hidden)
+                            } else {
+                                "$sign ${formatKes(entry.entry.amount)}"
+                            },
                         style = MaterialTheme.typography.titleSmall,
                         color = amountColor,
                         fontWeight = FontWeight.Bold
@@ -333,11 +372,16 @@ internal fun StatementEntryRow(entry: StatementEntryUi, orderLabel: String?) {
                     }
                     
                     Text(
-                        text = stringResource(
-                            R.string.money_balance_label,
-                            balanceSign,
-                            formatKes(entry.runningBalance.abs())
-                        ),
+                        text =
+                            if (hideAmounts) {
+                                stringResource(R.string.money_amount_hidden)
+                            } else {
+                                stringResource(
+                                    R.string.money_balance_label,
+                                    balanceSign,
+                                    formatKes(entry.runningBalance.abs())
+                                )
+                            },
                         style = MaterialTheme.typography.labelSmall,
                         color = balanceColor,
                         modifier = Modifier.padding(start = 8.dp)
@@ -351,6 +395,7 @@ internal fun StatementEntryRow(entry: StatementEntryUi, orderLabel: String?) {
 @Composable
 internal fun StatementCustomerRow(
     customer: CustomerAccountSummary,
+    hideAmounts: Boolean,
     onClick: () -> Unit
 ) {
     Surface(
@@ -383,11 +428,20 @@ internal fun StatementCustomerRow(
                 }
                 Spacer(Modifier.height(6.dp))
                 Text(
-                    text = stringResource(
-                        R.string.money_billed_paid,
-                        formatKes(customer.billed),
-                        formatKes(customer.paid)
-                    ),
+                    text =
+                        if (hideAmounts) {
+                            stringResource(
+                                R.string.money_billed_paid,
+                                stringResource(R.string.money_amount_hidden),
+                                stringResource(R.string.money_amount_hidden)
+                            )
+                        } else {
+                            stringResource(
+                                R.string.money_billed_paid,
+                                formatKes(customer.billed),
+                                formatKes(customer.paid)
+                            )
+                        },
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
@@ -395,13 +449,13 @@ internal fun StatementCustomerRow(
                 )
             }
             Spacer(Modifier.width(8.dp))
-            BalanceChip(balance = customer.balance)
+            BalanceChip(balance = customer.balance, hideAmounts = hideAmounts)
         }
     }
 }
 
 @Composable
-internal fun BalanceChip(balance: BigDecimal) {
+internal fun BalanceChip(balance: BigDecimal, hideAmounts: Boolean) {
     val (label, color) =
         when {
             balance > BigDecimal.ZERO -> stringResource(R.string.money_balance_due) to MaterialTheme.colorScheme.errorContainer
@@ -419,7 +473,15 @@ internal fun BalanceChip(balance: BigDecimal) {
         ) {
             Text(text = label, style = MaterialTheme.typography.labelSmall)
             Spacer(Modifier.width(4.dp))
-            Text(text = formatKes(balance.abs()), style = MaterialTheme.typography.labelLarge)
+            Text(
+                text =
+                    if (hideAmounts) {
+                        stringResource(R.string.money_amount_hidden)
+                    } else {
+                        formatKes(balance.abs())
+                    },
+                style = MaterialTheme.typography.labelLarge
+            )
         }
     }
 }

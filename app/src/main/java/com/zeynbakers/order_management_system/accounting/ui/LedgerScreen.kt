@@ -17,6 +17,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
@@ -32,6 +34,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -63,6 +66,7 @@ fun LedgerScreen(
     val entries by viewModel.entries.collectAsState()
     val summary by viewModel.summary.collectAsState()
     var filter by remember { mutableStateOf(LedgerFilter.All) }
+    var hideAmounts by rememberSaveable { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         viewModel.load()
@@ -90,6 +94,24 @@ fun LedgerScreen(
                         IconButton(onClick = onBack) {
                             Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.action_back))
                         }
+                    },
+                    actions = {
+                        IconButton(onClick = { hideAmounts = !hideAmounts }) {
+                            Icon(
+                                imageVector =
+                                    if (hideAmounts) {
+                                        Icons.Filled.VisibilityOff
+                                    } else {
+                                        Icons.Filled.Visibility
+                                    },
+                                contentDescription =
+                                    if (hideAmounts) {
+                                        stringResource(R.string.action_show_balances)
+                                    } else {
+                                        stringResource(R.string.action_hide_balances)
+                                    }
+                            )
+                        }
                     }
                 )
             }
@@ -101,7 +123,7 @@ fun LedgerScreen(
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             item {
-                LedgerSummaryCard(summary = summary)
+                LedgerSummaryCard(summary = summary, hideAmounts = hideAmounts)
             }
 
             item {
@@ -125,7 +147,7 @@ fun LedgerScreen(
                 item { EmptyLedgerState() }
             } else {
                 items(filtered, key = { it.id }) { entry ->
-                    LedgerEntryCard(entry = entry)
+                    LedgerEntryCard(entry = entry, hideAmounts = hideAmounts)
                 }
             }
         }
@@ -133,7 +155,7 @@ fun LedgerScreen(
 }
 
 @Composable
-private fun LedgerSummaryCard(summary: LedgerSummaryUi?) {
+private fun LedgerSummaryCard(summary: LedgerSummaryUi?, hideAmounts: Boolean) {
     Surface(
         tonalElevation = 2.dp,
         shape = MaterialTheme.shapes.large,
@@ -149,30 +171,38 @@ private fun LedgerSummaryCard(summary: LedgerSummaryUi?) {
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             } else {
-                LedgerSummaryRow(label = stringResource(R.string.ledger_filter_charges), amount = formatKes(summary.totalDebits))
-                LedgerSummaryRow(label = stringResource(R.string.ledger_filter_payments), amount = formatKes(summary.totalCredits))
-                LedgerSummaryRow(label = stringResource(R.string.ledger_write_offs), amount = formatKes(summary.totalWriteOffs))
-                LedgerSummaryRow(label = stringResource(R.string.ledger_reversals), amount = formatKes(summary.totalReversals))
+                LedgerSummaryRow(label = stringResource(R.string.ledger_filter_charges), amount = formatKes(summary.totalDebits), hideAmounts = hideAmounts)
+                LedgerSummaryRow(label = stringResource(R.string.ledger_filter_payments), amount = formatKes(summary.totalCredits), hideAmounts = hideAmounts)
+                LedgerSummaryRow(label = stringResource(R.string.ledger_write_offs), amount = formatKes(summary.totalWriteOffs), hideAmounts = hideAmounts)
+                LedgerSummaryRow(label = stringResource(R.string.ledger_reversals), amount = formatKes(summary.totalReversals), hideAmounts = hideAmounts)
                 Spacer(Modifier.height(4.dp))
-                LedgerSummaryRow(label = stringResource(R.string.ledger_net_balance), amount = formatKes(summary.netBalance))
+                LedgerSummaryRow(label = stringResource(R.string.ledger_net_balance), amount = formatKes(summary.netBalance), hideAmounts = hideAmounts)
             }
         }
     }
 }
 
 @Composable
-private fun LedgerSummaryRow(label: String, amount: String) {
+private fun LedgerSummaryRow(label: String, amount: String, hideAmounts: Boolean) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
         Text(text = label, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        Text(text = amount, style = MaterialTheme.typography.bodySmall)
+        Text(
+            text =
+                if (hideAmounts) {
+                    stringResource(R.string.money_amount_hidden)
+                } else {
+                    amount
+                },
+            style = MaterialTheme.typography.bodySmall
+        )
     }
 }
 
 @Composable
-private fun LedgerEntryCard(entry: LedgerEntryUi) {
+private fun LedgerEntryCard(entry: LedgerEntryUi, hideAmounts: Boolean) {
     val typeLabel = entryTypeLabel(entry.type)
     val amountColor = ledgerEntryTypeColor(entry.type)
     val sign = if (entry.type == EntryType.DEBIT || entry.type == EntryType.REVERSAL) "+" else "-"
@@ -194,7 +224,12 @@ private fun LedgerEntryCard(entry: LedgerEntryUi) {
                 }
                 Spacer(Modifier.width(8.dp))
                 Text(
-                    text = "$sign ${formatKes(entry.amount)}",
+                    text =
+                        if (hideAmounts) {
+                            stringResource(R.string.money_amount_hidden)
+                        } else {
+                            "$sign ${formatKes(entry.amount)}"
+                        },
                     style = MaterialTheme.typography.titleMedium,
                     color = amountColor
                 )

@@ -138,6 +138,7 @@ fun CustomerStatementsScreen(
     var customEnd by rememberSaveable { mutableStateOf("") }
     var showAllLedger by rememberSaveable { mutableStateOf(false) }
     var showReversals by rememberSaveable { mutableStateOf(false) }
+    var hideAmounts by rememberSaveable { mutableStateOf(false) }
     var isMenuOpen by remember { mutableStateOf(false) }
 
     LaunchedEffect(initialCustomerId) {
@@ -355,6 +356,7 @@ fun CustomerStatementsScreen(
                         items(summaries, key = { it.customerId }) { summary ->
                             StatementCustomerRow(
                                 customer = summary,
+                                hideAmounts = hideAmounts,
                                 onClick = { activeCustomerId = summary.customerId }
                             )
                         }
@@ -380,7 +382,9 @@ fun CustomerStatementsScreen(
                         customerName = customerName,
                         phone = phone,
                         rangeLabel = range.label,
+                        hideAmounts = hideAmounts,
                         showReversals = showReversals,
+                        onToggleHideAmounts = { hideAmounts = !hideAmounts },
                         onToggleReversals = { showReversals = !showReversals },
                         onChangeCustomer = { activeCustomerId = null },
                         onOpenAllLedger = { showAllLedger = true }
@@ -413,6 +417,7 @@ fun CustomerStatementsScreen(
                         payments = totals.payments,
                         writeOffs = totals.writeOffs,
                         reversals = totals.reversals,
+                        hideAmounts = hideAmounts,
                         showReversals = showReversals,
                         closingBalance = closingBalance
                     )
@@ -427,7 +432,11 @@ fun CustomerStatementsScreen(
                 } else {
                     items(displayEntries, key = { it.entry.id }) { entry ->
                         val orderLabel = entry.entry.orderId?.let { orderLabels[it] }
-                        StatementEntryRow(entry = entry, orderLabel = orderLabel)
+                        StatementEntryRow(
+                            entry = entry,
+                            hideAmounts = hideAmounts,
+                            orderLabel = orderLabel
+                        )
                     }
                 }
             }

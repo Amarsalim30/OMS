@@ -103,6 +103,8 @@
     <string name="action_expand">Expand</string>
     <string name="action_show_reversals">Show reversals</string>
     <string name="action_hide_reversals">Hide reversals</string>
+    <string name="action_show_balances">Show balances</string>
+    <string name="action_hide_balances">Hide balances</string>
     <string name="action_more_filters">More filters</string>
     <string name="payment_saved">Payment saved</string>
     <string name="customers_title">Customers</string>
@@ -366,6 +368,7 @@
     <string name="money_applied_existing_duplicates">Already recorded: %1$d</string>
     <string name="money_applied_intake_duplicates">Import duplicates: %1$d</string>
     <string name="money_applied_missing_customer">Missing customer: %1$d</string>
+    <string name="money_amount_hidden">****</string>
     <string name="money_filter_all_short">All</string>
     <string name="money_filter_needs_short">Needs</string>
     <string name="money_filter_duplicates_short">Duplicates</string>
