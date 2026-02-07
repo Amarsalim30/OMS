@@ -48,10 +48,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.zeynbakers.order_management_system.R
 import com.zeynbakers.order_management_system.core.ui.components.AppCard
 import com.zeynbakers.order_management_system.core.util.formatKes
 import java.math.BigDecimal
@@ -84,12 +86,18 @@ internal fun CalendarTopAppBar(
                     softWrap = false,
                     overflow = TextOverflow.Ellipsis
                 )
-                Icon(imageVector = Icons.Filled.ArrowDropDown, contentDescription = "Select month")
+                Icon(
+                    imageVector = Icons.Filled.ArrowDropDown,
+                    contentDescription = stringResource(R.string.calendar_select_month)
+                )
             }
         },
         navigationIcon = {
             IconButton(onClick = onSummaryClick) {
-                Icon(imageVector = Icons.Filled.BarChart, contentDescription = "Summary")
+                Icon(
+                    imageVector = Icons.Filled.BarChart,
+                    contentDescription = stringResource(R.string.calendar_summary)
+                )
             }
         },
         actions = {
@@ -97,7 +105,7 @@ internal fun CalendarTopAppBar(
                 Box(modifier = Modifier.size(24.dp)) {
                     Icon(
                         imageVector = Icons.Filled.CalendarToday,
-                        contentDescription = "Today",
+                        contentDescription = stringResource(R.string.calendar_today),
                         modifier = Modifier.fillMaxSize()
                     )
                     Text(
@@ -149,7 +157,10 @@ internal fun MonthPickerSheet(
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 IconButton(onClick = { pickerYear -= 1 }) {
-                    Icon(imageVector = Icons.Filled.ChevronLeft, contentDescription = "Previous year")
+                    Icon(
+                        imageVector = Icons.Filled.ChevronLeft,
+                        contentDescription = stringResource(R.string.calendar_previous_year)
+                    )
                 }
                 Text(
                     text = pickerYear.toString(),
@@ -157,7 +168,10 @@ internal fun MonthPickerSheet(
                     fontWeight = FontWeight.SemiBold
                 )
                 IconButton(onClick = { pickerYear += 1 }) {
-                    Icon(imageVector = Icons.Filled.ChevronRight, contentDescription = "Next year")
+                    Icon(
+                        imageVector = Icons.Filled.ChevronRight,
+                        contentDescription = stringResource(R.string.calendar_next_year)
+                    )
                 }
             }
             LazyVerticalGrid(
@@ -224,11 +238,11 @@ internal fun MonthSummaryCard(
         ) {
             Column {
                 Text(
-                    text = "Month total",
+                    text = stringResource(R.string.calendar_month_total),
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                val totalLabel = monthTotal?.let { formatKes(it) } ?: "Loading..."
+                val totalLabel = monthTotal?.let { formatKes(it) } ?: stringResource(R.string.calendar_loading)
                 Text(text = totalLabel, style = MaterialTheme.typography.titleMedium)
             }
             Row(
@@ -241,14 +255,14 @@ internal fun MonthSummaryCard(
                         color = MaterialTheme.colorScheme.surfaceVariant
                     ) {
                         Text(
-                            text = "No orders",
+                            text = stringResource(R.string.calendar_no_orders),
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
                         )
                     }
                     TextButton(onClick = onAddOrder) {
-                        Text("Add order")
+                        Text(stringResource(R.string.calendar_add_order))
                     }
                 } else if (dueCount > 0) {
                     Surface(
@@ -257,7 +271,7 @@ internal fun MonthSummaryCard(
                         modifier = Modifier.clickable(role = Role.Button) { onDueClick() }
                     ) {
                         Text(
-                            text = "Unpaid $dueCount",
+                            text = stringResource(R.string.calendar_unpaid_count, dueCount),
                             style = MaterialTheme.typography.labelMedium,
                             color = MaterialTheme.colorScheme.onErrorContainer,
                             modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
@@ -267,7 +281,7 @@ internal fun MonthSummaryCard(
                 IconButton(onClick = onLegendClick) {
                     Icon(
                         imageVector = Icons.Filled.Info,
-                        contentDescription = "Payment status info",
+                        contentDescription = stringResource(R.string.calendar_payment_status_info),
                         tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
@@ -296,23 +310,23 @@ internal fun LegendInfoSheet(
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Text(
-                text = "Payment status",
+                text = stringResource(R.string.calendar_payment_status),
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.SemiBold
             )
             StatusLegendRow()
             Text(
-                text = "Unpaid includes partial balances.",
+                text = stringResource(R.string.calendar_unpaid_includes_partial),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Text(
-                text = "Tip: Tap a day to view details. Long-press to add an order.",
+                text = stringResource(R.string.calendar_tip_tap_day),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Text(
-                text = "Week starts on",
+                text = stringResource(R.string.calendar_week_starts_on),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -320,17 +334,17 @@ internal fun LegendInfoSheet(
                 FilterChip(
                     selected = weekStart == systemWeekStart,
                     onClick = { onWeekStartChange(null) },
-                    label = { Text("System") }
+                    label = { Text(stringResource(R.string.calendar_week_start_system)) }
                 )
                 FilterChip(
                     selected = weekStart == Calendar.MONDAY,
                     onClick = { onWeekStartChange(Calendar.MONDAY) },
-                    label = { Text("Mon") }
+                    label = { Text(stringResource(R.string.calendar_week_start_mon)) }
                 )
                 FilterChip(
                     selected = weekStart == Calendar.SUNDAY,
                     onClick = { onWeekStartChange(Calendar.SUNDAY) },
-                    label = { Text("Sun") }
+                    label = { Text(stringResource(R.string.calendar_week_start_sun)) }
                 )
             }
         }
@@ -346,10 +360,10 @@ private fun StatusLegendRow() {
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        LegendItem(label = "Unpaid", state = PaymentState.UNPAID)
-        LegendItem(label = "Partial", state = PaymentState.PARTIAL)
-        LegendItem(label = "Paid", state = PaymentState.PAID)
-        LegendItem(label = "Overpaid", state = PaymentState.OVERPAID)
+        LegendItem(label = stringResource(R.string.day_status_unpaid), state = PaymentState.UNPAID)
+        LegendItem(label = stringResource(R.string.day_status_partial), state = PaymentState.PARTIAL)
+        LegendItem(label = stringResource(R.string.day_status_paid), state = PaymentState.PAID)
+        LegendItem(label = stringResource(R.string.day_status_overpaid), state = PaymentState.OVERPAID)
     }
 }
 

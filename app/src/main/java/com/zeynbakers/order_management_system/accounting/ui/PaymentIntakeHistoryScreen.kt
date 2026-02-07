@@ -228,7 +228,7 @@ fun PaymentIntakeHistoryScreen(
                         if (moveMode == MoveMode.ORDER) {
                             if (moveOrders.isEmpty()) {
                                 Text(
-                                    text = "No orders found for this customer.",
+                                    text = stringResource(R.string.money_no_orders_found_for_customer),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -299,8 +299,15 @@ private fun PaymentHistoryRow(
     onMove: () -> Unit,
     onVoid: () -> Unit
 ) {
-    val methodLabel = if (item.method == PaymentMethod.MPESA) "M-PESA" else "Cash"
-    val codeLabel = item.transactionCode?.let { "$methodLabel $it" } ?: methodLabel
+    val methodLabel =
+        if (item.method == PaymentMethod.MPESA) {
+            stringResource(R.string.money_method_mpesa)
+        } else {
+            stringResource(R.string.money_method_cash)
+        }
+    val codeLabel =
+        item.transactionCode?.let { stringResource(R.string.money_method_code, methodLabel, it) }
+            ?: methodLabel
     val orderAllocations =
         item.allocations.filter { it.orderId != null && it.status == PaymentAllocationStatus.APPLIED }
     val orderLabel =
@@ -315,14 +322,16 @@ private fun PaymentHistoryRow(
                     notes = allocation.orderNotes,
                     totalAmount = null
                 )
-                allocation.orderId?.let { "$label (ID $it)" } ?: label
+                allocation.orderId?.let {
+                    stringResource(R.string.money_order_with_id, label, it)
+                } ?: label
             }
-            else -> "Orders (${orderAllocations.size})"
+            else -> stringResource(R.string.money_orders_count, orderAllocations.size)
         }
     val customerLabel =
         item.customerName
-            ?: item.customerId?.let { "Customer #$it" }
-            ?: "Customer"
+            ?: item.customerId?.let { stringResource(R.string.money_customer_id_fallback, it) }
+            ?: stringResource(R.string.money_customer)
     val targetLabel = orderLabel ?: customerLabel
     val statusLabel = item.status.label()
     val statusColor = item.status.color()
@@ -336,11 +345,16 @@ private fun PaymentHistoryRow(
         ) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = "${formatDateTime(item.receivedAt)} - ${formatKes(item.displayAmount)}",
+                    text =
+                        stringResource(
+                            R.string.money_row_datetime_amount,
+                            formatDateTime(item.receivedAt),
+                            formatKes(item.displayAmount)
+                        ),
                     style = MaterialTheme.typography.titleSmall
                 )
                 Text(
-                    text = "$codeLabel - $targetLabel",
+                    text = stringResource(R.string.money_row_code_target, codeLabel, targetLabel),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
@@ -357,19 +371,17 @@ private fun PaymentHistoryRow(
             Column(horizontalAlignment = androidx.compose.ui.Alignment.End) {
                 StatusPill(label = statusLabel, color = statusColor)
                 Spacer(modifier = Modifier.height(6.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    TextButton(
-                        onClick = onMove,
-                        enabled = item.customerId != null
-                    ) {
-                        Text(stringResource(R.string.action_move))
-                    }
-                    TextButton(
-                        onClick = onVoid,
-                        enabled = item.status != PaymentReceiptStatus.VOIDED
-                    ) {
-                        Text(stringResource(R.string.action_void))
-                    }
+                TextButton(
+                    onClick = onMove,
+                    enabled = item.customerId != null
+                ) {
+                    Text(stringResource(R.string.action_move))
+                }
+                TextButton(
+                    onClick = onVoid,
+                    enabled = item.status != PaymentReceiptStatus.VOIDED
+                ) {
+                    Text(stringResource(R.string.action_void))
                 }
             }
         }
@@ -416,9 +428,12 @@ private fun ErrorHistoryState(message: String) {
 @Composable
 private fun moveModeOptions(): List<AppFilterOption> {
     return listOf(
-        AppFilterOption(MoveMode.ORDER.name, "Order"),
+        AppFilterOption(MoveMode.ORDER.name, stringResource(R.string.money_move_mode_order)),
         AppFilterOption(MoveMode.OLDEST_ORDERS.name, stringResource(R.string.money_oldest_orders)),
-        AppFilterOption(MoveMode.CUSTOMER_CREDIT.name, "Customer credit")
+        AppFilterOption(
+            MoveMode.CUSTOMER_CREDIT.name,
+            stringResource(R.string.money_move_mode_customer_credit)
+        )
     )
 }
 
@@ -428,12 +443,13 @@ private enum class MoveMode {
     CUSTOMER_CREDIT
 }
 
+@Composable
 private fun PaymentReceiptStatus.label(): String {
     return when (this) {
-        PaymentReceiptStatus.UNAPPLIED -> "Not used"
-        PaymentReceiptStatus.PARTIAL -> "Part used"
-        PaymentReceiptStatus.APPLIED -> "Used"
-        PaymentReceiptStatus.VOIDED -> "Voided"
+        PaymentReceiptStatus.UNAPPLIED -> stringResource(R.string.money_receipt_status_not_used)
+        PaymentReceiptStatus.PARTIAL -> stringResource(R.string.money_receipt_status_part_used)
+        PaymentReceiptStatus.APPLIED -> stringResource(R.string.money_receipt_status_used)
+        PaymentReceiptStatus.VOIDED -> stringResource(R.string.money_receipt_status_voided)
     }
 }
 

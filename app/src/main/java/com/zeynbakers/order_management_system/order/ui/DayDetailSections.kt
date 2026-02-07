@@ -27,10 +27,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.zeynbakers.order_management_system.R
 import com.zeynbakers.order_management_system.core.ui.components.AppCard
 import com.zeynbakers.order_management_system.core.ui.components.AppEmptyState
 import com.zeynbakers.order_management_system.core.util.formatKes
@@ -46,7 +48,12 @@ internal fun DaySummaryCard(
 ) {
     val monthLabel = titleCase(date.month.name)
     val dayOfWeekLabel = titleCase(date.dayOfWeek.name)
-    val balanceLabel = if (stats.balance.signum() >= 0) "Balance" else "Over"
+    val balanceLabel =
+        if (stats.balance.signum() >= 0) {
+            stringResource(R.string.day_balance_label)
+        } else {
+            stringResource(R.string.day_over_label)
+        }
     val balanceValue = formatKes(stats.balance.abs())
 
     Surface(
@@ -99,7 +106,7 @@ internal fun DaySummaryCard(
 
                 Column(horizontalAlignment = Alignment.End) {
                     Text(
-                        text = "Total",
+                        text = stringResource(R.string.day_total_label),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -117,7 +124,7 @@ internal fun DaySummaryCard(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                SummaryMetric(label = "Paid", value = formatKes(stats.totalPaid))
+                SummaryMetric(label = stringResource(R.string.day_paid_label), value = formatKes(stats.totalPaid))
                 SummaryMetric(label = balanceLabel, value = balanceValue)
             }
 
@@ -131,34 +138,34 @@ internal fun DaySummaryCard(
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 SummaryChip(
-                    label = "Orders",
+                    label = stringResource(R.string.day_orders_label),
                     count = stats.orderCount,
                     color = MaterialTheme.colorScheme.primary
                 )
                 if (stats.paidCount > 0) {
                     SummaryChip(
-                        label = "Paid",
+                        label = stringResource(R.string.day_status_paid),
                         count = stats.paidCount,
                         color = paymentStateColor(PaymentState.PAID)
                     )
                 }
                 if (stats.partialCount > 0) {
                     SummaryChip(
-                        label = "Partial",
+                        label = stringResource(R.string.day_status_partial),
                         count = stats.partialCount,
                         color = paymentStateColor(PaymentState.PARTIAL)
                     )
                 }
                 if (stats.unpaidCount > 0) {
                     SummaryChip(
-                        label = "Unpaid",
+                        label = stringResource(R.string.day_status_unpaid),
                         count = stats.unpaidCount,
                         color = paymentStateColor(PaymentState.UNPAID)
                     )
                 }
                 if (stats.overpaidCount > 0) {
                     SummaryChip(
-                        label = "Overpaid",
+                        label = stringResource(R.string.day_status_overpaid),
                         count = stats.overpaidCount,
                         color = paymentStateColor(PaymentState.OVERPAID)
                     )
@@ -191,7 +198,7 @@ private fun SummaryChip(label: String, count: Int, color: Color) {
         color = color.copy(alpha = 0.15f)
     ) {
         Text(
-            text = "$label $count",
+            text = stringResource(R.string.day_chip_count, label, count),
             style = MaterialTheme.typography.labelMedium,
             color = color,
             modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
@@ -230,13 +237,17 @@ internal fun OrderListItem(
     val showReceive = paymentState == PaymentState.UNPAID || paymentState == PaymentState.PARTIAL
     val detailLabel =
         when (paymentState) {
-            PaymentState.UNPAID -> "Balance due ${formatKes(order.totalAmount)}"
-            PaymentState.PARTIAL -> "Balance due ${formatKes(balance)}"
-            PaymentState.OVERPAID -> "Overpaid by ${formatKes(paidAmount.subtract(order.totalAmount))}"
-            PaymentState.PAID -> "Paid in full"
+            PaymentState.UNPAID -> stringResource(R.string.day_balance_due_amount, formatKes(order.totalAmount))
+            PaymentState.PARTIAL -> stringResource(R.string.day_balance_due_amount, formatKes(balance))
+            PaymentState.OVERPAID ->
+                stringResource(
+                    R.string.day_overpaid_by_amount,
+                    formatKes(paidAmount.subtract(order.totalAmount))
+                )
+            PaymentState.PAID -> stringResource(R.string.day_paid_in_full)
         }
     val customerTextColor =
-        if (customerLabel == "No customer") {
+        if (customerLabel == stringResource(R.string.day_no_customer)) {
             MaterialTheme.colorScheme.onSurfaceVariant
         } else {
             MaterialTheme.colorScheme.onSurface
@@ -312,18 +323,21 @@ internal fun OrderListItem(
                     horizontalArrangement = Arrangement.End
                 ) {
                     TextButton(onClick = onPaymentHistory) {
-                        Text("History")
+                        Text(stringResource(R.string.day_history))
                     }
                     if (showReceive) {
                         Spacer(Modifier.width(8.dp))
                         Button(onClick = onReceivePayment) {
-                            Text("Record payment")
+                            Text(stringResource(R.string.customer_action_record_payment))
                         }
                     }
                 }
             }
             IconButton(onClick = onDelete) {
-                Icon(imageVector = Icons.Filled.Delete, contentDescription = "Delete order")
+                Icon(
+                    imageVector = Icons.Filled.Delete,
+                    contentDescription = stringResource(R.string.day_delete_order)
+                )
             }
         }
     }

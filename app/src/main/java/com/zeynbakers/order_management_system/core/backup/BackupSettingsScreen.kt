@@ -11,6 +11,8 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.AlertDialog
@@ -37,11 +39,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
 import androidx.documentfile.provider.DocumentFile
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
+import com.zeynbakers.order_management_system.R
 import com.zeynbakers.order_management_system.core.ui.LocalUiEventDispatcher
 import com.zeynbakers.order_management_system.core.ui.showSnackbar
 import java.io.File
@@ -59,6 +63,16 @@ fun BackupSettingsScreen(
     onImportContacts: () -> Unit
 ) {
     val context = LocalContext.current
+    val backupStageDefault = stringResource(R.string.backup_stage_backing_up)
+    val restoreStageDefault = stringResource(R.string.backup_stage_restoring)
+    val backupCompleteMessage = stringResource(R.string.backup_complete)
+    val backupFailedMessage = stringResource(R.string.backup_failed)
+    val restoreCompleteMessage = stringResource(R.string.restore_complete_restart)
+    val restoreFailedMessage = stringResource(R.string.restore_failed)
+    val pickFolderFirstMessage = stringResource(R.string.backup_pick_folder_first)
+    val backupStartedMessage = stringResource(R.string.backup_started)
+    val noBackupFoundMessage = stringResource(R.string.backup_no_app_storage_backups)
+    val restoreStartedMessage = stringResource(R.string.restore_started)
     val prefs = remember { BackupPreferences(context) }
     var state by remember { mutableStateOf(prefs.readState()) }
     var appBackups by remember { mutableStateOf<List<File>>(emptyList()) }
@@ -110,8 +124,8 @@ fun BackupSettingsScreen(
     val isRestoreRunning = restoreInfo?.state == WorkInfo.State.RUNNING
     val backupProgress = backupInfo?.progress?.getInt(BackupScheduler.KEY_PROGRESS, 0) ?: 0
     val restoreProgress = restoreInfo?.progress?.getInt(BackupScheduler.KEY_PROGRESS, 0) ?: 0
-    val backupStage = backupInfo?.progress?.getString(BackupScheduler.KEY_STAGE) ?: "Backing up"
-    val restoreStage = restoreInfo?.progress?.getString(BackupScheduler.KEY_STAGE) ?: "Restoring"
+    val backupStage = backupInfo?.progress?.getString(BackupScheduler.KEY_STAGE) ?: backupStageDefault
+    val restoreStage = restoreInfo?.progress?.getString(BackupScheduler.KEY_STAGE) ?: restoreStageDefault
 
     LaunchedEffect(backupInfo?.state, restoreInfo?.state) {
         state = prefs.readState()
@@ -121,9 +135,9 @@ fun BackupSettingsScreen(
     LaunchedEffect(backupInfo?.state) {
         when (backupInfo?.state) {
             WorkInfo.State.SUCCEEDED ->
-                uiEvents.showSnackbar("Backup complete")
+                uiEvents.showSnackbar(backupCompleteMessage)
             WorkInfo.State.FAILED ->
-                uiEvents.showSnackbar("Backup failed")
+                uiEvents.showSnackbar(backupFailedMessage)
             else -> Unit
         }
     }
@@ -131,24 +145,24 @@ fun BackupSettingsScreen(
     LaunchedEffect(restoreInfo?.state) {
         when (restoreInfo?.state) {
             WorkInfo.State.SUCCEEDED ->
-                uiEvents.showSnackbar("Restore complete. Restart app.")
+                uiEvents.showSnackbar(restoreCompleteMessage)
             WorkInfo.State.FAILED ->
-                uiEvents.showSnackbar("Restore failed")
+                uiEvents.showSnackbar(restoreFailedMessage)
             else -> Unit
         }
     }
 
     val lastBackupLabel =
-        state.lastBackupTime?.let { formatTimestamp(it) } ?: "Never"
+        state.lastBackupTime?.let { formatTimestamp(it) } ?: stringResource(R.string.backup_status_never)
     val statusLabel =
         when (state.lastStatus) {
-            BackupStatus.Success -> "Success"
-            BackupStatus.Failed -> "Failed"
-            BackupStatus.Never -> "Never"
+            BackupStatus.Success -> stringResource(R.string.backup_status_success)
+            BackupStatus.Failed -> stringResource(R.string.backup_status_failed)
+            BackupStatus.Never -> stringResource(R.string.backup_status_never)
         }
     val targetLabel =
         if (state.targetType == BackupTargetType.AppPrivate) {
-            "App storage (private)"
+            stringResource(R.string.backup_target_app_storage_private)
         } else {
             val label =
                 state.targetUri?.let { uri ->
@@ -156,24 +170,32 @@ fun BackupSettingsScreen(
                         DocumentFile.fromTreeUri(context, uri.toUri())?.name
                     }.getOrNull()
                 }
-            label?.let { "Folder: $it" } ?: "Folder: Not selected"
+            label?.let { stringResource(R.string.backup_target_folder_named, it) }
+                ?: stringResource(R.string.backup_target_folder_not_selected)
         }
 
     Scaffold(
         contentWindowInsets = WindowInsets(0),
         topBar = {
             CenterAlignedTopAppBar(
-                title = { Text("Backup") },
+                title = { Text(stringResource(R.string.backup_title)) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = stringResource(R.string.action_back)
+                        )
                     }
                 }
             )
         }
     ) { padding ->
         Column(
-            modifier = Modifier.padding(padding).padding(12.dp),
+            modifier =
+                Modifier
+                    .padding(padding)
+                    .padding(12.dp)
+                    .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Row(
@@ -182,9 +204,12 @@ fun BackupSettingsScreen(
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Column {
-                    Text("Automatic daily backup", style = MaterialTheme.typography.titleMedium)
                     Text(
-                        text = "Runs once a day when battery and storage are OK.",
+                        stringResource(R.string.backup_automatic_daily),
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                    Text(
+                        text = stringResource(R.string.backup_automatic_daily_hint),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -193,7 +218,7 @@ fun BackupSettingsScreen(
                     checked = state.autoEnabled,
                     onCheckedChange = { enabled ->
                         if (enabled && state.targetType == BackupTargetType.SafDirectory && state.targetUri == null) {
-                            scope.launch { uiEvents.showSnackbar("Pick a backup folder first") }
+                            scope.launch { uiEvents.showSnackbar(pickFolderFirstMessage) }
                             folderPicker.launch(null)
                             return@Switch
                         }
@@ -204,9 +229,12 @@ fun BackupSettingsScreen(
             }
 
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(text = "Last backup: $lastBackupLabel", style = MaterialTheme.typography.bodyMedium)
                 Text(
-                    text = "Status: $statusLabel",
+                    text = stringResource(R.string.backup_last_backup, lastBackupLabel),
+                    style = MaterialTheme.typography.bodyMedium
+                )
+                Text(
+                    text = stringResource(R.string.backup_status, statusLabel),
                     style = MaterialTheme.typography.bodyMedium,
                     color =
                         when (state.lastStatus) {
@@ -225,7 +253,10 @@ fun BackupSettingsScreen(
             }
 
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(text = "Backup location", style = MaterialTheme.typography.titleMedium)
+                Text(
+                    text = stringResource(R.string.backup_location),
+                    style = MaterialTheme.typography.titleMedium
+                )
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     FilterChip(
                         selected = state.targetType == BackupTargetType.AppPrivate,
@@ -235,14 +266,14 @@ fun BackupSettingsScreen(
                             state = prefs.readState()
                             BackupScheduler.ensureScheduled(context)
                         },
-                        label = { Text("App storage") }
+                        label = { Text(stringResource(R.string.backup_target_app_storage)) }
                     )
                     FilterChip(
                         selected = state.targetType == BackupTargetType.SafDirectory,
                         onClick = {
                             folderPicker.launch(null)
                         },
-                        label = { Text("Folder") }
+                        label = { Text(stringResource(R.string.backup_target_folder)) }
                     )
                 }
                 Text(
@@ -252,14 +283,14 @@ fun BackupSettingsScreen(
                 )
                 if (state.targetType == BackupTargetType.SafDirectory) {
                     TextButton(onClick = { folderPicker.launch(null) }) {
-                        Text("Change folder")
+                        Text(stringResource(R.string.backup_change_folder))
                     }
                 }
             }
 
             if (isBackupRunning) {
                 ProgressRow(
-                    title = "Backup in progress",
+                    title = stringResource(R.string.backup_in_progress),
                     stage = backupStage,
                     progress = backupProgress
                 )
@@ -267,7 +298,7 @@ fun BackupSettingsScreen(
 
             if (isRestoreRunning) {
                 ProgressRow(
-                    title = "Restore in progress",
+                    title = stringResource(R.string.restore_in_progress),
                     stage = restoreStage,
                     progress = restoreProgress
                 )
@@ -276,27 +307,27 @@ fun BackupSettingsScreen(
             Button(
                 onClick = {
                     if (state.targetType == BackupTargetType.SafDirectory && state.targetUri == null) {
-                        scope.launch { uiEvents.showSnackbar("Pick a backup folder first") }
+                        scope.launch { uiEvents.showSnackbar(pickFolderFirstMessage) }
                         folderPicker.launch(null)
                         return@Button
                     }
                     BackupScheduler.enqueueManualBackup(context)
-                    scope.launch { uiEvents.showSnackbar("Backup started") }
+                    scope.launch { uiEvents.showSnackbar(backupStartedMessage) }
                 },
                 enabled = !isBackupRunning && !isRestoreRunning,
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Text("Run backup now")
+                Text(stringResource(R.string.backup_run_now))
             }
 
             Spacer(Modifier.height(6.dp))
 
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(text = "Restore", style = MaterialTheme.typography.titleMedium)
+                Text(text = stringResource(R.string.restore_title), style = MaterialTheme.typography.titleMedium)
                 val latestBackup = appBackups.firstOrNull()
-                val latestLabel = latestBackup?.name ?: "None"
+                val latestLabel = latestBackup?.name ?: stringResource(R.string.backup_none)
                 Text(
-                    text = "Latest app storage backup: $latestLabel",
+                    text = stringResource(R.string.backup_latest_app_storage_backup, latestLabel),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -305,7 +336,7 @@ fun BackupSettingsScreen(
                     Button(
                         onClick = {
                             if (latestBackup == null) {
-                                scope.launch { uiEvents.showSnackbar("No app storage backups found") }
+                                scope.launch { uiEvents.showSnackbar(noBackupFoundMessage) }
                                 return@Button
                             }
                             pendingRestore = RestoreRequest(null)
@@ -313,21 +344,25 @@ fun BackupSettingsScreen(
                         enabled = !isBackupRunning && !isRestoreRunning && latestBackup != null,
                         modifier = Modifier.weight(1f)
                     ) {
-                        Text("Restore latest")
+                        Text(stringResource(R.string.restore_latest))
                     }
                     Button(
                         onClick = { restorePicker.launch(arrayOf("application/zip")) },
                         enabled = !isBackupRunning && !isRestoreRunning,
                         modifier = Modifier.weight(1f)
                     ) {
-                        Text("Restore from file")
+                        Text(stringResource(R.string.restore_from_file))
                     }
                 }
                 Text(
-                    text = "Restore replaces all current data.",
+                    text = stringResource(R.string.restore_replaces_data),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+            }
+
+            TextButton(onClick = onImportContacts, modifier = Modifier.align(Alignment.End)) {
+                Text(stringResource(R.string.more_import_contacts))
             }
         }
     }
@@ -336,22 +371,22 @@ fun BackupSettingsScreen(
     if (restoreRequest != null) {
         AlertDialog(
             onDismissRequest = { pendingRestore = null },
-            title = { Text("Restore backup?") },
-            text = { Text("This will replace all current data.") },
+            title = { Text(stringResource(R.string.restore_confirm_title)) },
+            text = { Text(stringResource(R.string.restore_confirm_body)) },
             confirmButton = {
                 Button(
                     onClick = {
                         BackupScheduler.enqueueRestore(context, restoreRequest.uriString)
-                        scope.launch { uiEvents.showSnackbar("Restore started") }
+                        scope.launch { uiEvents.showSnackbar(restoreStartedMessage) }
                         pendingRestore = null
                     }
                 ) {
-                    Text("Restore")
+                    Text(stringResource(R.string.restore_action))
                 }
             },
             dismissButton = {
                 TextButton(onClick = { pendingRestore = null }) {
-                    Text("Cancel")
+                    Text(stringResource(R.string.action_cancel))
                 }
             }
         )
@@ -365,6 +400,7 @@ private fun formatTimestamp(timestamp: Long): String {
 
 @Composable
 private fun ProgressRow(title: String, stage: String, progress: Int) {
+    val clampedProgress = progress.coerceIn(0, 100)
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Text(text = title, style = MaterialTheme.typography.titleMedium)
         Text(
@@ -373,11 +409,11 @@ private fun ProgressRow(title: String, stage: String, progress: Int) {
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         LinearProgressIndicator(
-            progress = { (progress.coerceIn(0, 100)) / 100f },
+            progress = { clampedProgress / 100f },
             modifier = Modifier.fillMaxWidth()
         )
         Text(
-            text = "$progress%",
+            text = stringResource(R.string.backup_progress_percent, clampedProgress),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant
         )

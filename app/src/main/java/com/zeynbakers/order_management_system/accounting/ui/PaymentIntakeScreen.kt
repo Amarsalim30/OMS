@@ -20,17 +20,14 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -58,17 +55,23 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.zeynbakers.order_management_system.R
+import com.zeynbakers.order_management_system.core.ui.components.AppCard
 import com.zeynbakers.order_management_system.core.ui.LocalUiEventDispatcher
 import com.zeynbakers.order_management_system.core.ui.showSnackbar
 import com.zeynbakers.order_management_system.core.util.formatKes
 import java.math.BigDecimal
 import kotlinx.coroutines.launch
 
-@OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
+@OptIn(
+    ExperimentalFoundationApi::class,
+    ExperimentalLayoutApi::class,
+    ExperimentalMaterial3Api::class
+)
 @Composable
 fun MpesaImportScreen(
     viewModel: PaymentIntakeViewModel,
@@ -90,6 +93,12 @@ fun MpesaImportScreen(
     var intakeFilter by rememberSaveable { mutableStateOf(IntakeFilter.All) }
     var filterMenuOpen by remember { mutableStateOf(false) }
     var activeKey by rememberSaveable { mutableStateOf<String?>(null) }
+    val clipboardEmptyMessage = stringResource(R.string.money_clipboard_empty)
+    val receiptNotFoundMessage = stringResource(R.string.money_receipt_not_found)
+    val appliedPaymentsTemplate = stringResource(R.string.money_applied_payments)
+    val existingDuplicatesTemplate = stringResource(R.string.money_applied_existing_duplicates)
+    val intakeDuplicatesTemplate = stringResource(R.string.money_applied_intake_duplicates)
+    val missingCustomerTemplate = stringResource(R.string.money_applied_missing_customer)
 
     LaunchedEffect(initialText) {
         val text = initialText?.trim().orEmpty()
@@ -115,6 +124,11 @@ fun MpesaImportScreen(
         transactions.count { it.duplicateState == DuplicateState.NONE && !it.canApply() }
     val duplicatesCount = transactions.count { it.duplicateState != DuplicateState.NONE }
     val selectedCount = transactions.count { it.selected }
+    val selectedReadyItems =
+        transactions.filter { it.selected && it.duplicateState == DuplicateState.NONE && it.canApply() }
+    val selectedReadyCount = selectedReadyItems.size
+    val selectedReadyAmount =
+        selectedReadyItems.fold(BigDecimal.ZERO) { acc, item -> acc + item.amount }
     val filteredTransactions =
         remember(transactions, intakeFilter) {
             when (intakeFilter) {
@@ -129,13 +143,37 @@ fun MpesaImportScreen(
     val pasteFromClipboard: () -> Unit = {
         val clip = clipboardManager.getText()?.text?.trim().orEmpty()
         if (clip.isBlank()) {
-            scope.launch { uiEvents.showSnackbar("Clipboard is empty") }
+            scope.launch { uiEvents.showSnackbar(clipboardEmptyMessage) }
             Unit
         } else if (rawText.isBlank()) {
             viewModel.setRawText(clip)
         } else {
             viewModel.appendRawText(clip)
         }
+    }
+
+    val applyAndNotify: suspend () -> PaymentApplySummary = {
+        val summary = viewModel.applySelected()
+        val messageParts =
+            mutableListOf(
+                appliedPaymentsTemplate.format(summary.applied)
+            )
+        if (summary.existingDuplicates > 0) {
+            messageParts +=
+                existingDuplicatesTemplate.format(summary.existingDuplicates)
+        }
+        if (summary.intakeDuplicates > 0) {
+            messageParts +=
+                intakeDuplicatesTemplate.format(summary.intakeDuplicates)
+        }
+        if (summary.skippedNoCustomer > 0) {
+            messageParts +=
+                missingCustomerTemplate.format(summary.skippedNoCustomer)
+        }
+        val message =
+            messageParts.joinToString(separator = ", ")
+        uiEvents.showSnackbar(message)
+        summary
     }
 
     LaunchedEffect(rawText) {
@@ -160,10 +198,10 @@ fun MpesaImportScreen(
         topBar = {
             if (showTopBar) {
                 TopAppBar(
-                    title = { Text(androidx.compose.ui.res.stringResource(R.string.money_collect_title)) },
+                    title = { Text(stringResource(R.string.money_collect_title)) },
                     navigationIcon = {
                         IconButton(onClick = onClose) {
-                            Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                            Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.action_back))
                         }
                     },
                     colors = TopAppBarDefaults.topAppBarColors(
@@ -175,26 +213,20 @@ fun MpesaImportScreen(
         bottomBar = {
             if (readyCount > 0) {
                 ApplyReadyBar(
+                    selectedReadyCount = selectedReadyCount,
+                    selectedReadyAmount = selectedReadyAmount,
                     readyCount = readyCount,
                     readyAmount = readyAmount,
-                    onApply = {
+                    onApplySelected = {
                         scope.launch {
-                            viewModel.setAllSelected(true)
-                            val summary = viewModel.applySelected()
-                            val message =
-                                buildString {
-                                    append("Applied ${summary.applied} payments")
-                                    if (summary.existingDuplicates > 0) {
-                                        append(", ${summary.existingDuplicates} already recorded")
-                                    }
-                                    if (summary.intakeDuplicates > 0) {
-                                        append(", ${summary.intakeDuplicates} duplicates in import")
-                                    }
-                            if (summary.skippedNoCustomer > 0) {
-                                append(", ${summary.skippedNoCustomer} missing customer")
-                            }
+                            val summary = applyAndNotify()
+                            onApplied(summary)
                         }
-                            uiEvents.showSnackbar(message)
+                    },
+                    onApplyAllReady = {
+                        scope.launch {
+                            viewModel.selectReadyOnly()
+                            val summary = applyAndNotify()
                             onApplied(summary)
                         }
                     }
@@ -237,21 +269,21 @@ fun MpesaImportScreen(
                                     value = rawText,
                                     visualTransformation = VisualTransformation.None,
                                     innerTextField = innerTextField,
-                                    placeholder = { Text("Paste one or more messages") },
-                                    label = { Text("M-PESA messages") },
+                                    placeholder = { Text(stringResource(R.string.money_paste_messages_placeholder)) },
+                                    label = { Text(stringResource(R.string.money_mpesa_messages_label)) },
                                     trailingIcon = {
                                         if (rawIsLarge) {
                                             IconButton(onClick = { rawExpanded = false }) {
                                                 Icon(
                                                     imageVector = Icons.Filled.ExpandLess,
-                                                    contentDescription = "Collapse"
+                                                    contentDescription = stringResource(R.string.action_collapse)
                                                 )
                                             }
                                         }
                                     },
                                     supportingText =
                                         if (rawText.isBlank()) {
-                                            { Text("Separate each message with a blank line.") }
+                                            { Text(stringResource(R.string.money_separate_messages)) }
                                         } else {
                                             null
                                         },
@@ -291,30 +323,31 @@ fun MpesaImportScreen(
                                 IconButton(onClick = { rawExpanded = true }) {
                                     Icon(
                                         imageVector = Icons.Filled.ExpandMore,
-                                        contentDescription = "Expand"
+                                        contentDescription = stringResource(R.string.action_expand)
                                     )
                                 }
                             }
                         }
                     }
 
-                    Row(
+                    FlowRow(
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        verticalArrangement = Arrangement.spacedBy(2.dp)
                     ) {
-                        TextButton(onClick = pasteFromClipboard) { Text("Paste") }
+                        TextButton(onClick = pasteFromClipboard) { Text(stringResource(R.string.action_paste)) }
                         TextButton(
                             onClick = { viewModel.setRawText("") },
                             enabled = rawText.isNotBlank()
-                        ) { Text("Clear") }
+                        ) { Text(stringResource(R.string.action_clear)) }
                         TextButton(
                             onClick = { viewModel.selectReadyOnly() },
                             enabled = transactions.isNotEmpty()
-                        ) { Text("Select ready") }
+                        ) { Text(stringResource(R.string.money_select_ready)) }
                         TextButton(
                             onClick = { viewModel.setAllSelected(false) },
                             enabled = selectedCount > 0
-                        ) { Text("Clear selection") }
+                        ) { Text(stringResource(R.string.money_clear_selection)) }
                     }
                 }
             }
@@ -329,10 +362,10 @@ fun MpesaImportScreen(
                         ) {
                             val filterLabel =
                                 when (intakeFilter) {
-                                    IntakeFilter.All -> "All $allCount"
-                                    IntakeFilter.Needs -> "Needs $needsCount"
-                                    IntakeFilter.Duplicates -> "Duplicates $duplicatesCount"
-                                    IntakeFilter.Selected -> "Selected $selectedCount"
+                                    IntakeFilter.All -> stringResource(R.string.money_filter_all_count, allCount)
+                                    IntakeFilter.Needs -> stringResource(R.string.money_filter_needs_count, needsCount)
+                                    IntakeFilter.Duplicates -> stringResource(R.string.money_filter_duplicates_count, duplicatesCount)
+                                    IntakeFilter.Selected -> stringResource(R.string.money_filter_selected_count, selectedCount)
                                 }
                             Box {
                                 TextButton(onClick = { filterMenuOpen = true }) {
@@ -343,28 +376,28 @@ fun MpesaImportScreen(
                                     onDismissRequest = { filterMenuOpen = false }
                                 ) {
                                     DropdownMenuItem(
-                                        text = { Text("All $allCount") },
+                                        text = { Text(stringResource(R.string.money_filter_all_count, allCount)) },
                                         onClick = {
                                             intakeFilter = IntakeFilter.All
                                             filterMenuOpen = false
                                         }
                                     )
                                     DropdownMenuItem(
-                                        text = { Text("Needs $needsCount") },
+                                        text = { Text(stringResource(R.string.money_filter_needs_count, needsCount)) },
                                         onClick = {
                                             intakeFilter = IntakeFilter.Needs
                                             filterMenuOpen = false
                                         }
                                     )
                                     DropdownMenuItem(
-                                        text = { Text("Duplicates $duplicatesCount") },
+                                        text = { Text(stringResource(R.string.money_filter_duplicates_count, duplicatesCount)) },
                                         onClick = {
                                             intakeFilter = IntakeFilter.Duplicates
                                             filterMenuOpen = false
                                         }
                                     )
                                     DropdownMenuItem(
-                                        text = { Text("Selected $selectedCount") },
+                                        text = { Text(stringResource(R.string.money_filter_selected_count, selectedCount)) },
                                         onClick = {
                                             intakeFilter = IntakeFilter.Selected
                                             filterMenuOpen = false
@@ -373,7 +406,7 @@ fun MpesaImportScreen(
                                 }
                             }
                             Text(
-                                text = "Selected $selectedCount",
+                                text = stringResource(R.string.money_selected_count, selectedCount),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -385,7 +418,7 @@ fun MpesaImportScreen(
             if (transactions.isEmpty()) {
                 item {
                     Text(
-                        text = "No payments detected yet.",
+                        text = stringResource(R.string.money_no_payments_detected),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -393,7 +426,7 @@ fun MpesaImportScreen(
             } else if (filteredTransactions.isEmpty()) {
                 item {
                     Text(
-                        text = "No payments for this filter.",
+                        text = stringResource(R.string.money_no_payments_for_filter),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -429,7 +462,7 @@ fun MpesaImportScreen(
                 if (target != null) {
                     onOpenReceiptHistory(target)
                 } else {
-                    scope.launch { uiEvents.showSnackbar("Receipt not found") }
+                    scope.launch { uiEvents.showSnackbar(receiptNotFoundMessage) }
                 }
             },
             onMoveExisting = {
@@ -443,246 +476,9 @@ fun MpesaImportScreen(
     }
 }
 
-private enum class IntakeFilter(val label: String) {
-    All("All"),
-    Needs("Needs"),
-    Duplicates("Duplicates"),
-    Selected("Selected")
+private enum class IntakeFilter(val labelRes: Int) {
+    All(R.string.money_filter_all_short),
+    Needs(R.string.money_filter_needs_short),
+    Duplicates(R.string.money_filter_duplicates_short),
+    Selected(R.string.money_filter_selected_short)
 }
-
-private enum class StepState {
-    Idle,
-    Active,
-    Complete
-}
-
-@Composable
-private fun IntakeStepRow(
-    hasSource: Boolean,
-    hasAssignments: Boolean,
-    hasSelected: Boolean
-) {
-    val sourceState = if (hasSource) StepState.Complete else StepState.Active
-    val assignState =
-        when {
-            !hasSource -> StepState.Idle
-            hasAssignments -> StepState.Complete
-            else -> StepState.Active
-        }
-    val postState =
-        when {
-            !hasAssignments -> StepState.Idle
-            hasSelected -> StepState.Complete
-            else -> StepState.Active
-        }
-
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        StepChip(step = "1", label = "Source", state = sourceState, modifier = Modifier.weight(1f))
-        StepChip(step = "2", label = "Assign", state = assignState, modifier = Modifier.weight(1f))
-        StepChip(step = "3", label = "Post", state = postState, modifier = Modifier.weight(1f))
-    }
-}
-
-@Composable
-private fun StepChip(
-    step: String,
-    label: String,
-    state: StepState,
-    modifier: Modifier = Modifier
-) {
-    val (container, content) =
-        when (state) {
-            StepState.Complete -> MaterialTheme.colorScheme.primaryContainer to MaterialTheme.colorScheme.onPrimaryContainer
-            StepState.Active -> MaterialTheme.colorScheme.secondaryContainer to MaterialTheme.colorScheme.onSecondaryContainer
-            StepState.Idle -> MaterialTheme.colorScheme.surfaceVariant to MaterialTheme.colorScheme.onSurfaceVariant
-        }
-    Surface(
-        color = container,
-        contentColor = content,
-        shape = MaterialTheme.shapes.large,
-        modifier = modifier
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Surface(
-                color = content.copy(alpha = 0.12f),
-                contentColor = content,
-                shape = MaterialTheme.shapes.small
-            ) {
-                Text(
-                    text = step,
-                    style = MaterialTheme.typography.labelSmall,
-                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                )
-            }
-            Text(
-                text = label,
-                style = MaterialTheme.typography.labelMedium,
-                maxLines = 1
-            )
-        }
-    }
-}
-
-@Composable
-private fun IntakeSummaryRow(
-    totalDetected: Int,
-    readyCount: Int,
-    needsMatchCount: Int,
-    duplicateCount: Int
-) {
-    val hasAny = totalDetected > 0 || readyCount > 0 || needsMatchCount > 0 || duplicateCount > 0
-    if (!hasAny) return
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .horizontalScroll(rememberScrollState()),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        SummaryPill(
-            label = "Detected",
-            value = totalDetected,
-            container = MaterialTheme.colorScheme.surfaceVariant,
-            content = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        SummaryPill(
-            label = "Ready",
-            value = readyCount,
-            container = MaterialTheme.colorScheme.secondaryContainer,
-            content = MaterialTheme.colorScheme.onSecondaryContainer
-        )
-        SummaryPill(
-            label = "Needs match",
-            value = needsMatchCount,
-            container = MaterialTheme.colorScheme.tertiaryContainer,
-            content = MaterialTheme.colorScheme.onTertiaryContainer
-        )
-        SummaryPill(
-            label = "Duplicates",
-            value = duplicateCount,
-            container = MaterialTheme.colorScheme.errorContainer,
-            content = MaterialTheme.colorScheme.onErrorContainer
-        )
-    }
-}
-
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-private fun IntakeSummaryCard(
-    totalDetected: Int,
-    readyCount: Int,
-    needsMatchCount: Int,
-    duplicateCount: Int,
-    selectedCount: Int,
-    selectedAmount: BigDecimal,
-    onSelectMatched: () -> Unit,
-    onClearSelection: () -> Unit
-) {
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.padding(12.dp)) {
-            Text(text = "Summary", style = MaterialTheme.typography.titleSmall)
-            Spacer(modifier = Modifier.height(6.dp))
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                SummaryPill(
-                    label = "Detected",
-                    value = totalDetected,
-                    container = MaterialTheme.colorScheme.surfaceVariant,
-                    content = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                SummaryPill(
-                    label = "Ready",
-                    value = readyCount,
-                    container = MaterialTheme.colorScheme.secondaryContainer,
-                    content = MaterialTheme.colorScheme.onSecondaryContainer
-                )
-                SummaryPill(
-                    label = "Needs match",
-                    value = needsMatchCount,
-                    container = MaterialTheme.colorScheme.tertiaryContainer,
-                    content = MaterialTheme.colorScheme.onTertiaryContainer
-                )
-                SummaryPill(
-                    label = "Duplicates",
-                    value = duplicateCount,
-                    container = MaterialTheme.colorScheme.errorContainer,
-                    content = MaterialTheme.colorScheme.onErrorContainer
-                )
-            }
-            Spacer(modifier = Modifier.height(8.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text(
-                    text = "Selected $selectedCount - Total ${formatKes(selectedAmount)}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Row {
-                    TextButton(onClick = onSelectMatched) { Text("Select matched") }
-                    TextButton(onClick = onClearSelection) { Text("Clear") }
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun SummaryPill(
-    label: String,
-    value: Int,
-    container: androidx.compose.ui.graphics.Color,
-    content: androidx.compose.ui.graphics.Color
-) {
-    Surface(
-        color = container,
-        contentColor = content,
-        shape = MaterialTheme.shapes.small
-    ) {
-        Text(
-            text = "$label $value",
-            style = MaterialTheme.typography.labelSmall,
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-        )
-    }
-}
-
-@Composable
-private fun ApplyReadyBar(
-    readyCount: Int,
-    readyAmount: BigDecimal,
-    onApply: () -> Unit
-) {
-    Surface(tonalElevation = 3.dp) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(6.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = "Total ${formatKes(readyAmount)}",
-                style = MaterialTheme.typography.titleSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Button(
-                onClick = onApply,
-                enabled = readyCount > 0,
-                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
-            ) {
-                Text("Apply")
-            }
-        }
-    }
-}
-
-
-
-

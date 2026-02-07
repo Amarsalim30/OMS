@@ -1,69 +1,36 @@
-# App Review Refresh (2026-02-07, current state)
+# App Review Refresh (2026-02-07 implementation update)
 
-## Validation
-- `./gradlew assembleDebug` (pass)
-- `./gradlew assembleDebugAndroidTest` (pass)
-- `./gradlew testDebugUnitTest` (pass)
-- `./gradlew lintDebug` (pass)
-- Lint summary: `0 errors, 18 warnings, 8 hints`
-- Evidence: `app/build/intermediates/lint_intermediate_text_report/debug/lintReportDebug/lint-results-debug.txt`
+## Current State
+All reopened P1/P2 UI/UX issues from the latest audit pass are fixed.
 
-## Findings (ordered by severity)
+Status snapshot:
+- P0: 0 open
+- P1: 0 open
+- P2: 0 open
 
-### P0 - None
-No release-blocking runtime/build failures found in this pass.
+Primary tracker:
+- `docs/issues/app-ui-ux-master-review-2026-02-06.md`
 
-### P1-1) Orchestration/screen complexity still exists in a few files (reduced)
-Evidence:
-- `app/src/main/java/com/zeynbakers/order_management_system/MainActivity.kt` (~29 lines, resolved hotspot)
-- `app/src/main/java/com/zeynbakers/order_management_system/MainAppContent.kt` (~597 lines)
-- `app/src/main/java/com/zeynbakers/order_management_system/order/ui/DayDetailScreen.kt` (~947 lines)
-- `app/src/main/java/com/zeynbakers/order_management_system/order/ui/CalendarScreen.kt` (~472 lines)
+## Implemented Fixes
 
-Risk:
-- Day-detail and app-content orchestration still have broad regression surfaces.
+### P1
+- Notification settings body now scrolls.
+  - Evidence: `app/src/main/java/com/zeynbakers/order_management_system/core/notifications/NotificationSettingsScreen.kt:87`
+- Backup settings body now scrolls.
+  - Evidence: `app/src/main/java/com/zeynbakers/order_management_system/core/backup/BackupSettingsScreen.kt:198`
+- Payment intake top actions now wrap on narrow widths.
+  - Evidence: `app/src/main/java/com/zeynbakers/order_management_system/accounting/ui/PaymentIntakeScreen.kt:333`
 
-Required fix:
-- Continue extracting editor/delete orchestration from `DayDetailScreen.kt`.
-- Continue extracting feature wiring from `MainAppContent.kt` into dedicated coordinator helpers.
+### P2
+- Summary stat pill now uses resource-backed formatting.
+  - Evidence: `app/src/main/java/com/zeynbakers/order_management_system/order/ui/SummarySections.kt:219`
+  - Evidence: `app/src/main/res/values/strings.xml:171`
+- Backup progress percent now uses localized string resource.
+  - Evidence: `app/src/main/java/com/zeynbakers/order_management_system/core/backup/BackupSettingsScreen.kt:416`
+  - Evidence: `app/src/main/res/values/strings.xml:275`
+- Payment intake apply bar totals are stacked to avoid crowding.
+  - Evidence: `app/src/main/java/com/zeynbakers/order_management_system/accounting/ui/PaymentIntakeSections.kt:278`
+  - Evidence: `app/src/main/java/com/zeynbakers/order_management_system/accounting/ui/PaymentIntakeSections.kt:283`
 
-### P2-1) Dependency currency remains behind latest releases
-Evidence:
-- `gradle/libs.versions.toml`
-- Warnings: AGP/Kotlin/Compose BOM/Lifecycle/Room/Navigation/Core/etc newer versions available.
-
-Risk:
-- Longer-term security, compatibility, and maintenance drag.
-
-Required fix:
-- Run a dedicated dependency upgrade sprint with staged compatibility verification.
-
-### P3-1) Compose performance hints remain (non-blocking)
-Evidence (lint hints):
-- `AutoboxingStateCreation` hints in:
-- `app/src/main/java/com/zeynbakers/order_management_system/MainAppContent.kt`
-- `app/src/main/java/com/zeynbakers/order_management_system/accounting/ui/CustomerStatementsScreen.kt`
-- `app/src/main/java/com/zeynbakers/order_management_system/customer/ui/CustomerDetailScreen.kt`
-- `app/src/main/java/com/zeynbakers/order_management_system/order/ui/CalendarScreen.kt`
-
-Risk:
-- Minor avoidable allocations on state writes for primitive-backed state.
-
-Required fix:
-- Replace relevant `mutableStateOf(Int)` with `mutableIntStateOf(...)` where safe.
-
-## Implemented Since Previous Review (confirmed)
-- `MainActivity` orchestration extracted to `MainAppContent` host function.
-- Core order/calendar split into dedicated section/utility files:
-- `order/ui/DayDetailSections.kt`
-- `order/ui/CalendarScreenSections.kt`
-- `order/ui/CalendarDayCellModern.kt`
-- `order/ui/CalendarDateUtils.kt`
-- DS adoption expanded on high-traffic surfaces (`AppCard`, `AppEmptyState`).
-- Accessibility smoke tests added:
-- `app/src/androidTest/java/com/zeynbakers/order_management_system/ui/AccessibilitySmokeTest.kt`
-
-## Status
-- App is build/test healthy.
-- Master UI/UX program items from `app-ui-ux-master-review-2026-02-06.md` are now marked complete.
-- Remaining work is technical hardening (further decomposition + dependency maintenance + micro-performance hints).
+## Verification
+- Build: `.\gradlew.bat assembleDebug` succeeded on 2026-02-07.

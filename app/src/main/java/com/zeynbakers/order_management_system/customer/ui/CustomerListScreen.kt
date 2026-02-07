@@ -65,6 +65,7 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
@@ -142,6 +143,8 @@ private fun CustomersScreenM3(
     val uiEvents = LocalUiEventDispatcher.current
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
+    val customerArchivedMessage = stringResource(R.string.customer_archived)
+    val undoActionLabel = stringResource(R.string.action_undo)
 
     LaunchedEffect(query) {
         if (queryText != query) {
@@ -239,12 +242,12 @@ private fun CustomersScreenM3(
                 FilterChip(
                     selected = hideZeroBalances,
                     onClick = { hideZeroBalances = !hideZeroBalances },
-                    label = { Text("Hide zero balances") }
+                    label = { Text(stringResource(R.string.customer_hide_zero_balances)) }
                 )
                 FilterChip(
                     selected = showInactive,
                     onClick = { showInactive = !showInactive },
-                    label = { Text("Show inactive (no orders)") }
+                    label = { Text(stringResource(R.string.customer_show_inactive_no_orders)) }
                 )
             }
 
@@ -255,11 +258,19 @@ private fun CustomersScreenM3(
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Text(
-                    text = if (queryText.isBlank()) "All customers" else "Search results",
+                    text = if (queryText.isBlank()) {
+                        stringResource(R.string.customer_all_customers)
+                    } else {
+                        stringResource(R.string.customer_search_results)
+                    },
                     style = MaterialTheme.typography.labelLarge
                 )
                 Text(
-                    text = "${filteredCustomers.size} results",
+                    text = pluralStringResource(
+                        R.plurals.customer_result_count,
+                        filteredCustomers.size,
+                        filteredCustomers.size
+                    ),
                     style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -307,35 +318,35 @@ private fun CustomersScreenM3(
         ) {
             Column(modifier = Modifier.fillMaxWidth().padding(12.dp)) {
                 Text(
-                    text = customer.name.ifBlank { "Unknown Customer" },
+                    text = customer.name.ifBlank { stringResource(R.string.customer_unknown) },
                     style = MaterialTheme.typography.titleMedium
                 )
                 Spacer(Modifier.height(6.dp))
-                ActionRow(label = "Record payment", onClick = {
+                ActionRow(label = stringResource(R.string.customer_action_record_payment), onClick = {
                     onRecordPayment(customer.customerId)
                     longPressedCustomer = null
                 })
-                ActionRow(label = "New order", onClick = {
+                ActionRow(label = stringResource(R.string.customer_action_new_order), onClick = {
                     onAddOrder(customer.customerId)
                     longPressedCustomer = null
                 })
                 ActionRow(
-                    label = "Message",
+                    label = stringResource(R.string.customer_action_message),
                     enabled = hasPhone,
                     onClick = {
                         launchSms(context, customer.phone)
                         longPressedCustomer = null
                     }
                 )
-                ActionRow(label = "View details", onClick = {
+                ActionRow(label = stringResource(R.string.customer_action_view_details), onClick = {
                     onCustomerClick(customer.customerId)
                     longPressedCustomer = null
                 })
-                ActionRow(label = "Payment history", onClick = {
+                ActionRow(label = stringResource(R.string.customer_action_payment_history), onClick = {
                     onPaymentHistory(customer.customerId)
                     longPressedCustomer = null
                 })
-                ActionRow(label = "Edit customer", onClick = {
+                ActionRow(label = stringResource(R.string.customer_action_edit_customer), onClick = {
                     onEditCustomer(customer.customerId)
                     longPressedCustomer = null
                 })
@@ -347,7 +358,7 @@ private fun CustomersScreenM3(
                     color = MaterialTheme.colorScheme.surfaceVariant
                 ) {}
                 ActionRow(
-                    label = "Archive",
+                    label = stringResource(R.string.customer_action_archive),
                     textColor = MaterialTheme.colorScheme.error,
                     onClick = {
                         pendingArchiveCustomer = customer
@@ -361,8 +372,8 @@ private fun CustomersScreenM3(
     pendingArchiveCustomer?.let { customer ->
         AlertDialog(
             onDismissRequest = { pendingArchiveCustomer = null },
-            title = { Text("Archive customer?") },
-            text = { Text("Archived customers are hidden from lists, but their history stays.") },
+            title = { Text(stringResource(R.string.customer_archive_title)) },
+            text = { Text(stringResource(R.string.customer_archive_message)) },
             confirmButton = {
                 TextButton(onClick = {
                     onArchiveCustomer(customer.customerId)
@@ -370,363 +381,31 @@ private fun CustomersScreenM3(
                     scope.launch {
                         val result =
                             uiEvents.showSnackbar(
-                                message = "Customer archived",
-                                actionLabel = "Undo"
+                                message = customerArchivedMessage,
+                                actionLabel = undoActionLabel
                             )
                         if (result == SnackbarResult.ActionPerformed) {
                             onRestoreCustomer(customer.customerId)
                         }
                     }
-                }) { Text("Archive") }
+                }) { Text(stringResource(R.string.customer_action_archive)) }
             },
             dismissButton = {
-                TextButton(onClick = { pendingArchiveCustomer = null }) { Text("Cancel") }
+                TextButton(onClick = { pendingArchiveCustomer = null }) { Text(stringResource(R.string.action_cancel)) }
             }
         )
     }
 }
 
-@Composable
-private fun CustomersTopBar(
-    onBack: () -> Unit,
-    showBack: Boolean
-) {
-    CenterAlignedTopAppBar(
-        title = {
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(text = "Customers", style = MaterialTheme.typography.titleLarge)
-                Text(
-                    text = "Find customers and collect payments",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        },
-        navigationIcon = {
-            if (showBack) {
-                TextButton(onClick = onBack) { Text("Back") }
-            }
-        }
-    )
-}
-
-@Composable
-private fun SearchField(
-    queryText: String,
-    onQueryTextChange: (String) -> Unit
-) {
-    OutlinedTextField(
-        value = queryText,
-        onValueChange = onQueryTextChange,
-        label = { Text("Search customers") },
-        placeholder = { Text("Name or phone") },
-        leadingIcon = { Icon(imageVector = Icons.Filled.Search, contentDescription = "Search") },
-        trailingIcon = {
-            if (queryText.isNotBlank()) {
-                IconButton(onClick = { onQueryTextChange("") }) {
-                    Icon(imageVector = Icons.Filled.Close, contentDescription = "Clear")
-                }
-            }
-        },
-        singleLine = true,
-        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-        modifier = Modifier.fillMaxWidth()
-    )
-}
-
-@Composable
-private fun FilterSortBar(
-    selectedFilter: CustomerFilter,
-    onFilterChange: (CustomerFilter) -> Unit,
-    onSortMenuToggle: () -> Unit
-) {
-    Column(
-        modifier = Modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        AppFilterRow(
-            options = customerFilterOptions(),
-            selectedKey = selectedFilter.name,
-            onSelect = { onFilterChange(CustomerFilter.valueOf(it)) }
-        )
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.End,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            IconButton(onClick = onSortMenuToggle) {
-                Icon(imageVector = Icons.AutoMirrored.Filled.Sort, contentDescription = "Sort")
-            }
-        }
-    }
-}
-
-@Composable
-private fun customerFilterOptions(): List<AppFilterOption> {
-    return listOf(
-        AppFilterOption(CustomerFilter.All.name, "All"),
-        AppFilterOption(CustomerFilter.Owing.name, "Owes"),
-        AppFilterOption(CustomerFilter.Credit.name, "Credit"),
-        AppFilterOption(CustomerFilter.Settled.name, "Settled")
-    )
-}
-
-@Composable
-private fun SortMenu(
-    expanded: Boolean,
-    selectedSort: CustomerSort,
-    onDismiss: () -> Unit,
-    onSelect: (CustomerSort) -> Unit
-) {
-    DropdownMenu(expanded = expanded, onDismissRequest = onDismiss) {
-        DropdownMenuItem(
-            text = { Text("Balance: High to low") },
-            onClick = { onSelect(CustomerSort.BalanceDesc) },
-            trailingIcon = {
-                if (selectedSort == CustomerSort.BalanceDesc) {
-                    Icon(imageVector = Icons.Filled.Check, contentDescription = "Selected")
-                }
-            }
-        )
-        DropdownMenuItem(
-            text = { Text("Balance: Low to high") },
-            onClick = { onSelect(CustomerSort.BalanceAsc) },
-            trailingIcon = {
-                if (selectedSort == CustomerSort.BalanceAsc) {
-                    Icon(imageVector = Icons.Filled.Check, contentDescription = "Selected")
-                }
-            }
-        )
-        DropdownMenuItem(
-            text = { Text("Name: A to Z") },
-            onClick = { onSelect(CustomerSort.NameAsc) },
-            trailingIcon = {
-                if (selectedSort == CustomerSort.NameAsc) {
-                    Icon(imageVector = Icons.Filled.Check, contentDescription = "Selected")
-                }
-            }
-        )
-    }
-}
-
-@OptIn(ExperimentalFoundationApi::class)
-@Composable
-private fun CustomerRowItem(
-    customer: CustomerAccountSummary,
-    onClick: () -> Unit,
-    onLongClick: () -> Unit,
-    onMenuClick: () -> Unit,
-    onRecordPayment: () -> Unit,
-    onAddOrder: () -> Unit,
-    onMessage: () -> Unit,
-    hasPhone: Boolean
-) {
-    val name = customer.name.ifBlank { "Unknown Customer" }
-    val initials = name.trim().split(" ").take(2).mapNotNull { it.firstOrNull() }.joinToString("")
-        .ifBlank { "?" }
-    val phone = customer.phone.trim()
-
-    Surface(
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
-        shape = MaterialTheme.shapes.large,
-        modifier = Modifier
-            .fillMaxWidth()
-            .heightIn(min = 56.dp)
-            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
-            .padding(vertical = 2.dp)
-    ) {
-        Row(
-            modifier = Modifier.padding(10.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Surface(
-                color = MaterialTheme.colorScheme.surfaceContainerHighest,
-                shape = CircleShape,
-                modifier = Modifier.size(40.dp)
-            ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Text(text = initials, style = MaterialTheme.typography.labelLarge)
-                }
-            }
-
-            Spacer(Modifier.width(8.dp))
-
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = name,
-                    style = MaterialTheme.typography.titleMedium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                if (phone.isNotBlank()) {
-                    Text(
-                        text = phone,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-                Spacer(Modifier.height(6.dp))
-                Text(
-                    text = "Billed ${formatKes(customer.billed)} - Paid ${formatKes(customer.paid)}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Spacer(Modifier.height(4.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    TextButton(
-                        onClick = onRecordPayment,
-                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
-                    ) {
-                        Text("Pay")
-                    }
-                    TextButton(
-                        onClick = onAddOrder,
-                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
-                    ) {
-                        Text("Order")
-                    }
-                    TextButton(
-                        onClick = onMessage,
-                        enabled = hasPhone,
-                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
-                    ) {
-                        Text("Message")
-                    }
-                }
-            }
-
-            Spacer(Modifier.width(6.dp))
-
-            BalanceChip(balance = customer.balance)
-            IconButton(onClick = onMenuClick) {
-                Icon(imageVector = Icons.Filled.MoreVert, contentDescription = "Customer actions")
-            }
-        }
-    }
-}
-
-@Composable
-private fun BalanceChip(balance: BigDecimal) {
-    val (label, color) =
-        when {
-            balance > BigDecimal.ZERO -> "Owes" to MaterialTheme.colorScheme.errorContainer
-            balance < BigDecimal.ZERO -> "Credit" to MaterialTheme.colorScheme.tertiaryContainer
-            else -> "Settled" to MaterialTheme.colorScheme.secondaryContainer
-        }
-    Surface(
-        color = color,
-        shape = MaterialTheme.shapes.small,
-        modifier = Modifier.heightIn(min = 32.dp)
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = label,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            Spacer(Modifier.width(4.dp))
-            Text(
-                text = formatKes(balance.abs()),
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-        }
-    }
-}
-
-@Composable
-private fun EmptyCustomersState(
-    isSearching: Boolean,
-    onAddCustomer: () -> Unit
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(top = 20.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Icon(
-            imageVector = Icons.Outlined.Person,
-            contentDescription = "No customers",
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.size(48.dp)
-        )
-        Spacer(Modifier.height(6.dp))
-        Text(
-            text = if (isSearching) "No customers found" else "No customers yet",
-            style = MaterialTheme.typography.titleMedium
-        )
-        Spacer(Modifier.height(6.dp))
-        Text(
-            text = if (isSearching) "Try a different search." else "Add your first customer to get started.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        Spacer(Modifier.height(6.dp))
-        Button(onClick = onAddCustomer) {
-            Text("Add customer")
-        }
-    }
-}
-
-@Composable
-private fun ActionRow(
-    label: String,
-    onClick: () -> Unit,
-    enabled: Boolean = true,
-    textColor: androidx.compose.ui.graphics.Color? = null
-) {
-    val resolvedColor = textColor ?: MaterialTheme.colorScheme.onSurface
-    val displayColor =
-        if (enabled) resolvedColor else MaterialTheme.colorScheme.onSurfaceVariant
-    Surface(
-        modifier = Modifier
-            .fillMaxWidth()
-            .heightIn(min = 48.dp)
-            .clickable(enabled = enabled) { onClick() },
-        color = MaterialTheme.colorScheme.surface
-    ) {
-        Row(
-            modifier = Modifier.padding(vertical = 10.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = label,
-                style = MaterialTheme.typography.bodyLarge,
-                color = displayColor
-            )
-        }
-    }
-}
-
-private enum class CustomerFilter {
+internal enum class CustomerFilter {
     All,
     Owing,
     Credit,
     Settled
 }
 
-private enum class CustomerSort {
+internal enum class CustomerSort {
     BalanceDesc,
     BalanceAsc,
     NameAsc
 }
-
-private fun launchSms(context: android.content.Context, phone: String) {
-    if (phone.isBlank()) return
-    val intent = Intent(Intent.ACTION_VIEW, "sms:$phone".toUri())
-        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-    context.startActivity(intent)
-}
-
-
-
-

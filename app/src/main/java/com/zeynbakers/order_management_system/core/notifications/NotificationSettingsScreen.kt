@@ -4,6 +4,8 @@ import android.Manifest
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -12,8 +14,10 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
@@ -33,10 +37,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import com.zeynbakers.order_management_system.R
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun NotificationSettingsScreen(onBack: () -> Unit) {
     val context = LocalContext.current
@@ -61,17 +67,24 @@ fun NotificationSettingsScreen(onBack: () -> Unit) {
         contentWindowInsets = WindowInsets(0),
         topBar = {
             CenterAlignedTopAppBar(
-                title = { Text("Notifications") },
+                title = { Text(stringResource(R.string.notifications_title)) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(imageVector = Icons.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = stringResource(R.string.action_back)
+                        )
                     }
                 }
             )
         }
     ) { padding ->
         Column(
-            modifier = Modifier.padding(padding).padding(12.dp),
+            modifier =
+                Modifier
+                    .padding(padding)
+                    .padding(12.dp)
+                    .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Row(
@@ -80,9 +93,12 @@ fun NotificationSettingsScreen(onBack: () -> Unit) {
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text("Order reminders", style = MaterialTheme.typography.titleMedium)
                     Text(
-                        text = "Due-date reminders and daily summary.",
+                        stringResource(R.string.notifications_order_reminders),
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                    Text(
+                        text = stringResource(R.string.notifications_order_reminders_hint),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -102,35 +118,43 @@ fun NotificationSettingsScreen(onBack: () -> Unit) {
 
             if (requiresPermission() && !hasPermission) {
                 Text(
-                    text = "Notification permission is required on Android 13+.",
+                    text = stringResource(R.string.notifications_permission_required),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.error
                 )
                 TextButton(onClick = { permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS) }) {
-                    Text("Grant permission")
+                    Text(stringResource(R.string.notifications_grant_permission))
                 }
             }
 
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text(text = "Reminder lead time", style = MaterialTheme.typography.titleMedium)
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    LeadTimeChip(
-                        label = "1 hour",
-                        minutes = NotificationPreferences.LEAD_TIME_1_HOUR,
-                        selectedMinutes = settings.leadTimeMinutes
-                    ) { minutes ->
-                        prefs.setLeadTimeMinutes(minutes)
-                        settings = prefs.readSettings()
-                        NotificationScheduler.enqueueNow(context)
-                    }
-                    LeadTimeChip(
-                        label = "1 day",
-                        minutes = NotificationPreferences.LEAD_TIME_1_DAY,
-                        selectedMinutes = settings.leadTimeMinutes
-                    ) { minutes ->
-                        prefs.setLeadTimeMinutes(minutes)
-                        settings = prefs.readSettings()
-                        NotificationScheduler.enqueueNow(context)
+                Text(
+                    text = stringResource(R.string.notifications_reminder_lead_time),
+                    style = MaterialTheme.typography.titleMedium
+                )
+                val leadTimeOptions =
+                    listOf(
+                        NotificationPreferences.LEAD_TIME_15_MIN to stringResource(R.string.notifications_lead_time_15_min),
+                        NotificationPreferences.LEAD_TIME_30_MIN to stringResource(R.string.notifications_lead_time_30_min),
+                        NotificationPreferences.LEAD_TIME_1_HOUR to stringResource(R.string.notifications_lead_time_1_hour),
+                        NotificationPreferences.LEAD_TIME_2_HOURS to stringResource(R.string.notifications_lead_time_2_hours),
+                        NotificationPreferences.LEAD_TIME_12_HOURS to stringResource(R.string.notifications_lead_time_12_hours),
+                        NotificationPreferences.LEAD_TIME_1_DAY to stringResource(R.string.notifications_lead_time_1_day)
+                    )
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    leadTimeOptions.forEach { (minutes, label) ->
+                        LeadTimeChip(
+                            label = label,
+                            minutes = minutes,
+                            selectedMinutes = settings.leadTimeMinutes
+                        ) { selectedMinutes ->
+                            prefs.setLeadTimeMinutes(selectedMinutes)
+                            settings = prefs.readSettings()
+                            NotificationScheduler.enqueueNow(context)
+                        }
                     }
                 }
             }
@@ -141,9 +165,12 @@ fun NotificationSettingsScreen(onBack: () -> Unit) {
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Column {
-                    Text("Daily summary", style = MaterialTheme.typography.titleMedium)
                     Text(
-                        text = "One notification each morning with totals.",
+                        stringResource(R.string.notifications_daily_summary),
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                    Text(
+                        text = stringResource(R.string.notifications_daily_summary_hint),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -160,7 +187,7 @@ fun NotificationSettingsScreen(onBack: () -> Unit) {
 
             Spacer(Modifier.height(4.dp))
             Text(
-                text = "Reminders run with WorkManager (no exact alarms).",
+                text = stringResource(R.string.notifications_workmanager_hint),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )

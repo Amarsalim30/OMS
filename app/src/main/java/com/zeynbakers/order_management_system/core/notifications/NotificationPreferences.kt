@@ -78,7 +78,11 @@ class NotificationPreferences(context: Context) {
         private const val KEY_DUE_REMINDER_HISTORY = "due_reminder_history"
 
         const val LEAD_TIME_1_HOUR = 60
+        const val LEAD_TIME_2_HOURS = 2 * 60
+        const val LEAD_TIME_12_HOURS = 12 * 60
         const val LEAD_TIME_1_DAY = 24 * 60
+        const val LEAD_TIME_30_MIN = 30
+        const val LEAD_TIME_15_MIN = 15
         const val DEFAULT_LEAD_TIME_MINUTES = LEAD_TIME_1_DAY
     }
 }

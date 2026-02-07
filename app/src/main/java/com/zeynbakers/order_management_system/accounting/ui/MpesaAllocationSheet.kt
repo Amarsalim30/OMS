@@ -25,8 +25,10 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.zeynbakers.order_management_system.R
 import com.zeynbakers.order_management_system.core.util.formatDateTime
 import com.zeynbakers.order_management_system.core.util.formatKes
 
@@ -76,9 +78,10 @@ fun MpesaAllocationSheet(
                     text = formatKes(item.amount),
                     style = MaterialTheme.typography.titleLarge
                 )
-                val codeLabel = item.transactionCode?.let { "Code $it" } ?: "No code"
+                val codeLabel = item.transactionCode?.let { stringResource(R.string.money_code_value, it) }
+                    ?: stringResource(R.string.money_no_code)
                 val timeLabel = item.receivedAt?.let { formatDateTime(it) }
-                val meta = listOfNotNull(codeLabel, timeLabel).joinToString(" • ")
+                val meta = listOfNotNull(codeLabel, timeLabel).joinToString(" � ")
                 Text(
                     text = meta,
                     style = MaterialTheme.typography.bodySmall,
@@ -89,9 +92,9 @@ fun MpesaAllocationSheet(
             }
 
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text(text = "Customer", style = MaterialTheme.typography.titleSmall)
+                Text(text = stringResource(R.string.money_customer), style = MaterialTheme.typography.titleSmall)
                 if (item.selectedCustomerId != null && !editingCustomer) {
-                    val name = item.suggestedCustomerName ?: "Customer"
+                    val name = item.suggestedCustomerName ?: stringResource(R.string.money_customer)
                     TextButton(onClick = { editingCustomer = true }) {
                         Text(text = name, style = MaterialTheme.typography.bodyMedium)
                     }
@@ -102,14 +105,14 @@ fun MpesaAllocationSheet(
                                 editingCustomer = true
                                 customerQuery = ""
                             }
-                        ) { Text("Clear") }
+                        ) { Text(stringResource(R.string.action_clear)) }
                     }
                 } else {
                     OutlinedTextField(
                         value = customerQuery,
                         onValueChange = { customerQuery = it },
-                        label = { Text("Search name or phone") },
-                        placeholder = { Text("Customer name or number") },
+                        label = { Text(stringResource(R.string.money_search_name_or_phone)) },
+                        placeholder = { Text(stringResource(R.string.money_customer_name_or_number)) },
                         modifier = Modifier.fillMaxWidth()
                     )
                     if (customerSuggestions.isNotEmpty()) {
@@ -133,25 +136,25 @@ fun MpesaAllocationSheet(
             }
 
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(text = "Allocation", style = MaterialTheme.typography.titleSmall)
+                Text(text = stringResource(R.string.money_allocation), style = MaterialTheme.typography.titleSmall)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     FilterChip(
                         selected = item.allocationMode == AllocationMode.OLDEST_ORDERS,
                         onClick = { onSelectAllocationMode(AllocationMode.OLDEST_ORDERS) },
-                        label = { Text("Oldest orders") },
+                        label = { Text(stringResource(R.string.money_oldest_orders)) },
                         enabled = item.selectedCustomerId != null
                     )
                     FilterChip(
                         selected = item.allocationMode == AllocationMode.CUSTOMER_CREDIT,
                         onClick = { onSelectAllocationMode(AllocationMode.CUSTOMER_CREDIT) },
-                        label = { Text("Customer credit") },
+                        label = { Text(stringResource(R.string.money_customer_credit)) },
                         enabled = item.selectedCustomerId != null
                     )
                 }
 
                 if (item.orderSuggestions.isNotEmpty()) {
                     Text(
-                        text = "Pick order",
+                        text = stringResource(R.string.money_pick_order),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -159,7 +162,10 @@ fun MpesaAllocationSheet(
                         item.orderSuggestions.firstOrNull { it.orderId == item.selectedOrderId }
                     if (selectedOrder != null) {
                         Text(
-                            text = "Selected: ${suggestionLabel(selectedOrder, 22)}",
+                            text = stringResource(
+                                R.string.money_selected_label,
+                                suggestionLabel(selectedOrder, 22)
+                            ),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -174,14 +180,14 @@ fun MpesaAllocationSheet(
                             TextButton(
                                 onClick = { onSelectOrder(suggestion.orderId) }
                             ) {
-                                val rowLabel = "$label • Due $outstanding"
+                                val rowLabel = stringResource(R.string.money_due_amount, label, outstanding)
                                 Text(rowLabel)
                             }
                         }
                     }
                 } else if (item.selectedCustomerId != null) {
                     Text(
-                        text = "No unpaid orders found for this customer.",
+                        text = stringResource(R.string.money_no_open_orders),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -189,7 +195,7 @@ fun MpesaAllocationSheet(
 
                 if (!item.canApply()) {
                     Text(
-                        text = "Needs customer match before applying.",
+                        text = stringResource(R.string.money_needs_customer_match),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.error
                     )
@@ -198,16 +204,16 @@ fun MpesaAllocationSheet(
 
             if (item.duplicateState == DuplicateState.EXISTING) {
                 Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text(text = "Existing receipt", style = MaterialTheme.typography.titleSmall)
+                    Text(text = stringResource(R.string.money_existing_receipt), style = MaterialTheme.typography.titleSmall)
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         TextButton(onClick = onViewExisting) {
-                            Text("View receipt")
+                            Text(stringResource(R.string.money_view_receipt))
                         }
                         Button(
                             onClick = onMoveExisting,
                             enabled = item.canApply()
                         ) {
-                            Text("Move")
+                            Text(stringResource(R.string.action_move))
                         }
                     }
                 }

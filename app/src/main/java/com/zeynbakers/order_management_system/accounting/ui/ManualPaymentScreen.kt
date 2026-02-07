@@ -223,8 +223,41 @@ fun ManualPaymentScreen(
                                             customerQuery = ""
                                         }
                                     ) {
-                                        val label = "${summary.name} - ${summary.phone}"
-                                        Text(label)
+                                        val balanceLabel =
+                                            when {
+                                                summary.balance > BigDecimal.ZERO ->
+                                                    stringResource(
+                                                        R.string.money_due_value,
+                                                        formatKes(summary.balance)
+                                                    )
+                                                summary.balance < BigDecimal.ZERO ->
+                                                    stringResource(
+                                                        R.string.money_credit_value,
+                                                        formatKes(summary.balance.abs())
+                                                    )
+                                                else -> stringResource(R.string.money_balance_clear)
+                                            }
+                                        val primaryLabel =
+                                            if (summary.phone.isBlank()) {
+                                                summary.name
+                                            } else {
+                                                "${summary.name} - ${summary.phone}"
+                                            }
+                                        Column(
+                                            verticalArrangement = Arrangement.spacedBy(2.dp),
+                                            horizontalAlignment = Alignment.Start,
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            Text(
+                                                text = primaryLabel,
+                                                style = MaterialTheme.typography.bodyMedium
+                                            )
+                                            Text(
+                                                text = balanceLabel,
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
                                     }
                                 }
                             }
@@ -237,7 +270,10 @@ fun ManualPaymentScreen(
                         ) {
                             Column(modifier = Modifier.padding(12.dp)) {
                                 Text(
-                                    text = customer?.name?.ifBlank { "Customer" } ?: "Customer",
+                                    text =
+                                        customer?.name?.ifBlank {
+                                            stringResource(R.string.money_customer)
+                                        } ?: stringResource(R.string.money_customer),
                                     style = MaterialTheme.typography.titleSmall
                                 )
                                 customer?.phone?.takeIf { it.isNotBlank() }?.let { phone ->

@@ -33,7 +33,9 @@ import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import com.zeynbakers.order_management_system.R
 
 data class TopLevelDestination(
     val route: String,
@@ -75,7 +77,10 @@ fun AppScaffold(
                 }
                 Spacer(modifier = Modifier.weight(1f))
                 IconButton(onClick = onOpenMore) {
-                    Icon(Icons.Filled.Settings, contentDescription = "Settings")
+                    Icon(
+                        Icons.Filled.Settings,
+                        contentDescription = stringResource(R.string.action_settings)
+                    )
                 }
             }
             Box(modifier = Modifier.weight(1f)) {
@@ -110,7 +115,10 @@ fun AppScaffold(
                         onClick = onOpenMore,
                         modifier = Modifier.padding(end = 6.dp)
                     ) {
-                        Icon(Icons.Filled.Settings, contentDescription = "Settings")
+                        Icon(
+                            Icons.Filled.Settings,
+                            contentDescription = stringResource(R.string.action_settings)
+                        )
                     }
                 }
             }

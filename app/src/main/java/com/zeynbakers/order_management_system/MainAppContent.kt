@@ -1,5 +1,4 @@
 package com.zeynbakers.order_management_system
-
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -90,7 +89,6 @@ import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 import androidx.compose.runtime.State
-
 @OptIn(ExperimentalMaterial3WindowSizeClassApi::class)
 @Composable
 internal fun MainAppContent(
@@ -106,7 +104,6 @@ internal fun MainAppContent(
                 val paymentIntakeViewModel: PaymentIntakeViewModel = viewModel(factory = viewModelFactory)
                 val paymentHistoryViewModel: PaymentIntakeHistoryViewModel = viewModel(factory = viewModelFactory)
                 val ledgerViewModel: LedgerViewModel = viewModel(factory = viewModelFactory)
-
                 val amountRegistry = remember { AmountFieldRegistry() }
                 val voiceRouter = remember { VoiceInputRouter(onApplyTotal = amountRegistry::applyAmount) }
                 val overlaySuppressed = remember { mutableStateOf(false) }
@@ -126,16 +123,13 @@ internal fun MainAppContent(
                     }
                 }
                 val scope = rememberCoroutineScope()
-
                 var currentMonth by rememberSaveable { mutableStateOf(0) }
                 var currentYear by rememberSaveable { mutableStateOf(0) }
                 var baseMonth by rememberSaveable { mutableStateOf(0) }
                 var baseYear by rememberSaveable { mutableStateOf(0) }
-
                 var selectedDate by remember { mutableStateOf<LocalDate?>(null) }
                 var summaryDate by remember { mutableStateOf<LocalDate?>(null) }
                 var quickAddDate by remember { mutableStateOf<LocalDate?>(null) }
-
                 var customerQuery by rememberSaveable { mutableStateOf("") }
                 var paymentIntakeText by rememberSaveable { mutableStateOf<String?>(null) }
                 var moneyTabName by rememberSaveable { mutableStateOf(MoneyTab.Collect.name) }
@@ -143,12 +137,10 @@ internal fun MainAppContent(
                 var statementCustomerId by rememberSaveable { mutableStateOf<Long?>(null) }
                 var showMoreSheet by rememberSaveable { mutableStateOf(false) }
                 var selectedTopLevelRoute by rememberSaveable { mutableStateOf(AppRoutes.Calendar) }
-
                 var importContacts by remember { mutableStateOf<List<ImportContact>>(emptyList()) }
                 var selectedContactPhones by remember { mutableStateOf<Set<String>>(emptySet()) }
                 var isContactsLoading by remember { mutableStateOf(false) }
                 val dayDrafts = remember { mutableStateMapOf<LocalDate, OrderDraft>() }
-
                 var hasRecordPermission by remember {
                     mutableStateOf(
                         ContextCompat.checkSelfPermission(
@@ -157,16 +149,13 @@ internal fun MainAppContent(
                         ) == PackageManager.PERMISSION_GRANTED
                     )
                 }
-
                 val updatePrefs = remember { UpdatePreferences(context) }
                 var showUpdateDialog by remember { mutableStateOf(false) }
                 val navController = rememberNavController()
                 val navBackStackEntry by navController.currentBackStackEntryAsState()
                 val currentRoute = navBackStackEntry?.destination?.route
                 val activeTopLevelRoute = topLevelRouteFor(currentRoute) ?: selectedTopLevelRoute
-
                 val moneyTab = runCatching { MoneyTab.valueOf(moneyTabName) }.getOrDefault(MoneyTab.Collect)
-
                 val updateNotes = remember {
                     listOf(
                         "Share M-PESA messages from Messages directly into the app.",
@@ -178,7 +167,6 @@ internal fun MainAppContent(
                         "Faster voice calculator responses when adding totals."
                     )
                 }
-
                 val contactsPermissionLauncher = rememberLauncherForActivityResult(
                     ActivityResultContracts.RequestPermission()
                 ) { granted: Boolean ->
@@ -194,13 +182,11 @@ internal fun MainAppContent(
                         }
                     }
                 }
-
                 val recordPermissionLauncher = rememberLauncherForActivityResult(
                     ActivityResultContracts.RequestPermission()
                 ) { granted: Boolean ->
                     hasRecordPermission = granted
                 }
-
                 val calendarDays by orderViewModel.calendarDays.collectAsState()
                 val monthTotal by orderViewModel.monthTotal.collectAsState()
                 val monthBadgeCount by orderViewModel.monthBadgeCount.collectAsState()
@@ -216,7 +202,6 @@ internal fun MainAppContent(
                 val unpaidPaidAmounts by orderViewModel.unpaidPaidAmounts.collectAsState()
                 val unpaidCustomerNames by orderViewModel.unpaidCustomerNames.collectAsState()
                 val creditPrompt by orderViewModel.creditPrompt.collectAsState()
-
                 val customerSummaries by customerViewModel.summaries.collectAsState()
                 val customerDetail by customerViewModel.customer.collectAsState()
                 val customerLedger by customerViewModel.ledger.collectAsState()
@@ -224,20 +209,17 @@ internal fun MainAppContent(
                 val customerFinanceSummary by customerViewModel.financeSummary.collectAsState()
                 val customerOrders by customerViewModel.orders.collectAsState()
                 val customerOrderLabels by customerViewModel.orderLabels.collectAsState()
-
                 var pendingCreditPrompt by remember { mutableStateOf<OrderCreditPrompt?>(null) }
                 val incomingIntent by launchIntentState
                 val currentDate: () -> LocalDate = {
                     Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date
                 }
-
                 LaunchedEffect(currentMonth, currentYear) {
                     if (currentMonth > 0 && currentYear > 0) {
                         orderViewModel.loadMonth(month = currentMonth, year = currentYear)
                         orderViewModel.prefetchAdjacentMonths(year = currentYear, month = currentMonth)
                     }
                 }
-
                 LaunchedEffect(Unit) {
                     BackupScheduler.ensureScheduled(context)
                     NotificationScheduler.ensureScheduled(context)
@@ -252,7 +234,6 @@ internal fun MainAppContent(
                         baseYear = now.year
                     }
                 }
-
                 LaunchedEffect(activeTopLevelRoute) {
                     if (activeTopLevelRoute == AppRoutes.Calendar &&
                         updatePrefs.shouldShowUpdate(BuildConfig.VERSION_NAME)
@@ -260,13 +241,11 @@ internal fun MainAppContent(
                         showUpdateDialog = true
                     }
                 }
-
                 LaunchedEffect(creditPrompt) {
                     if (creditPrompt != null) {
                         pendingCreditPrompt = creditPrompt
                     }
                 }
-
                 val openImportContacts: () -> Unit = {
                     val hasPermission =
                         ContextCompat.checkSelfPermission(
@@ -279,7 +258,6 @@ internal fun MainAppContent(
                         contactsPermissionLauncher.launch(Manifest.permission.READ_CONTACTS)
                     }
                 }
-
                 val refreshAfterPayments: () -> Unit = {
                     if (currentMonth > 0 && currentYear > 0) {
                         orderViewModel.loadMonth(month = currentMonth, year = currentYear)
@@ -289,7 +267,6 @@ internal fun MainAppContent(
                     WidgetUpdater.enqueue(context)
                     NotificationScheduler.enqueueNow(context)
                 }
-
                 val voiceCalcAccess =
                     remember(hasRecordPermission) {
                         VoiceCalcAccess(
@@ -300,7 +277,6 @@ internal fun MainAppContent(
                             onApplyAmount = { amount -> amountRegistry.applyAmount(amount) }
                         )
                     }
-
                 LaunchedEffect(incomingIntent) {
                     val intent = incomingIntent ?: return@LaunchedEffect
                     AppShortcuts.reportShortcutUsed(context.applicationContext, intent.action)
@@ -355,7 +331,6 @@ internal fun MainAppContent(
                         }
                     }
                 }
-
                 CompositionLocalProvider(
                     LocalAmountFieldRegistry provides amountRegistry,
                     LocalVoiceCalcAccess provides voiceCalcAccess,
@@ -363,235 +338,159 @@ internal fun MainAppContent(
                     LocalVoiceInputRouter provides voiceRouter,
                     LocalUiEventDispatcher provides uiEventDispatcher
                 ) {
-                    Box(modifier = Modifier.fillMaxSize()) {
-                        val windowSizeClass = calculateWindowSizeClass(activity)
-                        val topLevelDestinations = listOf(
-                            TopLevelDestination(
-                                AppRoutes.Calendar,
-                                stringResource(R.string.nav_calendar),
-                                Icons.Filled.CalendarToday
-                            ),
-                            TopLevelDestination(
-                                AppRoutes.Orders,
-                                stringResource(R.string.nav_orders),
-                                Icons.AutoMirrored.Filled.ListAlt
-                            ),
-                            TopLevelDestination(
-                                AppRoutes.Customers,
-                                stringResource(R.string.nav_customers),
-                                Icons.Filled.People
-                            ),
-                            TopLevelDestination(
-                                AppRoutes.Money,
-                                stringResource(R.string.nav_money),
-                                Icons.Filled.AccountBalanceWallet
-                            )
-                        )
-
-                        val moreActions = listOf(
-                            MoreAction(stringResource(R.string.more_backup_restore), Icons.Filled.Settings) {
-                                showMoreSheet = false
-                                navController.navigate(AppRoutes.Backup)
-                            },
-                            MoreAction(stringResource(R.string.more_notifications), Icons.Filled.Notifications) {
-                                showMoreSheet = false
-                                navController.navigate(AppRoutes.Notifications)
-                            },
-                            MoreAction(stringResource(R.string.more_import_contacts), Icons.Filled.PersonAdd) {
-                                showMoreSheet = false
-                                openImportContacts()
-                            }
-                        )
-
-                        val calendarState = AppCalendarState(
-                            calendarDays = calendarDays,
-                            currentYear = currentYear,
-                            currentMonth = currentMonth,
-                            baseYear = baseYear,
-                            baseMonth = baseMonth,
-                            monthSnapshots = monthSnapshots,
-                            monthTotal = monthTotal,
-                            monthBadgeCount = monthBadgeCount,
-                            selectedDate = selectedDate,
-                            summaryDate = summaryDate,
-                            quickAddDate = quickAddDate,
-                            ordersForDate = ordersForDate,
-                            dayTotal = dayTotal,
-                            orderCustomerNames = orderCustomerNames,
-                            orderPaidAmounts = orderPaidAmounts,
-                            summaryOrders = summaryOrders,
-                            summaryTotal = summaryTotal,
-                            summaryCustomerNames = summaryCustomerNames,
-                            dayDrafts = dayDrafts
-                        )
-
-                        val ordersState = AppOrdersState(
-                            unpaidOrders = unpaidOrders,
-                            unpaidPaidAmounts = unpaidPaidAmounts,
-                            unpaidCustomerNames = unpaidCustomerNames
-                        )
-
-                        val customersState = AppCustomersState(
-                            customerSummaries = customerSummaries,
-                            customerDetail = customerDetail,
-                            customerLedger = customerLedger,
-                            customerBalance = customerBalance,
-                            customerFinanceSummary = customerFinanceSummary,
-                            customerOrders = customerOrders,
-                            customerOrderLabels = customerOrderLabels,
-                            customerQuery = customerQuery,
-                            importContacts = importContacts,
-                            selectedContactPhones = selectedContactPhones,
-                            isContactsLoading = isContactsLoading
-                        )
-
-                        val accountsState = AppAccountsState(
-                            moneyTab = moneyTab,
-                            paymentIntakeText = paymentIntakeText,
-                            manualCustomerId = manualCustomerId,
-                            statementCustomerId = statementCustomerId
-                        )
-
-                        val calendarCallbacks = AppCalendarCallbacks(
-                            onSelectedDateChange = { selectedDate = it },
-                            onSummaryDateChange = { summaryDate = it },
-                            onQuickAddDateChange = { quickAddDate = it },
-                            onMonthSettled = { year, month ->
-                                currentYear = year
-                                currentMonth = month
-                            }
-                        )
-
-                        val customersCallbacks = AppCustomersCallbacks(
-                            onCustomerQueryChange = { customerQuery = it },
-                            onImportContactsChange = { importContacts = it },
-                            onSelectedContactPhonesChange = { selectedContactPhones = it },
-                            onContactsLoadingChange = { isContactsLoading = it }
-                        )
-
-                        val accountsCallbacks = AppAccountsCallbacks(
-                            onMoneyTabChange = { moneyTabName = it.name },
-                            onPaymentIntakeTextChange = { paymentIntakeText = it },
-                            onManualCustomerIdChange = { manualCustomerId = it },
-                            onStatementCustomerIdChange = { statementCustomerId = it }
-                        )
-
-                        val navigationActions = AppFeatureNavigationActions(
-                            onOpenMore = { showMoreSheet = true },
-                            openImportContacts = openImportContacts,
-                            navigateToMoneyRecord = { customerId ->
-                                manualCustomerId = customerId
-                                moneyTabName = MoneyTab.Record.name
-                                selectedTopLevelRoute = AppRoutes.Money
-                                navController.navigate(AppRoutes.Money) { launchSingleTop = true }
-                            },
-                            navigateToMoneyStatements = { customerId ->
-                                statementCustomerId = customerId
-                                moneyTabName = MoneyTab.Statements.name
-                                selectedTopLevelRoute = AppRoutes.Money
-                                navController.navigate(AppRoutes.Money) { launchSingleTop = true }
-                            },
-                            navigateToCalendarQuickAdd = { targetDate ->
-                                selectedDate = targetDate
-                                quickAddDate = targetDate
-                                selectedTopLevelRoute = AppRoutes.Calendar
-                                navigateTopLevel(navController, AppRoutes.Calendar, resetToRoot = true)
-                            },
-                            navigateToPaymentHistory = { filter, focusReceiptId ->
-                                navigateToPaymentHistory(navController, filter, focusReceiptId)
-                            }
-                        )
-
-                        val supportActions = AppFeatureSupportActions(
-                            refreshAfterPayments = refreshAfterPayments,
-                            currentDate = currentDate,
-                            monthLabel = ::monthLabel,
-                            onShowMessage = { message ->
-                                scope.launch { uiEventDispatcher.showSnackbar(message) }
-                            },
-                            loadContacts = {
-                                withContext(Dispatchers.IO) {
-                                    loadAllContacts(context)
-                                }
-                            }
-                        )
-
-                        AppScaffold(
-                            windowSizeClass = windowSizeClass,
-                            destinations = topLevelDestinations,
-                            selectedRoute = activeTopLevelRoute,
-                            onDestinationSelected = { route ->
-                                selectedTopLevelRoute = route
-                                navigateTopLevel(navController, route, resetToRoot = true)
-                            },
-                            showMoreSheet = showMoreSheet,
-                            onOpenMore = { showMoreSheet = true },
-                            onDismissMore = { showMoreSheet = false },
-                            moreActions = moreActions
-                        ) { padding ->
-                            AppFeatureNavHost(
-                                navController = navController,
-                                modifier = Modifier.fillMaxSize().padding(padding),
-                                orderViewModel = orderViewModel,
-                                customerViewModel = customerViewModel,
-                                paymentIntakeViewModel = paymentIntakeViewModel,
-                                paymentHistoryViewModel = paymentHistoryViewModel,
-                                ledgerViewModel = ledgerViewModel,
-                                calendarState = calendarState,
-                                ordersState = ordersState,
-                                customersState = customersState,
-                                accountsState = accountsState,
-                                calendarCallbacks = calendarCallbacks,
-                                customersCallbacks = customersCallbacks,
-                                accountsCallbacks = accountsCallbacks,
-                                navigationActions = navigationActions,
-                                supportActions = supportActions
-                            )
+                    val calendarState = AppCalendarState(
+                        calendarDays = calendarDays,
+                        currentYear = currentYear,
+                        currentMonth = currentMonth,
+                        baseYear = baseYear,
+                        baseMonth = baseMonth,
+                        monthSnapshots = monthSnapshots,
+                        monthTotal = monthTotal,
+                        monthBadgeCount = monthBadgeCount,
+                        selectedDate = selectedDate,
+                        summaryDate = summaryDate,
+                        quickAddDate = quickAddDate,
+                        ordersForDate = ordersForDate,
+                        dayTotal = dayTotal,
+                        orderCustomerNames = orderCustomerNames,
+                        orderPaidAmounts = orderPaidAmounts,
+                        summaryOrders = summaryOrders,
+                        summaryTotal = summaryTotal,
+                        summaryCustomerNames = summaryCustomerNames,
+                        dayDrafts = dayDrafts
+                    )
+                    val ordersState = AppOrdersState(
+                        unpaidOrders = unpaidOrders,
+                        unpaidPaidAmounts = unpaidPaidAmounts,
+                        unpaidCustomerNames = unpaidCustomerNames
+                    )
+                    val customersState = AppCustomersState(
+                        customerSummaries = customerSummaries,
+                        customerDetail = customerDetail,
+                        customerLedger = customerLedger,
+                        customerBalance = customerBalance,
+                        customerFinanceSummary = customerFinanceSummary,
+                        customerOrders = customerOrders,
+                        customerOrderLabels = customerOrderLabels,
+                        customerQuery = customerQuery,
+                        importContacts = importContacts,
+                        selectedContactPhones = selectedContactPhones,
+                        isContactsLoading = isContactsLoading
+                    )
+                    val accountsState = AppAccountsState(
+                        moneyTab = moneyTab,
+                        paymentIntakeText = paymentIntakeText,
+                        manualCustomerId = manualCustomerId,
+                        statementCustomerId = statementCustomerId
+                    )
+                    val calendarCallbacks = AppCalendarCallbacks(
+                        onSelectedDateChange = { selectedDate = it },
+                        onSummaryDateChange = { summaryDate = it },
+                        onQuickAddDateChange = { quickAddDate = it },
+                        onMonthSettled = { year, month ->
+                            currentYear = year
+                            currentMonth = month
                         }
-
-                        SnackbarHost(
-                            hostState = appSnackbarHostState,
-                            modifier = Modifier
-                                .align(Alignment.BottomCenter)
-                                .padding(horizontal = 12.dp, vertical = 10.dp)
-                        )
-
-                        VoiceCalculatorOverlay(
-                            hasPermission = hasRecordPermission,
-                            onRequestPermission = { recordPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO) },
-                            isSuppressed = overlaySuppressed.value,
-                            defaultIdleYDp = 72.dp
-                        )
-
-                        pendingCreditPrompt?.let { prompt ->
-                            CreditPromptDialog(
-                                prompt = prompt,
-                                onDismiss = {
-                                    pendingCreditPrompt = null
-                                    orderViewModel.clearCreditPrompt()
-                                },
-                                onApplyCredit = {
-                                    pendingCreditPrompt = null
-                                    orderViewModel.applyAvailableCreditToOrder(
-                                        orderId = prompt.orderId,
-                                        customerId = prompt.customerId
-                                    )
-                                    refreshAfterPayments()
-                                }
-                            )
+                    )
+                    val customersCallbacks = AppCustomersCallbacks(
+                        onCustomerQueryChange = { customerQuery = it },
+                        onImportContactsChange = { importContacts = it },
+                        onSelectedContactPhonesChange = { selectedContactPhones = it },
+                        onContactsLoadingChange = { isContactsLoading = it }
+                    )
+                    val accountsCallbacks = AppAccountsCallbacks(
+                        onMoneyTabChange = { moneyTabName = it.name },
+                        onPaymentIntakeTextChange = { paymentIntakeText = it },
+                        onManualCustomerIdChange = { manualCustomerId = it },
+                        onStatementCustomerIdChange = { statementCustomerId = it }
+                    )
+                    val navigationActions = AppFeatureNavigationActions(
+                        onOpenMore = { showMoreSheet = true },
+                        openImportContacts = openImportContacts,
+                        navigateToMoneyRecord = { customerId ->
+                            manualCustomerId = customerId
+                            moneyTabName = MoneyTab.Record.name
+                            selectedTopLevelRoute = AppRoutes.Money
+                            navController.navigate(AppRoutes.Money) { launchSingleTop = true }
+                        },
+                        navigateToMoneyStatements = { customerId ->
+                            statementCustomerId = customerId
+                            moneyTabName = MoneyTab.Statements.name
+                            selectedTopLevelRoute = AppRoutes.Money
+                            navController.navigate(AppRoutes.Money) { launchSingleTop = true }
+                        },
+                        navigateToCalendarQuickAdd = { targetDate ->
+                            selectedDate = targetDate
+                            quickAddDate = targetDate
+                            selectedTopLevelRoute = AppRoutes.Calendar
+                            navigateTopLevel(navController, AppRoutes.Calendar, resetToRoot = true)
+                        },
+                        navigateToPaymentHistory = { filter, focusReceiptId ->
+                            navigateToPaymentHistory(navController, filter, focusReceiptId)
                         }
-
-                        if (showUpdateDialog) {
-                            WhatsNewDialog(
-                                notes = updateNotes,
-                                onDismiss = {
-                                    showUpdateDialog = false
-                                    updatePrefs.markVersionSeen(BuildConfig.VERSION_NAME)
-                                }
-                            )
+                    )
+                    val supportActions = AppFeatureSupportActions(
+                        refreshAfterPayments = refreshAfterPayments,
+                        currentDate = currentDate,
+                        monthLabel = ::monthLabel,
+                        onShowMessage = { message ->
+                            scope.launch { uiEventDispatcher.showSnackbar(message) }
+                        },
+                        loadContacts = {
+                            withContext(Dispatchers.IO) {
+                                loadAllContacts(context)
+                            }
                         }
-                    }
+                    )
+                    MainAppHostScaffold(
+                        activity = activity,
+                        navController = navController,
+                        activeTopLevelRoute = activeTopLevelRoute,
+                        selectedTopLevelRoute = selectedTopLevelRoute,
+                        onSelectedTopLevelRouteChange = { selectedTopLevelRoute = it },
+                        showMoreSheet = showMoreSheet,
+                        onShowMoreSheetChange = { showMoreSheet = it },
+                        openImportContacts = openImportContacts,
+                        calendarState = calendarState,
+                        ordersState = ordersState,
+                        customersState = customersState,
+                        accountsState = accountsState,
+                        calendarCallbacks = calendarCallbacks,
+                        customersCallbacks = customersCallbacks,
+                        accountsCallbacks = accountsCallbacks,
+                        navigationActions = navigationActions,
+                        supportActions = supportActions,
+                        orderViewModel = orderViewModel,
+                        customerViewModel = customerViewModel,
+                        paymentIntakeViewModel = paymentIntakeViewModel,
+                        paymentHistoryViewModel = paymentHistoryViewModel,
+                        ledgerViewModel = ledgerViewModel,
+                        appSnackbarHostState = appSnackbarHostState,
+                        hasRecordPermission = hasRecordPermission,
+                        onRequestRecordPermission = {
+                            recordPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                        },
+                        overlaySuppressed = overlaySuppressed,
+                        pendingCreditPrompt = pendingCreditPrompt,
+                        onDismissCreditPrompt = {
+                            pendingCreditPrompt = null
+                            orderViewModel.clearCreditPrompt()
+                        },
+                        onApplyCreditPrompt = { prompt ->
+                            pendingCreditPrompt = null
+                            orderViewModel.applyAvailableCreditToOrder(
+                                orderId = prompt.orderId,
+                                customerId = prompt.customerId
+                            )
+                            refreshAfterPayments()
+                        },
+                        showUpdateDialog = showUpdateDialog,
+                        updateNotes = updateNotes,
+                        onDismissUpdateDialog = {
+                            showUpdateDialog = false
+                            updatePrefs.markVersionSeen(BuildConfig.VERSION_NAME)
+                        }
+                    )
                 }
             }
-        
 }

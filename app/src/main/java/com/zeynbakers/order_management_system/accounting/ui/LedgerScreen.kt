@@ -17,7 +17,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material3.Card
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
@@ -36,17 +35,21 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.zeynbakers.order_management_system.R
+import com.zeynbakers.order_management_system.core.ui.components.AppCard
+import com.zeynbakers.order_management_system.core.ui.components.AppEmptyState
 import com.zeynbakers.order_management_system.accounting.data.EntryType
 import com.zeynbakers.order_management_system.core.util.formatDateTime
 import com.zeynbakers.order_management_system.core.util.formatKes
 
-private enum class LedgerFilter(val label: String) {
-    All("All"),
-    Charges("Charges"),
-    Payments("Payments"),
-    Adjustments("Adjustments")
+private enum class LedgerFilter(val labelRes: Int) {
+    All(R.string.ledger_filter_all),
+    Charges(R.string.ledger_filter_charges),
+    Payments(R.string.ledger_filter_payments),
+    Adjustments(R.string.ledger_filter_adjustments)
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -82,10 +85,10 @@ fun LedgerScreen(
         topBar = {
             if (showTopBar) {
                 CenterAlignedTopAppBar(
-                    title = { Text("Ledger") },
+                    title = { Text(stringResource(R.string.money_ledger_title)) },
                     navigationIcon = {
                         IconButton(onClick = onBack) {
-                            Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                            Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.action_back))
                         }
                     }
                 )
@@ -112,7 +115,7 @@ fun LedgerScreen(
                         FilterChip(
                             selected = filter == option,
                             onClick = { filter = option },
-                            label = { Text(option.label) }
+                            label = { Text(stringResource(option.labelRes)) }
                         )
                     }
                 }
@@ -137,28 +140,28 @@ private fun LedgerSummaryCard(summary: LedgerSummaryUi?) {
         color = MaterialTheme.colorScheme.surfaceContainerHighest
     ) {
         Column(modifier = Modifier.fillMaxWidth().padding(12.dp)) {
-            Text(text = "Ledger snapshot", style = MaterialTheme.typography.titleSmall)
+            Text(text = stringResource(R.string.ledger_snapshot), style = MaterialTheme.typography.titleSmall)
             Spacer(Modifier.height(4.dp))
             if (summary == null) {
                 Text(
-                    text = "Loading totals...",
+                    text = stringResource(R.string.ledger_loading_totals),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             } else {
-                SummaryRow(label = "Charges", amount = formatKes(summary.totalDebits))
-                SummaryRow(label = "Payments", amount = formatKes(summary.totalCredits))
-                SummaryRow(label = "Write-offs", amount = formatKes(summary.totalWriteOffs))
-                SummaryRow(label = "Reversals", amount = formatKes(summary.totalReversals))
+                LedgerSummaryRow(label = stringResource(R.string.ledger_filter_charges), amount = formatKes(summary.totalDebits))
+                LedgerSummaryRow(label = stringResource(R.string.ledger_filter_payments), amount = formatKes(summary.totalCredits))
+                LedgerSummaryRow(label = stringResource(R.string.ledger_write_offs), amount = formatKes(summary.totalWriteOffs))
+                LedgerSummaryRow(label = stringResource(R.string.ledger_reversals), amount = formatKes(summary.totalReversals))
                 Spacer(Modifier.height(4.dp))
-                SummaryRow(label = "Net balance", amount = formatKes(summary.netBalance))
+                LedgerSummaryRow(label = stringResource(R.string.ledger_net_balance), amount = formatKes(summary.netBalance))
             }
         }
     }
 }
 
 @Composable
-private fun SummaryRow(label: String, amount: String) {
+private fun LedgerSummaryRow(label: String, amount: String) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween
@@ -171,10 +174,10 @@ private fun SummaryRow(label: String, amount: String) {
 @Composable
 private fun LedgerEntryCard(entry: LedgerEntryUi) {
     val typeLabel = entryTypeLabel(entry.type)
-    val amountColor = entryTypeColor(entry.type)
+    val amountColor = ledgerEntryTypeColor(entry.type)
     val sign = if (entry.type == EntryType.DEBIT || entry.type == EntryType.REVERSAL) "+" else "-"
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+    AppCard {
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -209,31 +212,24 @@ private fun LedgerEntryCard(entry: LedgerEntryUi) {
 
 @Composable
 private fun EmptyLedgerState() {
-    Surface(
-        tonalElevation = 1.dp,
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
-        shape = MaterialTheme.shapes.medium
-    ) {
-        Text(
-            text = "No ledger entries yet.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.fillMaxWidth().padding(10.dp)
-        )
-    }
+    AppEmptyState(
+        title = stringResource(R.string.money_ledger_title),
+        body = stringResource(R.string.ledger_no_entries)
+    )
 }
 
+@Composable
 private fun entryTypeLabel(type: EntryType): String {
     return when (type) {
-        EntryType.DEBIT -> "Order charge"
-        EntryType.CREDIT -> "Payment"
-        EntryType.WRITE_OFF -> "Write-off"
-        EntryType.REVERSAL -> "Payment reversal"
+        EntryType.DEBIT -> stringResource(R.string.ledger_entry_order_charge)
+        EntryType.CREDIT -> stringResource(R.string.ledger_entry_payment)
+        EntryType.WRITE_OFF -> stringResource(R.string.ledger_entry_write_off)
+        EntryType.REVERSAL -> stringResource(R.string.ledger_entry_payment_reversal)
     }
 }
 
 @Composable
-private fun entryTypeColor(type: EntryType) =
+private fun ledgerEntryTypeColor(type: EntryType) =
     when (type) {
         EntryType.DEBIT -> MaterialTheme.colorScheme.error
         EntryType.CREDIT -> MaterialTheme.colorScheme.primary

@@ -26,6 +26,8 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
+import com.zeynbakers.order_management_system.R
 import com.zeynbakers.order_management_system.core.util.formatKes
 import com.zeynbakers.order_management_system.core.util.normalizePickupTime
 import com.zeynbakers.order_management_system.core.ui.LocalAmountFieldRegistry
@@ -44,6 +46,8 @@ import kotlinx.coroutines.launch
 import kotlinx.datetime.LocalDate
 import java.util.Calendar
 import java.util.Locale
+import java.time.format.DateTimeFormatter
+import kotlinx.datetime.toJavaLocalDate
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -236,7 +240,10 @@ fun CalendarScreen(
                     isQuickAddOpen = true
                 }
             ) {
-                Icon(imageVector = Icons.Filled.Add, contentDescription = "Add order")
+                Icon(
+                    imageVector = Icons.Filled.Add,
+                    contentDescription = stringResource(R.string.calendar_add_order)
+                )
             }
         }
     ) { padding ->
@@ -338,6 +345,12 @@ fun CalendarScreen(
 
     if (isQuickAddOpen && activeDate != null) {
         val amountRegistry = LocalAmountFieldRegistry.current
+        val notesRequiredMessage = stringResource(R.string.day_editor_notes_required)
+        val validTotalRequiredMessage = stringResource(R.string.day_editor_valid_total_required)
+        val phoneRequiredMessage = stringResource(R.string.day_editor_phone_required_for_customer)
+        val addOrderDateLabel = remember(activeDate) {
+            DateTimeFormatter.ofPattern("d MMM", Locale.getDefault()).format(activeDate.toJavaLocalDate())
+        }
         val notesState by rememberUpdatedState(notes)
         val setNotes by rememberUpdatedState<(String) -> Unit>({ notes = it })
         DisposableEffect(Unit) {
@@ -363,19 +376,19 @@ fun CalendarScreen(
         fun submitOrder() {
             when {
                 trimmedNotes.isEmpty() -> {
-                    notesError = "Notes are required"
+                    notesError = notesRequiredMessage
                     totalError = null
                     customerError = null
                 }
                 parsedTotal == null || parsedTotal <= BigDecimal.ZERO -> {
                     notesError = null
-                    totalError = "Enter a valid total"
+                    totalError = validTotalRequiredMessage
                     customerError = null
                 }
                 hasCustomerMismatch -> {
                     notesError = null
                     totalError = null
-                    customerError = "Phone is required to attach a customer"
+                    customerError = phoneRequiredMessage
                 }
                 isPickupTimeInvalid -> {
                     notesError = null
@@ -405,7 +418,7 @@ fun CalendarScreen(
         }
 
         OrderEditorSheet(
-            title = "Add order on ${activeDate.dayOfMonth} ${activeDate.month.name.lowercase().replaceFirstChar { it.uppercase() }}",
+            title = stringResource(R.string.calendar_order_add_title, addOrderDateLabel),
             notes = notes,
             onNotesChange = {
                 notes = it
@@ -419,8 +432,8 @@ fun CalendarScreen(
             },
             isTotalInvalid = parsedTotal == null && totalText.isNotBlank(),
             totalSupportingText = when {
-                parsedTotal == null && totalText.isNotBlank() -> "Enter a valid total"
-                formattedTotal != null -> "Will save as $formattedTotal"
+                parsedTotal == null && totalText.isNotBlank() -> validTotalRequiredMessage
+                formattedTotal != null -> stringResource(R.string.calendar_total_will_save, formattedTotal)
                 else -> null
             },
             totalError = totalError,

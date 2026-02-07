@@ -36,8 +36,11 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.zeynbakers.order_management_system.R
 
 @Composable
 @OptIn(ExperimentalMaterial3Api::class)
@@ -62,17 +65,23 @@ fun ImportContactsScreen(
     val allVisibleSelected =
         visiblePhones.isNotEmpty() && visiblePhones.all { selectedPhones.contains(it) }
     val isFiltered = query.isNotBlank() && filteredContacts.size != contacts.size
+    val selectedLabel =
+        pluralStringResource(
+            id = R.plurals.import_contacts_selected_count,
+            count = selectedCount,
+            selectedCount
+        )
 
     Scaffold(
         contentWindowInsets = WindowInsets(0),
         topBar = {
             CenterAlignedTopAppBar(
-                title = { Text(text = "Import contacts") },
+                title = { Text(text = stringResource(R.string.import_contacts_title)) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back"
+                            contentDescription = stringResource(R.string.action_back)
                         )
                     }
                 }
@@ -88,7 +97,7 @@ fun ImportContactsScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "$selectedCount selected",
+                        text = selectedLabel,
                         style = MaterialTheme.typography.labelLarge,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -96,7 +105,12 @@ fun ImportContactsScreen(
                         onClick = onImport,
                         enabled = selectedCount > 0
                     ) {
-                        Text(text = "Import ($selectedCount)")
+                        Text(
+                            text = stringResource(
+                                R.string.import_contacts_action_with_count,
+                                selectedCount
+                            )
+                        )
                     }
                 }
             }
@@ -118,7 +132,7 @@ fun ImportContactsScreen(
             }
 
             Text(
-                text = "Import customers from your phonebook. We skip empty numbers automatically.",
+                text = stringResource(R.string.import_contacts_hint),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -128,8 +142,8 @@ fun ImportContactsScreen(
             OutlinedTextField(
                 value = query,
                 onValueChange = { query = it },
-                label = { Text("Search contacts") },
-                placeholder = { Text("Name or phone") },
+                label = { Text(stringResource(R.string.import_contacts_search_label)) },
+                placeholder = { Text(stringResource(R.string.import_contacts_search_placeholder)) },
                 modifier = Modifier.fillMaxWidth()
             )
 
@@ -137,14 +151,19 @@ fun ImportContactsScreen(
 
             if (contacts.isEmpty()) {
                 Text(
-                    text = "No contacts found on this device.",
+                    text = stringResource(R.string.import_contacts_empty_device),
                     style = MaterialTheme.typography.bodyMedium
                 )
                 return@Column
             }
 
             SelectAllRow(
-                label = if (isFiltered) "Select all (visible)" else "Select all",
+                label =
+                    if (isFiltered) {
+                        stringResource(R.string.import_contacts_select_all_visible)
+                    } else {
+                        stringResource(R.string.import_contacts_select_all)
+                    },
                 selected = allVisibleSelected,
                 onToggle = { onToggleSelectAll(visiblePhones) }
             )
@@ -153,7 +172,7 @@ fun ImportContactsScreen(
 
             if (filteredContacts.isEmpty()) {
                 Text(
-                    text = "No matches for \"$query\".",
+                    text = stringResource(R.string.import_contacts_no_matches, query),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -196,7 +215,7 @@ private fun SelectAllRow(
             RoundCheckToggle(
                 selected = selected,
                 onToggle = onToggle,
-                contentDescription = "Select all"
+                contentDescription = stringResource(R.string.import_contacts_select_all)
             )
             Spacer(Modifier.size(8.dp))
             Text(text = label, style = MaterialTheme.typography.titleMedium)
@@ -224,7 +243,8 @@ private fun ContactRow(
             RoundCheckToggle(
                 selected = selected,
                 onToggle = onToggle,
-                contentDescription = "Select ${contact.name}"
+                contentDescription =
+                    stringResource(R.string.import_contacts_select_contact, contact.name)
             )
             Spacer(Modifier.size(10.dp))
             Column(modifier = Modifier.weight(1f)) {

@@ -1,5 +1,4 @@
 package com.zeynbakers.order_management_system.order.ui
-
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -52,6 +51,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -63,6 +63,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.foundation.shape.RoundedCornerShape
+import com.zeynbakers.order_management_system.R
 import com.zeynbakers.order_management_system.core.ui.LocalAmountFieldRegistry
 import com.zeynbakers.order_management_system.core.ui.LocalVoiceCalcAccess
 import com.zeynbakers.order_management_system.core.ui.LocalVoiceOverlaySuppressed
@@ -84,7 +85,6 @@ import java.util.Locale
 import kotlinx.datetime.LocalDate
 import kotlinx.coroutines.launch
 import androidx.compose.material3.FilterChip
-
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun DayDetailScreen(
@@ -145,7 +145,6 @@ fun DayDetailScreen(
             maximumFractionDigits = 2
         }
     }
-
     LaunchedEffect(notes, totalText, customerName, customerPhone, pickupTimeText, editingOrderId) {
         val hasDraftContent =
             notes.isNotBlank() ||
@@ -169,7 +168,6 @@ fun DayDetailScreen(
             onDraftChange(null)
         }
     }
-
     LaunchedEffect(editingOrderId) {
         if (editingOrderId == null) {
             customerName = ""
@@ -195,17 +193,14 @@ fun DayDetailScreen(
         customerName = customer.name
         customerPhone = customer.phone
     }
-
     LaunchedEffect(isEditorOpen) {
         overlaySuppressed.value = isEditorOpen
     }
-
     DisposableEffect(Unit) {
         onDispose {
             overlaySuppressed.value = false
         }
     }
-
     LaunchedEffect(customerName, customerPhone) {
         val query = when {
             customerName.isNotBlank() -> customerName
@@ -214,7 +209,6 @@ fun DayDetailScreen(
         }
         suggestions = if (query.isBlank()) emptyList() else searchCustomers(query)
     }
-
     LaunchedEffect(pendingDeleteOrder?.id) {
         val order = pendingDeleteOrder ?: return@LaunchedEffect
         deleteAllocations = loadOrderPaymentAllocations(order.id)
@@ -230,9 +224,7 @@ fun DayDetailScreen(
         deleteSelectedOrderId = deleteMoveOrderOptions.firstOrNull()?.orderId
         deleteMoveFullReceipts = true
     }
-
     BackHandler(enabled = !isEditorOpen, onBack = onBack)
-
     val dayStats = remember(orders, orderPaidAmounts, dayTotal) {
         computeDayStats(orders, orderPaidAmounts, dayTotal)
     }
@@ -278,25 +270,11 @@ fun DayDetailScreen(
             onBack()
         }
     }
-    val (emptyTitle, emptySubtitle) = remember(orders, orderFilter, searchQuery) {
-        when {
-            orders.isEmpty() ->
-                Pair("No orders yet", "Tap + to add the first order.")
-            searchQuery.isNotBlank() ->
-                Pair("No matches", "Try a different name or note.")
-            orderFilter == DayOrderFilter.Unpaid ->
-                Pair("No unpaid orders", "All orders are paid or partial.")
-            orderFilter == DayOrderFilter.Partial ->
-                Pair("No partial payments", "No orders are partially paid.")
-            orderFilter == DayOrderFilter.Paid ->
-                Pair("No paid orders", "No orders are fully paid yet.")
-            orderFilter == DayOrderFilter.Overpaid ->
-                Pair("No overpaid orders", "No orders have extra payments.")
-            else ->
-                Pair("No orders", "Try a different filter.")
-        }
+    val emptyStateRes: Pair<Int, Int> = remember(orders, orderFilter, searchQuery) {
+        dayEmptyStateRes(orders = orders, orderFilter = orderFilter, searchQuery = searchQuery)
     }
-
+    val emptyTitleRes = emptyStateRes.first
+    val emptySubtitleRes = emptyStateRes.second
     Scaffold(
         contentWindowInsets = WindowInsets(0),
         topBar = {
@@ -317,7 +295,10 @@ fun DayDetailScreen(
                 },
                 navigationIcon = {
                     IconButton(onClick = onBackClick) {
-                        Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = stringResource(R.string.action_back)
+                        )
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors()
@@ -345,7 +326,7 @@ fun DayDetailScreen(
                 customerError = null
                 isEditorOpen = true
             }) {
-                Icon(imageVector = Icons.Filled.Add, contentDescription = "Add order")
+                Icon(imageVector = Icons.Filled.Add, contentDescription = stringResource(R.string.day_add_order))
             }
         }
     ) { padding ->
@@ -357,7 +338,6 @@ fun DayDetailScreen(
                     stats = dayStats
                 )
             }
-
             if (orders.isNotEmpty()) {
                 item {
                     Column(
@@ -375,14 +355,12 @@ fun DayDetailScreen(
                                 onSelect = { selected -> orderFilter = DayOrderFilter.valueOf(selected) }
                             )
                         }
-
                         Spacer(Modifier.height(10.dp))
-
                         OutlinedTextField(
                             value = searchQuery,
                             onValueChange = { searchQuery = it },
-                            label = { Text("Search orders") },
-                            placeholder = { Text("Notes or customer") },
+                            label = { Text(stringResource(R.string.day_search_orders)) },
+                            placeholder = { Text(stringResource(R.string.day_search_notes_or_customer)) },
                             leadingIcon = {
                                 Icon(imageVector = Icons.Filled.Search, contentDescription = null)
                             },
@@ -391,7 +369,7 @@ fun DayDetailScreen(
                                     IconButton(onClick = { searchQuery = "" }) {
                                         Icon(
                                             imageVector = Icons.Filled.Close,
-                                            contentDescription = "Clear search"
+                                            contentDescription = stringResource(R.string.day_clear_search)
                                         )
                                     }
                                 }
@@ -399,14 +377,16 @@ fun DayDetailScreen(
                             singleLine = true,
                             modifier = Modifier.fillMaxWidth()
                         )
-
                         Spacer(Modifier.height(6.dp))
-
                         val orderCountLabel =
                             if (searchQuery.isBlank() && orderFilter == DayOrderFilter.All) {
-                                "${filteredOrders.size} orders"
+                                stringResource(R.string.day_orders_count, filteredOrders.size)
                             } else {
-                                "Showing ${filteredOrders.size} of ${orders.size} orders"
+                                stringResource(
+                                    R.string.day_showing_orders_count,
+                                    filteredOrders.size,
+                                    orders.size
+                                )
                             }
                         Text(
                             text = orderCountLabel,
@@ -416,15 +396,17 @@ fun DayDetailScreen(
                     }
                 }
             }
-
             if (filteredOrders.isEmpty()) {
                 item {
-                    EmptyDayState(title = emptyTitle, subtitle = emptySubtitle)
+                    EmptyDayState(
+                        title = stringResource(emptyTitleRes),
+                        subtitle = stringResource(emptySubtitleRes)
+                    )
                 }
             } else {
                 items(filteredOrders) { order ->
                     val customerLabel =
-                        order.customerId?.let { customerNames[it] } ?: "No customer"
+                        order.customerId?.let { customerNames[it] } ?: stringResource(R.string.day_no_customer)
                     val paidAmount = orderPaidAmounts[order.id] ?: BigDecimal.ZERO
                     val paymentState = resolvePaymentState(order.totalAmount, paidAmount)
                     OrderListItem(
@@ -449,499 +431,60 @@ fun DayDetailScreen(
                     )
                 }
             }
-
             item {
                 Spacer(Modifier.height(80.dp))
             }
         }
     }
-
-    if (isEditorOpen) {
-        val paidAmount = editingOrderId?.let { orderPaidAmounts[it] } ?: BigDecimal.ZERO
-        val trimmedTotal = totalText.trim()
-        val parsedTotal = trimmedTotal.toBigDecimalOrNull()
-        val currentTotal = parsedTotal ?: BigDecimal.ZERO
-        val statusText = if (paidAmount >= currentTotal && currentTotal > BigDecimal.ZERO) "Paid" else "Unpaid"
-        val remaining = if (currentTotal > paidAmount) currentTotal.subtract(paidAmount) else BigDecimal.ZERO
-        val formattedTotal = parsedTotal?.let { formatter.format(it) }
-        val isTotalInvalid = trimmedTotal.isNotEmpty() && parsedTotal == null
-        val normalizedPickupTime =
-            if (pickupTimeText.isBlank()) null else normalizePickupTime(pickupTimeText)
-        val isPickupTimeInvalid = pickupTimeText.isNotBlank() && normalizedPickupTime == null
-        val hasCustomerMismatch = customerName.isNotBlank() && customerPhone.isBlank()
-        val canSave =
-            notes.trim().isNotEmpty() &&
-                parsedTotal != null &&
-                parsedTotal > BigDecimal.ZERO &&
-                !hasCustomerMismatch &&
-                !isPickupTimeInvalid
-        val notesState by rememberUpdatedState(notes)
-        val setNotes by rememberUpdatedState<(String) -> Unit>({ notes = it })
-        DisposableEffect(Unit) {
-            voiceRouter.registerNotesTarget(getNotes = { notesState }, setNotes = setNotes)
-            onDispose { voiceRouter.clearNotesTarget() }
-        }
-
-        fun submitOrder() {
-            val trimmedNotes = notes.trim()
-            val finalTotal = trimmedTotal.toBigDecimalOrNull()?.setScale(2, RoundingMode.HALF_UP)
-
-            when {
-                trimmedNotes.isEmpty() -> {
-                    notesError = "Notes are required"
-                    totalError = null
-                    customerError = null
-                }
-                finalTotal == null || finalTotal <= BigDecimal.ZERO -> {
-                    notesError = null
-                    totalError = "Enter a valid total"
-                    customerError = null
-                }
-                hasCustomerMismatch -> {
-                    notesError = null
-                    totalError = null
-                    customerError = "Phone is required to attach a customer"
-                }
-                isPickupTimeInvalid -> {
-                    notesError = null
-                    totalError = null
-                    customerError = null
-                }
-                else -> {
-                    onSaveOrder(
-                        trimmedNotes,
-                        finalTotal,
-                        customerName.trim(),
-                        customerPhone.trim(),
-                        normalizedPickupTime,
-                        editingOrderId
-                    )
-                    notes = ""
-                    totalText = ""
-                    customerName = ""
-                    customerPhone = ""
-                    pickupTimeText = ""
-                    editingOrderId = null
-                    notesError = null
-                    totalError = null
-                    customerError = null
-                    onDraftChange(null)
-                    isEditorOpen = false
-                }
-            }
-        }
-
-        OrderEditorSheet(
-            title = if (editingOrderId == null) "New Order" else "Edit Order",
-            notes = notes,
-            onNotesChange = {
-                notes = it
-                notesError = null
-            },
-            notesError = notesError,
-            totalText = totalText,
-            onTotalTextChange = {
-                totalText = sanitizeAmountInput(it)
-                totalError = null
-            },
-            isTotalInvalid = isTotalInvalid,
-            totalSupportingText = when {
-                isTotalInvalid -> "Enter a valid amount."
-                formattedTotal != null -> "Total: KSh $formattedTotal"
-                else -> null
-            },
-            totalError = totalError,
-            statusText = "Status: $statusText - Paid ${formatKes(paidAmount)} - Due ${formatKes(remaining)}",
-            pickupTimeText = pickupTimeText,
-            onPickupTimeChange = { pickupTimeText = sanitizePickupTimeInput(it) },
-            isPickupTimeInvalid = isPickupTimeInvalid,
-            customerName = customerName,
-            onCustomerNameChange = {
-                customerName = it
-                customerError = null
-            },
-            customerPhone = customerPhone,
-            onCustomerPhoneChange = {
-                customerPhone = it
-                customerError = null
-            },
-            suggestions = suggestions,
-            onSuggestionSelected = { customer ->
-                customerName = customer.name
-                customerPhone = customer.phone
-                suggestions = emptyList()
-            },
-            customerError = customerError,
-            canSave = canSave,
-            onSave = { submitOrder() },
-            onClear = {
-                notes = ""
-                totalText = ""
-                customerName = ""
-                customerPhone = ""
-                pickupTimeText = ""
-                editingOrderId = null
-                notesError = null
-                totalError = null
-                customerError = null
-                onDraftChange(null)
-            },
-            onCancel = { isEditorOpen = false },
-            onNotesFocused = { voiceRouter.onFocusTarget(VoiceTarget.Notes) },
-            onTotalFocused = { setter ->
-                amountRegistry.update(setter)
-                voiceRouter.onFocusTarget(VoiceTarget.Total)
-            },
-            voiceHasPermission = voiceCalcAccess.hasPermission,
-            onRequestVoicePermission = voiceCalcAccess.onRequestPermission
-        )
-    }
-
-    if (pendingDeleteOrder != null) {
-        val order = pendingDeleteOrder!!
-        val hasAllocations = deleteAllocations.isNotEmpty()
-        val selectedAllocations =
-            deleteAllocations.filter { allocation -> deleteSelection.contains(allocation.allocationId) }
-        val targetAllocation =
-            if (deleteAction == OrderPaymentAction.MOVE) {
-                when (deleteMoveTarget) {
-                    DeleteMoveTarget.ORDER ->
-                        deleteSelectedOrderId?.let { ReceiptAllocation.Order(it) }
-                    DeleteMoveTarget.OLDEST_ORDERS ->
-                        order.customerId?.let { ReceiptAllocation.OldestOrders(it) }
-                    DeleteMoveTarget.CUSTOMER_CREDIT ->
-                        order.customerId?.let { ReceiptAllocation.CustomerCredit(it) }
-                }
-            } else {
-                null
-            }
-        val canConfirm =
-            if (!hasAllocations) {
-                true
-            } else {
-                when (deleteAction) {
-                    OrderPaymentAction.MOVE ->
-                        selectedAllocations.isNotEmpty() && targetAllocation != null
-                    OrderPaymentAction.VOID -> selectedAllocations.isNotEmpty()
-                }
-            }
-
-        AlertDialog(
-            onDismissRequest = { pendingDeleteOrder = null },
-            title = { Text("Delete order?") },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    val label =
-                        formatOrderLabelWithId(
-                            orderId = order.id,
-                            date = order.orderDate,
-                            customerName = order.customerId?.let { customerNames[it] },
-                            notes = order.notes,
-                            totalAmount = order.totalAmount
-                        )
-                    Text("$label will be cancelled and removed from totals.")
-
-                    if (!hasAllocations) {
-                        Text(
-                            text = "No payments are linked to this order.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    } else {
-                        Text(
-                            text = "Select payments to move or delete.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            TextButton(
-                                onClick = {
-                                    deleteSelection = deleteAllocations.map { it.allocationId }.toSet()
-                                }
-                            ) { Text("Select all") }
-                            TextButton(onClick = { deleteSelection = emptySet() }) { Text("Clear") }
-                        }
-
-                        Column(
-                            modifier = Modifier
-                                .heightIn(max = 220.dp)
-                                .verticalScroll(rememberScrollState()),
-                            verticalArrangement = Arrangement.spacedBy(6.dp)
-                        ) {
-                            deleteAllocations.forEach { allocation ->
-                                val selected = deleteSelection.contains(allocation.allocationId)
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Checkbox(
-                                        checked = selected,
-                                        onCheckedChange = { checked ->
-                                            deleteSelection =
-                                                if (checked) {
-                                                    deleteSelection + allocation.allocationId
-                                                } else {
-                                                    deleteSelection - allocation.allocationId
-                                                }
-                                        }
-                                    )
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        val codeLabel =
-                                            allocation.transactionCode?.let { "${allocation.method.name} $it" }
-                                                ?: allocation.method.name
-                                        Text(
-                                            text = "${formatKes(allocation.amount)} - $codeLabel",
-                                            style = MaterialTheme.typography.bodyMedium
-                                        )
-                                        Text(
-                                            text = formatDateTime(allocation.receivedAt),
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                        val sender =
-                                            allocation.senderName?.takeIf { it.isNotBlank() }
-                                                ?: allocation.senderPhone?.takeIf { it.isNotBlank() }
-                                        if (sender != null) {
-                                            Text(
-                                                text = "From $sender",
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                        }
-
-                        Spacer(Modifier.height(6.dp))
-                        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            FilterChip(
-                                selected = deleteAction == OrderPaymentAction.MOVE,
-                                onClick = { deleteAction = OrderPaymentAction.MOVE },
-                                label = { Text("Move payments") }
-                            )
-                            FilterChip(
-                                selected = deleteAction == OrderPaymentAction.VOID,
-                                onClick = { deleteAction = OrderPaymentAction.VOID },
-                                label = { Text("Delete payments") }
-                            )
-                        }
-
-                        if (deleteAction == OrderPaymentAction.MOVE) {
-                            if (order.customerId == null) {
-                                Text(
-                                    text = "No customer on this order. Choose a target order.",
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                FilterChip(
-                                    selected = deleteMoveTarget == DeleteMoveTarget.ORDER,
-                                    onClick = { deleteMoveTarget = DeleteMoveTarget.ORDER },
-                                    label = { Text("Order") }
-                                )
-                                if (order.customerId != null) {
-                                    FilterChip(
-                                        selected = deleteMoveTarget == DeleteMoveTarget.OLDEST_ORDERS,
-                                        onClick = { deleteMoveTarget = DeleteMoveTarget.OLDEST_ORDERS },
-                                        label = { Text("Oldest orders") }
-                                    )
-                                    FilterChip(
-                                        selected = deleteMoveTarget == DeleteMoveTarget.CUSTOMER_CREDIT,
-                                        onClick = { deleteMoveTarget = DeleteMoveTarget.CUSTOMER_CREDIT },
-                                        label = { Text("Customer credit") }
-                                    )
-                                }
-                            }
-
-                            if (deleteMoveTarget == DeleteMoveTarget.ORDER) {
-                                if (deleteMoveOrderOptions.isEmpty()) {
-                                    Text(
-                                        text = "No other orders available.",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                } else {
-                                    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                        deleteMoveOrderOptions.forEach { option ->
-                                            FilterChip(
-                                                selected = deleteSelectedOrderId == option.orderId,
-                                                onClick = { deleteSelectedOrderId = option.orderId },
-                                                label = { Text(option.label) }
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Checkbox(
-                                    checked = deleteMoveFullReceipts,
-                                    onCheckedChange = { deleteMoveFullReceipts = it }
-                                )
-                                Text(
-                                    text = "Move full receipts (affects other orders)",
-                                    style = MaterialTheme.typography.bodySmall
-                                )
-                            }
-                        }
-                    }
-                }
-            },
-            confirmButton = {
-                Button(
-                    onClick = {
-                        val allocationIds = selectedAllocations.map { it.allocationId }
-                        scope.launch {
-                            if (!hasAllocations) {
-                                onDeleteOrder(order.id)
-                            } else {
-                                onDeleteOrderWithPayments(
-                                    order.id,
-                                    date,
-                                    allocationIds,
-                                    deleteAction,
-                                    targetAllocation,
-                                    deleteMoveFullReceipts
-                                )
-                            }
-                            pendingDeleteOrder = null
-                        }
-                    },
-                    enabled = canConfirm
-                ) {
-                    Text("Delete order")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { pendingDeleteOrder = null }) {
-                    Text("Cancel")
-                }
-            }
-        )
-    }
-}
-
-
-internal fun resolvePaymentState(total: BigDecimal, paidAmount: BigDecimal): PaymentState {
-    if (paidAmount.compareTo(BigDecimal.ZERO) <= 0) {
-        return PaymentState.UNPAID
-    }
-    val balance = total.subtract(paidAmount)
-    return when {
-        balance.compareTo(BigDecimal.ZERO) > 0 -> PaymentState.PARTIAL
-        balance.compareTo(BigDecimal.ZERO) == 0 -> PaymentState.PAID
-        else -> PaymentState.OVERPAID
-    }
-}
-
-@Composable
-internal fun paymentStateColor(state: PaymentState): Color {
-    return when (state) {
-        PaymentState.PAID -> MaterialTheme.colorScheme.tertiary
-        PaymentState.PARTIAL -> MaterialTheme.colorScheme.secondary
-        PaymentState.UNPAID -> MaterialTheme.colorScheme.error
-        PaymentState.OVERPAID -> MaterialTheme.colorScheme.primary
-    }
-}
-
-internal fun paymentStateLabel(state: PaymentState): String {
-    return when (state) {
-        PaymentState.PAID -> "Paid"
-        PaymentState.PARTIAL -> "Partial"
-        PaymentState.UNPAID -> "Unpaid"
-        PaymentState.OVERPAID -> "Overpaid"
-    }
-}
-
-private fun computeDayStats(
-    orders: List<OrderEntity>,
-    orderPaidAmounts: Map<Long, BigDecimal>,
-    dayTotal: BigDecimal
-): DaySummaryStats {
-    var paidCount = 0
-    var partialCount = 0
-    var unpaidCount = 0
-    var overpaidCount = 0
-    var totalPaid = BigDecimal.ZERO
-
-    orders.forEach { order ->
-        val paidAmount = orderPaidAmounts[order.id] ?: BigDecimal.ZERO
-        totalPaid = totalPaid.add(paidAmount)
-        when (resolvePaymentState(order.totalAmount, paidAmount)) {
-            PaymentState.PAID -> paidCount += 1
-            PaymentState.PARTIAL -> partialCount += 1
-            PaymentState.UNPAID -> unpaidCount += 1
-            PaymentState.OVERPAID -> overpaidCount += 1
-        }
-    }
-
-    return DaySummaryStats(
-        orderCount = orders.size,
-        paidCount = paidCount,
-        partialCount = partialCount,
-        unpaidCount = unpaidCount,
-        overpaidCount = overpaidCount,
-        totalPaid = totalPaid,
-        balance = dayTotal.subtract(totalPaid)
+    DayOrderEditorDialog(
+        isEditorOpen = isEditorOpen,
+        editingOrderId = editingOrderId,
+        orderPaidAmounts = orderPaidAmounts,
+        totalText = totalText,
+        notes = notes,
+        pickupTimeText = pickupTimeText,
+        customerName = customerName,
+        customerPhone = customerPhone,
+        suggestions = suggestions,
+        notesError = notesError,
+        totalError = totalError,
+        customerError = customerError,
+        formatter = formatter,
+        amountRegistry = amountRegistry,
+        voiceCalcAccess = voiceCalcAccess,
+        voiceRouter = voiceRouter,
+        onSaveOrder = onSaveOrder,
+        onDraftChange = onDraftChange,
+        onSetNotes = { notes = it },
+        onSetTotalText = { totalText = it },
+        onSetCustomerName = { customerName = it },
+        onSetCustomerPhone = { customerPhone = it },
+        onSetPickupTimeText = { pickupTimeText = it },
+        onSetEditingOrderId = { editingOrderId = it },
+        onSetSuggestions = { suggestions = it },
+        onSetNotesError = { notesError = it },
+        onSetTotalError = { totalError = it },
+        onSetCustomerError = { customerError = it },
+        onSetEditorOpen = { isEditorOpen = it }
+    )
+    DayDeleteOrderDialog(
+        pendingDeleteOrder = pendingDeleteOrder,
+        customerNames = customerNames,
+        date = date,
+        deleteAllocations = deleteAllocations,
+        deleteSelection = deleteSelection,
+        deleteAction = deleteAction,
+        deleteMoveTarget = deleteMoveTarget,
+        deleteMoveOrderOptions = deleteMoveOrderOptions,
+        deleteSelectedOrderId = deleteSelectedOrderId,
+        deleteMoveFullReceipts = deleteMoveFullReceipts,
+        onSetPendingDeleteOrder = { pendingDeleteOrder = it },
+        onSetDeleteSelection = { deleteSelection = it },
+        onSetDeleteAction = { deleteAction = it },
+        onSetDeleteMoveTarget = { deleteMoveTarget = it },
+        onSetDeleteSelectedOrderId = { deleteSelectedOrderId = it },
+        onSetDeleteMoveFullReceipts = { deleteMoveFullReceipts = it },
+        onDeleteOrder = onDeleteOrder,
+        onDeleteOrderWithPayments = onDeleteOrderWithPayments
     )
 }
-
-internal fun titleCase(value: String): String {
-    return value.lowercase().replaceFirstChar { it.uppercase() }
-}
-
-data class DaySummaryStats(
-    val orderCount: Int,
-    val paidCount: Int,
-    val partialCount: Int,
-    val unpaidCount: Int,
-    val overpaidCount: Int,
-    val totalPaid: BigDecimal,
-    val balance: BigDecimal
-)
-
-data class OrderDraft(
-    val notes: String,
-    val totalText: String,
-    val customerName: String,
-    val customerPhone: String,
-    val pickupTime: String,
-    val editingOrderId: Long?
-)
-
-private enum class DayOrderFilter(val label: String) {
-    All("All"),
-    Unpaid("Unpaid"),
-    Partial("Partial"),
-    Paid("Paid"),
-    Overpaid("Overpaid")
-}
-
-private fun dayOrderFilterOptions(
-    totalOrders: Int,
-    stats: DaySummaryStats
-): List<AppFilterOption> {
-    return DayOrderFilter.values().map { filter ->
-        val count =
-            when (filter) {
-                DayOrderFilter.All -> totalOrders
-                DayOrderFilter.Unpaid -> stats.unpaidCount
-                DayOrderFilter.Partial -> stats.partialCount
-                DayOrderFilter.Paid -> stats.paidCount
-                DayOrderFilter.Overpaid -> stats.overpaidCount
-            }
-        val label = if (count == 0 && filter != DayOrderFilter.All) filter.label else "${filter.label} ($count)"
-        AppFilterOption(filter.name, label)
-    }
-}
-
-private enum class DeleteMoveTarget {
-    ORDER,
-    OLDEST_ORDERS,
-    CUSTOMER_CREDIT
-}
-
-
