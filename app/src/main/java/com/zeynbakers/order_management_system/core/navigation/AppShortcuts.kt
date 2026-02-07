@@ -9,29 +9,44 @@ import com.zeynbakers.order_management_system.MainActivity
 import com.zeynbakers.order_management_system.R
 
 object AppShortcuts {
+    private const val SHORTCUT_NEW_ORDER = "new_order"
+    private const val SHORTCUT_TODAY = "today"
+    private const val SHORTCUT_UNPAID = "unpaid"
+
     fun ensure(context: Context) {
         val shortcuts =
             listOf(
                 buildShortcut(
                     context = context,
-                    id = "new_order",
+                    id = SHORTCUT_NEW_ORDER,
                     labelRes = R.string.shortcut_new_order,
                     action = AppIntents.ACTION_NEW_ORDER
                 ),
                 buildShortcut(
                     context = context,
-                    id = "today",
+                    id = SHORTCUT_TODAY,
                     labelRes = R.string.shortcut_today,
                     action = AppIntents.ACTION_SHOW_TODAY
                 ),
                 buildShortcut(
                     context = context,
-                    id = "unpaid",
+                    id = SHORTCUT_UNPAID,
                     labelRes = R.string.shortcut_unpaid,
                     action = AppIntents.ACTION_SHOW_UNPAID
                 )
             )
         ShortcutManagerCompat.setDynamicShortcuts(context, shortcuts)
+    }
+
+    fun reportShortcutUsed(context: Context, action: String?) {
+        val shortcutId =
+            when (action) {
+                AppIntents.ACTION_NEW_ORDER -> SHORTCUT_NEW_ORDER
+                AppIntents.ACTION_SHOW_TODAY -> SHORTCUT_TODAY
+                AppIntents.ACTION_SHOW_UNPAID -> SHORTCUT_UNPAID
+                else -> null
+            } ?: return
+        ShortcutManagerCompat.reportShortcutUsed(context, shortcutId)
     }
 
     private fun buildShortcut(

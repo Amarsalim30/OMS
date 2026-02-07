@@ -39,8 +39,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -63,6 +61,9 @@ import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.zeynbakers.order_management_system.R
+import com.zeynbakers.order_management_system.core.ui.LocalUiEventDispatcher
+import com.zeynbakers.order_management_system.core.ui.showSnackbar
 import com.zeynbakers.order_management_system.core.util.formatKes
 import java.math.BigDecimal
 import kotlinx.coroutines.launch
@@ -81,7 +82,7 @@ fun MpesaImportScreen(
 ) {
     val clipboardManager = LocalClipboardManager.current
     val scope = rememberCoroutineScope()
-    val snackbarHostState = remember { SnackbarHostState() }
+    val uiEvents = LocalUiEventDispatcher.current
     val rawText by viewModel.rawText.collectAsState()
     val transactions by viewModel.transactions.collectAsState()
     var rawExpanded by rememberSaveable { mutableStateOf(true) }
@@ -128,7 +129,7 @@ fun MpesaImportScreen(
     val pasteFromClipboard: () -> Unit = {
         val clip = clipboardManager.getText()?.text?.trim().orEmpty()
         if (clip.isBlank()) {
-            scope.launch { snackbarHostState.showSnackbar("Clipboard is empty") }
+            scope.launch { uiEvents.showSnackbar("Clipboard is empty") }
             Unit
         } else if (rawText.isBlank()) {
             viewModel.setRawText(clip)
@@ -156,11 +157,10 @@ fun MpesaImportScreen(
 
     Scaffold(
         contentWindowInsets = WindowInsets(0),
-        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             if (showTopBar) {
                 TopAppBar(
-                    title = { Text("M-PESA Import") },
+                    title = { Text(androidx.compose.ui.res.stringResource(R.string.money_collect_title)) },
                     navigationIcon = {
                         IconButton(onClick = onClose) {
                             Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
@@ -190,11 +190,11 @@ fun MpesaImportScreen(
                                     if (summary.intakeDuplicates > 0) {
                                         append(", ${summary.intakeDuplicates} duplicates in import")
                                     }
-                                    if (summary.skippedNoCustomer > 0) {
-                                        append(", ${summary.skippedNoCustomer} missing customer")
-                                    }
-                                }
-                            snackbarHostState.showSnackbar(message)
+                            if (summary.skippedNoCustomer > 0) {
+                                append(", ${summary.skippedNoCustomer} missing customer")
+                            }
+                        }
+                            uiEvents.showSnackbar(message)
                             onApplied(summary)
                         }
                     }
@@ -429,13 +429,13 @@ fun MpesaImportScreen(
                 if (target != null) {
                     onOpenReceiptHistory(target)
                 } else {
-                    scope.launch { snackbarHostState.showSnackbar("Receipt not found") }
+                    scope.launch { uiEvents.showSnackbar("Receipt not found") }
                 }
             },
             onMoveExisting = {
                 scope.launch {
                     val result = viewModel.reallocateExistingReceipt(activeItem.key)
-                    snackbarHostState.showSnackbar(result.message)
+                    uiEvents.showSnackbar(result.message)
                 }
             },
             onDismiss = { activeKey = null }

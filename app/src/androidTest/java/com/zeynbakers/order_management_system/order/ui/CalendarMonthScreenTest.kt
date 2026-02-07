@@ -4,9 +4,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assert
-import androidx.compose.ui.test.assertDoesNotExist
-import androidx.compose.ui.test.assertExists
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import java.math.BigDecimal
@@ -112,9 +112,11 @@ class CalendarMonthScreenTest {
             }
         }
 
-        composeRule.onNodeWithTag("day-markers-2026-01-16").assertExists()
-        composeRule.onNodeWithTag("day-markers-2026-01-16-overflow").assertExists()
-        composeRule.onNodeWithText("+2").assertExists()
+        composeRule.onNodeWithTag("day-markers-2026-01-16")
+            .assert(SemanticsMatcher("exists") { true })
+        composeRule.onNodeWithTag("day-markers-2026-01-16-overflow")
+            .assert(SemanticsMatcher("exists") { true })
+        composeRule.onNodeWithText("+2").assert(SemanticsMatcher("exists") { true })
     }
 
     @Test
@@ -147,7 +149,8 @@ class CalendarMonthScreenTest {
             }
         }
 
-        composeRule.onNodeWithTag("day-markers-2026-01-16").assertExists()
-        composeRule.onNodeWithTag("day-markers-2026-01-16-overflow").assertDoesNotExist()
+        composeRule.onNodeWithTag("day-markers-2026-01-16")
+            .assert(SemanticsMatcher("exists") { true })
+        composeRule.onAllNodesWithTag("day-markers-2026-01-16-overflow").assertCountEquals(0)
     }
 }

@@ -1,93 +1,79 @@
-# App Review Refresh (2026-02-06, Open Issues Implemented)
+# App Review Refresh (2026-02-06, current state)
 
-Scope reviewed:
-- `app/src/main/java/com/zeynbakers/order_management_system`
-- `app/src/main/res`
-- Build quality gates (`testDebugUnitTest`, `lintDebug`)
+## Validation
+- `./gradlew assembleDebug` (pass)
+- `./gradlew assembleDebugAndroidTest` (pass)
+- `./gradlew testDebugUnitTest` (pass)
+- `./gradlew lintDebug` (pass)
+- Lint summary: `0 errors, 18 warnings, 8 hints`
+- Evidence: `app/build/intermediates/lint_intermediate_text_report/debug/lintReportDebug/lint-results-debug.txt`
 
-Validation (latest):
-- `./gradlew.bat :app:testDebugUnitTest --no-daemon` (pass)
-- `./gradlew.bat :app:lintDebug --no-daemon` (pass)
-- Lint summary: `0 errors, 18 warnings, 9 hints`
-  - Evidence: `app/build/intermediates/lint_intermediate_text_report/debug/lintReportDebug/lint-results-debug.txt`
+## Findings (ordered by severity)
 
-## Implemented In This Pass
+### P0 - None
+No release-blocking runtime/build failures found in this pass.
 
-### 1) Implemented - Feature state/callback coupling reduced
-- Evidence:
-  - `app/src/main/java/com/zeynbakers/order_management_system/AppFeatureNavHost.kt:64`
-  - `app/src/main/java/com/zeynbakers/order_management_system/AppFeatureNavHost.kt:86`
-  - `app/src/main/java/com/zeynbakers/order_management_system/AppFeatureNavHost.kt:92`
-  - `app/src/main/java/com/zeynbakers/order_management_system/AppFeatureNavHost.kt:106`
-  - `app/src/main/java/com/zeynbakers/order_management_system/AppFeatureNavHost.kt:113`
-  - `app/src/main/java/com/zeynbakers/order_management_system/AppFeatureNavHost.kt:120`
-  - `app/src/main/java/com/zeynbakers/order_management_system/AppFeatureNavHost.kt:127`
-  - `app/src/main/java/com/zeynbakers/order_management_system/MainActivity.kt:381`
-  - `app/src/main/java/com/zeynbakers/order_management_system/MainActivity.kt:507`
-- What changed:
-  - Added grouped feature state bundles (`AppCalendarState`, `AppOrdersState`, `AppCustomersState`, `AppAccountsState`).
-  - Added grouped callback bundles (`AppCalendarCallbacks`, `AppCustomersCallbacks`, `AppAccountsCallbacks`).
-  - `MainActivity` now prepares feature bundles once and passes compact objects into `AppFeatureNavHost`.
+### P1-1) Composition and screen complexity still high
+Evidence:
+- `app/src/main/java/com/zeynbakers/order_management_system/MainActivity.kt` (~561 lines)
+- `app/src/main/java/com/zeynbakers/order_management_system/order/ui/DayDetailScreen.kt` (~1202 lines)
+- `app/src/main/java/com/zeynbakers/order_management_system/order/ui/CalendarScreen.kt` (~1161 lines)
+- `app/src/main/java/com/zeynbakers/order_management_system/accounting/ui/CustomerStatementsScreen.kt` (~889 lines)
 
-### 2) Implemented - Customer filter UX no longer depends on horizontal chip scrolling
-- Evidence:
-  - `app/src/main/java/com/zeynbakers/order_management_system/customer/ui/CustomerListScreen.kt:231`
-  - `app/src/main/java/com/zeynbakers/order_management_system/customer/ui/CustomerListScreen.kt:435`
-  - `app/src/main/java/com/zeynbakers/order_management_system/customer/ui/CustomerListScreen.kt:444`
-- What changed:
-  - Replaced horizontally scrolling chip rows with `FlowRow` for filter groups.
-  - Sort action remains visible in a stable trailing row.
+Risk:
+- Large files increase regression probability and slow safe UX iteration.
 
-### 3) Implemented - Build hygiene warnings addressed (high-value subset)
-- Evidence:
-  - `app/src/main/java/com/zeynbakers/order_management_system/core/navigation/PendingIntentFactory.kt:9`
-  - `gradle/libs.versions.toml:50`
-  - `gradle/libs.versions.toml:53`
-  - `app/build.gradle.kts:86`
-  - `app/build.gradle.kts:96`
-- What changed:
-  - Removed obsolete SDK check in `PendingIntentFactory` (`FLAG_IMMUTABLE` now unconditional for minSdk 24).
-  - Migrated previously hardcoded Gradle dependencies to version catalog aliases (`UseTomlInstead` cleanup).
+Required fix:
+- Continue coordinator extraction from `MainActivity`.
+- Split large screen files into section composables in feature subfiles.
 
-### 4) Implemented - KTX migration cleanup for URI and SharedPreferences operations
-- Evidence:
-  - `app/src/main/java/com/zeynbakers/order_management_system/core/backup/BackupManager.kt:192`
-  - `app/src/main/java/com/zeynbakers/order_management_system/core/backup/BackupPreferences.kt:4`
-  - `app/src/main/java/com/zeynbakers/order_management_system/core/calendar/CalendarPreferences.kt:4`
-  - `app/src/main/java/com/zeynbakers/order_management_system/customer/ui/CustomerDetailScreen.kt:656`
-  - `app/src/main/java/com/zeynbakers/order_management_system/customer/ui/CustomerListScreen.kt:732`
-  - `app/src/main/java/com/zeynbakers/order_management_system/core/notifications/NotificationPreferences.kt:4`
-  - `app/src/main/java/com/zeynbakers/order_management_system/core/updates/UpdatePreferences.kt:4`
-- What changed:
-  - Switched URI parsing callsites to `toUri()`.
-  - Switched SharedPreferences writes to `androidx.core.content.edit`.
+### P1-2) Accessibility hardening is still incomplete for critical flows
+Evidence:
+- Progressive filter pattern exists in multiple screens, but there are no dedicated text-scale/touch-target acceptance tests for high-traffic order/intake flows.
+- Existing UI tests are still limited in coverage depth for accessibility conditions.
 
-### 5) Implemented - Launcher asset warning set reduced
-- Evidence:
-  - `app/src/main/AndroidManifest.xml:11`
-  - Removed old launcher resources (`ic_launcher.png`, `ic_launcher_round.png`, legacy adaptive xml + unused launcher xml drawables).
-- What changed:
-  - Consolidated launcher icon usage to `@mipmap/ic_launcher_foreground`.
-  - Removed duplicate/unused launcher resources and resized icon content to reduce shape issues.
+Risk:
+- Usability regressions for small devices and large-font users can slip in unnoticed.
 
-### 6) Implemented - Top-level deprecated icon usage removed
-- Evidence:
-  - `app/src/main/java/com/zeynbakers/order_management_system/MainActivity.kt:361`
-- What changed:
-  - Replaced deprecated `Icons.Filled.ListAlt` with `Icons.AutoMirrored.Filled.ListAlt`.
+Required fix:
+- Add explicit UI tests/checklist gates for min touch targets, text scaling, and filter discoverability.
 
-## Current Remaining Items
+### P2-1) Dependency currency remains behind latest releases
+Evidence:
+- `gradle/libs.versions.toml`
+- Warnings: AGP/Kotlin/Compose BOM/Lifecycle/Room/Navigation/Core/etc newer versions available.
 
-### 1) Dependency currency warnings (non-blocking)
-- Evidence:
-  - `gradle/libs.versions.toml:2`
-  - `gradle/libs.versions.toml:5`
-  - `gradle/libs.versions.toml:19`
-- Notes:
-  - Remaining warnings are primarily upgrade suggestions (`GradleDependency`, `NewerVersionAvailable`, `AndroidGradlePluginVersion`).
-  - These are not regressions or release blockers; they require a coordinated dependency-upgrade sprint and compatibility validation.
+Risk:
+- Longer-term security, compatibility, and maintenance drag.
 
-## Status Summary
-- Open implementation issues from the previous review are completed.
-- Quality gate status is healthy (`0` lint errors, tests passing).
-- Remaining work is version-upgrade maintenance, not app-flow defects.
+Required fix:
+- Run a dedicated dependency upgrade sprint with staged compatibility verification.
+
+### P3-1) Compose performance hints remain (non-blocking)
+Evidence (lint hints):
+- `AutoboxingStateCreation` hints in:
+- `app/src/main/java/com/zeynbakers/order_management_system/MainActivity.kt`
+- `app/src/main/java/com/zeynbakers/order_management_system/accounting/ui/CustomerStatementsScreen.kt`
+- `app/src/main/java/com/zeynbakers/order_management_system/customer/ui/CustomerDetailScreen.kt`
+- `app/src/main/java/com/zeynbakers/order_management_system/order/ui/CalendarScreen.kt`
+
+Risk:
+- Minor avoidable allocations on state writes for primitive-backed state.
+
+Required fix:
+- Replace relevant `mutableStateOf(Int)` with `mutableIntStateOf(...)` where safe.
+
+## Implemented Since Previous Review (confirmed)
+- Feature nav graph split completed (`core/navigation/graphs/*`).
+- `AppFeatureNavHost` reduced to thin wiring layer.
+- `MainActivity` reduced meaningfully (still pending deeper extraction).
+- Shared UI primitives added (`AppCard`, `AppSection`, `AppEmptyState`, `AppFilterRow`, `AppSpacing`).
+- Progressive filter UX now applied in day detail/history/statements/customers.
+- Localization usage expanded (`stringResource` call sites now ~95).
+- New UI tests added for customer actions and filter component behavior.
+- Resolved lint hygiene items for DS/resources/shortcuts:
+- `ModifierParameter`, `PluralsCandidate`, `UnusedResources`, `ReportShortcutUsage`.
+
+## Status
+- App is build/test healthy.
+- Primary remaining issues are structural UX debt, accessibility coverage gaps, and dependency maintenance (not core flow breakage).

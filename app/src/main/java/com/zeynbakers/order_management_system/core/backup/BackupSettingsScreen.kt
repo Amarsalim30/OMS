@@ -23,8 +23,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -44,6 +42,8 @@ import androidx.core.net.toUri
 import androidx.documentfile.provider.DocumentFile
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
+import com.zeynbakers.order_management_system.core.ui.LocalUiEventDispatcher
+import com.zeynbakers.order_management_system.core.ui.showSnackbar
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -63,7 +63,7 @@ fun BackupSettingsScreen(
     var state by remember { mutableStateOf(prefs.readState()) }
     var appBackups by remember { mutableStateOf<List<File>>(emptyList()) }
     var pendingRestore by remember { mutableStateOf<RestoreRequest?>(null) }
-    val snackbarHostState = remember { SnackbarHostState() }
+    val uiEvents = LocalUiEventDispatcher.current
     val scope = rememberCoroutineScope()
 
     val folderPicker =
@@ -121,9 +121,9 @@ fun BackupSettingsScreen(
     LaunchedEffect(backupInfo?.state) {
         when (backupInfo?.state) {
             WorkInfo.State.SUCCEEDED ->
-                snackbarHostState.showSnackbar("Backup complete")
+                uiEvents.showSnackbar("Backup complete")
             WorkInfo.State.FAILED ->
-                snackbarHostState.showSnackbar("Backup failed")
+                uiEvents.showSnackbar("Backup failed")
             else -> Unit
         }
     }
@@ -131,9 +131,9 @@ fun BackupSettingsScreen(
     LaunchedEffect(restoreInfo?.state) {
         when (restoreInfo?.state) {
             WorkInfo.State.SUCCEEDED ->
-                snackbarHostState.showSnackbar("Restore complete. Restart app.")
+                uiEvents.showSnackbar("Restore complete. Restart app.")
             WorkInfo.State.FAILED ->
-                snackbarHostState.showSnackbar("Restore failed")
+                uiEvents.showSnackbar("Restore failed")
             else -> Unit
         }
     }
@@ -161,7 +161,6 @@ fun BackupSettingsScreen(
 
     Scaffold(
         contentWindowInsets = WindowInsets(0),
-        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             CenterAlignedTopAppBar(
                 title = { Text("Backup") },
@@ -194,7 +193,7 @@ fun BackupSettingsScreen(
                     checked = state.autoEnabled,
                     onCheckedChange = { enabled ->
                         if (enabled && state.targetType == BackupTargetType.SafDirectory && state.targetUri == null) {
-                            scope.launch { snackbarHostState.showSnackbar("Pick a backup folder first") }
+                            scope.launch { uiEvents.showSnackbar("Pick a backup folder first") }
                             folderPicker.launch(null)
                             return@Switch
                         }
@@ -277,12 +276,12 @@ fun BackupSettingsScreen(
             Button(
                 onClick = {
                     if (state.targetType == BackupTargetType.SafDirectory && state.targetUri == null) {
-                        scope.launch { snackbarHostState.showSnackbar("Pick a backup folder first") }
+                        scope.launch { uiEvents.showSnackbar("Pick a backup folder first") }
                         folderPicker.launch(null)
                         return@Button
                     }
                     BackupScheduler.enqueueManualBackup(context)
-                    scope.launch { snackbarHostState.showSnackbar("Backup started") }
+                    scope.launch { uiEvents.showSnackbar("Backup started") }
                 },
                 enabled = !isBackupRunning && !isRestoreRunning,
                 modifier = Modifier.fillMaxWidth()
@@ -306,7 +305,7 @@ fun BackupSettingsScreen(
                     Button(
                         onClick = {
                             if (latestBackup == null) {
-                                scope.launch { snackbarHostState.showSnackbar("No app storage backups found") }
+                                scope.launch { uiEvents.showSnackbar("No app storage backups found") }
                                 return@Button
                             }
                             pendingRestore = RestoreRequest(null)
@@ -343,7 +342,7 @@ fun BackupSettingsScreen(
                 Button(
                     onClick = {
                         BackupScheduler.enqueueRestore(context, restoreRequest.uriString)
-                        scope.launch { snackbarHostState.showSnackbar("Restore started") }
+                        scope.launch { uiEvents.showSnackbar("Restore started") }
                         pendingRestore = null
                     }
                 ) {

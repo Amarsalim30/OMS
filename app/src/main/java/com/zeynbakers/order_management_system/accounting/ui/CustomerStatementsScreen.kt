@@ -56,12 +56,19 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.zeynbakers.order_management_system.R
 import com.zeynbakers.order_management_system.accounting.data.AccountEntryEntity
 import com.zeynbakers.order_management_system.accounting.data.CustomerAccountSummary
 import com.zeynbakers.order_management_system.accounting.data.EntryType
+import com.zeynbakers.order_management_system.core.ui.components.AppCard
+import com.zeynbakers.order_management_system.core.ui.components.AppEmptyState
+import com.zeynbakers.order_management_system.core.ui.components.AppFilterOption
+import com.zeynbakers.order_management_system.core.ui.components.AppFilterRow
 import com.zeynbakers.order_management_system.core.ui.rememberCurrentDate
 import com.zeynbakers.order_management_system.core.util.formatDateTime
 import com.zeynbakers.order_management_system.core.util.formatKes
@@ -74,10 +81,10 @@ import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 
-private enum class StatementRangeType(val label: String) {
-    All("All time"),
-    Month("Month"),
-    Custom("Custom")
+private enum class StatementRangeType {
+    All,
+    Month,
+    Custom
 }
 
 private data class MonthOption(
@@ -167,14 +174,17 @@ fun CustomerStatementsScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
-                        Text(text = "All customers ledger", style = MaterialTheme.typography.titleMedium)
                         Text(
-                            text = "Advanced view",
+                            text = stringResource(R.string.money_advanced_ledger_title),
+                            style = MaterialTheme.typography.titleMedium
+                        )
+                        Text(
+                            text = stringResource(R.string.money_advanced_ledger_subtitle),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
-                    TextButton(onClick = { showAllLedger = false }) { Text("Back") }
+                    TextButton(onClick = { showAllLedger = false }) { Text(stringResource(R.string.action_back)) }
                 }
                 LedgerScreen(
                     viewModel = ledgerViewModel,
@@ -255,19 +265,19 @@ fun CustomerStatementsScreen(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Column(modifier = Modifier.weight(1f)) {
-                        Text(text = "Customer statements", style = MaterialTheme.typography.titleLarge)
+                        Text(text = stringResource(R.string.money_statement_title), style = MaterialTheme.typography.titleLarge)
                         Text(
-                            text = "Pick a customer to view statement",
+                            text = stringResource(R.string.money_statement_pick_customer),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                     IconButton(onClick = { isMenuOpen = true }) {
-                        Icon(imageVector = Icons.Filled.MoreVert, contentDescription = "More")
+                        Icon(imageVector = Icons.Filled.MoreVert, contentDescription = stringResource(R.string.action_more))
                     }
                     DropdownMenu(expanded = isMenuOpen, onDismissRequest = { isMenuOpen = false }) {
                         DropdownMenuItem(
-                            text = { Text("All customers ledger") },
+                            text = { Text(stringResource(R.string.money_advanced_ledger_title)) },
                             onClick = {
                                 showAllLedger = true
                                 isMenuOpen = false
@@ -281,13 +291,13 @@ fun CustomerStatementsScreen(
                 OutlinedTextField(
                     value = queryText,
                     onValueChange = { queryText = it },
-                    label = { Text("Search customers") },
-                    placeholder = { Text("Name or phone") },
-                    leadingIcon = { Icon(imageVector = Icons.Filled.Search, contentDescription = "Search") },
+                    label = { Text(stringResource(R.string.money_search_customers)) },
+                    placeholder = { Text(stringResource(R.string.money_name_or_phone)) },
+                    leadingIcon = { Icon(imageVector = Icons.Filled.Search, contentDescription = stringResource(R.string.action_search)) },
                     trailingIcon = {
                         if (queryText.isNotBlank()) {
                             IconButton(onClick = { queryText = "" }) {
-                                Icon(imageVector = Icons.Filled.Close, contentDescription = "Clear")
+                                Icon(imageVector = Icons.Filled.Close, contentDescription = stringResource(R.string.action_clear))
                             }
                         }
                     },
@@ -302,11 +312,15 @@ fun CustomerStatementsScreen(
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
                     Text(
-                        text = if (queryText.isBlank()) "All customers" else "Search results",
+                        text = if (queryText.isBlank()) stringResource(R.string.money_all_customers) else stringResource(R.string.money_search_results),
                         style = MaterialTheme.typography.labelLarge
                     )
                     Text(
-                        text = "${summaries.size} results",
+                        text = pluralStringResource(
+                            id = R.plurals.money_result_count,
+                            count = summaries.size,
+                            summaries.size
+                        ),
                         style = MaterialTheme.typography.labelLarge,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -315,7 +329,13 @@ fun CustomerStatementsScreen(
                 Spacer(Modifier.height(8.dp))
 
                 if (summaries.isEmpty()) {
-                    EmptyState(text = if (queryText.isBlank()) "No customers yet" else "No customers found")
+                    EmptyState(
+                        text = if (queryText.isBlank()) {
+                            stringResource(R.string.money_no_customers_yet)
+                        } else {
+                            stringResource(R.string.money_no_customers_found)
+                        }
+                    )
                 } else {
                     LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         items(summaries, key = { it.customerId }) { summary ->
@@ -384,10 +404,10 @@ fun CustomerStatementsScreen(
 
                 if (!range.isValid) {
                     item {
-                        InfoCard(text = "Enter a valid custom range (YYYY-MM-DD).")
+                        InfoCard(text = stringResource(R.string.money_invalid_custom_range))
                     }
                 } else if (displayEntries.isEmpty()) {
-                    item { EmptyState(text = "No ledger entries in this range.") }
+                    item { EmptyState(text = stringResource(R.string.money_no_entries_in_range)) }
                 } else {
                     items(displayEntries, key = { it.entry.id }) { entry ->
                         val orderLabel = entry.entry.orderId?.let { orderLabels[it] }
@@ -418,27 +438,35 @@ private fun StatementHeader(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(modifier = Modifier.weight(1f)) {
-                Text(text = "Statement", style = MaterialTheme.typography.titleLarge)
+                Text(text = stringResource(R.string.money_statement_title), style = MaterialTheme.typography.titleLarge)
                 Text(
                     text = rangeLabel,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-            TextButton(onClick = onChangeCustomer) { Text("Change") }
+            TextButton(onClick = onChangeCustomer) { Text(stringResource(R.string.action_change)) }
             IconButton(onClick = { showMenu = true }) {
-                Icon(imageVector = Icons.Filled.MoreVert, contentDescription = "More")
+                Icon(imageVector = Icons.Filled.MoreVert, contentDescription = stringResource(R.string.action_more))
             }
             DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
                 DropdownMenuItem(
-                    text = { Text(if (showReversals) "Hide reversals" else "Show reversals") },
+                    text = {
+                        Text(
+                            if (showReversals) {
+                                stringResource(R.string.action_hide_reversals)
+                            } else {
+                                stringResource(R.string.action_show_reversals)
+                            }
+                        )
+                    },
                     onClick = {
                         onToggleReversals()
                         showMenu = false
                     }
                 )
                 DropdownMenuItem(
-                    text = { Text("All customers ledger") },
+                    text = { Text(stringResource(R.string.money_advanced_ledger_title)) },
                     onClick = {
                         onOpenAllLedger()
                         showMenu = false
@@ -477,18 +505,11 @@ private fun RangeSelector(
         ?.label ?: "${monthName(selectedMonth)} $selectedYear"
 
     Column(modifier = Modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            StatementRangeType.entries.forEach { option ->
-                FilterChip(
-                    selected = rangeType == option,
-                    onClick = { onRangeTypeChange(option) },
-                    label = { Text(option.label) }
-                )
-            }
-        }
+        AppFilterRow(
+            options = rangeTypeOptions(),
+            selectedKey = rangeType.name,
+            onSelect = { onRangeTypeChange(StatementRangeType.valueOf(it)) }
+        )
 
         if (rangeType == StatementRangeType.Month) {
             Spacer(Modifier.height(8.dp))
@@ -501,7 +522,7 @@ private fun RangeSelector(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column(modifier = Modifier.weight(1f)) {
-                    Text(text = "Month", style = MaterialTheme.typography.labelLarge)
+                    Text(text = stringResource(R.string.money_month), style = MaterialTheme.typography.labelLarge)
                     Text(
                         text = selectedLabel,
                         style = MaterialTheme.typography.bodyMedium,
@@ -557,23 +578,19 @@ private fun StatementSummaryCard(
     showReversals: Boolean,
     closingBalance: BigDecimal
 ) {
-    Surface(
-        tonalElevation = 2.dp,
-        shape = MaterialTheme.shapes.large,
-        color = MaterialTheme.colorScheme.surfaceContainerHighest
-    ) {
-        Column(modifier = Modifier.fillMaxWidth().padding(12.dp)) {
-            Text(text = "Statement summary", style = MaterialTheme.typography.titleSmall)
+    AppCard {
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Text(text = stringResource(R.string.money_statement_summary_title), style = MaterialTheme.typography.titleSmall)
             Spacer(Modifier.height(6.dp))
-            SummaryRow(label = "Opening balance", amount = formatKes(openingBalance))
-            SummaryRow(label = "Charges (+)", amount = formatKes(charges))
-            SummaryRow(label = "Payments (-)", amount = formatKes(payments))
-            SummaryRow(label = "Write-offs (-)", amount = formatKes(writeOffs))
+            SummaryRow(label = stringResource(R.string.money_statement_opening_balance), amount = formatKes(openingBalance))
+            SummaryRow(label = stringResource(R.string.money_statement_charges), amount = formatKes(charges))
+            SummaryRow(label = stringResource(R.string.money_statement_payments), amount = formatKes(payments))
+            SummaryRow(label = stringResource(R.string.money_statement_write_offs), amount = formatKes(writeOffs))
             if (showReversals) {
-                SummaryRow(label = "Reversals", amount = formatKes(reversals))
+                SummaryRow(label = stringResource(R.string.money_statement_reversals), amount = formatKes(reversals))
             }
             Spacer(Modifier.height(4.dp))
-            SummaryRow(label = "Closing balance", amount = formatKes(closingBalance))
+            SummaryRow(label = stringResource(R.string.money_statement_closing_balance), amount = formatKes(closingBalance))
         }
     }
 }
@@ -587,6 +604,15 @@ private fun SummaryRow(label: String, amount: String) {
         Text(text = label, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         Text(text = amount, style = MaterialTheme.typography.bodySmall)
     }
+}
+
+@Composable
+private fun rangeTypeOptions(): List<AppFilterOption> {
+    return listOf(
+        AppFilterOption(StatementRangeType.All.name, stringResource(R.string.money_all_time)),
+        AppFilterOption(StatementRangeType.Month.name, stringResource(R.string.money_month)),
+        AppFilterOption(StatementRangeType.Custom.name, stringResource(R.string.money_custom))
+    )
 }
 
 @Composable
@@ -765,34 +791,22 @@ private fun BalanceChip(balance: BigDecimal) {
 
 @Composable
 private fun InfoCard(text: String) {
-    Surface(
-        tonalElevation = 1.dp,
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
-        shape = MaterialTheme.shapes.medium
-    ) {
+    AppCard {
         Text(
             text = text,
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.fillMaxWidth().padding(12.dp)
+            modifier = Modifier.fillMaxWidth()
         )
     }
 }
 
 @Composable
 private fun EmptyState(text: String) {
-    Surface(
-        tonalElevation = 1.dp,
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
-        shape = MaterialTheme.shapes.medium
-    ) {
-        Text(
-            text = text,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.fillMaxWidth().padding(12.dp)
-        )
-    }
+    AppEmptyState(
+        title = stringResource(R.string.money_statement_title),
+        body = text
+    )
 }
 
 private fun buildStatementEntries(entries: List<AccountEntryEntity>): List<StatementEntryUi> {

@@ -2,7 +2,6 @@
 
 package com.zeynbakers.order_management_system.order.ui
 
-import android.widget.Toast
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -46,15 +45,17 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalClipboardManager
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.Alignment
+import com.zeynbakers.order_management_system.core.ui.LocalUiEventDispatcher
+import com.zeynbakers.order_management_system.core.ui.showSnackbar
 import com.zeynbakers.order_management_system.core.ui.rememberCurrentDate
 import com.zeynbakers.order_management_system.core.util.formatKes
 import com.zeynbakers.order_management_system.order.data.OrderEntity
@@ -71,6 +72,7 @@ import kotlinx.datetime.TimeZone
 import kotlinx.datetime.atStartOfDayIn
 import kotlinx.datetime.plus
 import kotlinx.datetime.toLocalDateTime
+import kotlinx.coroutines.launch
 
 private enum class SummaryRangeMode(val label: String) {
     DAY("Day"),
@@ -100,7 +102,8 @@ fun SummaryScreen(
     onBack: () -> Unit
 ) {
     val clipboardManager = LocalClipboardManager.current
-    val context = LocalContext.current
+    val uiEvents = LocalUiEventDispatcher.current
+    val scope = rememberCoroutineScope()
     var isDatePickerOpen by remember { mutableStateOf(false) }
     var mode by remember { mutableStateOf(SummaryRangeMode.DAY) }
     var anchorDate by remember { mutableStateOf(initialDate) }
@@ -193,9 +196,7 @@ fun SummaryScreen(
                     IconButton(
                         onClick = {
                             clipboardManager.setText(AnnotatedString(chefMessage))
-                            Toast
-                                .makeText(context, "Chef list copied", Toast.LENGTH_SHORT)
-                                .show()
+                            scope.launch { uiEvents.showSnackbar("Chef list copied") }
                         },
                         enabled = aggregatedItems.isNotEmpty() || unparsedLines.isNotEmpty()
                     ) {

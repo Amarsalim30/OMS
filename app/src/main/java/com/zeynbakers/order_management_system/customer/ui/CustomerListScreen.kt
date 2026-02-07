@@ -47,8 +47,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -67,11 +65,17 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
+import com.zeynbakers.order_management_system.R
 import com.zeynbakers.order_management_system.accounting.data.CustomerAccountSummary
+import com.zeynbakers.order_management_system.core.ui.components.AppFilterOption
+import com.zeynbakers.order_management_system.core.ui.components.AppFilterRow
+import com.zeynbakers.order_management_system.core.ui.LocalUiEventDispatcher
+import com.zeynbakers.order_management_system.core.ui.showSnackbar
 import com.zeynbakers.order_management_system.core.util.formatKes
 import java.math.BigDecimal
 import kotlinx.coroutines.flow.debounce
@@ -135,7 +139,7 @@ private fun CustomersScreenM3(
     var showInactive by rememberSaveable { mutableStateOf(false) }
     var longPressedCustomer by remember { mutableStateOf<CustomerAccountSummary?>(null) }
     var pendingArchiveCustomer by remember { mutableStateOf<CustomerAccountSummary?>(null) }
-    val snackbarHostState = remember { SnackbarHostState() }
+    val uiEvents = LocalUiEventDispatcher.current
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
 
@@ -190,7 +194,6 @@ private fun CustomersScreenM3(
 
     Scaffold(
         contentWindowInsets = WindowInsets(0),
-        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             CustomersTopBar(
                 onBack = onBack,
@@ -366,7 +369,7 @@ private fun CustomersScreenM3(
                     pendingArchiveCustomer = null
                     scope.launch {
                         val result =
-                            snackbarHostState.showSnackbar(
+                            uiEvents.showSnackbar(
                                 message = "Customer archived",
                                 actionLabel = "Undo"
                             )
@@ -441,31 +444,11 @@ private fun FilterSortBar(
         modifier = Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        FlowRow(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            FilterChip(
-                selected = selectedFilter == CustomerFilter.All,
-                onClick = { onFilterChange(CustomerFilter.All) },
-                label = { Text("All") }
-            )
-            FilterChip(
-                selected = selectedFilter == CustomerFilter.Owing,
-                onClick = { onFilterChange(CustomerFilter.Owing) },
-                label = { Text("Owes") }
-            )
-            FilterChip(
-                selected = selectedFilter == CustomerFilter.Credit,
-                onClick = { onFilterChange(CustomerFilter.Credit) },
-                label = { Text("Credit") }
-            )
-            FilterChip(
-                selected = selectedFilter == CustomerFilter.Settled,
-                onClick = { onFilterChange(CustomerFilter.Settled) },
-                label = { Text("Settled") }
-            )
-        }
+        AppFilterRow(
+            options = customerFilterOptions(),
+            selectedKey = selectedFilter.name,
+            onSelect = { onFilterChange(CustomerFilter.valueOf(it)) }
+        )
 
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -477,6 +460,16 @@ private fun FilterSortBar(
             }
         }
     }
+}
+
+@Composable
+private fun customerFilterOptions(): List<AppFilterOption> {
+    return listOf(
+        AppFilterOption(CustomerFilter.All.name, "All"),
+        AppFilterOption(CustomerFilter.Owing.name, "Owes"),
+        AppFilterOption(CustomerFilter.Credit.name, "Credit"),
+        AppFilterOption(CustomerFilter.Settled.name, "Settled")
+    )
 }
 
 @Composable

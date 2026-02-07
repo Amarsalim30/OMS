@@ -10,6 +10,8 @@ import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.res.stringResource
+import com.zeynbakers.order_management_system.R
 import com.zeynbakers.order_management_system.accounting.ui.LedgerViewModel
 import com.zeynbakers.order_management_system.accounting.ui.PaymentApplySummary
 import com.zeynbakers.order_management_system.accounting.ui.ManualPaymentScreen
@@ -50,17 +52,17 @@ fun MoneyScreen(
                     Tab(
                         selected = selectedTab == MoneyTab.Collect,
                         onClick = { onTabChange(MoneyTab.Collect) },
-                        text = { Text("Collect") }
+                        text = { Text(stringResource(R.string.money_tab_collect)) }
                     )
                     Tab(
                         selected = selectedTab == MoneyTab.Record,
                         onClick = { onTabChange(MoneyTab.Record) },
-                        text = { Text("Record") }
+                        text = { Text(stringResource(R.string.money_tab_record)) }
                     )
                     Tab(
                         selected = selectedTab == MoneyTab.Statements,
                         onClick = { onTabChange(MoneyTab.Statements) },
-                        text = { Text("Statements") }
+                        text = { Text(stringResource(R.string.money_tab_statements)) }
                     )
                 }
             }

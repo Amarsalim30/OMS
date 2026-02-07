@@ -1,18 +1,15 @@
 package com.zeynbakers.order_management_system
 
 import android.Manifest
-import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Bundle
-import android.provider.ContactsContract
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
@@ -25,11 +22,8 @@ import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.ReceiptLong
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.automirrored.filled.ListAlt
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.windowsizeclass.ExperimentalMaterial3WindowSizeClassApi
 import androidx.compose.material3.windowsizeclass.calculateWindowSizeClass
 import androidx.compose.runtime.CompositionLocalProvider
@@ -46,10 +40,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.navigation.NavGraph.Companion.findStartDestination
-import androidx.navigation.NavHostController
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.zeynbakers.order_management_system.accounting.ui.LedgerViewModel
@@ -72,13 +65,15 @@ import com.zeynbakers.order_management_system.core.ui.LocalVoiceInputRouter
 import com.zeynbakers.order_management_system.core.ui.LocalVoiceOverlaySuppressed
 import com.zeynbakers.order_management_system.core.ui.MoneyTab
 import com.zeynbakers.order_management_system.core.ui.MoreAction
+import com.zeynbakers.order_management_system.core.ui.LocalUiEventDispatcher
 import com.zeynbakers.order_management_system.core.ui.TopLevelDestination
+import com.zeynbakers.order_management_system.core.ui.UiEvent
+import com.zeynbakers.order_management_system.core.ui.UiEventDispatcher
 import com.zeynbakers.order_management_system.core.ui.VoiceCalcAccess
 import com.zeynbakers.order_management_system.core.ui.VoiceCalculatorOverlay
 import com.zeynbakers.order_management_system.core.ui.VoiceInputRouter
+import com.zeynbakers.order_management_system.core.ui.showSnackbar
 import com.zeynbakers.order_management_system.core.ui.theme.Order_management_systemTheme
-import com.zeynbakers.order_management_system.core.util.formatKes
-import com.zeynbakers.order_management_system.core.util.normalizePhoneNumberE164
 import com.zeynbakers.order_management_system.core.updates.UpdatePreferences
 import com.zeynbakers.order_management_system.core.widget.WidgetUpdater
 import com.zeynbakers.order_management_system.customer.ui.CustomerAccountsViewModel
@@ -118,6 +113,20 @@ class MainActivity : ComponentActivity() {
                 val voiceRouter = remember { VoiceInputRouter(onApplyTotal = amountRegistry::applyAmount) }
                 val overlaySuppressed = remember { mutableStateOf(false) }
                 val appSnackbarHostState = remember { SnackbarHostState() }
+                val contactsPermissionMessage =
+                    stringResource(R.string.contacts_permission_required_for_import)
+                val uiEventDispatcher = remember(appSnackbarHostState) {
+                    UiEventDispatcher { event ->
+                        when (event) {
+                            is UiEvent.Snackbar -> appSnackbarHostState.showSnackbar(
+                                message = event.message,
+                                actionLabel = event.actionLabel,
+                                withDismissAction = event.withDismissAction,
+                                duration = event.duration
+                            )
+                        }
+                    }
+                }
                 val scope = rememberCoroutineScope()
 
                 var currentMonth by rememberSaveable { mutableStateOf(0) }
@@ -183,7 +192,7 @@ class MainActivity : ComponentActivity() {
                         )
                     } else {
                         scope.launch {
-                            appSnackbarHostState.showSnackbar("Contacts permission is required to import customers")
+                            uiEventDispatcher.showSnackbar(contactsPermissionMessage)
                         }
                     }
                 }
@@ -296,6 +305,7 @@ class MainActivity : ComponentActivity() {
 
                 LaunchedEffect(incomingIntent) {
                     val intent = incomingIntent ?: return@LaunchedEffect
+                    AppShortcuts.reportShortcutUsed(context.applicationContext, intent.action)
                     when (intent.action) {
                         AppIntents.ACTION_SHOW_TODAY -> {
                             val targetDate = currentDate()
@@ -352,27 +362,44 @@ class MainActivity : ComponentActivity() {
                     LocalAmountFieldRegistry provides amountRegistry,
                     LocalVoiceCalcAccess provides voiceCalcAccess,
                     LocalVoiceOverlaySuppressed provides overlaySuppressed,
-                    LocalVoiceInputRouter provides voiceRouter
+                    LocalVoiceInputRouter provides voiceRouter,
+                    LocalUiEventDispatcher provides uiEventDispatcher
                 ) {
                     Box(modifier = Modifier.fillMaxSize()) {
                         val windowSizeClass = calculateWindowSizeClass(this@MainActivity)
                         val topLevelDestinations = listOf(
-                            TopLevelDestination(AppRoutes.Calendar, "Calendar", Icons.Filled.CalendarToday),
-                            TopLevelDestination(AppRoutes.Orders, "Orders", Icons.AutoMirrored.Filled.ListAlt),
-                            TopLevelDestination(AppRoutes.Customers, "Customers", Icons.Filled.People),
-                            TopLevelDestination(AppRoutes.Money, "Accounts", Icons.Filled.AccountBalanceWallet)
+                            TopLevelDestination(
+                                AppRoutes.Calendar,
+                                stringResource(R.string.nav_calendar),
+                                Icons.Filled.CalendarToday
+                            ),
+                            TopLevelDestination(
+                                AppRoutes.Orders,
+                                stringResource(R.string.nav_orders),
+                                Icons.AutoMirrored.Filled.ListAlt
+                            ),
+                            TopLevelDestination(
+                                AppRoutes.Customers,
+                                stringResource(R.string.nav_customers),
+                                Icons.Filled.People
+                            ),
+                            TopLevelDestination(
+                                AppRoutes.Money,
+                                stringResource(R.string.nav_money),
+                                Icons.Filled.AccountBalanceWallet
+                            )
                         )
 
                         val moreActions = listOf(
-                            MoreAction("Backup & restore", Icons.Filled.Settings) {
+                            MoreAction(stringResource(R.string.more_backup_restore), Icons.Filled.Settings) {
                                 showMoreSheet = false
                                 navController.navigate(AppRoutes.Backup)
                             },
-                            MoreAction("Notifications", Icons.Filled.Notifications) {
+                            MoreAction(stringResource(R.string.more_notifications), Icons.Filled.Notifications) {
                                 showMoreSheet = false
                                 navController.navigate(AppRoutes.Notifications)
                             },
-                            MoreAction("Import contacts", Icons.Filled.PersonAdd) {
+                            MoreAction(stringResource(R.string.more_import_contacts), Icons.Filled.PersonAdd) {
                                 showMoreSheet = false
                                 openImportContacts()
                             }
@@ -482,7 +509,7 @@ class MainActivity : ComponentActivity() {
                             currentDate = currentDate,
                             monthLabel = ::monthLabel,
                             onShowMessage = { message ->
-                                scope.launch { appSnackbarHostState.showSnackbar(message) }
+                                scope.launch { uiEventDispatcher.showSnackbar(message) }
                             },
                             loadContacts = {
                                 withContext(Dispatchers.IO) {
@@ -539,63 +566,29 @@ class MainActivity : ComponentActivity() {
                         )
 
                         pendingCreditPrompt?.let { prompt ->
-                            AlertDialog(
-                                onDismissRequest = {
+                            CreditPromptDialog(
+                                prompt = prompt,
+                                onDismiss = {
                                     pendingCreditPrompt = null
                                     orderViewModel.clearCreditPrompt()
                                 },
-                                title = { Text("Apply available credit?") },
-                                text = {
-                                    Text(
-                                        "Customer has ${formatKes(prompt.availableCredit)} in credit. Apply it to ${prompt.orderLabel}?"
+                                onApplyCredit = {
+                                    pendingCreditPrompt = null
+                                    orderViewModel.applyAvailableCreditToOrder(
+                                        orderId = prompt.orderId,
+                                        customerId = prompt.customerId
                                     )
-                                },
-                                confirmButton = {
-                                    TextButton(onClick = {
-                                        pendingCreditPrompt = null
-                                        orderViewModel.applyAvailableCreditToOrder(
-                                            orderId = prompt.orderId,
-                                            customerId = prompt.customerId
-                                        )
-                                        refreshAfterPayments()
-                                    }) {
-                                        Text("Apply credit")
-                                    }
-                                },
-                                dismissButton = {
-                                    TextButton(onClick = {
-                                        pendingCreditPrompt = null
-                                        orderViewModel.clearCreditPrompt()
-                                    }) {
-                                        Text("Skip")
-                                    }
+                                    refreshAfterPayments()
                                 }
                             )
                         }
 
                         if (showUpdateDialog) {
-                            AlertDialog(
-                                onDismissRequest = {
+                            WhatsNewDialog(
+                                notes = updateNotes,
+                                onDismiss = {
                                     showUpdateDialog = false
                                     updatePrefs.markVersionSeen(BuildConfig.VERSION_NAME)
-                                },
-                                title = { Text("What's new") },
-                                text = {
-                                    Column {
-                                        updateNotes.forEach { note ->
-                                            Text(text = "- $note")
-                                        }
-                                    }
-                                },
-                                confirmButton = {
-                                    TextButton(
-                                        onClick = {
-                                            showUpdateDialog = false
-                                            updatePrefs.markVersionSeen(BuildConfig.VERSION_NAME)
-                                        }
-                                    ) {
-                                        Text("Got it")
-                                    }
                                 }
                             )
                         }
@@ -609,146 +602,5 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         launchIntent.value = intent
     }
-}
-private fun topLevelRouteFor(route: String?): String? {
-    return when {
-        route == null -> null
-        route == AppRoutes.Calendar -> AppRoutes.Calendar
-        route.startsWith("day/") -> AppRoutes.Calendar
-        route == AppRoutes.Summary -> AppRoutes.Calendar
-        route == AppRoutes.Orders -> AppRoutes.Orders
-        route == AppRoutes.Customers -> AppRoutes.Customers
-        route.startsWith("customer/") -> AppRoutes.Customers
-        route == AppRoutes.ImportContacts -> AppRoutes.Customers
-        route == AppRoutes.Money -> AppRoutes.Money
-        route.startsWith("payment_history/") -> AppRoutes.Money
-        else -> null
-    }
-}
-
-private fun navigateTopLevel(
-    navController: NavHostController,
-    route: String,
-    resetToRoot: Boolean = false
-) {
-    val currentRoute = navController.currentBackStackEntry?.destination?.route
-    if (resetToRoot) {
-        if (currentRoute == route) {
-            return
-        }
-        navController.navigate(route) {
-            popUpTo(navController.graph.findStartDestination().id) {
-                inclusive = true
-                saveState = false
-            }
-            launchSingleTop = true
-            restoreState = false
-        }
-        return
-    }
-    navController.navigate(route) {
-        popUpTo(navController.graph.findStartDestination().id) {
-            saveState = true
-        }
-        launchSingleTop = true
-        restoreState = true
-    }
-}
-
-private fun navigateCalendarExternal(
-    navController: NavHostController,
-    route: String
-) {
-    navigateTopLevel(navController, AppRoutes.Calendar, resetToRoot = true)
-    navController.navigate(route) {
-        popUpTo(AppRoutes.Calendar) { inclusive = false }
-        launchSingleTop = true
-        restoreState = false
-    }
-}
-
-private fun navigateToPaymentHistory(
-    navController: NavHostController,
-    filter: PaymentHistoryFilter,
-    focusReceiptId: Long?
-) {
-    val route = when (filter) {
-        PaymentHistoryFilter.All -> AppRoutes.paymentHistoryAll(focusReceiptId)
-        is PaymentHistoryFilter.Customer -> AppRoutes.paymentHistoryCustomer(filter.customerId)
-        is PaymentHistoryFilter.Order -> AppRoutes.paymentHistoryOrder(filter.orderId)
-    }
-    navController.navigate(route)
-}
-
-private fun navToImportContacts(
-    context: Context,
-    onNavigate: (String) -> Unit,
-    onOpen: () -> Unit
-) {
-    val hasPermission =
-        ContextCompat.checkSelfPermission(
-            context,
-            Manifest.permission.READ_CONTACTS
-        ) == PackageManager.PERMISSION_GRANTED
-    if (hasPermission) {
-        onOpen()
-    } else {
-        onNavigate(AppRoutes.Customers)
-    }
-}
-
-private fun monthLabel(year: Int, month: Int): String {
-    if (month == 0 || year == 0) return "Loading..."
-    val monthName = when (month) {
-        1 -> "January"
-        2 -> "February"
-        3 -> "March"
-        4 -> "April"
-        5 -> "May"
-        6 -> "June"
-        7 -> "July"
-        8 -> "August"
-        9 -> "September"
-        10 -> "October"
-        11 -> "November"
-        12 -> "December"
-        else -> "Month"
-    }
-    return "$monthName $year"
-}
-
-private suspend fun loadAllContacts(context: Context): List<ImportContact> {
-    val resolver = context.contentResolver
-    val projection = arrayOf(
-        ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME,
-        ContactsContract.CommonDataKinds.Phone.NUMBER
-    )
-    val cursor =
-        resolver.query(
-            ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
-            projection,
-            null,
-            null,
-            ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME + " ASC"
-        ) ?: return emptyList()
-
-    val results = mutableListOf<ImportContact>()
-    val seen = mutableSetOf<String>()
-    cursor.use { phones ->
-        val nameIndex = phones.getColumnIndex(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME)
-        val numberIndex = phones.getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER)
-        if (nameIndex == -1 || numberIndex == -1) return emptyList()
-
-        while (phones.moveToNext()) {
-            val rawName = phones.getString(nameIndex) ?: ""
-            val rawNumber = phones.getString(numberIndex) ?: ""
-            val cleanNumber = normalizePhoneNumberE164(rawNumber) ?: continue
-            if (!seen.add(cleanNumber)) continue
-            val displayName = rawName.trim().ifBlank { cleanNumber }
-            results.add(ImportContact(name = displayName, phone = cleanNumber))
-        }
-    }
-
-    return results
 }
 

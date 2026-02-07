@@ -22,8 +22,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -46,10 +44,14 @@ import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.res.stringResource
+import com.zeynbakers.order_management_system.R
 import com.zeynbakers.order_management_system.accounting.data.PaymentMethod
 import com.zeynbakers.order_management_system.core.ui.LocalAmountFieldRegistry
+import com.zeynbakers.order_management_system.core.ui.LocalUiEventDispatcher
 import com.zeynbakers.order_management_system.core.ui.LocalVoiceInputRouter
 import com.zeynbakers.order_management_system.core.ui.VoiceTarget
+import com.zeynbakers.order_management_system.core.ui.showSnackbar
 import com.zeynbakers.order_management_system.core.util.formatKes
 import com.zeynbakers.order_management_system.core.util.formatOrderLabel
 import com.zeynbakers.order_management_system.customer.ui.CustomerAccountsViewModel
@@ -70,6 +72,9 @@ fun ManualPaymentScreen(
 ) {
     val amountRegistry = LocalAmountFieldRegistry.current
     val voiceRouter = LocalVoiceInputRouter.current
+    val uiEvents = LocalUiEventDispatcher.current
+    val paymentSavedMessage = stringResource(R.string.payment_saved)
+    val enterValidAmount = stringResource(R.string.money_enter_valid_amount)
     val customer by customerViewModel.customer.collectAsState()
     val orders by customerViewModel.orders.collectAsState()
     val orderLabels by customerViewModel.orderLabels.collectAsState()
@@ -83,7 +88,6 @@ fun ManualPaymentScreen(
     var selectedMethod by rememberSaveable { mutableStateOf(PaymentMethod.CASH) }
     var customerQuery by rememberSaveable { mutableStateOf("") }
     var showOrderSheet by remember { mutableStateOf(false) }
-    val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
 
     LaunchedEffect(initialCustomerId) {
@@ -143,11 +147,10 @@ fun ManualPaymentScreen(
 
     Scaffold(
         contentWindowInsets = WindowInsets(0),
-        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             if (showTopBar) {
                 TopAppBar(
-                    title = { Text("Manual payment") },
+                    title = { Text(stringResource(R.string.money_record_title)) },
                     colors = TopAppBarDefaults.topAppBarColors(
                         containerColor = MaterialTheme.colorScheme.surface
                     )
@@ -166,7 +169,7 @@ fun ManualPaymentScreen(
                             val customerId = selectedCustomerId ?: return@Button
                             val amount = parsedAmount
                             if (amount == null || amount <= BigDecimal.ZERO) {
-                                amountError = "Enter a valid amount"
+                                amountError = enterValidAmount
                                 return@Button
                             }
                             customerViewModel.recordPayment(
@@ -178,7 +181,7 @@ fun ManualPaymentScreen(
                             )
                             onPaymentRecorded()
                             scope.launch {
-                                snackbarHostState.showSnackbar("Payment saved")
+                                uiEvents.showSnackbar(paymentSavedMessage)
                             }
                             amountText = ""
                             noteText = ""
@@ -186,7 +189,7 @@ fun ManualPaymentScreen(
                         },
                         enabled = canSave
                     ) {
-                        Text("Save payment")
+                        Text(stringResource(R.string.money_save_payment))
                     }
                 }
             }
@@ -200,12 +203,15 @@ fun ManualPaymentScreen(
             item {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     if (selectedCustomerId == null) {
-                        Text(text = "Select customer", style = MaterialTheme.typography.titleSmall)
+                        Text(
+                            text = stringResource(R.string.money_select_customer),
+                            style = MaterialTheme.typography.titleSmall
+                        )
                         OutlinedTextField(
                             value = customerQuery,
                             onValueChange = { customerQuery = it },
-                            label = { Text("Search name or phone") },
-                            placeholder = { Text("Customer name or number") },
+                            label = { Text(stringResource(R.string.money_search_name_or_phone)) },
+                            placeholder = { Text(stringResource(R.string.money_customer_name_or_number)) },
                             modifier = Modifier.fillMaxWidth()
                         )
                         if (suggestions.isNotEmpty()) {
@@ -249,13 +255,13 @@ fun ManualPaymentScreen(
                                         customerQuery = ""
                                     }
                                 ) {
-                                    Text("Change customer")
+                                    Text(stringResource(R.string.money_change_customer))
                                 }
                             }
                         }
                     }
 
-                    Text(text = "Amount", style = MaterialTheme.typography.titleSmall)
+                    Text(text = stringResource(R.string.money_amount), style = MaterialTheme.typography.titleSmall)
                     OutlinedTextField(
                         value = amountText,
                         onValueChange = {
@@ -265,8 +271,8 @@ fun ManualPaymentScreen(
                             }
                             amountError = null
                         },
-                        label = { Text("Amount (KES)") },
-                        placeholder = { Text("KES 0.00") },
+                        label = { Text(stringResource(R.string.money_amount_kes)) },
+                        placeholder = { Text(stringResource(R.string.money_kes_zero)) },
                         enabled = selectedCustomerId != null,
                         keyboardOptions = KeyboardOptions(
                             keyboardType = KeyboardType.Decimal,
@@ -285,16 +291,16 @@ fun ManualPaymentScreen(
                         Text(text = it, color = MaterialTheme.colorScheme.error)
                     }
 
-                    Text(text = "Method", style = MaterialTheme.typography.titleSmall)
+                    Text(text = stringResource(R.string.money_method), style = MaterialTheme.typography.titleSmall)
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         MethodChip(
-                            label = "Cash",
+                            label = stringResource(R.string.money_method_cash),
                             selected = selectedMethod == PaymentMethod.CASH,
                             onClick = { selectedMethod = PaymentMethod.CASH },
                             enabled = selectedCustomerId != null
                         )
                         MethodChip(
-                            label = "M-PESA",
+                            label = stringResource(R.string.money_method_mpesa),
                             selected = selectedMethod == PaymentMethod.MPESA,
                             onClick = { selectedMethod = PaymentMethod.MPESA },
                             enabled = selectedCustomerId != null
@@ -304,24 +310,24 @@ fun ManualPaymentScreen(
                     OutlinedTextField(
                         value = noteText,
                         onValueChange = { noteText = it },
-                        label = { Text("Note (optional)") },
+                        label = { Text(stringResource(R.string.money_note_optional)) },
                         enabled = selectedCustomerId != null,
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
                         modifier = Modifier.fillMaxWidth()
                     )
 
-                    Text(text = "Allocation", style = MaterialTheme.typography.titleSmall)
+                    Text(text = stringResource(R.string.money_allocation), style = MaterialTheme.typography.titleSmall)
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         FilterChip(
                             selected = selectedOrderId == null,
                             onClick = { selectedOrderId = null },
-                            label = { Text("Oldest orders") },
+                            label = { Text(stringResource(R.string.money_oldest_orders)) },
                             enabled = selectedCustomerId != null
                         )
                         FilterChip(
                             selected = selectedOrderId != null,
                             onClick = { showOrderSheet = true },
-                            label = { Text("Pick order") },
+                            label = { Text(stringResource(R.string.money_pick_order)) },
                             enabled = selectedCustomerId != null
                         )
                     }
@@ -338,7 +344,7 @@ fun ManualPaymentScreen(
                                 }
                         if (!label.isNullOrBlank()) {
                             Text(
-                                text = "Selected: $label",
+                                text = stringResource(R.string.money_selected_label, label),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -357,10 +363,10 @@ fun ManualPaymentScreen(
                 modifier = Modifier.fillMaxWidth().padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Text(text = "Pick order", style = MaterialTheme.typography.titleSmall)
+                Text(text = stringResource(R.string.money_pick_order), style = MaterialTheme.typography.titleSmall)
                 if (eligibleOrders.isEmpty()) {
                     Text(
-                        text = "No open orders for this customer.",
+                        text = stringResource(R.string.money_no_open_orders),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -384,7 +390,13 @@ fun ManualPaymentScreen(
                                     showOrderSheet = false
                                 }
                             ) {
-                                Text("$label - Due ${formatKes(outstanding)}")
+                                Text(
+                                    stringResource(
+                                        R.string.money_due_amount,
+                                        label,
+                                        formatKes(outstanding)
+                                    )
+                                )
                             }
                         }
                     }

@@ -5,7 +5,6 @@ import android.os.Bundle
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
-import android.widget.Toast
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectDragGestures
@@ -52,10 +51,6 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.systemBars
-import com.zeynbakers.order_management_system.core.ui.VoiceNotesMode
-import com.zeynbakers.order_management_system.core.ui.VoicePreparedResult
-import com.zeynbakers.order_management_system.core.ui.VoiceTarget
-import com.zeynbakers.order_management_system.core.ui.LocalVoiceInputRouter
 import android.util.Log
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -77,6 +72,7 @@ fun VoiceCalculatorOverlay(
     val context = LocalContext.current
     val density = LocalDensity.current
     val coroutineScope = rememberCoroutineScope()
+    val uiEvents = LocalUiEventDispatcher.current
     val voiceRouter = LocalVoiceInputRouter.current
     var mode by remember { mutableStateOf(VoiceCalcMode.Idle) }
     var transcript by remember { mutableStateOf("") }
@@ -523,9 +519,7 @@ fun VoiceCalculatorOverlay(
                         onApply = {
                             val appliedMessage = prepared?.let { voiceRouter.apply(it) }
                             if (!appliedMessage.isNullOrBlank()) {
-                                Toast
-                                    .makeText(context, appliedMessage, Toast.LENGTH_SHORT)
-                                    .show()
+                                coroutineScope.launch { uiEvents.showSnackbar(appliedMessage) }
                             }
                             mode = VoiceCalcMode.Idle
                         },

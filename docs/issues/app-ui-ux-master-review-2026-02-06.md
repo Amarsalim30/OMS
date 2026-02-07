@@ -1,208 +1,176 @@
-# App-Wide UI/UX Master Review (2026-02-06)
+# App-Wide UI/UX Master Review (2026-02-06, implementation refresh 2)
 
 ## Summary
-The app has strong operational depth, but UX quality is limited by fragmented navigation, duplicated form flows, and inconsistent feedback patterns. This issue consolidates existing UI/UX issue files and current code findings into one prioritized plan aimed at a top-tier, modern, fast business workflow.
+This implementation wave materially improved app UX foundations: feature navigation is modularized, shared UI primitives are active, copy localization coverage expanded, progressive filters now cover multiple high-traffic surfaces, and regression tests were expanded.
 
-Primary business goal:
-- A new or busy staff user should complete common tasks with minimal training and minimal taps:
-- `Add order`, `Receive payment`, `Find customer balance`, `Open statement`, `Correct allocation`.
+The largest remaining UX engineering risk is still orchestration/screen size in a few core files, especially `MainActivity`, `CalendarScreen`, and `DayDetailScreen`.
 
 ## Evidence base
-- Existing review docs in `docs/issues`:
-- `docs/issues/iconography-navigation-workflow-review.md`
-- `docs/issues/customer-module-ui-ux-review.md`
-- `docs/issues/orders-unpaid-toasted-utility-redesign.md`
-- `docs/issues/mpesa-import-selection-selects-wrong-items.md`
-- `docs/issues/bottom-nav-*.md`
-- `docs/issues/insets-topbar-excess-gap.md`
-- `docs/issues/bottom-nav-insets-excess-space.md`
-- Current UI code audit:
-- `app/src/main/java/com/zeynbakers/order_management_system/MainActivity.kt:117`
-- `app/src/main/java/com/zeynbakers/order_management_system/order/ui/DayDetailScreen.kt:108`
-- `app/src/main/java/com/zeynbakers/order_management_system/order/ui/CalendarScreen.kt:131`
-- `app/src/main/java/com/zeynbakers/order_management_system/accounting/ui/PaymentIntakeScreen.kt:72`
-- `app/src/main/java/com/zeynbakers/order_management_system/accounting/ui/ManualPaymentScreen.kt:61`
-- `app/src/main/java/com/zeynbakers/order_management_system/accounting/ui/CustomerStatementsScreen.kt:111`
-- `app/src/main/java/com/zeynbakers/order_management_system/customer/ui/CustomerListScreen.kt:82`
-- `app/src/main/java/com/zeynbakers/order_management_system/core/ui/AppScaffold.kt:52`
+- Existing issue docs in `docs/issues`.
+- Code audit + implementation verification on 2026-02-06.
+- Validation commands passed:
+- `./gradlew assembleDebug`
+- `./gradlew assembleDebugAndroidTest`
+- `./gradlew testDebugUnitTest`
+- `./gradlew lintDebug`
+- Lint summary: `0 errors, 18 warnings, 8 hints`
 
-## Critical findings and required fixes
+## Implemented in this pass
 
-### P0-1) Navigation and orchestration are too centralized
+### Done-1) Feature nav graph split is complete
 Evidence:
-- `MainActivity.kt` is a 1000+ line hub with route logic, permission flows, intent routing, and cross-feature state.
-- `app/src/main/java/com/zeynbakers/order_management_system/MainActivity.kt:117`
-- `app/src/main/java/com/zeynbakers/order_management_system/MainActivity.kt:405`
-- `app/src/main/java/com/zeynbakers/order_management_system/MainActivity.kt:892`
+- Host reduced to wiring-only: `app/src/main/java/com/zeynbakers/order_management_system/AppFeatureNavHost.kt`
+- Feature graphs:
+- `app/src/main/java/com/zeynbakers/order_management_system/core/navigation/graphs/CalendarGraph.kt`
+- `app/src/main/java/com/zeynbakers/order_management_system/core/navigation/graphs/OrdersGraph.kt`
+- `app/src/main/java/com/zeynbakers/order_management_system/core/navigation/graphs/CustomersGraph.kt`
+- `app/src/main/java/com/zeynbakers/order_management_system/core/navigation/graphs/MoneyGraph.kt`
+- `app/src/main/java/com/zeynbakers/order_management_system/core/navigation/graphs/SettingsGraph.kt`
 
 Impact:
-- High regression risk.
-- Hard to evolve UX consistently across features.
-- Top-level flow behavior is harder to reason about and test.
+- Feature route changes are now isolated by graph module.
 
-Fix:
-- Split navigation into feature graphs (`calendar`, `orders`, `customers`, `money`, `settings`).
-- Move transient route context (`manualCustomerId`, `statementCustomerId`, `paymentIntakeText`) into feature-scoped state holders.
-- Keep `MainActivity` as shell only (theme, root scaffold, root nav host).
-
-### P0-2) Order entry UX is duplicated and diverging
+### Done-2) Main activity extraction progressed further
 Evidence:
-- Calendar quick-add and day-detail editor duplicate field logic, validation, focus choreography, and voice routing.
-- `app/src/main/java/com/zeynbakers/order_management_system/order/ui/CalendarScreen.kt:420`
-- `app/src/main/java/com/zeynbakers/order_management_system/order/ui/CalendarScreen.kt:539`
-- `app/src/main/java/com/zeynbakers/order_management_system/order/ui/DayDetailScreen.kt:510`
-- `app/src/main/java/com/zeynbakers/order_management_system/order/ui/DayDetailScreen.kt:640`
+- Navigation helper extraction: `app/src/main/java/com/zeynbakers/order_management_system/AppNavigationHelpers.kt`
+- Contact loading extraction: `app/src/main/java/com/zeynbakers/order_management_system/ContactsLoader.kt`
+- Dialog extraction: `app/src/main/java/com/zeynbakers/order_management_system/MainDialogs.kt`
+- `MainActivity` reduced from prior ~737 lines to ~561 lines.
 
 Impact:
-- Inconsistent behavior risk between add and edit.
-- Slower UX iteration and more bug surface.
+- Lower local complexity and clearer orchestration boundaries.
 
-Fix:
-- Build one reusable `OrderEditorSheet` component plus shared `OrderEditorState`.
-- Reuse one validation model and one submit pipeline for add/edit.
-- Keep only screen-specific wrappers for entry context.
-
-### P0-3) Feedback system is inconsistent and mostly toast-based
+### Done-3) Money wording/copy map + dialog copy standardized
 Evidence:
-- Many actions across money, backup, imports, and history use toasts.
-- `app/src/main/java/com/zeynbakers/order_management_system/accounting/ui/PaymentIntakeScreen.kt:131`
-- `app/src/main/java/com/zeynbakers/order_management_system/accounting/ui/PaymentIntakeScreen.kt:195`
-- `app/src/main/java/com/zeynbakers/order_management_system/accounting/ui/ManualPaymentScreen.kt:176`
-- `app/src/main/java/com/zeynbakers/order_management_system/core/backup/BackupSettingsScreen.kt:118`
-- `app/src/main/java/com/zeynbakers/order_management_system/MainActivity.kt:194`
+- Money copy map: `app/src/main/java/com/zeynbakers/order_management_system/accounting/ui/MoneyCopy.kt`
+- Centralized dialog strings in resources: `app/src/main/res/values/strings.xml`
+- Resource-based dialogs: `app/src/main/java/com/zeynbakers/order_management_system/MainDialogs.kt`
 
 Impact:
-- Messages are easy to miss.
-- No unified action recovery pattern (undo/retry/details).
+- Better terminology consistency and localization readiness.
 
-Fix:
-- Standardize to one app-level `SnackbarHost` + inline status cards for long operations.
-- Introduce typed `UiEvent` contracts: `Success`, `Error`, `Warning`, `Undoable`.
-- Reserve toast only for platform-level edge notifications.
-
-### P1-1) Money and accounts information architecture is still ambiguous
+### Done-4) Shared UI primitives are in place and used
 Evidence:
-- Top-level `Money` screen mixes intake, manual collection, and statements while also exposing legacy all-customer ledger mode.
-- `app/src/main/java/com/zeynbakers/order_management_system/core/ui/MoneyScreen.kt:21`
-- `app/src/main/java/com/zeynbakers/order_management_system/core/ui/MoneyScreen.kt:49`
-- `app/src/main/java/com/zeynbakers/order_management_system/accounting/ui/CustomerStatementsScreen.kt:156`
-- `app/src/main/java/com/zeynbakers/order_management_system/accounting/ui/LedgerScreen.kt:54`
+- `app/src/main/java/com/zeynbakers/order_management_system/core/ui/components/AppCard.kt`
+- `app/src/main/java/com/zeynbakers/order_management_system/core/ui/components/AppSection.kt`
+- `app/src/main/java/com/zeynbakers/order_management_system/core/ui/components/AppEmptyState.kt`
+- `app/src/main/java/com/zeynbakers/order_management_system/core/ui/components/AppFilterRow.kt`
+- `app/src/main/java/com/zeynbakers/order_management_system/core/ui/components/AppSpacing.kt`
 
 Impact:
-- Users must infer differences between `Statements`, `Ledger`, `History`, and `Payments`.
-- Increases training cost and wrong-path taps.
+- Shared spacing/surface/filter patterns reduce drift across feature screens.
 
-Fix:
-- Reframe money IA into explicit tasks:
-- `Collect` (M-PESA + Manual intake)
-- `Allocate` (matching and movement)
-- `History` (receipts and actions)
-- `Statements` (customer-level financial truth)
-- Keep global ledger as admin sub-screen only, not a peer workflow tab.
-
-### P1-2) Key customer actions still depend on long press and overflow
+### Done-5) Progressive filter UX now covers additional dense surfaces
 Evidence:
-- Row actions open via long press / combined click and bottom sheet.
-- `app/src/main/java/com/zeynbakers/order_management_system/customer/ui/CustomerListScreen.kt:292`
-- `app/src/main/java/com/zeynbakers/order_management_system/customer/ui/CustomerListScreen.kt:531`
+- Payment history move-allocation filters: `app/src/main/java/com/zeynbakers/order_management_system/accounting/ui/PaymentIntakeHistoryScreen.kt`
+- Statement range filters: `app/src/main/java/com/zeynbakers/order_management_system/accounting/ui/CustomerStatementsScreen.kt`
+- Customer filters: `app/src/main/java/com/zeynbakers/order_management_system/customer/ui/CustomerListScreen.kt`
+- Day-detail order filters: `app/src/main/java/com/zeynbakers/order_management_system/order/ui/DayDetailScreen.kt`
 
 Impact:
-- Discoverability gap for first-time users.
-- Slower repeated workflows.
+- Better discoverability on narrow screens via primary-visible + more-filters interaction.
 
-Fix:
-- Add visible quick actions on row cards (`Pay`, `New order`, `Message`).
-- Keep long press as optional power shortcut, not primary access.
-
-### P1-3) Visual language is inconsistent across modules
+### Done-6) Localization coverage expanded significantly
 Evidence:
-- Different card density, type treatment, and tone between Orders, Customers, and Accounting screens.
-- `app/src/main/java/com/zeynbakers/order_management_system/order/ui/UnpaidOrdersScreen.kt:223`
-- `app/src/main/java/com/zeynbakers/order_management_system/customer/ui/CustomerListScreen.kt:525`
-- `app/src/main/java/com/zeynbakers/order_management_system/accounting/ui/CustomerStatementsScreen.kt:612`
-- Typography uses generic sans serif everywhere.
-- `app/src/main/java/com/zeynbakers/order_management_system/core/ui/theme/Type.kt:14`
+- Resource additions: `app/src/main/res/values/strings.xml`
+- Core flow migration in money/customer/history/manual screens.
+- `stringResource(...)` usage now ~95 call sites (up from baseline 14 in this program).
 
 Impact:
-- App feels stitched from different design passes.
-- Lower perceived quality despite strong features.
+- Much stronger copy governance and localization path for critical workflows.
 
-Fix:
-- Create a small internal design system:
-- `AppCard`, `AppHeader`, `AppSection`, `AppInlineStat`, `AppStatusChip`, `AppEmptyState`.
-- Standardize spacing, corner radius, elevation, and semantic colors by token.
-- Introduce branded font pair (readability-first, performance-safe).
-
-### P2-1) Accessibility and readability need hard constraints
+### Done-7) UI regression coverage expanded
 Evidence:
-- Repeated horizontally scrollable chip bars and dense control rows across screens.
-- `app/src/main/java/com/zeynbakers/order_management_system/customer/ui/CustomerListScreen.kt:232`
-- `app/src/main/java/com/zeynbakers/order_management_system/order/ui/DayDetailScreen.kt:399`
-- `app/src/main/java/com/zeynbakers/order_management_system/accounting/ui/CustomerStatementsScreen.kt:480`
+- `app/src/androidTest/java/com/zeynbakers/order_management_system/customer/ui/CustomerListActionsTest.kt`
+- `app/src/androidTest/java/com/zeynbakers/order_management_system/core/ui/components/AppFilterRowTest.kt`
+- `app/src/androidTest/java/com/zeynbakers/order_management_system/order/ui/CalendarMonthScreenTest.kt` (compatibility updates)
 
 Impact:
-- Hidden options on small devices.
-- Higher cognitive load and lower scan speed.
+- Better guardrails for customer primary actions and progressive filter behavior.
 
-Fix:
-- Enforce minimum touch target and text scaling checks.
-- Replace overflow chip strips with segmented groups + `More filters` drawer when count is high.
-
-### P2-2) Copy quality and text encoding issues exist
+### Done-8) Lint hygiene cleanup for DS/resources/shortcuts completed
 Evidence:
-- Garbled separator in manual payment order picker row text.
-- `app/src/main/java/com/zeynbakers/order_management_system/accounting/ui/ManualPaymentScreen.kt:381`
+- DS composable API order fixed:
+- `app/src/main/java/com/zeynbakers/order_management_system/core/ui/components/AppEmptyState.kt`
+- `app/src/main/java/com/zeynbakers/order_management_system/core/ui/components/AppFilterRow.kt`
+- `app/src/main/java/com/zeynbakers/order_management_system/core/ui/components/AppSection.kt`
+- Resource cleanup:
+- `app/src/main/res/values/strings.xml` (`money_result_count` converted to plurals, unused resource removed)
+- Shortcut usage reporting:
+- `app/src/main/java/com/zeynbakers/order_management_system/core/navigation/AppShortcuts.kt`
+- `app/src/main/java/com/zeynbakers/order_management_system/MainActivity.kt`
 
 Impact:
-- Reduces trust and product polish.
+- Reduced lint noise and improved API consistency/localization hygiene.
 
-Fix:
-- Add copy pass and encoding guard in CI (UTF-8 integrity check for ui strings).
-- Move user-facing strings into centralized resources for consistency and localization readiness.
+## Highest-priority remaining issues
 
-## Recommended implementation plan
+### P0-1) `MainActivity` is improved but still large
+Evidence:
+- `app/src/main/java/com/zeynbakers/order_management_system/MainActivity.kt` (~561 lines).
 
-### Phase 1 (1-2 weeks): UX stabilization
-- Replace critical toasts with snackbars in payment + backup + import flows.
-- Fix copy/encoding bugs (`ManualPaymentScreen` garbled bullet).
-- Add visible quick actions on customer rows.
-- Align top-level icon/action ordering using one documented map.
+Impact:
+- Still a wide regression surface for app-wide flow updates.
 
-### Phase 2 (2-4 weeks): shared UX components and IA cleanup
-- Extract shared `OrderEditorSheet`.
-- Introduce UI foundation components and spacing/color/type tokens.
-- Restructure `Money` into explicit workflow tabs and hide advanced ledger under admin menu.
+Required fix:
+- Extract coordinator/state assembly (`calendarState`, `customersState`, callbacks, navigation actions) into dedicated coordinator files.
 
-### Phase 3 (4-8 weeks): architectural hardening + polish
-- Decompose `MainActivity` navigation into feature nav graphs.
-- Add screen-level state holders for each feature flow.
-- Run accessibility, responsiveness, and interaction polish pass.
+### P1-1) Core order screens are still oversized
+Evidence:
+- `app/src/main/java/com/zeynbakers/order_management_system/order/ui/DayDetailScreen.kt` (~1202 lines)
+- `app/src/main/java/com/zeynbakers/order_management_system/order/ui/CalendarScreen.kt` (still large)
 
-## Improvement options
+Impact:
+- Harder targeted previews, focused testing, and safe iterative UX changes.
 
-### Option A: Quick polish only
-- Time: ~1-2 weeks
-- Delivers: copy cleanup, feedback consistency, small discoverability fixes
-- Tradeoff: core IA and duplication debt remain
+Required fix:
+- Continue section extraction into dedicated files with pure props/callbacks.
 
-### Option B (Recommended): Foundation + workflow modernization
-- Time: ~4-8 weeks
-- Delivers: top-tier UX baseline with structural maintainability
-- Tradeoff: moderate refactor effort
+### P1-2) DS adoption remains partial
+Evidence:
+- New DS primitives exist, but not all high-traffic cards/headers/empty states use them.
 
-### Option C: Full redesign and re-platformed UI architecture
-- Time: ~10-12 weeks
-- Delivers: complete visual and interaction reset
-- Tradeoff: highest scope and regression management effort
+Impact:
+- Residual visual inconsistency across modules.
 
-## Acceptance criteria for closure
-- Core tasks (`add order`, `record payment`, `open statement`, `fix allocation`) complete in <= 2 primary navigation steps after entering feature.
-- At least 80 percent of current toast paths replaced by snackbar/inline event patterns.
-- One shared order editor used by calendar quick add and day edit.
-- Customer list primary actions visible without long press.
-- Money IA labels and routes are unambiguous in usability checks.
-- No text encoding artifacts in UI strings.
-- Accessibility pass completed for touch target, text scaling, and contrast on key screens.
+Required fix:
+- Apply DS components systematically in orders/calendar/intake surfaces.
 
-## Tracking notes
-This issue supersedes and consolidates, not deletes, prior focused UI/UX issues. Keep detailed issue files for tactical implementation, but use this file as the master program and prioritization source.
+### P2-1) Accessibility checklist automation still incomplete
+Evidence:
+- Progressive filter behavior is tested, but no dedicated text-scale/touch-target UI checks yet.
+
+Impact:
+- Remaining risk for small-screen/high-font-scale usability regressions.
+
+Required fix:
+- Add explicit accessibility smoke tests for key flows.
+
+## Refined Option B status
+
+### Phase 1 (1-2 weeks): consistency hardening
+- Standardize event handling contract (`UiEvent`) and snackbar routing. [done]
+- Normalize Money/Accounts labels and key task names. [done]
+- Add accessibility checklist gates for key flows. [pending]
+
+### Phase 2 (2-4 weeks): structural UX modernization
+- Split large screens into section composables and reusable primitives. [partially done]
+- Introduce internal design-system components and spacing/type tokens. [done] (baseline)
+- Expand string resource migration for workflow copy. [done] (core money/customer/history flows)
+
+### Phase 3 (4-8 weeks): architecture and quality scale-up
+- Split feature nav graphs and reduce `MainActivity` orchestration scope. [partially done]
+- Add targeted UI tests for critical workflows and regressions. [partially done]
+- Run polish pass for hierarchy, motion, responsiveness. [pending]
+
+## Updated acceptance criteria
+- Core workflows complete in <=2 primary steps after entering a feature. [partially met]
+- Shared feedback contract is used by payment, customer, backup, and import flows. [met]
+- Shared order editor remains the single source for add/edit forms. [met]
+- Customer row primary actions remain visible without long press. [met]
+- Money labels are consistent across nav, tabs, and primary titles. [partially met]
+- Key workflow copy is resource-backed for localization. [met for core money/customer/history flows]
+- Accessibility checks completed for touch target, text scaling, and filter discoverability. [not met]
+
+## Tracking note
+This file remains the master UI/UX program document. Update this file first when status changes, then cascade updates into tactical issue files.

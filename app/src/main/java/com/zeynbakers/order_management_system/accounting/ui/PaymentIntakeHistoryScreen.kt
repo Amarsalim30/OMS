@@ -14,18 +14,14 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -39,12 +35,20 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.zeynbakers.order_management_system.R
+import com.zeynbakers.order_management_system.core.ui.LocalUiEventDispatcher
+import com.zeynbakers.order_management_system.core.ui.showSnackbar
 import com.zeynbakers.order_management_system.accounting.data.PaymentAllocationStatus
 import com.zeynbakers.order_management_system.accounting.data.PaymentMethod
 import com.zeynbakers.order_management_system.accounting.data.PaymentReceiptStatus
 import com.zeynbakers.order_management_system.accounting.domain.ReceiptAllocation
+import com.zeynbakers.order_management_system.core.ui.components.AppCard
+import com.zeynbakers.order_management_system.core.ui.components.AppEmptyState
+import com.zeynbakers.order_management_system.core.ui.components.AppFilterOption
+import com.zeynbakers.order_management_system.core.ui.components.AppFilterRow
 import com.zeynbakers.order_management_system.core.util.formatOrderLabel
 import com.zeynbakers.order_management_system.core.util.formatDateTime
 import com.zeynbakers.order_management_system.core.util.formatKes
@@ -60,24 +64,20 @@ fun PaymentIntakeHistoryScreen(
     onRemoved: () -> Unit
 ) {
     val scope = rememberCoroutineScope()
-    val snackbarHostState = remember { SnackbarHostState() }
+    val uiEvents = LocalUiEventDispatcher.current
     val listState = rememberLazyListState()
     val items by viewModel.history.collectAsState()
     val header by viewModel.header.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
     val error by viewModel.error.collectAsState()
-    val screenTitle =
-        when (filter) {
-            PaymentHistoryFilter.All -> "Payments"
-            is PaymentHistoryFilter.Customer -> "Customer payments"
-            is PaymentHistoryFilter.Order -> "Order payments"
-        }
+    val screenTitle = stringResource(MoneyCopy.paymentHistoryTitle(filter))
     var pendingVoid by remember { mutableStateOf<PaymentHistoryItemUi?>(null) }
     var voidReason by remember { mutableStateOf("") }
     var pendingMove by remember { mutableStateOf<PaymentHistoryItemUi?>(null) }
     var moveMode by remember { mutableStateOf(MoveMode.OLDEST_ORDERS) }
     var selectedOrderId by remember { mutableStateOf<Long?>(null) }
     var moveOrders by remember { mutableStateOf<List<MoveOrderOption>>(emptyList()) }
+    val selectTargetMessage = stringResource(R.string.money_select_target)
 
     LaunchedEffect(filter) {
         viewModel.load(filter)
@@ -104,13 +104,15 @@ fun PaymentIntakeHistoryScreen(
 
     Scaffold(
         contentWindowInsets = WindowInsets(0),
-        snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
             TopAppBar(
                 title = { Text(screenTitle) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = stringResource(R.string.action_back)
+                        )
                     }
                 }
             )
@@ -157,15 +159,15 @@ fun PaymentIntakeHistoryScreen(
                 pendingVoid = null
                 voidReason = ""
             },
-            title = { Text("Void payment?") },
+            title = { Text(stringResource(R.string.money_void_payment_title)) },
             text = {
                 Column {
-                    Text("This keeps the payment but removes it from totals.")
+                    Text(stringResource(R.string.money_void_payment_hint))
                     Spacer(modifier = Modifier.height(6.dp))
                     androidx.compose.material3.OutlinedTextField(
                         value = voidReason,
                         onValueChange = { voidReason = it },
-                        label = { Text("Reason (optional)") },
+                        label = { Text(stringResource(R.string.money_reason_optional)) },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -179,12 +181,12 @@ fun PaymentIntakeHistoryScreen(
                     voidReason = ""
                     scope.launch {
                         val result = viewModel.onVoidReceipt(target, reason)
-                        snackbarHostState.showSnackbar(result.message)
+                        uiEvents.showSnackbar(result.message)
                         viewModel.load(filter)
                         onRemoved()
                     }
                 }) {
-                    Text("Void")
+                    Text(stringResource(R.string.action_void))
                 }
             },
             dismissButton = {
@@ -192,7 +194,7 @@ fun PaymentIntakeHistoryScreen(
                     pendingVoid = null
                     voidReason = ""
                 }) {
-                    Text("Cancel")
+                    Text(stringResource(R.string.action_cancel))
                 }
             }
         )
@@ -211,29 +213,17 @@ fun PaymentIntakeHistoryScreen(
             }
         AlertDialog(
             onDismissRequest = { pendingMove = null },
-            title = { Text("Move payment") },
+            title = { Text(stringResource(R.string.money_move_payment_title)) },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     if (!hasCustomer) {
-                        Text("Missing customer details for this payment.")
+                        Text(stringResource(R.string.money_move_payment_missing_customer))
                     } else {
-                        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            FilterChip(
-                                selected = moveMode == MoveMode.ORDER,
-                                onClick = { moveMode = MoveMode.ORDER },
-                                label = { Text("Order") }
-                            )
-                            FilterChip(
-                                selected = moveMode == MoveMode.OLDEST_ORDERS,
-                                onClick = { moveMode = MoveMode.OLDEST_ORDERS },
-                                label = { Text("Oldest orders") }
-                            )
-                            FilterChip(
-                                selected = moveMode == MoveMode.CUSTOMER_CREDIT,
-                                onClick = { moveMode = MoveMode.CUSTOMER_CREDIT },
-                                label = { Text("Customer credit") }
-                            )
-                        }
+                        AppFilterRow(
+                            options = moveModeOptions(),
+                            selectedKey = moveMode.name,
+                            onSelect = { selected -> moveMode = MoveMode.valueOf(selected) }
+                        )
 
                         if (moveMode == MoveMode.ORDER) {
                             if (moveOrders.isEmpty()) {
@@ -245,7 +235,7 @@ fun PaymentIntakeHistoryScreen(
                             } else {
                                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                     moveOrders.forEach { option ->
-                                        FilterChip(
+                                        androidx.compose.material3.FilterChip(
                                             selected = selectedOrderId == option.orderId,
                                             onClick = { selectedOrderId = option.orderId },
                                             label = { Text(option.label) }
@@ -265,23 +255,23 @@ fun PaymentIntakeHistoryScreen(
                         scope.launch {
                             val result =
                                 if (allocation == null) {
-                                    PaymentHistoryActionResult(false, "Select a target")
+                                    PaymentHistoryActionResult(false, selectTargetMessage)
                                 } else {
                                     viewModel.onMoveReceipt(target, allocation)
                                 }
-                            snackbarHostState.showSnackbar(result.message)
+                            uiEvents.showSnackbar(result.message)
                             viewModel.load(filter)
                             onRemoved()
                         }
                     },
                     enabled = allocation != null
                 ) {
-                    Text("Move")
+                    Text(stringResource(R.string.action_move))
                 }
             },
             dismissButton = {
                 TextButton(onClick = { pendingMove = null }) {
-                    Text("Cancel")
+                    Text(stringResource(R.string.action_cancel))
                 }
             }
         )
@@ -290,12 +280,7 @@ fun PaymentIntakeHistoryScreen(
 
 @Composable
 private fun HistoryHeaderCard(header: PaymentHistoryHeader) {
-    Surface(
-        tonalElevation = 1.dp,
-        shape = MaterialTheme.shapes.medium,
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Column(modifier = Modifier.padding(12.dp)) {
+    AppCard {
             Text(text = header.title, style = MaterialTheme.typography.titleMedium)
             header.subtitle?.let {
                 Spacer(modifier = Modifier.height(4.dp))
@@ -305,7 +290,6 @@ private fun HistoryHeaderCard(header: PaymentHistoryHeader) {
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
-        }
     }
 }
 
@@ -343,7 +327,7 @@ private fun PaymentHistoryRow(
     val statusLabel = item.status.label()
     val statusColor = item.status.color()
 
-    Card(modifier = Modifier.fillMaxWidth()) {
+    AppCard {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -364,7 +348,7 @@ private fun PaymentHistoryRow(
                 )
                 item.secondaryAmount?.let { secondary ->
                     Text(
-                        text = "Receipt total ${formatKes(secondary)}",
+                        text = stringResource(R.string.money_receipt_total, formatKes(secondary)),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -378,13 +362,13 @@ private fun PaymentHistoryRow(
                         onClick = onMove,
                         enabled = item.customerId != null
                     ) {
-                        Text("Move")
+                        Text(stringResource(R.string.action_move))
                     }
                     TextButton(
                         onClick = onVoid,
                         enabled = item.status != PaymentReceiptStatus.VOIDED
                     ) {
-                        Text("Void")
+                        Text(stringResource(R.string.action_void))
                     }
                 }
             }
@@ -409,29 +393,15 @@ private fun StatusPill(label: String, color: androidx.compose.ui.graphics.Color)
 
 @Composable
 private fun EmptyHistoryState() {
-    Surface(
-        tonalElevation = 1.dp,
-        shape = MaterialTheme.shapes.medium,
-        color = MaterialTheme.colorScheme.surfaceContainerLow
-    ) {
-        Text(
-            text = "No payments yet.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(14.dp)
-        )
-    }
+    AppEmptyState(
+        title = stringResource(R.string.money_payment_history_all),
+        body = stringResource(R.string.money_no_payments_yet)
+    )
 }
 
 @Composable
 private fun ErrorHistoryState(message: String) {
-    Surface(
-        tonalElevation = 1.dp,
-        shape = MaterialTheme.shapes.medium,
-        color = MaterialTheme.colorScheme.errorContainer
-    ) {
+    Surface(tonalElevation = 1.dp, shape = MaterialTheme.shapes.medium, color = MaterialTheme.colorScheme.errorContainer) {
         Text(
             text = message,
             style = MaterialTheme.typography.bodyMedium,
@@ -441,6 +411,15 @@ private fun ErrorHistoryState(message: String) {
                 .padding(14.dp)
         )
     }
+}
+
+@Composable
+private fun moveModeOptions(): List<AppFilterOption> {
+    return listOf(
+        AppFilterOption(MoveMode.ORDER.name, "Order"),
+        AppFilterOption(MoveMode.OLDEST_ORDERS.name, stringResource(R.string.money_oldest_orders)),
+        AppFilterOption(MoveMode.CUSTOMER_CREDIT.name, "Customer credit")
+    )
 }
 
 private enum class MoveMode {

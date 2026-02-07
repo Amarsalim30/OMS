@@ -68,6 +68,8 @@ import com.zeynbakers.order_management_system.core.ui.LocalVoiceCalcAccess
 import com.zeynbakers.order_management_system.core.ui.LocalVoiceOverlaySuppressed
 import com.zeynbakers.order_management_system.core.ui.LocalVoiceInputRouter
 import com.zeynbakers.order_management_system.core.ui.VoiceTarget
+import com.zeynbakers.order_management_system.core.ui.components.AppFilterOption
+import com.zeynbakers.order_management_system.core.ui.components.AppFilterRow
 import com.zeynbakers.order_management_system.core.util.formatKes
 import com.zeynbakers.order_management_system.core.util.formatDateTime
 import com.zeynbakers.order_management_system.core.util.formatOrderLabelWithId
@@ -364,34 +366,14 @@ fun DayDetailScreen(
                             .padding(horizontal = 16.dp)
                     ) {
                         Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .horizontalScroll(rememberScrollState()),
+                            modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            DayOrderFilter.values().forEach { filter ->
-                                val filterCount =
-                                    when (filter) {
-                                        DayOrderFilter.All -> orders.size
-                                        DayOrderFilter.Unpaid -> dayStats.unpaidCount
-                                        DayOrderFilter.Partial -> dayStats.partialCount
-                                        DayOrderFilter.Paid -> dayStats.paidCount
-                                        DayOrderFilter.Overpaid -> dayStats.overpaidCount
-                                    }
-                                val filterLabel =
-                                    if (filter == DayOrderFilter.All) {
-                                        "${filter.label} ($filterCount)"
-                                    } else if (filterCount == 0) {
-                                        filter.label
-                                    } else {
-                                        "${filter.label} ($filterCount)"
-                                    }
-                                FilterChip(
-                                    selected = orderFilter == filter,
-                                    onClick = { orderFilter = filter },
-                                    label = { Text(filterLabel) }
-                                )
-                            }
+                            AppFilterRow(
+                                options = dayOrderFilterOptions(orders.size, dayStats),
+                                selectedKey = orderFilter.name,
+                                onSelect = { selected -> orderFilter = DayOrderFilter.valueOf(selected) }
+                            )
                         }
 
                         Spacer(Modifier.height(10.dp))
@@ -1251,6 +1233,24 @@ private enum class DayOrderFilter(val label: String) {
     Partial("Partial"),
     Paid("Paid"),
     Overpaid("Overpaid")
+}
+
+private fun dayOrderFilterOptions(
+    totalOrders: Int,
+    stats: DaySummaryStats
+): List<AppFilterOption> {
+    return DayOrderFilter.values().map { filter ->
+        val count =
+            when (filter) {
+                DayOrderFilter.All -> totalOrders
+                DayOrderFilter.Unpaid -> stats.unpaidCount
+                DayOrderFilter.Partial -> stats.partialCount
+                DayOrderFilter.Paid -> stats.paidCount
+                DayOrderFilter.Overpaid -> stats.overpaidCount
+            }
+        val label = if (count == 0 && filter != DayOrderFilter.All) filter.label else "${filter.label} ($count)"
+        AppFilterOption(filter.name, label)
+    }
 }
 
 private enum class DeleteMoveTarget {
