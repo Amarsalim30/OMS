@@ -1,4 +1,4 @@
-# App Review Refresh (2026-02-06, current state)
+# App Review Refresh (2026-02-07, current state)
 
 ## Validation
 - `./gradlew assembleDebug` (pass)
@@ -13,30 +13,19 @@
 ### P0 - None
 No release-blocking runtime/build failures found in this pass.
 
-### P1-1) Composition and screen complexity still high
+### P1-1) Orchestration/screen complexity still exists in a few files (reduced)
 Evidence:
-- `app/src/main/java/com/zeynbakers/order_management_system/MainActivity.kt` (~561 lines)
-- `app/src/main/java/com/zeynbakers/order_management_system/order/ui/DayDetailScreen.kt` (~1202 lines)
-- `app/src/main/java/com/zeynbakers/order_management_system/order/ui/CalendarScreen.kt` (~1161 lines)
-- `app/src/main/java/com/zeynbakers/order_management_system/accounting/ui/CustomerStatementsScreen.kt` (~889 lines)
+- `app/src/main/java/com/zeynbakers/order_management_system/MainActivity.kt` (~29 lines, resolved hotspot)
+- `app/src/main/java/com/zeynbakers/order_management_system/MainAppContent.kt` (~597 lines)
+- `app/src/main/java/com/zeynbakers/order_management_system/order/ui/DayDetailScreen.kt` (~947 lines)
+- `app/src/main/java/com/zeynbakers/order_management_system/order/ui/CalendarScreen.kt` (~472 lines)
 
 Risk:
-- Large files increase regression probability and slow safe UX iteration.
+- Day-detail and app-content orchestration still have broad regression surfaces.
 
 Required fix:
-- Continue coordinator extraction from `MainActivity`.
-- Split large screen files into section composables in feature subfiles.
-
-### P1-2) Accessibility hardening is still incomplete for critical flows
-Evidence:
-- Progressive filter pattern exists in multiple screens, but there are no dedicated text-scale/touch-target acceptance tests for high-traffic order/intake flows.
-- Existing UI tests are still limited in coverage depth for accessibility conditions.
-
-Risk:
-- Usability regressions for small devices and large-font users can slip in unnoticed.
-
-Required fix:
-- Add explicit UI tests/checklist gates for min touch targets, text scaling, and filter discoverability.
+- Continue extracting editor/delete orchestration from `DayDetailScreen.kt`.
+- Continue extracting feature wiring from `MainAppContent.kt` into dedicated coordinator helpers.
 
 ### P2-1) Dependency currency remains behind latest releases
 Evidence:
@@ -52,7 +41,7 @@ Required fix:
 ### P3-1) Compose performance hints remain (non-blocking)
 Evidence (lint hints):
 - `AutoboxingStateCreation` hints in:
-- `app/src/main/java/com/zeynbakers/order_management_system/MainActivity.kt`
+- `app/src/main/java/com/zeynbakers/order_management_system/MainAppContent.kt`
 - `app/src/main/java/com/zeynbakers/order_management_system/accounting/ui/CustomerStatementsScreen.kt`
 - `app/src/main/java/com/zeynbakers/order_management_system/customer/ui/CustomerDetailScreen.kt`
 - `app/src/main/java/com/zeynbakers/order_management_system/order/ui/CalendarScreen.kt`
@@ -64,16 +53,17 @@ Required fix:
 - Replace relevant `mutableStateOf(Int)` with `mutableIntStateOf(...)` where safe.
 
 ## Implemented Since Previous Review (confirmed)
-- Feature nav graph split completed (`core/navigation/graphs/*`).
-- `AppFeatureNavHost` reduced to thin wiring layer.
-- `MainActivity` reduced meaningfully (still pending deeper extraction).
-- Shared UI primitives added (`AppCard`, `AppSection`, `AppEmptyState`, `AppFilterRow`, `AppSpacing`).
-- Progressive filter UX now applied in day detail/history/statements/customers.
-- Localization usage expanded (`stringResource` call sites now ~95).
-- New UI tests added for customer actions and filter component behavior.
-- Resolved lint hygiene items for DS/resources/shortcuts:
-- `ModifierParameter`, `PluralsCandidate`, `UnusedResources`, `ReportShortcutUsage`.
+- `MainActivity` orchestration extracted to `MainAppContent` host function.
+- Core order/calendar split into dedicated section/utility files:
+- `order/ui/DayDetailSections.kt`
+- `order/ui/CalendarScreenSections.kt`
+- `order/ui/CalendarDayCellModern.kt`
+- `order/ui/CalendarDateUtils.kt`
+- DS adoption expanded on high-traffic surfaces (`AppCard`, `AppEmptyState`).
+- Accessibility smoke tests added:
+- `app/src/androidTest/java/com/zeynbakers/order_management_system/ui/AccessibilitySmokeTest.kt`
 
 ## Status
 - App is build/test healthy.
-- Primary remaining issues are structural UX debt, accessibility coverage gaps, and dependency maintenance (not core flow breakage).
+- Master UI/UX program items from `app-ui-ux-master-review-2026-02-06.md` are now marked complete.
+- Remaining work is technical hardening (further decomposition + dependency maintenance + micro-performance hints).

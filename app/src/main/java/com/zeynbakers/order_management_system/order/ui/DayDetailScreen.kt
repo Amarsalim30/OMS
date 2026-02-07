@@ -824,323 +824,8 @@ fun DayDetailScreen(
     }
 }
 
-@Composable
-private fun DaySummaryCard(
-    date: LocalDate,
-    dayTotal: BigDecimal,
-    stats: DaySummaryStats
-) {
-    val monthLabel = titleCase(date.month.name)
-    val dayOfWeekLabel = titleCase(date.dayOfWeek.name)
-    val balanceLabel = if (stats.balance.signum() >= 0) "Balance" else "Over"
-    val balanceValue = formatKes(stats.balance.abs())
 
-    Surface(
-        shape = RoundedCornerShape(20.dp),
-        tonalElevation = 1.dp,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp)
-    ) {
-        Column(modifier = Modifier.padding(12.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Surface(
-                    shape = RoundedCornerShape(16.dp),
-                    color = MaterialTheme.colorScheme.surfaceVariant
-                ) {
-                    Column(
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        Text(
-                            text = date.dayOfMonth.toString(),
-                            style = MaterialTheme.typography.headlineMedium,
-                            fontWeight = FontWeight.SemiBold
-                        )
-                        Text(
-                            text = monthLabel.take(3).uppercase(),
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
-
-                Spacer(Modifier.width(12.dp))
-
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = dayOfWeekLabel,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                    Text(
-                        text = "$monthLabel ${date.dayOfMonth}, ${date.year}",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-
-                Column(horizontalAlignment = Alignment.End) {
-                    Text(
-                        text = "Total",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Text(
-                        text = formatKes(dayTotal),
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                }
-            }
-
-            Spacer(Modifier.height(8.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                SummaryMetric(label = "Paid", value = formatKes(stats.totalPaid))
-                SummaryMetric(label = balanceLabel, value = balanceValue)
-            }
-
-            Spacer(Modifier.height(10.dp))
-
-            val chipScrollState = rememberScrollState()
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .horizontalScroll(chipScrollState),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                SummaryChip(
-                    label = "Orders",
-                    count = stats.orderCount,
-                    color = MaterialTheme.colorScheme.primary
-                )
-                if (stats.paidCount > 0) {
-                    SummaryChip(
-                        label = "Paid",
-                        count = stats.paidCount,
-                        color = paymentStateColor(PaymentState.PAID)
-                    )
-                }
-                if (stats.partialCount > 0) {
-                    SummaryChip(
-                        label = "Partial",
-                        count = stats.partialCount,
-                        color = paymentStateColor(PaymentState.PARTIAL)
-                    )
-                }
-                if (stats.unpaidCount > 0) {
-                    SummaryChip(
-                        label = "Unpaid",
-                        count = stats.unpaidCount,
-                        color = paymentStateColor(PaymentState.UNPAID)
-                    )
-                }
-                if (stats.overpaidCount > 0) {
-                    SummaryChip(
-                        label = "Overpaid",
-                        count = stats.overpaidCount,
-                        color = paymentStateColor(PaymentState.OVERPAID)
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-private fun SummaryMetric(label: String, value: String) {
-    Column {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        Text(
-            text = value,
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.SemiBold
-        )
-    }
-}
-
-@Composable
-private fun SummaryChip(label: String, count: Int, color: Color) {
-    Surface(
-        shape = RoundedCornerShape(999.dp),
-        color = color.copy(alpha = 0.15f)
-    ) {
-        Text(
-            text = "$label $count",
-            style = MaterialTheme.typography.labelMedium,
-            color = color,
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
-        )
-    }
-}
-
-@Composable
-private fun EmptyDayState(
-    title: String,
-    subtitle: String
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 24.dp, vertical = 20.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
-    ) {
-        Text(text = title, style = MaterialTheme.typography.titleMedium)
-        Spacer(Modifier.height(4.dp))
-        Text(
-            text = subtitle,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-    }
-}
-
-@Composable
-private fun OrderListItem(
-    order: OrderEntity,
-    customerLabel: String,
-    paidAmount: BigDecimal,
-    paymentState: PaymentState,
-    onEdit: () -> Unit,
-    onDelete: () -> Unit,
-    onPaymentHistory: () -> Unit,
-    onReceivePayment: () -> Unit
-) {
-    val stateColor = paymentStateColor(paymentState)
-    val statusLabel = paymentStateLabel(paymentState)
-    val balance = order.totalAmount.subtract(paidAmount)
-    val showReceive = paymentState == PaymentState.UNPAID || paymentState == PaymentState.PARTIAL
-    val detailLabel =
-        when (paymentState) {
-            PaymentState.UNPAID -> "Balance due ${formatKes(order.totalAmount)}"
-            PaymentState.PARTIAL -> "Balance due ${formatKes(balance)}"
-            PaymentState.OVERPAID -> "Overpaid by ${formatKes(paidAmount.subtract(order.totalAmount))}"
-            PaymentState.PAID -> "Paid in full"
-        }
-    val customerTextColor =
-        if (customerLabel == "No customer") {
-            MaterialTheme.colorScheme.onSurfaceVariant
-        } else {
-            MaterialTheme.colorScheme.onSurface
-        }
-
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 6.dp)
-            .clickable { onEdit() },
-        shape = RoundedCornerShape(18.dp)
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Surface(
-                color = stateColor,
-                shape = RoundedCornerShape(3.dp),
-                modifier = Modifier
-                    .width(6.dp)
-                    .heightIn(min = 48.dp)
-            ) {}
-            Spacer(Modifier.width(12.dp))
-            Column(modifier = Modifier.weight(1f)) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.Top
-                ) {
-                    Text(
-                        text = order.notes,
-                        style = MaterialTheme.typography.titleMedium,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f)
-                    )
-                    Spacer(Modifier.width(8.dp))
-                    Text(
-                        text = formatKes(order.totalAmount),
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.SemiBold,
-                        maxLines = 1,
-                        softWrap = false,
-                        textAlign = TextAlign.End,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.widthIn(min = 84.dp)
-                    )
-                }
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    text = customerLabel,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = customerTextColor
-                )
-                Spacer(Modifier.height(6.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    StatusPill(label = statusLabel, color = stateColor)
-                    Spacer(Modifier.width(8.dp))
-                    Text(
-                        text = detailLabel,
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-                Spacer(Modifier.height(8.dp))
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.End
-                ) {
-                    TextButton(onClick = onPaymentHistory) {
-                        Text("History")
-                    }
-                    if (showReceive) {
-                        Spacer(Modifier.width(8.dp))
-                        Button(onClick = onReceivePayment) {
-                            Text("Record payment")
-                        }
-                    }
-                }
-            }
-            IconButton(onClick = onDelete) {
-                Icon(imageVector = Icons.Filled.Delete, contentDescription = "Delete order")
-            }
-        }
-    }
-}
-
-@Composable
-private fun StatusPill(label: String, color: Color) {
-    Surface(
-        shape = RoundedCornerShape(999.dp),
-        color = color.copy(alpha = 0.15f)
-    ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelMedium,
-            color = color,
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
-        )
-    }
-}
-
-private fun resolvePaymentState(total: BigDecimal, paidAmount: BigDecimal): PaymentState {
+internal fun resolvePaymentState(total: BigDecimal, paidAmount: BigDecimal): PaymentState {
     if (paidAmount.compareTo(BigDecimal.ZERO) <= 0) {
         return PaymentState.UNPAID
     }
@@ -1153,7 +838,7 @@ private fun resolvePaymentState(total: BigDecimal, paidAmount: BigDecimal): Paym
 }
 
 @Composable
-private fun paymentStateColor(state: PaymentState): Color {
+internal fun paymentStateColor(state: PaymentState): Color {
     return when (state) {
         PaymentState.PAID -> MaterialTheme.colorScheme.tertiary
         PaymentState.PARTIAL -> MaterialTheme.colorScheme.secondary
@@ -1162,7 +847,7 @@ private fun paymentStateColor(state: PaymentState): Color {
     }
 }
 
-private fun paymentStateLabel(state: PaymentState): String {
+internal fun paymentStateLabel(state: PaymentState): String {
     return when (state) {
         PaymentState.PAID -> "Paid"
         PaymentState.PARTIAL -> "Partial"
@@ -1204,7 +889,7 @@ private fun computeDayStats(
     )
 }
 
-private fun titleCase(value: String): String {
+internal fun titleCase(value: String): String {
     return value.lowercase().replaceFirstChar { it.uppercase() }
 }
 
@@ -1258,4 +943,5 @@ private enum class DeleteMoveTarget {
     OLDEST_ORDERS,
     CUSTOMER_CREDIT
 }
+
 
