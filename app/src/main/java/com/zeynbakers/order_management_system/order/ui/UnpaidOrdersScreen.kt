@@ -1,5 +1,6 @@
 package com.zeynbakers.order_management_system.order.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -94,6 +95,11 @@ fun UnpaidOrdersScreen(
     var searchQuery by rememberSaveable { mutableStateOf("") }
     var hideBalances by rememberSaveable { mutableStateOf(false) }
     var pendingSwipePayOrder by remember { mutableStateOf<OrderEntity?>(null) }
+
+    BackHandler(enabled = isSearchActive) {
+        isSearchActive = false
+        searchQuery = ""
+    }
 
     // Base Sort
     val sortedOrders =

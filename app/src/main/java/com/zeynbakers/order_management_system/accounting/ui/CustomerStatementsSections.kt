@@ -1,7 +1,10 @@
 package com.zeynbakers.order_management_system.accounting.ui
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.MoneyOff
@@ -440,6 +443,7 @@ internal fun StatementEntryRow(
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 internal fun StatementCustomerRow(
         modifier: Modifier = Modifier,
@@ -447,91 +451,136 @@ internal fun StatementCustomerRow(
         hideAmounts: Boolean,
         onClick: () -> Unit
 ) {
+    val name = customer.name.ifBlank { stringResource(R.string.customer_unknown) }
+    val initials =
+            name.trim()
+                    .split(" ")
+                    .take(2)
+                    .mapNotNull { it.firstOrNull() }
+                    .joinToString("")
+                    .uppercase()
+                    .ifBlank { "?" }
+    val phone = customer.phone.trim()
+
     Surface(
             color = MaterialTheme.colorScheme.surfaceContainerLow,
-            shape = MaterialTheme.shapes.large,
-            modifier = modifier.fillMaxWidth().heightIn(min = 56.dp).clickable(onClick = onClick)
+            shape = MaterialTheme.shapes.medium,
+            modifier = modifier.fillMaxWidth().combinedClickable(onClick = onClick, onLongClick = null)
     ) {
-        Row(modifier = Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                        text = customer.name.ifBlank { stringResource(R.string.customer_unknown) },
-                        style = MaterialTheme.typography.titleMedium,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                )
-                if (customer.phone.isNotBlank()) {
+        Row(
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically
+        ) {
+            Surface(
+                    color = MaterialTheme.colorScheme.primaryContainer,
+                    shape = CircleShape,
+                    modifier = Modifier.size(36.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
                     Text(
-                            text = customer.phone,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
+                            text = initials,
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer
                     )
                 }
-                Spacer(Modifier.height(6.dp))
-                Text(
-                        text =
-                                if (hideAmounts) {
-                                    stringResource(
-                                            R.string.money_billed_paid,
-                                            stringResource(R.string.money_amount_hidden),
-                                            stringResource(R.string.money_amount_hidden)
-                                    )
-                                } else {
-                                    stringResource(
-                                            R.string.money_billed_paid,
-                                            formatKes(customer.billed),
-                                            formatKes(customer.paid)
-                                    )
-                                },
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                )
             }
-            Spacer(Modifier.width(8.dp))
-            BalanceChip(balance = customer.balance, hideAmounts = hideAmounts)
+
+            Spacer(Modifier.width(12.dp))
+
+            Column(modifier = Modifier.weight(1f)) {
+                Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                            text = name,
+                            style = MaterialTheme.typography.bodyLarge,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false)
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    CompactBalanceChip(balance = customer.balance, hideAmounts = hideAmounts)
+                }
+
+                Spacer(Modifier.height(2.dp))
+
+                Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                ) {
+                    if (phone.isNotBlank()) {
+                        Text(
+                                text = phone,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f, fill = false)
+                        )
+                        Spacer(Modifier.width(8.dp))
+                    }
+                    Text(
+                            text =
+                                    if (hideAmounts) {
+                                        stringResource(
+                                                R.string.money_billed_paid,
+                                                stringResource(R.string.money_amount_hidden),
+                                                stringResource(R.string.money_amount_hidden)
+                                        )
+                                    } else {
+                                        stringResource(
+                                                R.string.money_billed_paid,
+                                                formatKes(customer.billed),
+                                                formatKes(customer.paid)
+                                        )
+                                    },
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1
+                    )
+                }
+            }
         }
     }
 }
 
 @Composable
-internal fun BalanceChip(balance: BigDecimal, hideAmounts: Boolean) {
-    val (label, color) =
+internal fun CompactBalanceChip(balance: BigDecimal, hideAmounts: Boolean) {
+    val (label, containerColor, contentColor) =
             when {
                 balance > BigDecimal.ZERO ->
-                        stringResource(R.string.money_balance_due) to
-                                MaterialTheme.colorScheme.errorContainer
+                        Triple(
+                                if (hideAmounts) stringResource(R.string.money_amount_hidden)
+                                else formatKes(balance),
+                                MaterialTheme.colorScheme.errorContainer,
+                                MaterialTheme.colorScheme.onErrorContainer
+                        )
                 balance < BigDecimal.ZERO ->
-                        stringResource(R.string.money_balance_extra) to
-                                MaterialTheme.colorScheme.tertiaryContainer
+                        Triple(
+                                if (hideAmounts) stringResource(R.string.money_amount_hidden)
+                                else formatKes(balance.abs()),
+                                MaterialTheme.colorScheme.tertiaryContainer,
+                                MaterialTheme.colorScheme.onTertiaryContainer
+                        )
                 else ->
-                        stringResource(R.string.money_balance_clear) to
-                                MaterialTheme.colorScheme.secondaryContainer
+                        Triple(
+                                stringResource(R.string.money_balance_clear),
+                                MaterialTheme.colorScheme.secondaryContainer,
+                                MaterialTheme.colorScheme.onSecondaryContainer
+                        )
             }
-    Surface(
-            color = color,
-            shape = MaterialTheme.shapes.small,
-            modifier = Modifier.heightIn(min = 32.dp)
-    ) {
-        Row(
-                modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp),
-                verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(text = label, style = MaterialTheme.typography.labelSmall)
-            Spacer(Modifier.width(4.dp))
-            Text(
+
+    Surface(color = containerColor, shape = MaterialTheme.shapes.small) {
+        Text(
                     text =
-                            if (hideAmounts) {
-                                stringResource(R.string.money_amount_hidden)
-                            } else {
-                                formatKes(balance.abs())
-                            },
-                    style = MaterialTheme.typography.labelLarge
-            )
-        }
+                            label,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = contentColor,
+                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+        )
     }
 }
 

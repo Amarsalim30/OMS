@@ -7,6 +7,7 @@
 package com.zeynbakers.order_management_system.customer.ui
 
 import android.content.Intent
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
@@ -176,6 +177,26 @@ private fun CustomersScreenM3(
             .debounce(300)
             .distinctUntilChanged()
             .collect { onQueryChange(it) }
+    }
+
+    BackHandler(
+        enabled =
+            pendingArchiveCustomer != null ||
+                longPressedCustomer != null ||
+                showSortSheet ||
+                showFilterSheet ||
+                isSearchActive
+    ) {
+        when {
+            pendingArchiveCustomer != null -> pendingArchiveCustomer = null
+            longPressedCustomer != null -> longPressedCustomer = null
+            showSortSheet -> showSortSheet = false
+            showFilterSheet -> showFilterSheet = false
+            isSearchActive -> {
+                isSearchActive = false
+                queryText = ""
+            }
+        }
     }
 
     val filteredCustomers by remember(

@@ -6,6 +6,7 @@
 
 package com.zeynbakers.order_management_system.accounting.ui
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -140,6 +141,21 @@ fun CustomerStatementsScreen(
         }
     }
 
+    BackHandler(
+            enabled =
+                    showAllLedger || isMenuOpen || isSearchActive || activeCustomerId != null
+    ) {
+        when {
+            showAllLedger -> showAllLedger = false
+            isMenuOpen -> isMenuOpen = false
+            isSearchActive -> {
+                isSearchActive = false
+                queryText = ""
+            }
+            activeCustomerId != null -> activeCustomerId = null
+        }
+    }
+
     if (showAllLedger) {
         Scaffold(contentWindowInsets = WindowInsets(0)) { padding ->
             Column(modifier = Modifier.fillMaxSize().padding(padding).padding(externalPadding)) {
@@ -180,6 +196,16 @@ fun CustomerStatementsScreen(
     }
 
     val statementEntries = remember(ledger) { buildStatementEntries(ledger) }
+    val activeStatementSummaries by
+            remember(summaries) {
+                derivedStateOf {
+                    summaries.filter { summary ->
+                        summary.billed != BigDecimal.ZERO ||
+                                summary.paid != BigDecimal.ZERO ||
+                                summary.balance != BigDecimal.ZERO
+                    }
+                }
+            }
     val customRangeLabel = stringResource(R.string.money_custom_range)
     val allTimeLabel = stringResource(R.string.money_all_time)
     val rangeToSeparator = stringResource(R.string.money_to_separator)
@@ -246,66 +272,60 @@ fun CustomerStatementsScreen(
             }
 
     Scaffold(
+            modifier = Modifier.padding(externalPadding),
             contentWindowInsets = WindowInsets(0),
             topBar = {
                 if (activeCustomerId == null) {
                     // Customer List Mode Top Bar
                     if (isSearchActive) {
                         Surface(
-                                modifier = Modifier.fillMaxWidth().height(64.dp),
-                                color = MaterialTheme.colorScheme.surface,
-                                shadowElevation = 4.dp
+                            modifier = Modifier.fillMaxWidth(),
+                            color = MaterialTheme.colorScheme.surface,
+                            shadowElevation = 4.dp
                         ) {
                             TextField(
-                                    value = queryText,
-                                    onValueChange = { queryText = it },
-                                    placeholder = {
-                                        Text(stringResource(R.string.money_name_or_phone))
-                                    },
-                                    singleLine = true,
-                                    modifier = Modifier.fillMaxWidth(),
-                                    colors =
-                                            TextFieldDefaults.colors(
-                                                    focusedContainerColor =
-                                                            MaterialTheme.colorScheme.surface,
-                                                    unfocusedContainerColor =
-                                                            MaterialTheme.colorScheme.surface,
-                                                    focusedIndicatorColor = Color.Transparent,
-                                                    unfocusedIndicatorColor = Color.Transparent
-                                            ),
-                                    leadingIcon = {
-                                        IconButton(
-                                                onClick = {
-                                                    isSearchActive = false
-                                                    queryText = ""
-                                                }
-                                        ) {
+                                value = queryText,
+                                onValueChange = { queryText = it },
+                                placeholder = {
+                                    Text(stringResource(R.string.money_name_or_phone))
+                                },
+                                singleLine = true,
+                                modifier = Modifier.fillMaxWidth().height(64.dp),
+                                colors = TextFieldDefaults.colors(
+                                    focusedContainerColor = MaterialTheme.colorScheme.surface,
+                                    unfocusedContainerColor = MaterialTheme.colorScheme.surface,
+                                    focusedIndicatorColor = Color.Transparent,
+                                    unfocusedIndicatorColor = Color.Transparent
+                                ),
+                                leadingIcon = {
+                                    IconButton(
+                                        onClick = {
+                                            isSearchActive = false
+                                            queryText = ""
+                                        }
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                                            contentDescription = stringResource(R.string.action_back)
+                                        )
+                                    }
+                                },
+                                trailingIcon = {
+                                    if (queryText.isNotEmpty()) {
+                                        IconButton(onClick = { queryText = "" }) {
                                             Icon(
-                                                    imageVector =
-                                                            Icons.AutoMirrored.Filled.ArrowBack,
-                                                    contentDescription =
-                                                            stringResource(R.string.action_back)
+                                                imageVector = Icons.Filled.Close,
+                                                contentDescription = stringResource(R.string.action_clear)
                                             )
                                         }
-                                    },
-                                    trailingIcon = {
-                                        if (queryText.isNotEmpty()) {
-                                            IconButton(onClick = { queryText = "" }) {
-                                                Icon(
-                                                        imageVector = Icons.Filled.Close,
-                                                        contentDescription =
-                                                                stringResource(
-                                                                        R.string.action_clear
-                                                                )
-                                                )
-                                            }
-                                        }
                                     }
+                                }
                             )
                         }
                     } else {
                         CenterAlignedTopAppBar(
                                 title = { Text(stringResource(R.string.money_statement_title)) },
+                                windowInsets = WindowInsets(0),
                                 actions = {
                                     IconButton(onClick = { hideAmounts = !hideAmounts }) {
                                         Icon(
@@ -365,6 +385,7 @@ fun CustomerStatementsScreen(
                     // Statement Detail Mode Top Bar
                     CenterAlignedTopAppBar(
                             title = { Text(stringResource(R.string.money_statement_title)) },
+                            windowInsets = WindowInsets(0),
                             navigationIcon = {
                                 IconButton(onClick = { activeCustomerId = null }) {
                                     Icon(
@@ -446,7 +467,6 @@ fun CustomerStatementsScreen(
                     modifier =
                             Modifier.fillMaxSize()
                                     .padding(padding)
-                                    .padding(externalPadding)
                                     .padding(horizontal = 12.dp, vertical = 10.dp)
             ) {
                 Row(
@@ -464,8 +484,8 @@ fun CustomerStatementsScreen(
                             text =
                                     pluralStringResource(
                                             id = R.plurals.money_result_count,
-                                            count = summaries.size,
-                                            summaries.size
+                                            count = activeStatementSummaries.size,
+                                            activeStatementSummaries.size
                                     ),
                             style = MaterialTheme.typography.labelLarge,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -474,7 +494,7 @@ fun CustomerStatementsScreen(
 
                 Spacer(Modifier.height(8.dp))
 
-                if (summaries.isEmpty()) {
+                if (activeStatementSummaries.isEmpty()) {
                     EmptyState(
                             text =
                                     if (queryText.isBlank()) {
@@ -485,7 +505,7 @@ fun CustomerStatementsScreen(
                     )
                 } else {
                     LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        items(summaries, key = { it.customerId }) { summary ->
+                        items(activeStatementSummaries, key = { it.customerId }) { summary ->
                             StatementCustomerRow(
                                     modifier = Modifier.animateItem(),
                                     customer = summary,
@@ -504,7 +524,7 @@ fun CustomerStatementsScreen(
             val displayEntries = remember(filteredEntries) { filteredEntries.asReversed() }
 
             LazyColumn(
-                    modifier = Modifier.fillMaxSize().padding(padding).padding(externalPadding),
+                    modifier = Modifier.fillMaxSize().padding(padding),
                     contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
