@@ -7,13 +7,9 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.MoneyOff
 import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.ShoppingBag
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
-import androidx.compose.material.icons.filled.Warning
-import androidx.compose.material.icons.outlined.Payments
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -331,115 +327,160 @@ internal fun StatementEntryRow(
                             stringResource(R.string.money_entry_payment_reversal)
                         }
             }
+    val typeChipLabel =
+            when (entry.entry.type) {
+                EntryType.DEBIT -> stringResource(R.string.money_entry_kind_charge)
+                EntryType.CREDIT -> stringResource(R.string.money_entry_kind_payment)
+                EntryType.WRITE_OFF -> stringResource(R.string.money_entry_kind_adjustment)
+                EntryType.REVERSAL -> stringResource(R.string.money_entry_kind_reversal)
+            }
     val amountColor = entryTypeColor(entry.entry.type)
     val sign =
             if (entry.entry.type == EntryType.DEBIT || entry.entry.type == EntryType.REVERSAL) "+"
             else "-"
-    val balanceSign = if (entry.runningBalance < BigDecimal.ZERO) "-" else ""
     val balanceColor =
             when {
                 entry.runningBalance > BigDecimal.ZERO -> MaterialTheme.colorScheme.error
                 entry.runningBalance < BigDecimal.ZERO -> MaterialTheme.colorScheme.tertiary
                 else -> MaterialTheme.colorScheme.onSurfaceVariant
             }
-
-    val icon =
-            when (entry.entry.type) {
-                EntryType.DEBIT -> Icons.Filled.ShoppingBag
-                EntryType.CREDIT -> Icons.Outlined.Payments
-                EntryType.WRITE_OFF -> Icons.Filled.MoneyOff
-                EntryType.REVERSAL -> Icons.Filled.Warning
+    val balanceText =
+            if (hideAmounts) {
+                stringResource(R.string.money_amount_hidden)
+            } else {
+                when {
+                    entry.runningBalance > BigDecimal.ZERO ->
+                            stringResource(
+                                    R.string.money_due_value,
+                                    formatKes(entry.runningBalance)
+                            )
+                    entry.runningBalance < BigDecimal.ZERO ->
+                            stringResource(
+                                    R.string.money_credit_value,
+                                    formatKes(entry.runningBalance.abs())
+                            )
+                    else -> stringResource(R.string.money_balance_clear)
+                }
             }
+    val detailLine =
+            listOfNotNull(
+                            orderLabel?.takeIf { it.isNotBlank() }?.trim(),
+                            entry.entry.description.takeIf { it.isNotBlank() }?.trim()
+                    )
+                    .joinToString(" | ")
 
     AppCard(modifier = modifier) {
-        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
-            Surface(
-                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
-                    shape = MaterialTheme.shapes.small,
-                    modifier = Modifier.padding(top = 2.dp)
+        Column(modifier = Modifier.fillMaxWidth()) {
+            Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(
-                        imageVector = icon,
-                        contentDescription = null,
-                        modifier = Modifier.padding(4.dp).size(16.dp),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                EntryTypeBadge(type = entry.entry.type, label = typeChipLabel)
+                Text(
+                        text = formatDateTime(entry.entry.date),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
 
-            Spacer(Modifier.width(12.dp))
+            Spacer(Modifier.height(8.dp))
 
-            Column(modifier = Modifier.weight(1f)) {
+            Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.Top
+            ) {
+                Text(
+                        text = typeLabel,
+                        style = MaterialTheme.typography.titleSmall,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f)
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                        text =
+                                if (hideAmounts) {
+                                    stringResource(R.string.money_amount_hidden)
+                                } else {
+                                    "$sign ${formatKes(entry.entry.amount)}"
+                                },
+                        style = MaterialTheme.typography.titleMedium,
+                        color = amountColor,
+                        fontWeight = FontWeight.Bold
+                )
+            }
+
+            if (detailLine.isNotBlank()) {
+                Spacer(Modifier.height(2.dp))
+                Text(
+                        text = detailLine,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                )
+            }
+
+            Spacer(Modifier.height(8.dp))
+
+            Surface(
+                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    shape = MaterialTheme.shapes.small,
+                    modifier = Modifier.fillMaxWidth()
+            ) {
                 Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
+                        modifier =
+                                Modifier.fillMaxWidth()
+                                        .padding(horizontal = 10.dp, vertical = 6.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                            text = typeLabel,
-                            style = MaterialTheme.typography.titleSmall,
-                            color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Text(
-                            text =
-                                    if (hideAmounts) {
-                                        stringResource(R.string.money_amount_hidden)
-                                    } else {
-                                        "$sign ${formatKes(entry.entry.amount)}"
-                                    },
-                            style = MaterialTheme.typography.titleSmall,
-                            color = amountColor,
-                            fontWeight = FontWeight.Bold
-                    )
-                }
-
-                Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                                text = formatDateTime(entry.entry.date),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-
-                        orderLabel?.let {
-                            Text(
-                                    text = it,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                            )
-                        }
-                        if (entry.entry.description.isNotBlank()) {
-                            Text(
-                                    text = entry.entry.description,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                            )
-                        }
-                    }
-
-                    Text(
-                            text =
-                                    if (hideAmounts) {
-                                        stringResource(R.string.money_amount_hidden)
-                                    } else {
-                                        stringResource(
-                                                R.string.money_balance_label,
-                                                balanceSign,
-                                                formatKes(entry.runningBalance.abs())
-                                        )
-                                    },
+                            text = stringResource(R.string.money_balance_after_label),
                             style = MaterialTheme.typography.labelSmall,
-                            color = balanceColor,
-                            modifier = Modifier.padding(start = 8.dp)
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                            text = balanceText,
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = balanceColor
                     )
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun EntryTypeBadge(type: EntryType, label: String) {
+    val (containerColor, contentColor) =
+            when (type) {
+                EntryType.DEBIT ->
+                        MaterialTheme.colorScheme.errorContainer to
+                                MaterialTheme.colorScheme.onErrorContainer
+                EntryType.CREDIT ->
+                        MaterialTheme.colorScheme.primaryContainer to
+                                MaterialTheme.colorScheme.onPrimaryContainer
+                EntryType.WRITE_OFF ->
+                        MaterialTheme.colorScheme.secondaryContainer to
+                                MaterialTheme.colorScheme.onSecondaryContainer
+                EntryType.REVERSAL ->
+                        MaterialTheme.colorScheme.tertiaryContainer to
+                                MaterialTheme.colorScheme.onTertiaryContainer
+            }
+
+    Surface(color = containerColor, shape = MaterialTheme.shapes.small) {
+        Text(
+                text = label,
+                style = MaterialTheme.typography.labelSmall,
+                color = contentColor,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+        )
     }
 }
 

@@ -253,6 +253,37 @@ internal fun OrderEditorSheet(
 
                     Spacer(Modifier.height(8.dp))
 
+                    OutlinedTextField(
+                        value = pickupTimeText,
+                        onValueChange = onPickupTimeChange,
+                        label = { Text(stringResource(R.string.order_editor_pickup_time_optional_label)) },
+                        placeholder = { Text(stringResource(R.string.order_editor_pickup_time_placeholder)) },
+                        isError = isPickupTimeInvalid,
+                        trailingIcon = if (pickupTimeText.isNotEmpty()) {
+                            {
+                                IconButton(onClick = { onPickupTimeChange("") }) {
+                                    Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.action_clear))
+                                }
+                            }
+                        } else null,
+                        supportingText = {
+                            if (isPickupTimeInvalid) {
+                                Text(stringResource(R.string.order_editor_pickup_time_hint))
+                            }
+                        },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Number,
+                            imeAction = ImeAction.Next
+                        ),
+                        keyboardActions = KeyboardActions(onNext = { nameRequester.requestFocus() }),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .focusRequester(pickupRequester)
+                    )
+
+                    Spacer(Modifier.height(10.dp))
+
                     Text(
                         text = stringResource(R.string.order_editor_customer_optional_label),
                         style = MaterialTheme.typography.titleMedium
@@ -329,9 +360,16 @@ internal fun OrderEditorSheet(
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(
                             keyboardType = KeyboardType.Phone,
-                            imeAction = ImeAction.Next
+                            imeAction = ImeAction.Done
                         ),
-                        keyboardActions = KeyboardActions(onNext = { pickupRequester.requestFocus() }),
+                        keyboardActions = KeyboardActions(
+                            onDone = {
+                                focusManager.clearFocus()
+                                if (canSave) {
+                                    onSave()
+                                }
+                            }
+                        ),
                         trailingIcon = if (customerPhone.isNotEmpty()) {
                             {
                                 IconButton(onClick = { onCustomerPhoneChange("") }) {
@@ -348,44 +386,6 @@ internal fun OrderEditorSheet(
                         Spacer(Modifier.height(8.dp))
                         Text(text = it, color = MaterialTheme.colorScheme.error)
                     }
-
-                    Spacer(Modifier.height(10.dp))
-
-                    OutlinedTextField(
-                        value = pickupTimeText,
-                        onValueChange = onPickupTimeChange,
-                        label = { Text(stringResource(R.string.order_editor_pickup_time_optional_label)) },
-                        placeholder = { Text(stringResource(R.string.order_editor_pickup_time_placeholder)) },
-                        isError = isPickupTimeInvalid,
-                        trailingIcon = if (pickupTimeText.isNotEmpty()) {
-                            {
-                                IconButton(onClick = { onPickupTimeChange("") }) {
-                                    Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.action_clear))
-                                }
-                            }
-                        } else null,
-                        supportingText = {
-                            if (isPickupTimeInvalid) {
-                                Text(stringResource(R.string.order_editor_pickup_time_hint))
-                            }
-                        },
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(
-                            keyboardType = KeyboardType.Number,
-                            imeAction = ImeAction.Done
-                        ),
-                        keyboardActions = KeyboardActions(
-                            onDone = {
-                                focusManager.clearFocus()
-                                if (canSave) {
-                                    onSave()
-                                }
-                            }
-                        ),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .focusRequester(pickupRequester)
-                    )
 
                     Spacer(Modifier.height(12.dp))
                 }

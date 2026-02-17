@@ -227,7 +227,12 @@
     <string name="money_entry_bad_debt_writeoff">Bad Debt / Write-off</string>
     <string name="money_entry_credit_reversal">Credit reversal</string>
     <string name="money_entry_payment_reversal">Payment reversal</string>
+    <string name="money_entry_kind_charge">Charge</string>
+    <string name="money_entry_kind_payment">Payment</string>
+    <string name="money_entry_kind_adjustment">Adjustment</string>
+    <string name="money_entry_kind_reversal">Reversal</string>
     <string name="money_balance_label">Bal %1$s%2$s</string>
+    <string name="money_balance_after_label">Balance after</string>
     <string name="money_billed_paid">Billed %1$s - Paid %2$s</string>
     <string name="money_balance_due">Due</string>
     <string name="money_balance_extra">Extra</string>
