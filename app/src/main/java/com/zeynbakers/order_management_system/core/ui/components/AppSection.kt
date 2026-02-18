@@ -9,6 +9,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
 
 @Composable
 fun AppSection(
@@ -18,16 +19,20 @@ fun AppSection(
     content: @Composable ColumnScope.() -> Unit
 ) {
     Column(modifier = modifier.fillMaxWidth()) {
-        Text(text = title, style = MaterialTheme.typography.titleMedium)
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.SemiBold
+        )
         if (!subtitle.isNullOrBlank()) {
             Spacer(modifier = Modifier.height(AppSpacing.xSmall))
             Text(
                 text = subtitle,
-                style = MaterialTheme.typography.bodySmall,
+                style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
-        Spacer(modifier = Modifier.height(AppSpacing.small))
+        Spacer(modifier = Modifier.height(AppSpacing.medium))
         content()
     }
 }

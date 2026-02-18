@@ -23,6 +23,7 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
@@ -39,8 +40,10 @@ import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -84,6 +87,7 @@ internal fun OrderEditorSheet(
     canSave: Boolean,
     onSave: () -> Unit,
     onClear: () -> Unit,
+    onClearOptional: () -> Unit,
     onCancel: () -> Unit,
     onNotesFocused: () -> Unit,
     onTotalFocused: ((String) -> Unit) -> Unit,
@@ -105,9 +109,20 @@ internal fun OrderEditorSheet(
     val setTotalText by rememberUpdatedState<(String) -> Unit>({ onTotalTextChange(it) })
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val formScrollState = rememberScrollState()
+    val hasAnyInput =
+        notes.isNotBlank() ||
+            totalText.isNotBlank() ||
+            pickupTimeText.isNotBlank() ||
+            customerName.isNotBlank() ||
+            customerPhone.isNotBlank()
+    val hasOptionalInput =
+        pickupTimeText.isNotBlank() ||
+            customerName.isNotBlank() ||
+            customerPhone.isNotBlank()
+    var showClearConfirm by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
-        notesRequester.requestFocus()
+        nameRequester.requestFocus()
     }
 
     val dismissSheet = {
@@ -170,125 +185,10 @@ internal fun OrderEditorSheet(
                         .verticalScroll(formScrollState)
                         .padding(12.dp)
                 ) {
-                    OutlinedTextField(
-                        value = notes,
-                        onValueChange = onNotesChange,
-                        label = { Text(stringResource(R.string.order_editor_notes_required_label)) },
-                        placeholder = { Text(stringResource(R.string.order_editor_notes_placeholder)) },
-                        minLines = 2,
-                        maxLines = 3,
-                        keyboardOptions = KeyboardOptions(
-                            capitalization = KeyboardCapitalization.Sentences,
-                            imeAction = ImeAction.Next
-                        ),
-                        keyboardActions = KeyboardActions(onNext = { totalRequester.requestFocus() }),
-                        trailingIcon = if (notes.isNotEmpty()) {
-                            {
-                                IconButton(onClick = { onNotesChange("") }) {
-                                    Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.action_clear))
-                                }
-                            }
-                        } else null,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .focusRequester(notesRequester)
-                            .onFocusChanged { state ->
-                                if (state.isFocused) {
-                                    onNotesFocused()
-                                }
-                            }
-                    )
-
-                    notesError?.let {
-                        Text(text = it, color = MaterialTheme.colorScheme.error)
-                    }
-
-                    Spacer(Modifier.height(8.dp))
-
-                    OutlinedTextField(
-                        value = totalText,
-                        onValueChange = onTotalTextChange,
-                        label = { Text(stringResource(R.string.order_editor_total_amount_label)) },
-                        placeholder = { Text(stringResource(R.string.order_editor_total_placeholder)) },
-                        leadingIcon = { Text(stringResource(R.string.order_editor_currency_prefix)) },
-                        trailingIcon = if (totalText.isNotEmpty()) {
-                            {
-                                IconButton(onClick = { onTotalTextChange("") }) {
-                                    Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.action_clear))
-                                }
-                            }
-                        } else null,
-                        isError = isTotalInvalid,
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(
-                            keyboardType = KeyboardType.Decimal,
-                            imeAction = ImeAction.Next
-                        ),
-                        keyboardActions = KeyboardActions(onNext = { pickupRequester.requestFocus() }),
-                        supportingText = {
-                            totalSupportingText?.let { Text(it) }
-                        },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .focusRequester(totalRequester)
-                            .onFocusChanged { state ->
-                                if (state.isFocused) {
-                                    onTotalFocused(setTotalText)
-                                }
-                            }
-                    )
-
-                    totalError?.let {
-                        Text(text = it, color = MaterialTheme.colorScheme.error)
-                    }
-
-                    statusText?.let {
-                        Spacer(Modifier.height(4.dp))
-                        Text(
-                            text = it,
-                            style = MaterialTheme.typography.labelLarge,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-
-                    Spacer(Modifier.height(8.dp))
-
-                    OutlinedTextField(
-                        value = pickupTimeText,
-                        onValueChange = onPickupTimeChange,
-                        label = { Text(stringResource(R.string.order_editor_pickup_time_optional_label)) },
-                        placeholder = { Text(stringResource(R.string.order_editor_pickup_time_placeholder)) },
-                        isError = isPickupTimeInvalid,
-                        trailingIcon = if (pickupTimeText.isNotEmpty()) {
-                            {
-                                IconButton(onClick = { onPickupTimeChange("") }) {
-                                    Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.action_clear))
-                                }
-                            }
-                        } else null,
-                        supportingText = {
-                            if (isPickupTimeInvalid) {
-                                Text(stringResource(R.string.order_editor_pickup_time_hint))
-                            }
-                        },
-                        singleLine = true,
-                        keyboardOptions = KeyboardOptions(
-                            keyboardType = KeyboardType.Number,
-                            imeAction = ImeAction.Next
-                        ),
-                        keyboardActions = KeyboardActions(onNext = { nameRequester.requestFocus() }),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .focusRequester(pickupRequester)
-                    )
-
-                    Spacer(Modifier.height(10.dp))
-
                     Text(
                         text = stringResource(R.string.order_editor_customer_optional_label),
                         style = MaterialTheme.typography.titleMedium
                     )
-
                     OutlinedTextField(
                         value = customerName,
                         onValueChange = onCustomerNameChange,
@@ -352,7 +252,6 @@ internal fun OrderEditorSheet(
                     }
 
                     Spacer(Modifier.height(8.dp))
-
                     OutlinedTextField(
                         value = customerPhone,
                         onValueChange = onCustomerPhoneChange,
@@ -360,16 +259,9 @@ internal fun OrderEditorSheet(
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(
                             keyboardType = KeyboardType.Phone,
-                            imeAction = ImeAction.Done
+                            imeAction = ImeAction.Next
                         ),
-                        keyboardActions = KeyboardActions(
-                            onDone = {
-                                focusManager.clearFocus()
-                                if (canSave) {
-                                    onSave()
-                                }
-                            }
-                        ),
+                        keyboardActions = KeyboardActions(onNext = { notesRequester.requestFocus() }),
                         trailingIcon = if (customerPhone.isNotEmpty()) {
                             {
                                 IconButton(onClick = { onCustomerPhoneChange("") }) {
@@ -387,6 +279,139 @@ internal fun OrderEditorSheet(
                         Text(text = it, color = MaterialTheme.colorScheme.error)
                     }
 
+                    Spacer(Modifier.height(10.dp))
+                    Text(
+                        text = stringResource(R.string.order_editor_required_section_label),
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.height(6.dp))
+                    OutlinedTextField(
+                        value = notes,
+                        onValueChange = onNotesChange,
+                        label = { Text(stringResource(R.string.order_editor_notes_required_label)) },
+                        placeholder = { Text(stringResource(R.string.order_editor_notes_placeholder)) },
+                        minLines = 2,
+                        maxLines = 3,
+                        keyboardOptions = KeyboardOptions(
+                            capitalization = KeyboardCapitalization.Sentences,
+                            imeAction = ImeAction.Next
+                        ),
+                        keyboardActions = KeyboardActions(onNext = { totalRequester.requestFocus() }),
+                        trailingIcon = if (notes.isNotEmpty()) {
+                            {
+                                IconButton(onClick = { onNotesChange("") }) {
+                                    Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.action_clear))
+                                }
+                            }
+                        } else null,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .focusRequester(notesRequester)
+                            .onFocusChanged { state ->
+                                if (state.isFocused) {
+                                    onNotesFocused()
+                                }
+                            }
+                    )
+
+                    notesError?.let {
+                        Text(text = it, color = MaterialTheme.colorScheme.error)
+                    }
+
+                    Spacer(Modifier.height(8.dp))
+
+                    OutlinedTextField(
+                        value = totalText,
+                        onValueChange = onTotalTextChange,
+                        label = { Text(stringResource(R.string.order_editor_total_amount_label)) },
+                        placeholder = { Text(stringResource(R.string.order_editor_total_placeholder)) },
+                        leadingIcon = { Text(stringResource(R.string.order_editor_currency_prefix)) },
+                        trailingIcon = if (totalText.isNotEmpty()) {
+                            {
+                                IconButton(onClick = { onTotalTextChange("") }) {
+                                    Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.action_clear))
+                                }
+                            }
+                        } else null,
+                        isError = isTotalInvalid,
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Decimal,
+                            imeAction = ImeAction.Next
+                        ),
+                        keyboardActions = KeyboardActions(
+                            onNext = { pickupRequester.requestFocus() },
+                            onDone = {
+                                focusManager.clearFocus()
+                                if (canSave) {
+                                    onSave()
+                                }
+                            }
+                        ),
+                        supportingText = {
+                            totalSupportingText?.let { Text(it) }
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .focusRequester(totalRequester)
+                            .onFocusChanged { state ->
+                                if (state.isFocused) {
+                                    onTotalFocused(setTotalText)
+                                }
+                            }
+                    )
+
+                    totalError?.let {
+                        Text(text = it, color = MaterialTheme.colorScheme.error)
+                    }
+
+                    statusText?.let {
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            text = it,
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+
+                    Spacer(Modifier.height(10.dp))
+                    OutlinedTextField(
+                        value = pickupTimeText,
+                        onValueChange = onPickupTimeChange,
+                        label = { Text(stringResource(R.string.order_editor_pickup_time_optional_label)) },
+                        placeholder = { Text(stringResource(R.string.order_editor_pickup_time_placeholder)) },
+                        isError = isPickupTimeInvalid,
+                        trailingIcon = if (pickupTimeText.isNotEmpty()) {
+                            {
+                                IconButton(onClick = { onPickupTimeChange("") }) {
+                                    Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.action_clear))
+                                }
+                            }
+                        } else null,
+                        supportingText = {
+                            if (isPickupTimeInvalid) {
+                                Text(stringResource(R.string.order_editor_pickup_time_hint))
+                            }
+                        },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Number,
+                            imeAction = ImeAction.Done
+                        ),
+                        keyboardActions = KeyboardActions(
+                            onDone = {
+                                focusManager.clearFocus()
+                                if (canSave) {
+                                    onSave()
+                                }
+                            }
+                        ),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .focusRequester(pickupRequester)
+                    )
+
                     Spacer(Modifier.height(12.dp))
                 }
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
@@ -400,7 +425,20 @@ internal fun OrderEditorSheet(
                     TextButton(onClick = onCancel) {
                         Text(stringResource(R.string.action_cancel))
                     }
-                    TextButton(onClick = onClear) {
+                    if (hasOptionalInput) {
+                        TextButton(onClick = onClearOptional) {
+                            Text(stringResource(R.string.order_editor_clear_optional))
+                        }
+                    }
+                    TextButton(
+                        onClick = {
+                            if (hasAnyInput) {
+                                showClearConfirm = true
+                            } else {
+                                onClear()
+                            }
+                        }
+                    ) {
                         Icon(
                             imageVector = Icons.Filled.Close,
                             contentDescription = stringResource(R.string.action_clear)
@@ -416,6 +454,28 @@ internal fun OrderEditorSheet(
                         Text(stringResource(R.string.action_save))
                     }
                 }
+            }
+            if (showClearConfirm) {
+                AlertDialog(
+                    onDismissRequest = { showClearConfirm = false },
+                    title = { Text(stringResource(R.string.order_editor_clear_form_title)) },
+                    text = { Text(stringResource(R.string.order_editor_clear_form_message)) },
+                    confirmButton = {
+                        Button(
+                            onClick = {
+                                onClear()
+                                showClearConfirm = false
+                            }
+                        ) {
+                            Text(stringResource(R.string.order_editor_clear_form_confirm))
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showClearConfirm = false }) {
+                            Text(stringResource(R.string.action_cancel))
+                        }
+                    }
+                )
             }
 
             VoiceCalculatorOverlay(

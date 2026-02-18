@@ -18,6 +18,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
@@ -41,6 +42,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import com.zeynbakers.order_management_system.R
+import com.zeynbakers.order_management_system.core.ui.components.AppScreenHeaderCard
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -87,6 +89,17 @@ fun NotificationSettingsScreen(onBack: () -> Unit) {
                     .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
+            AppScreenHeaderCard(
+                title = stringResource(R.string.notifications_owner_title),
+                subtitle = stringResource(R.string.notifications_owner_subtitle),
+                leadingIcon = Icons.Filled.NotificationsActive,
+                highlight = if (settings.enabled) {
+                    stringResource(R.string.notifications_owner_enabled)
+                } else {
+                    stringResource(R.string.notifications_owner_disabled)
+                }
+            )
+
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,

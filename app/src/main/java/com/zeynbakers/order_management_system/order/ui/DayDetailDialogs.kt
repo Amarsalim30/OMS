@@ -95,15 +95,12 @@ internal fun DayOrderEditorDialog(
     val normalizedPickupTime =
         if (pickupTimeText.isBlank()) null else normalizePickupTime(pickupTimeText)
     val isPickupTimeInvalid = pickupTimeText.isNotBlank() && normalizedPickupTime == null
-    val hasCustomerMismatch = customerName.isNotBlank() && customerPhone.isBlank()
     val notesRequiredText = stringResource(R.string.day_editor_notes_required)
     val validTotalRequiredText = stringResource(R.string.day_editor_valid_total_required)
-    val phoneRequiredText = stringResource(R.string.day_editor_phone_required_for_customer)
     val canSave =
         notes.trim().isNotEmpty() &&
             parsedTotal != null &&
             parsedTotal > BigDecimal.ZERO &&
-            !hasCustomerMismatch &&
             !isPickupTimeInvalid
 
     val notesState by rememberUpdatedState(notes)
@@ -127,11 +124,6 @@ internal fun DayOrderEditorDialog(
                 onSetNotesError(null)
                 onSetTotalError(validTotalRequiredText)
                 onSetCustomerError(null)
-            }
-            hasCustomerMismatch -> {
-                onSetNotesError(null)
-                onSetTotalError(null)
-                onSetCustomerError(phoneRequiredText)
             }
             isPickupTimeInvalid -> {
                 onSetNotesError(null)
@@ -181,7 +173,7 @@ internal fun DayOrderEditorDialog(
         },
         isTotalInvalid = isTotalInvalid,
         totalSupportingText = when {
-            isTotalInvalid -> stringResource(R.string.day_editor_enter_valid_amount)
+            isTotalInvalid && totalError == null -> stringResource(R.string.day_editor_enter_valid_amount)
             formattedTotal != null -> stringResource(R.string.day_editor_total_preview, formattedTotal)
             else -> null
         },
@@ -226,6 +218,13 @@ internal fun DayOrderEditorDialog(
             onSetTotalError(null)
             onSetCustomerError(null)
             onDraftChange(null)
+        },
+        onClearOptional = {
+            onSetCustomerName("")
+            onSetCustomerPhone("")
+            onSetPickupTimeText("")
+            onSetSuggestions(emptyList())
+            onSetCustomerError(null)
         },
         onCancel = { onSetEditorOpen(false) },
         onNotesFocused = { voiceRouter.onFocusTarget(VoiceTarget.Notes) },
@@ -284,6 +283,40 @@ internal fun DayDeleteOrderDialog(
             }
         } else {
             null
+        }
+    val selectedTotal =
+        selectedAllocations.fold(BigDecimal.ZERO) { total, allocation ->
+            total.add(allocation.amount)
+        }
+    val moveTargetLabel =
+        when (deleteMoveTarget) {
+            DeleteMoveTarget.ORDER ->
+                deleteMoveOrderOptions.firstOrNull { option -> option.orderId == deleteSelectedOrderId }?.label
+                    ?: stringResource(R.string.day_target_order)
+            DeleteMoveTarget.OLDEST_ORDERS -> stringResource(R.string.day_target_oldest_orders)
+            DeleteMoveTarget.CUSTOMER_CREDIT -> stringResource(R.string.day_target_customer_credit)
+        }
+    val impactSummary =
+        when {
+            !hasAllocations ->
+                stringResource(R.string.day_delete_impact_no_payments_summary)
+            selectedAllocations.isEmpty() ->
+                stringResource(R.string.day_delete_impact_none_selected_summary)
+            deleteAction == OrderPaymentAction.MOVE && targetAllocation == null ->
+                stringResource(R.string.day_delete_impact_choose_target_summary)
+            deleteAction == OrderPaymentAction.MOVE ->
+                stringResource(
+                    R.string.day_delete_impact_move_summary,
+                    selectedAllocations.size,
+                    formatKes(selectedTotal),
+                    moveTargetLabel
+                )
+            else ->
+                stringResource(
+                    R.string.day_delete_impact_void_summary,
+                    selectedAllocations.size,
+                    formatKes(selectedTotal)
+                )
         }
     val canConfirm =
         if (!hasAllocations) {
@@ -459,6 +492,16 @@ internal fun DayDeleteOrderDialog(
                         }
                     }
                 }
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    text = stringResource(R.string.day_delete_impact_heading),
+                    style = MaterialTheme.typography.labelLarge
+                )
+                Text(
+                    text = impactSummary,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
         },
         confirmButton = {

@@ -49,6 +49,7 @@ import com.zeynbakers.order_management_system.core.ui.components.AppCard
 import com.zeynbakers.order_management_system.core.ui.components.AppEmptyState
 import com.zeynbakers.order_management_system.core.ui.components.AppFilterOption
 import com.zeynbakers.order_management_system.core.ui.components.AppFilterRow
+import com.zeynbakers.order_management_system.core.ui.components.AppScreenHeaderCard
 import com.zeynbakers.order_management_system.core.util.formatOrderLabel
 import com.zeynbakers.order_management_system.core.util.formatDateTime
 import com.zeynbakers.order_management_system.core.util.formatKes
@@ -124,6 +125,14 @@ fun PaymentIntakeHistoryScreen(
                 .padding(padding)
                 .padding(12.dp)
         ) {
+            AppScreenHeaderCard(
+                title = stringResource(R.string.money_payment_history_all),
+                subtitle = stringResource(R.string.money_history_owner_subtitle),
+                highlight = stringResource(R.string.money_history_owner_highlight_count, items.size)
+            )
+
+            Spacer(modifier = Modifier.height(8.dp))
+
             header?.let {
                 HistoryHeaderCard(header = it)
                 Spacer(modifier = Modifier.height(6.dp))

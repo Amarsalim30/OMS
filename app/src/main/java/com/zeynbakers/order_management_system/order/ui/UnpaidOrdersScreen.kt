@@ -52,11 +52,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.zeynbakers.order_management_system.R
+import com.zeynbakers.order_management_system.core.ui.components.AppScreenHeaderCard
 import com.zeynbakers.order_management_system.core.ui.rememberCurrentDate
+import com.zeynbakers.order_management_system.core.util.formatKes
 import com.zeynbakers.order_management_system.order.data.OrderEntity
 import java.math.BigDecimal
 import kotlinx.datetime.LocalDate
@@ -165,6 +168,22 @@ fun UnpaidOrdersScreen(
                     acc + (order.totalAmount - paid)
                 }
             }
+    val followUpCountLabel =
+        pluralStringResource(
+            id = R.plurals.unpaid_orders_count,
+            count = filteredOrders.size,
+            filteredOrders.size
+        )
+    val ownerHighlight =
+        if (hideBalances) {
+            followUpCountLabel
+        } else {
+            stringResource(
+                R.string.unpaid_owner_highlight,
+                followUpCountLabel,
+                formatKes(totalOutstanding)
+            )
+        }
 
     // Headers
     val dates =
@@ -295,6 +314,16 @@ fun UnpaidOrdersScreen(
                 contentPadding = PaddingValues(bottom = 80.dp), // Extra padding for bottom content
                 verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            item {
+                AppScreenHeaderCard(
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    title = stringResource(R.string.unpaid_owner_title),
+                    subtitle = stringResource(R.string.unpaid_owner_subtitle),
+                    leadingIcon = Icons.Outlined.Payments,
+                    highlight = ownerHighlight
+                )
+            }
+
             item {
                 SummaryCard(
                         count = filteredOrders.size,

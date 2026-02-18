@@ -15,6 +15,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CenterAlignedTopAppBar
@@ -47,6 +48,7 @@ import androidx.work.WorkInfo
 import androidx.work.WorkManager
 import com.zeynbakers.order_management_system.R
 import com.zeynbakers.order_management_system.core.ui.LocalUiEventDispatcher
+import com.zeynbakers.order_management_system.core.ui.components.AppScreenHeaderCard
 import com.zeynbakers.order_management_system.core.ui.showSnackbar
 import java.io.File
 import java.text.SimpleDateFormat
@@ -198,6 +200,13 @@ fun BackupSettingsScreen(
                     .verticalScroll(rememberScrollState()),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
+            AppScreenHeaderCard(
+                title = stringResource(R.string.backup_owner_title),
+                subtitle = stringResource(R.string.backup_owner_subtitle),
+                leadingIcon = Icons.Filled.Settings,
+                highlight = statusLabel
+            )
+
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,

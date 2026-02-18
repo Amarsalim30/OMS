@@ -212,7 +212,6 @@ fun CalendarScreen(
             }
         }
     }
-
     Scaffold(
         contentWindowInsets = WindowInsets(0),
         topBar = {
@@ -253,6 +252,8 @@ fun CalendarScreen(
                 .padding(padding)
         ) {
             MonthSummaryCard(
+                ownerTitle = stringResource(R.string.calendar_owner_title),
+                ownerSubtitle = stringResource(R.string.calendar_owner_subtitle),
                 monthTotal = displayedMonthTotal,
                 dueCount = displayedBadgeCount,
                 hasOrders = hasOrdersInVisibleMonth,
@@ -470,6 +471,13 @@ fun CalendarScreen(
                 totalError = null
                 customerError = null
             },
+            onClearOptional = {
+                customerName = ""
+                customerPhone = ""
+                pickupTimeText = ""
+                customerError = null
+                suggestions = emptyList()
+            },
             onCancel = { isQuickAddOpen = false },
             onNotesFocused = { voiceRouter.onFocusTarget(VoiceTarget.Notes) },
             onTotalFocused = { setter ->
@@ -481,5 +489,6 @@ fun CalendarScreen(
         )
     }
 }
+
 
 

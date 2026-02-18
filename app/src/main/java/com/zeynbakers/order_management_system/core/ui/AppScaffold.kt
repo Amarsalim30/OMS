@@ -15,11 +15,10 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material3.BottomAppBar
 import androidx.compose.material3.ElevatedButton
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.NavigationBar
@@ -34,6 +33,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.zeynbakers.order_management_system.R
 
@@ -63,25 +63,45 @@ fun AppScaffold(
     content: @Composable (PaddingValues) -> Unit
 ) {
     val useRail = windowSizeClass.widthSizeClass >= WindowWidthSizeClass.Medium
+
     if (useRail) {
         Row(modifier = Modifier.fillMaxSize()) {
-            NavigationRail {
+            NavigationRail(
+                containerColor = MaterialTheme.colorScheme.surface
+            ) {
+                Text(
+                    text = stringResource(R.string.app_name),
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 14.dp)
+                )
+                HorizontalDivider(
+                    modifier = Modifier.padding(horizontal = 12.dp),
+                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.25f)
+                )
+                Spacer(modifier = Modifier.weight(1f, fill = false))
                 destinations.forEach { destination ->
                     NavigationRailItem(
                         selected = selectedRoute == destination.route,
                         onClick = { onDestinationSelected(destination.route) },
                         icon = { Icon(destination.icon, contentDescription = destination.label) },
                         label = { Text(destination.label) },
-                        alwaysShowLabel = false
+                        alwaysShowLabel = true
                     )
                 }
                 Spacer(modifier = Modifier.weight(1f))
-                IconButton(onClick = onOpenMore) {
-                    Icon(
-                        Icons.Filled.Settings,
-                        contentDescription = stringResource(R.string.action_settings)
-                    )
-                }
+                NavigationRailItem(
+                    selected = false,
+                    onClick = onOpenMore,
+                    icon = {
+                        Icon(
+                            imageVector = Icons.Filled.Settings,
+                            contentDescription = stringResource(R.string.action_more)
+                        )
+                    },
+                    label = { Text(stringResource(R.string.action_more)) },
+                    alwaysShowLabel = true
+                )
             }
             Box(modifier = Modifier.weight(1f)) {
                 content(PaddingValues(0.dp))
@@ -91,35 +111,31 @@ fun AppScaffold(
         Scaffold(
             contentWindowInsets = WindowInsets(0),
             bottomBar = {
-                BottomAppBar(
+                NavigationBar(
                     containerColor = MaterialTheme.colorScheme.surface,
-                    tonalElevation = 0.dp
+                    tonalElevation = 2.dp
                 ) {
-                    NavigationBar(
-                        modifier = Modifier
-                            .weight(1f)
-                            .padding(vertical = 2.dp),
-                        containerColor = MaterialTheme.colorScheme.surface,
-                        tonalElevation = 0.dp
-                    ) {
-                        destinations.forEach { destination ->
-                            NavigationBarItem(
-                                selected = selectedRoute == destination.route,
-                                onClick = { onDestinationSelected(destination.route) },
-                                icon = { Icon(destination.icon, contentDescription = destination.label) },
-                                label = { Text(destination.label) }
-                            )
-                        }
-                    }
-                    IconButton(
-                        onClick = onOpenMore,
-                        modifier = Modifier.padding(end = 6.dp)
-                    ) {
-                        Icon(
-                            Icons.Filled.Settings,
-                            contentDescription = stringResource(R.string.action_settings)
+                    destinations.forEach { destination ->
+                        NavigationBarItem(
+                            selected = selectedRoute == destination.route,
+                            onClick = { onDestinationSelected(destination.route) },
+                            icon = { Icon(destination.icon, contentDescription = destination.label) },
+                            label = { Text(destination.label) },
+                            alwaysShowLabel = true
                         )
                     }
+                    NavigationBarItem(
+                        selected = false,
+                        onClick = onOpenMore,
+                        icon = {
+                            Icon(
+                                imageVector = Icons.Filled.Settings,
+                                contentDescription = stringResource(R.string.action_more)
+                            )
+                        },
+                        label = { Text(stringResource(R.string.action_more)) },
+                        alwaysShowLabel = true
+                    )
                 }
             }
         ) { padding ->
@@ -132,10 +148,19 @@ fun AppScaffold(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 6.dp)
+                    .padding(horizontal = 14.dp, vertical = 8.dp)
                     .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(6.dp)
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
+                Text(
+                    text = stringResource(R.string.action_more),
+                    style = MaterialTheme.typography.titleMedium
+                )
+                Text(
+                    text = stringResource(R.string.more_quick_tools_subtitle),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
                 moreActions.forEach { action ->
                     ElevatedButton(
                         onClick = action.onClick,

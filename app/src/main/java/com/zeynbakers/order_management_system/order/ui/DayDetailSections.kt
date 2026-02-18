@@ -14,11 +14,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.Button
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -61,9 +58,9 @@ internal fun DaySummaryCard(
         tonalElevation = 1.dp,
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp)
+            .padding(horizontal = 16.dp, vertical = 6.dp)
     ) {
-        Column(modifier = Modifier.padding(12.dp)) {
+        Column(modifier = Modifier.padding(10.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
@@ -118,7 +115,7 @@ internal fun DaySummaryCard(
                 }
             }
 
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(6.dp))
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -128,7 +125,7 @@ internal fun DaySummaryCard(
                 SummaryMetric(label = balanceLabel, value = balanceValue)
             }
 
-            Spacer(Modifier.height(10.dp))
+            Spacer(Modifier.height(8.dp))
 
             val chipScrollState = rememberScrollState()
             Row(
@@ -316,28 +313,36 @@ internal fun OrderListItem(
                         overflow = TextOverflow.Ellipsis
                     )
                 }
-                Spacer(Modifier.height(8.dp))
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = stringResource(R.string.day_tap_to_edit_hint),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(Modifier.height(6.dp))
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.End
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     TextButton(onClick = onPaymentHistory) {
                         Text(stringResource(R.string.day_history))
                     }
                     if (showReceive) {
-                        Spacer(Modifier.width(8.dp))
                         Button(onClick = onReceivePayment) {
                             Text(stringResource(R.string.customer_action_record_payment))
                         }
                     }
+                    Spacer(Modifier.weight(1f))
+                    TextButton(
+                        onClick = onDelete,
+                        colors = ButtonDefaults.textButtonColors(
+                            contentColor = MaterialTheme.colorScheme.error
+                        )
+                    ) {
+                        Text(stringResource(R.string.day_delete_order))
+                    }
                 }
-            }
-            IconButton(onClick = onDelete) {
-                Icon(
-                    imageVector = Icons.Filled.Delete,
-                    contentDescription = stringResource(R.string.day_delete_order)
-                )
             }
         }
     }

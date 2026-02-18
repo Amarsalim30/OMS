@@ -17,6 +17,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.outlined.RadioButtonUnchecked
+import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -41,6 +42,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.zeynbakers.order_management_system.R
+import com.zeynbakers.order_management_system.core.ui.components.AppScreenHeaderCard
 
 @Composable
 @OptIn(ExperimentalMaterial3Api::class)
@@ -121,6 +123,15 @@ fun ImportContactsScreen(
                 .padding(padding)
                 .padding(start = 12.dp, end = 12.dp, top = 12.dp)
         ) {
+            AppScreenHeaderCard(
+                title = stringResource(R.string.import_contacts_owner_title),
+                subtitle = stringResource(R.string.import_contacts_owner_subtitle),
+                leadingIcon = Icons.Outlined.Person,
+                highlight = selectedLabel
+            )
+
+            Spacer(Modifier.height(8.dp))
+
             if (isLoading) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),

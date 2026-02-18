@@ -83,6 +83,7 @@ import java.math.RoundingMode
 import java.text.NumberFormat
 import java.util.Locale
 import kotlinx.datetime.LocalDate
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import androidx.compose.material3.FilterChip
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
@@ -136,9 +137,9 @@ fun DayDetailScreen(
     val voiceCalcAccess = LocalVoiceCalcAccess.current
     val overlaySuppressed = LocalVoiceOverlaySuppressed.current
     val voiceRouter = LocalVoiceInputRouter.current
-    val scope = rememberCoroutineScope()
     var orderFilter by rememberSaveable { mutableStateOf(DayOrderFilter.All) }
     var searchQuery by rememberSaveable(date) { mutableStateOf("") }
+    var isSearchExpanded by rememberSaveable(date) { mutableStateOf(false) }
     val formatter = remember {
         NumberFormat.getNumberInstance(Locale.forLanguageTag("en-KE")).apply {
             minimumFractionDigits = 2
@@ -207,7 +208,18 @@ fun DayDetailScreen(
             customerPhone.isNotBlank() -> customerPhone
             else -> ""
         }
-        suggestions = if (query.isBlank()) emptyList() else searchCustomers(query)
+        val normalizedQuery = query.trim()
+        if (normalizedQuery.isBlank()) {
+            suggestions = emptyList()
+            return@LaunchedEffect
+        }
+        delay(250)
+        suggestions = searchCustomers(normalizedQuery)
+    }
+    LaunchedEffect(searchQuery) {
+        if (searchQuery.isNotBlank()) {
+            isSearchExpanded = true
+        }
     }
     LaunchedEffect(pendingDeleteOrder?.id) {
         val order = pendingDeleteOrder ?: return@LaunchedEffect
@@ -345,37 +357,10 @@ fun DayDetailScreen(
                             .fillMaxWidth()
                             .padding(horizontal = 16.dp)
                     ) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            AppFilterRow(
-                                options = dayOrderFilterOptions(orders.size, dayStats),
-                                selectedKey = orderFilter.name,
-                                onSelect = { selected -> orderFilter = DayOrderFilter.valueOf(selected) }
-                            )
-                        }
-                        Spacer(Modifier.height(10.dp))
-                        OutlinedTextField(
-                            value = searchQuery,
-                            onValueChange = { searchQuery = it },
-                            label = { Text(stringResource(R.string.day_search_orders)) },
-                            placeholder = { Text(stringResource(R.string.day_search_notes_or_customer)) },
-                            leadingIcon = {
-                                Icon(imageVector = Icons.Filled.Search, contentDescription = null)
-                            },
-                            trailingIcon = {
-                                if (searchQuery.isNotBlank()) {
-                                    IconButton(onClick = { searchQuery = "" }) {
-                                        Icon(
-                                            imageVector = Icons.Filled.Close,
-                                            contentDescription = stringResource(R.string.day_clear_search)
-                                        )
-                                    }
-                                }
-                            },
-                            singleLine = true,
-                            modifier = Modifier.fillMaxWidth()
+                        AppFilterRow(
+                            options = dayOrderFilterOptions(orders.size, dayStats),
+                            selectedKey = orderFilter.name,
+                            onSelect = { selected -> orderFilter = DayOrderFilter.valueOf(selected) }
                         )
                         Spacer(Modifier.height(6.dp))
                         val orderCountLabel =
@@ -388,11 +373,101 @@ fun DayDetailScreen(
                                     orders.size
                                 )
                             }
-                        Text(
-                            text = orderCountLabel,
-                            style = MaterialTheme.typography.labelLarge,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                        val searchVisible = isSearchExpanded
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = orderCountLabel,
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.weight(1f)
+                            )
+                            TextButton(
+                                onClick = {
+                                    if (searchVisible) {
+                                        isSearchExpanded = false
+                                    } else {
+                                        isSearchExpanded = true
+                                    }
+                                }
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Filled.Search,
+                                    contentDescription = null
+                                )
+                                Spacer(Modifier.width(6.dp))
+                                Text(
+                                    text = if (searchVisible) {
+                                        stringResource(R.string.day_hide_search)
+                                    } else {
+                                        stringResource(R.string.day_show_search)
+                                    }
+                                )
+                            }
+                        }
+                        if (searchVisible) {
+                            Spacer(Modifier.height(6.dp))
+                            OutlinedTextField(
+                                value = searchQuery,
+                                onValueChange = { searchQuery = it },
+                                label = { Text(stringResource(R.string.day_search_orders)) },
+                                placeholder = { Text(stringResource(R.string.day_search_notes_or_customer)) },
+                                leadingIcon = {
+                                    Icon(imageVector = Icons.Filled.Search, contentDescription = null)
+                                },
+                                trailingIcon = {
+                                    if (searchQuery.isNotBlank()) {
+                                        IconButton(onClick = { searchQuery = "" }) {
+                                            Icon(
+                                                imageVector = Icons.Filled.Close,
+                                                contentDescription = stringResource(R.string.day_clear_search)
+                                            )
+                                        }
+                                    }
+                                },
+                                singleLine = true,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+                        val activeContextLabel =
+                            when {
+                                orderFilter != DayOrderFilter.All && searchQuery.isNotBlank() -> {
+                                    stringResource(
+                                        R.string.day_active_context_filter_search,
+                                        stringResource(orderFilter.labelRes),
+                                        searchQuery
+                                    )
+                                }
+                                orderFilter != DayOrderFilter.All -> {
+                                    stringResource(
+                                        R.string.day_active_context_filter_only,
+                                        stringResource(orderFilter.labelRes)
+                                    )
+                                }
+                                searchQuery.isNotBlank() -> {
+                                    stringResource(
+                                        R.string.day_active_context_search_only,
+                                        searchQuery
+                                    )
+                                }
+                                else -> null
+                            }
+                        if (activeContextLabel != null) {
+                            Spacer(Modifier.height(6.dp))
+                            Surface(
+                                color = MaterialTheme.colorScheme.surfaceVariant,
+                                shape = RoundedCornerShape(999.dp)
+                            ) {
+                                Text(
+                                    text = activeContextLabel,
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                                )
+                            }
+                        }
                     }
                 }
             }

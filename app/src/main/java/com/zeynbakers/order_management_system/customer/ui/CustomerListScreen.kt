@@ -24,10 +24,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -75,6 +71,7 @@ import androidx.core.net.toUri
 import com.zeynbakers.order_management_system.R
 import com.zeynbakers.order_management_system.accounting.data.CustomerAccountSummary
 import com.zeynbakers.order_management_system.core.ui.LocalUiEventDispatcher
+import com.zeynbakers.order_management_system.core.ui.components.AppScreenHeaderCard
 import com.zeynbakers.order_management_system.core.ui.showSnackbar
 import com.zeynbakers.order_management_system.core.util.formatKes
 import java.math.BigDecimal
@@ -234,6 +231,22 @@ private fun CustomersScreenM3(
             }
         }
     }
+    val totalDue =
+        remember(filteredCustomers) {
+            filteredCustomers.fold(BigDecimal.ZERO) { acc, summary ->
+                if (summary.balance > BigDecimal.ZERO) acc + summary.balance else acc
+            }
+        }
+    val ownerHighlight =
+        if (totalDue > BigDecimal.ZERO) {
+            stringResource(R.string.customer_owner_highlight_due, formatKes(totalDue))
+        } else {
+            pluralStringResource(
+                R.plurals.customer_result_count,
+                filteredCustomers.size,
+                filteredCustomers.size
+            )
+        }
 
     Scaffold(
         contentWindowInsets = WindowInsets(0),
@@ -261,6 +274,15 @@ private fun CustomersScreenM3(
                 .padding(padding)
                 .padding(start = 12.dp, end = 12.dp, top = 12.dp)
         ) {
+            AppScreenHeaderCard(
+                title = stringResource(R.string.customer_owner_title),
+                subtitle = stringResource(R.string.customer_owner_subtitle),
+                leadingIcon = Icons.Outlined.Person,
+                highlight = ownerHighlight
+            )
+
+            Spacer(Modifier.height(8.dp))
+
             CustomerListControlRow(
                 selectedFilter = selectedFilter,
                 selectedSort = selectedSort,

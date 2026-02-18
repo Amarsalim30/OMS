@@ -7,6 +7,9 @@
     <string name="more_backup_restore">Backup &amp; restore</string>
     <string name="more_notifications">Notifications</string>
     <string name="more_import_contacts">Import contacts</string>
+    <string name="more_order_summary">Order summary</string>
+    <string name="more_payment_history">Payment history</string>
+    <string name="more_quick_tools_subtitle">Shortcuts for owner workflows</string>
     <string name="contacts_permission_required_for_import">Contacts permission is required to import customers</string>
     <string name="money_tab_collect">Collect</string>
     <string name="money_tab_record">Record</string>
@@ -14,10 +17,17 @@
     <string name="money_collect_title">M-PESA Import</string>
     <string name="money_record_title">Record payment</string>
     <string name="money_statement_title">Customer statements</string>
+    <string name="money_owner_title">Cashflow desk</string>
+    <string name="money_owner_highlight">Collections and ledger</string>
+    <string name="money_owner_subtitle_collect">Review incoming M-PESA receipts and post ready payments.</string>
+    <string name="money_owner_subtitle_record">Capture manual payments and assign them correctly.</string>
+    <string name="money_owner_subtitle_statements">Track balances and customer account movement.</string>
     <string name="money_statement_pick_customer">Pick a customer to view statement</string>
     <string name="money_advanced_ledger_title">All customers ledger (advanced)</string>
     <string name="money_advanced_ledger_subtitle">Advanced admin view</string>
     <string name="money_payment_history_all">Payment history</string>
+    <string name="money_history_owner_subtitle">Audit, move, or void receipts with full traceability.</string>
+    <string name="money_history_owner_highlight_count">%1$d receipts</string>
     <string name="money_payment_history_customer">Customer payment history</string>
     <string name="money_payment_history_order">Order payment history</string>
     <string name="money_statement_summary_title">Statement summary</string>
@@ -116,6 +126,9 @@
     <string name="customer_hide_zero_balances">Hide zero balances</string>
     <string name="customer_show_inactive_no_orders">Show inactive (no orders)</string>
     <string name="customer_all_customers">All customers</string>
+    <string name="customer_owner_title">Customer accounts</string>
+    <string name="customer_owner_subtitle">Track receivables, credit, and relationship status in one place.</string>
+    <string name="customer_owner_highlight_due">Due %1$s</string>
     <string name="customer_search_results">Search results</string>
     <plurals name="customer_result_count">
         <item quantity="one">%1$d result</item>
@@ -255,6 +268,11 @@
     <string name="day_search_orders">Search orders</string>
     <string name="day_search_notes_or_customer">Notes or customer</string>
     <string name="day_clear_search">Clear search</string>
+    <string name="day_show_search">Search</string>
+    <string name="day_hide_search">Hide search</string>
+    <string name="day_active_context_filter_search">Filter %1$s - Search "%2$s"</string>
+    <string name="day_active_context_filter_only">Filter %1$s</string>
+    <string name="day_active_context_search_only">Search "%1$s"</string>
     <string name="day_orders_count">Orders: %1$d</string>
     <plurals name="day_orders_count_plural">
         <item quantity="one">%1$d order</item>
@@ -262,6 +280,8 @@
     </plurals>
     <string name="day_showing_orders_count">Showing %1$d of %2$d</string>
     <string name="backup_title">Backup</string>
+    <string name="backup_owner_title">Data protection</string>
+    <string name="backup_owner_subtitle">Keep business records safe with automated and manual backups.</string>
     <string name="backup_stage_backing_up">Backing up</string>
     <string name="backup_stage_restoring">Restoring</string>
     <string name="backup_complete">Backup complete</string>
@@ -300,6 +320,10 @@
     <string name="restore_confirm_body">This will replace all current data.</string>
     <string name="restore_action">Restore</string>
     <string name="notifications_title">Notifications</string>
+    <string name="notifications_owner_title">Reminder operations</string>
+    <string name="notifications_owner_subtitle">Control customer reminder timing and daily overview alerts.</string>
+    <string name="notifications_owner_enabled">Enabled</string>
+    <string name="notifications_owner_disabled">Disabled</string>
     <string name="notifications_order_reminders">Order reminders</string>
     <string name="notifications_order_reminders_hint">Due-date reminders and daily summary.</string>
     <string name="notifications_permission_required">Notification permission is required on Android 13+.</string>
@@ -315,6 +339,8 @@
     <string name="notifications_daily_summary_hint">One notification each morning with totals.</string>
     <string name="notifications_workmanager_hint">Reminders run with WorkManager (no exact alarms).</string>
     <string name="import_contacts_title">Import contacts</string>
+    <string name="import_contacts_owner_title">Customer onboarding</string>
+    <string name="import_contacts_owner_subtitle">Import phonebook contacts to start tracking orders and balances.</string>
     <string name="import_contacts_hint">Import customers from your phonebook. We skip empty numbers automatically.</string>
     <string name="import_contacts_search_label">Search contacts</string>
     <string name="import_contacts_search_placeholder">Name or phone</string>
@@ -329,6 +355,9 @@
         <item quantity="other">%1$d selected</item>
     </plurals>
     <string name="unpaid_title">Unpaid Orders</string>
+    <string name="unpaid_owner_title">Collections queue</string>
+    <string name="unpaid_owner_subtitle">Prioritize follow-ups and record payments against outstanding orders.</string>
+    <string name="unpaid_owner_highlight">%1$s - %2$s</string>
     <string name="unpaid_filter_newest">Newest</string>
     <string name="unpaid_filter_oldest">Oldest</string>
     <string name="unpaid_filter_largest_due">Largest Due</string>
@@ -346,6 +375,8 @@
     <string name="unpaid_date_today">Today</string>
     <string name="unpaid_date_yesterday">Yesterday</string>
     <string name="calendar_add_order">Add order</string>
+    <string name="calendar_owner_title">Daily operations calendar</string>
+    <string name="calendar_owner_subtitle">Monitor workload, open balances, and schedule follow-up actions.</string>
     <string name="calendar_select_month">Select month</string>
     <string name="calendar_summary">Summary</string>
     <string name="calendar_today">Today</string>
@@ -407,6 +438,7 @@
     <string name="day_paid_in_full">Paid in full</string>
     <string name="day_history">History</string>
     <string name="day_delete_order">Delete order</string>
+    <string name="day_tap_to_edit_hint">Tap card to edit order details</string>
     <string name="day_filter_all">All</string>
     <string name="day_filter_unpaid">Unpaid</string>
     <string name="day_filter_partial">Partial</string>
@@ -435,15 +467,25 @@
     <string name="day_editor_status_line">Status: %1$s - Paid %2$s - Due %3$s</string>
     <string name="order_editor_notes_required_label">Notes (required)</string>
     <string name="order_editor_notes_placeholder">Customer details, delivery time, etc.</string>
+    <string name="order_editor_required_section_label">Required details</string>
     <string name="order_editor_total_amount_label">Total amount</string>
     <string name="order_editor_total_placeholder">KSh 0.00</string>
     <string name="order_editor_currency_prefix">KSh</string>
-    <string name="order_editor_pickup_time_optional_label">Pickup time (optional)</string>
-    <string name="order_editor_pickup_time_placeholder">09:00</string>
-    <string name="order_editor_pickup_time_hint">Use HH:MM (e.g., 09:30 or 930).</string>
+    <string name="order_editor_optional_section_label">Optional details</string>
+    <string name="order_editor_add_optional">Add optional</string>
+    <string name="order_editor_hide_optional">Hide optional</string>
+    <string name="order_editor_optional_in_use">Optional fields are filled. Clear them to hide this section.</string>
+    <string name="order_editor_optional_collapsed_hint">Add pickup time or customer details only when needed.</string>
+    <string name="order_editor_pickup_time_optional_label">Pickup/delivery time (optional)</string>
+    <string name="order_editor_pickup_time_placeholder">930 or 09:30</string>
+    <string name="order_editor_pickup_time_hint">Use HH:MM or 3-4 digits (e.g., 09:30 or 930).</string>
     <string name="order_editor_customer_optional_label">Customer (optional)</string>
     <string name="order_editor_customer_name_label">Customer name</string>
     <string name="order_editor_customer_phone_label">Customer phone</string>
+    <string name="order_editor_clear_optional">Clear optional</string>
+    <string name="order_editor_clear_form_title">Clear this form?</string>
+    <string name="order_editor_clear_form_message">This will remove all typed values for this order entry.</string>
+    <string name="order_editor_clear_form_confirm">Clear form</string>
     <string name="order_editor_suggestions_label">Suggestions</string>
     <string name="order_editor_suggestion_item">%1$s - %2$s</string>
     <string name="day_delete_order_title">Delete order?</string>
@@ -455,6 +497,12 @@
     <string name="day_move_payments">Move payments</string>
     <string name="day_delete_payments">Delete payments</string>
     <string name="day_delete_no_customer_target">No customer on this order. Choose a target order.</string>
+    <string name="day_delete_impact_heading">Delete impact</string>
+    <string name="day_delete_impact_no_payments_summary">This will remove the order and leave receipts unchanged because none are linked.</string>
+    <string name="day_delete_impact_none_selected_summary">Select at least one payment to continue.</string>
+    <string name="day_delete_impact_choose_target_summary">Choose where selected payments should be moved before deleting this order.</string>
+    <string name="day_delete_impact_move_summary">%1$d payment(s), total %2$s, will move to %3$s when this order is deleted.</string>
+    <string name="day_delete_impact_void_summary">%1$d payment(s), total %2$s, will be deleted with this order.</string>
     <string name="day_target_order">Order</string>
     <string name="day_target_oldest_orders">Oldest orders</string>
     <string name="day_target_customer_credit">Customer credit</string>

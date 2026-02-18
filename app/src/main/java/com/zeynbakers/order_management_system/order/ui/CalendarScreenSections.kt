@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
@@ -219,6 +220,9 @@ internal fun MonthPickerSheet(
 
 @Composable
 internal fun MonthSummaryCard(
+    ownerTitle: String? = null,
+    ownerSubtitle: String? = null,
+    ownerHighlight: String? = null,
     monthTotal: BigDecimal?,
     dueCount: Int,
     hasOrders: Boolean,
@@ -229,8 +233,53 @@ internal fun MonthSummaryCard(
     AppCard(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 6.dp)
+            .padding(horizontal = 12.dp, vertical = 4.dp)
     ) {
+        if (!ownerTitle.isNullOrBlank() || !ownerSubtitle.isNullOrBlank()) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Top
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
+                    ownerTitle?.let {
+                        Text(
+                            text = it,
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                    ownerSubtitle?.let {
+                        Text(
+                            text = it,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+                if (!ownerHighlight.isNullOrBlank()) {
+                    Surface(
+                        shape = RoundedCornerShape(999.dp),
+                        color = MaterialTheme.colorScheme.primaryContainer
+                    ) {
+                        Text(
+                            text = ownerHighlight,
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                        )
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.18f))
+            Spacer(modifier = Modifier.height(8.dp))
+        }
+
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -239,11 +288,15 @@ internal fun MonthSummaryCard(
             Column {
                 Text(
                     text = stringResource(R.string.calendar_month_total),
-                    style = MaterialTheme.typography.labelSmall,
+                    style = MaterialTheme.typography.labelMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 val totalLabel = monthTotal?.let { formatKes(it) } ?: stringResource(R.string.calendar_loading)
-                Text(text = totalLabel, style = MaterialTheme.typography.titleMedium)
+                Text(
+                    text = totalLabel,
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.SemiBold
+                )
             }
             Row(
                 verticalAlignment = Alignment.CenterVertically,
@@ -395,7 +448,7 @@ internal fun WeekdayHeaderRow(weekStart: Int) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 10.dp, vertical = 4.dp),
+            .padding(horizontal = 10.dp, vertical = 2.dp),
         horizontalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         labels.forEachIndexed { index, label ->
