@@ -45,7 +45,6 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
-import com.zeynbakers.order_management_system.accounting.ui.LedgerViewModel
 import com.zeynbakers.order_management_system.accounting.ui.PaymentIntakeHistoryViewModel
 import com.zeynbakers.order_management_system.accounting.ui.PaymentIntakeViewModel
 import com.zeynbakers.order_management_system.accounting.ui.PaymentHistoryFilter
@@ -103,7 +102,6 @@ internal fun MainAppContent(
                 val customerViewModel: CustomerAccountsViewModel = viewModel(factory = viewModelFactory)
                 val paymentIntakeViewModel: PaymentIntakeViewModel = viewModel(factory = viewModelFactory)
                 val paymentHistoryViewModel: PaymentIntakeHistoryViewModel = viewModel(factory = viewModelFactory)
-                val ledgerViewModel: LedgerViewModel = viewModel(factory = viewModelFactory)
                 val amountRegistry = remember { AmountFieldRegistry() }
                 val voiceRouter = remember { VoiceInputRouter(onApplyTotal = amountRegistry::applyAmount) }
                 val overlaySuppressed = remember { mutableStateOf(false) }
@@ -134,7 +132,6 @@ internal fun MainAppContent(
                 var paymentIntakeText by rememberSaveable { mutableStateOf<String?>(null) }
                 var moneyTabName by rememberSaveable { mutableStateOf(MoneyTab.Collect.name) }
                 var manualCustomerId by rememberSaveable { mutableStateOf<Long?>(null) }
-                var statementCustomerId by rememberSaveable { mutableStateOf<Long?>(null) }
                 var showMoreSheet by rememberSaveable { mutableStateOf(false) }
                 var selectedTopLevelRoute by rememberSaveable { mutableStateOf(AppRoutes.Calendar) }
                 var importContacts by remember { mutableStateOf<List<ImportContact>>(emptyList()) }
@@ -209,6 +206,8 @@ internal fun MainAppContent(
                 val customerFinanceSummary by customerViewModel.financeSummary.collectAsState()
                 val customerOrders by customerViewModel.orders.collectAsState()
                 val customerOrderLabels by customerViewModel.orderLabels.collectAsState()
+                val customerStatementRows by customerViewModel.statementRows.collectAsState()
+                val isCustomerStatementLoading by customerViewModel.isStatementLoading.collectAsState()
                 var pendingCreditPrompt by remember { mutableStateOf<OrderCreditPrompt?>(null) }
                 val incomingIntent by launchIntentState
                 val currentDate: () -> LocalDate = {
@@ -372,6 +371,8 @@ internal fun MainAppContent(
                         customerFinanceSummary = customerFinanceSummary,
                         customerOrders = customerOrders,
                         customerOrderLabels = customerOrderLabels,
+                        customerStatementRows = customerStatementRows,
+                        isCustomerStatementLoading = isCustomerStatementLoading,
                         customerQuery = customerQuery,
                         importContacts = importContacts,
                         selectedContactPhones = selectedContactPhones,
@@ -380,8 +381,7 @@ internal fun MainAppContent(
                     val accountsState = AppAccountsState(
                         moneyTab = moneyTab,
                         paymentIntakeText = paymentIntakeText,
-                        manualCustomerId = manualCustomerId,
-                        statementCustomerId = statementCustomerId
+                        manualCustomerId = manualCustomerId
                     )
                     val calendarCallbacks = AppCalendarCallbacks(
                         onSelectedDateChange = { selectedDate = it },
@@ -401,8 +401,7 @@ internal fun MainAppContent(
                     val accountsCallbacks = AppAccountsCallbacks(
                         onMoneyTabChange = { moneyTabName = it.name },
                         onPaymentIntakeTextChange = { paymentIntakeText = it },
-                        onManualCustomerIdChange = { manualCustomerId = it },
-                        onStatementCustomerIdChange = { statementCustomerId = it }
+                        onManualCustomerIdChange = { manualCustomerId = it }
                     )
                     val navigationActions = AppFeatureNavigationActions(
                         onOpenMore = { showMoreSheet = true },
@@ -410,12 +409,6 @@ internal fun MainAppContent(
                         navigateToMoneyRecord = { customerId ->
                             manualCustomerId = customerId
                             moneyTabName = MoneyTab.Record.name
-                            selectedTopLevelRoute = AppRoutes.Money
-                            navController.navigate(AppRoutes.Money) { launchSingleTop = true }
-                        },
-                        navigateToMoneyStatements = { customerId ->
-                            statementCustomerId = customerId
-                            moneyTabName = MoneyTab.Statements.name
                             selectedTopLevelRoute = AppRoutes.Money
                             navController.navigate(AppRoutes.Money) { launchSingleTop = true }
                         },
@@ -464,7 +457,6 @@ internal fun MainAppContent(
                         customerViewModel = customerViewModel,
                         paymentIntakeViewModel = paymentIntakeViewModel,
                         paymentHistoryViewModel = paymentHistoryViewModel,
-                        ledgerViewModel = ledgerViewModel,
                         appSnackbarHostState = appSnackbarHostState,
                         hasRecordPermission = hasRecordPermission,
                         onRequestRecordPermission = {

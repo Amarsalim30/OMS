@@ -9,7 +9,6 @@ import com.zeynbakers.order_management_system.AppAccountsCallbacks
 import com.zeynbakers.order_management_system.AppAccountsState
 import com.zeynbakers.order_management_system.AppFeatureNavigationActions
 import com.zeynbakers.order_management_system.AppFeatureSupportActions
-import com.zeynbakers.order_management_system.accounting.ui.LedgerViewModel
 import com.zeynbakers.order_management_system.accounting.ui.PaymentHistoryFilter
 import com.zeynbakers.order_management_system.accounting.ui.PaymentIntakeHistoryScreen
 import com.zeynbakers.order_management_system.accounting.ui.PaymentIntakeHistoryViewModel
@@ -23,7 +22,6 @@ internal fun NavGraphBuilder.accountsGraph(
     customerViewModel: CustomerAccountsViewModel,
     paymentIntakeViewModel: PaymentIntakeViewModel,
     paymentHistoryViewModel: PaymentIntakeHistoryViewModel,
-    ledgerViewModel: LedgerViewModel,
     accountsState: AppAccountsState,
     accountsCallbacks: AppAccountsCallbacks,
     navigationActions: AppFeatureNavigationActions,
@@ -35,15 +33,10 @@ internal fun NavGraphBuilder.accountsGraph(
             onTabChange = { accountsCallbacks.onMoneyTabChange(it) },
             paymentIntakeViewModel = paymentIntakeViewModel,
             customerViewModel = customerViewModel,
-            ledgerViewModel = ledgerViewModel,
             initialText = accountsState.paymentIntakeText,
             manualCustomerId = accountsState.manualCustomerId,
-            statementCustomerId = accountsState.statementCustomerId,
             onManualContextConsumed = {
                 accountsCallbacks.onManualCustomerIdChange(null)
-            },
-            onStatementContextConsumed = {
-                accountsCallbacks.onStatementCustomerIdChange(null)
             },
             onManualSaved = { supportActions.refreshAfterPayments() },
             onApplied = {

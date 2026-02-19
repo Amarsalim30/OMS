@@ -5,7 +5,6 @@
 
 package com.zeynbakers.order_management_system.customer.ui
 
-import android.content.Intent
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
@@ -60,7 +59,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.core.net.toUri
 import com.zeynbakers.order_management_system.R
 import com.zeynbakers.order_management_system.accounting.data.CustomerAccountSummary
 import com.zeynbakers.order_management_system.core.util.formatKes
@@ -512,11 +510,4 @@ internal fun ActionRow(
                 verticalAlignment = Alignment.CenterVertically
         ) { Text(text = label, style = MaterialTheme.typography.bodyLarge, color = displayColor) }
     }
-}
-
-internal fun launchSms(context: android.content.Context, phone: String) {
-    if (phone.isBlank()) return
-    val intent =
-            Intent(Intent.ACTION_VIEW, "sms:$phone".toUri()).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-    context.startActivity(intent)
 }

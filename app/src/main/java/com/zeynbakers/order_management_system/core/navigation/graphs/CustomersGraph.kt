@@ -16,6 +16,7 @@ import com.zeynbakers.order_management_system.customer.ui.CustomerAccountsViewMo
 import com.zeynbakers.order_management_system.customer.ui.CustomerDetailScreen
 import com.zeynbakers.order_management_system.customer.ui.CustomerListScreen
 import com.zeynbakers.order_management_system.customer.ui.ImportContactsScreen
+import com.zeynbakers.order_management_system.customer.ui.CustomerStatementScreen
 
 internal fun NavGraphBuilder.customersGraph(
     navController: NavHostController,
@@ -51,6 +52,9 @@ internal fun NavGraphBuilder.customersGraph(
             onArchiveCustomer = { customerId ->
                 customerViewModel.archiveCustomer(customerId)
             },
+            onDeleteCustomer = { customerId ->
+                customerViewModel.deleteCustomer(customerId)
+            },
             onRestoreCustomer = { customerId ->
                 customerViewModel.unarchiveCustomer(customerId)
             },
@@ -68,17 +72,15 @@ internal fun NavGraphBuilder.customersGraph(
         }
         CustomerDetailScreen(
             customer = customersState.customerDetail,
-            ledger = customersState.customerLedger,
             balance = customersState.customerBalance,
             financeSummary = customersState.customerFinanceSummary,
             orders = customersState.customerOrders,
-            orderLabels = customersState.customerOrderLabels,
             onBack = { navController.popBackStack() },
             onPaymentHistory = { id ->
                 navigationActions.navigateToPaymentHistory(PaymentHistoryFilter.Customer(id), null)
             },
             onOpenStatement = { id ->
-                navigationActions.navigateToMoneyStatements(id)
+                navController.navigate(AppRoutes.customerStatement(id))
             },
             onReceivePayment = {
                 navigationActions.navigateToMoneyRecord(customerId)
@@ -92,6 +94,33 @@ internal fun NavGraphBuilder.customersGraph(
             },
             onWriteOffOrder = { orderId ->
                 customerViewModel.writeOffOrder(orderId)
+                supportActions.refreshAfterPayments()
+            }
+        )
+    }
+
+    composable(
+        route = AppRoutes.CustomerStatement,
+        arguments = listOf(navArgument(AppRoutes.ARG_CUSTOMER_ID) { type = NavType.LongType })
+    ) { entry ->
+        val customerId = entry.arguments?.getLong(AppRoutes.ARG_CUSTOMER_ID) ?: return@composable
+        LaunchedEffect(customerId) {
+            customerViewModel.loadCustomer(customerId)
+        }
+        CustomerStatementScreen(
+            customer = customersState.customerDetail,
+            balance = customersState.customerBalance,
+            financeSummary = customersState.customerFinanceSummary,
+            rows = customersState.customerStatementRows,
+            isLoading = customersState.isCustomerStatementLoading,
+            onBack = { navController.popBackStack() },
+            onAddOrder = {
+                val targetDate = supportActions.currentDate()
+                navigationActions.navigateToCalendarQuickAdd(targetDate)
+            },
+            onRecordPayment = { navigationActions.navigateToMoneyRecord(customerId) },
+            onMarkBadDebt = { amount, note ->
+                customerViewModel.markBadDebt(customerId, amount, note)
                 supportActions.refreshAfterPayments()
             }
         )

@@ -33,7 +33,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material3.Button
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.AlertDialog
@@ -71,9 +70,7 @@ import androidx.core.net.toUri
 import com.zeynbakers.order_management_system.R
 import com.zeynbakers.order_management_system.accounting.data.CustomerAccountSummary
 import com.zeynbakers.order_management_system.core.ui.LocalUiEventDispatcher
-import com.zeynbakers.order_management_system.core.ui.components.AppScreenHeaderCard
 import com.zeynbakers.order_management_system.core.ui.showSnackbar
-import com.zeynbakers.order_management_system.core.util.formatKes
 import java.math.BigDecimal
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -92,6 +89,7 @@ fun CustomerListScreen(
     onAddOrder: (Long) -> Unit = {},
     onEditCustomer: (Long) -> Unit = {},
     onArchiveCustomer: (Long) -> Unit = {},
+    onDeleteCustomer: (Long) -> Unit = {},
     onRestoreCustomer: (Long) -> Unit = {},
     showBack: Boolean = true
 ) {
@@ -107,6 +105,7 @@ fun CustomerListScreen(
         onAddOrder = onAddOrder,
         onEditCustomer = onEditCustomer,
         onArchiveCustomer = onArchiveCustomer,
+        onDeleteCustomer = onDeleteCustomer,
         onRestoreCustomer = onRestoreCustomer,
         showBack = showBack
     )
@@ -125,6 +124,7 @@ private fun CustomersScreenM3(
     onAddOrder: (Long) -> Unit,
     onEditCustomer: (Long) -> Unit,
     onArchiveCustomer: (Long) -> Unit,
+    onDeleteCustomer: (Long) -> Unit,
     onRestoreCustomer: (Long) -> Unit,
     showBack: Boolean
 ) {
@@ -152,6 +152,7 @@ private fun CustomersScreenM3(
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val customerArchivedMessage = stringResource(R.string.customer_archived)
+    val customerDeletedMessage = stringResource(R.string.customer_deleted)
     val undoActionLabel = stringResource(R.string.action_undo)
     val resetFiltersAndSort: () -> Unit = {
         selectedFilter = CustomerFilter.All
@@ -231,23 +232,6 @@ private fun CustomersScreenM3(
             }
         }
     }
-    val totalDue =
-        remember(filteredCustomers) {
-            filteredCustomers.fold(BigDecimal.ZERO) { acc, summary ->
-                if (summary.balance > BigDecimal.ZERO) acc + summary.balance else acc
-            }
-        }
-    val ownerHighlight =
-        if (totalDue > BigDecimal.ZERO) {
-            stringResource(R.string.customer_owner_highlight_due, formatKes(totalDue))
-        } else {
-            pluralStringResource(
-                R.plurals.customer_result_count,
-                filteredCustomers.size,
-                filteredCustomers.size
-            )
-        }
-
     Scaffold(
         contentWindowInsets = WindowInsets(0),
         topBar = {
@@ -274,15 +258,6 @@ private fun CustomersScreenM3(
                 .padding(padding)
                 .padding(start = 12.dp, end = 12.dp, top = 12.dp)
         ) {
-            AppScreenHeaderCard(
-                title = stringResource(R.string.customer_owner_title),
-                subtitle = stringResource(R.string.customer_owner_subtitle),
-                leadingIcon = Icons.Outlined.Person,
-                highlight = ownerHighlight
-            )
-
-            Spacer(Modifier.height(8.dp))
-
             CustomerListControlRow(
                 selectedFilter = selectedFilter,
                 selectedSort = selectedSort,
@@ -361,7 +336,7 @@ private fun CustomersScreenM3(
                             onAddOrder = { onAddOrder(customer.customerId) },
                             onMessage = {
                                 if (customer.phone.isNotBlank()) {
-                                    launchSms(context, customer.phone)
+                                    launchCustomerMessage(context, customer.phone)
                                 }
                             },
                             hasPhone = customer.phone.isNotBlank()
@@ -375,6 +350,10 @@ private fun CustomersScreenM3(
     longPressedCustomer?.let { customer ->
         val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
         val hasPhone = customer.phone.isNotBlank()
+        val canDelete =
+            customer.billed == BigDecimal.ZERO &&
+                customer.paid == BigDecimal.ZERO &&
+                customer.balance == BigDecimal.ZERO
         ModalBottomSheet(
             onDismissRequest = { longPressedCustomer = null },
             sheetState = sheetState
@@ -397,7 +376,7 @@ private fun CustomersScreenM3(
                     label = stringResource(R.string.customer_action_message),
                     enabled = hasPhone,
                     onClick = {
-                        launchSms(context, customer.phone)
+                        launchCustomerMessage(context, customer.phone)
                         longPressedCustomer = null
                     }
                 )
@@ -421,7 +400,14 @@ private fun CustomersScreenM3(
                     color = MaterialTheme.colorScheme.surfaceVariant
                 ) {}
                 ActionRow(
-                    label = stringResource(R.string.customer_action_archive),
+                    label =
+                        stringResource(
+                            if (canDelete) {
+                                R.string.customer_action_delete
+                            } else {
+                                R.string.customer_action_archive
+                            }
+                        ),
                     textColor = MaterialTheme.colorScheme.error,
                     onClick = {
                         pendingArchiveCustomer = customer
@@ -433,25 +419,57 @@ private fun CustomersScreenM3(
     }
 
     pendingArchiveCustomer?.let { customer ->
+        val hasTransactions =
+            customer.billed != BigDecimal.ZERO ||
+                customer.paid != BigDecimal.ZERO ||
+                customer.balance != BigDecimal.ZERO
+        val titleRes =
+            if (hasTransactions) {
+                R.string.customer_archive_title
+            } else {
+                R.string.customer_delete_title
+            }
+        val messageRes =
+            if (hasTransactions) {
+                R.string.customer_archive_message
+            } else {
+                R.string.customer_delete_message
+            }
+        val confirmRes =
+            if (hasTransactions) {
+                R.string.customer_action_archive
+            } else {
+                R.string.customer_action_delete
+            }
         AlertDialog(
             onDismissRequest = { pendingArchiveCustomer = null },
-            title = { Text(stringResource(R.string.customer_archive_title)) },
-            text = { Text(stringResource(R.string.customer_archive_message)) },
+            title = { Text(stringResource(titleRes)) },
+            text = { Text(stringResource(messageRes)) },
             confirmButton = {
                 TextButton(onClick = {
-                    onArchiveCustomer(customer.customerId)
-                    pendingArchiveCustomer = null
-                    scope.launch {
-                        val result =
+                    if (hasTransactions) {
+                        onArchiveCustomer(customer.customerId)
+                        pendingArchiveCustomer = null
+                        scope.launch {
+                            val result =
+                                uiEvents.showSnackbar(
+                                    message = customerArchivedMessage,
+                                    actionLabel = undoActionLabel
+                                )
+                            if (result == SnackbarResult.ActionPerformed) {
+                                onRestoreCustomer(customer.customerId)
+                            }
+                        }
+                    } else {
+                        onDeleteCustomer(customer.customerId)
+                        pendingArchiveCustomer = null
+                        scope.launch {
                             uiEvents.showSnackbar(
-                                message = customerArchivedMessage,
-                                actionLabel = undoActionLabel
+                                message = customerDeletedMessage
                             )
-                        if (result == SnackbarResult.ActionPerformed) {
-                            onRestoreCustomer(customer.customerId)
                         }
                     }
-                }) { Text(stringResource(R.string.customer_action_archive)) }
+                }) { Text(stringResource(confirmRes)) }
             },
             dismissButton = {
                 TextButton(onClick = { pendingArchiveCustomer = null }) { Text(stringResource(R.string.action_cancel)) }

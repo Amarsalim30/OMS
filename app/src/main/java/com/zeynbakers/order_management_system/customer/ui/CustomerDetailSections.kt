@@ -42,7 +42,9 @@ internal fun BalanceCard(
     balance: BigDecimal,
     financeSummary: CustomerFinanceSummary?,
     canReceive: Boolean,
-    onReceivePayment: () -> Unit
+    onReceivePayment: () -> Unit,
+    onViewStatement: () -> Unit,
+    onViewPaymentHistory: () -> Unit
 ) {
     val context = LocalContext.current
     val summary = financeSummary
@@ -83,11 +85,22 @@ internal fun BalanceCard(
             )
             if (summary != null) {
                 Spacer(Modifier.height(8.dp))
-                SummaryRow(label = stringResource(R.string.customer_detail_orders_total), amount = formatKes(orderTotal))
-                SummaryRow(
-                    label = stringResource(R.string.customer_detail_payments_applied),
-                    amount = formatKes(paidToOrders)
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    SummaryMetricCard(
+                        modifier = Modifier.weight(1f),
+                        label = stringResource(R.string.customer_detail_orders_total),
+                        amount = formatKes(orderTotal)
+                    )
+                    SummaryMetricCard(
+                        modifier = Modifier.weight(1f),
+                        label = stringResource(R.string.customer_detail_payments_applied),
+                        amount = formatKes(paidToOrders)
+                    )
+                }
+                Spacer(Modifier.height(8.dp))
                 SummaryRow(
                     label = stringResource(R.string.customer_detail_credit_available),
                     amount = formatKes(availableCredit.max(BigDecimal.ZERO))
@@ -121,17 +134,38 @@ internal fun BalanceCard(
                     TextButton(onClick = { launchCustomerDial(context, phone) }) {
                         Text(stringResource(R.string.customer_detail_call))
                     }
-                    TextButton(onClick = { launchCustomerSms(context, phone) }) {
+                    TextButton(onClick = { launchCustomerMessage(context, phone) }) {
                         Text(stringResource(R.string.customer_action_message))
                     }
                 }
             }
             Spacer(Modifier.height(8.dp))
-            TextButton(
-                onClick = onReceivePayment,
-                enabled = canReceive
+            Button(
+                onClick = onViewStatement,
+                enabled = canReceive,
+                modifier = Modifier.fillMaxWidth()
             ) {
-                Text(stringResource(R.string.customer_action_record_payment))
+                Text(stringResource(R.string.customer_action_view_statement))
+            }
+            Spacer(Modifier.height(6.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                OutlinedButton(
+                    onClick = onReceivePayment,
+                    enabled = canReceive,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text(stringResource(R.string.customer_action_record_payment))
+                }
+                TextButton(
+                    onClick = onViewPaymentHistory,
+                    enabled = canReceive,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text(stringResource(R.string.customer_detail_receipt_history))
+                }
             }
         }
     }
@@ -488,11 +522,6 @@ internal fun launchCustomerDial(context: android.content.Context, phone: String)
     context.startActivity(intent)
 }
 
-internal fun launchCustomerSms(context: android.content.Context, phone: String) {
-    val intent = Intent(Intent.ACTION_VIEW, "sms:$phone".toUri()).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-    context.startActivity(intent)
-}
-
 internal fun filterOrders(orders: List<CustomerOrderUi>, filter: OrderFilter): List<CustomerOrderUi> {
     return orders.filter { order ->
         when (filter) {
@@ -592,6 +621,34 @@ internal fun orderStatusChipLabel(order: CustomerOrderUi): String {
                 OrderPaymentState.PAID -> stringResource(R.string.customer_detail_status_paid)
                 OrderPaymentState.OVERPAID -> stringResource(R.string.customer_detail_status_overpaid)
             }
+    }
+}
+
+@Composable
+private fun SummaryMetricCard(
+    modifier: Modifier = Modifier,
+    label: String,
+    amount: String
+) {
+    Surface(
+        modifier = modifier,
+        tonalElevation = 0.dp,
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        shape = MaterialTheme.shapes.small
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp)
+        ) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Text(
+                text = amount,
+                style = MaterialTheme.typography.titleSmall
+            )
+        }
     }
 }
 
