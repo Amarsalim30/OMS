@@ -9,7 +9,7 @@ Status snapshot:
 - P2: 0 open
 
 Primary tracker:
-- `docs/issues/app-ui-ux-master-review-2026-02-06.md`
+- `docs/current-app-state.md`
 
 ## Implemented Fixes
 
