@@ -34,3 +34,15 @@ Evidence:
 - [x] Top area height is reduced so more grid rows are visible on first load.
 - [x] No loss of existing month total/unpaid visibility or quick add workflow.
 - [x] Summary card hierarchy is clearer and less visually heavy on compact screens.
+
+## Shared Order Editor UX Pass (2026-02-18)
+
+Because Calendar Quick Add uses the shared `OrderEditorSheet`, this screen inherits the same editor layout updates made for Day Detail:
+
+- duplicate close actions removed (single top `X`),
+- compact footer actions (`Clear` + `Save`),
+- removal of `Save + Next` button and workflow path from the shared editor,
+- flow order tuned for faster entry (`Customer -> Pickup -> Notes -> Total`),
+- quick pickup chips and additive amount chips added for fewer taps,
+- mode-aware initial focus (new starts at customer, edit starts at notes),
+- sticky footer total summary added for clearer save context.

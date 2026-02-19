@@ -80,3 +80,41 @@ Evidence:
 - [x] Editor protects against accidental full-clear and supports quick optional-field reset.
 - [x] Customer suggestions feel stable during typing (debounced).
 - [x] Destructive flows include plain-language summaries of impact.
+
+## Polished UX (2026-02-18)
+- Added animation to search bar visibility for smoother feel.
+- Added key to order list items for better performance and state stability.
+- Enhanced Day Summary Card to highlight balance with primary color when positive.
+- Refined "Tap to edit" hint to be italic for subtle guidance.
+
+## Planned + Implemented UX Pass (2026-02-18)
+
+### Plan
+- Remove duplicate close actions inside editor (bottom `Cancel` vs top `X`).
+- Reduce action bar height and keep only core actions for compact screen use.
+- Temporarily disable `Save + Next` action in editor footer.
+- Make form visually shorter by tightening input placement:
+  - keep customer search in customer section,
+  - move pickup time next to total amount in required section,
+  - keep notes full-width for readability.
+
+### Implemented
+- Removed bottom `Cancel`; top-right `X` is the single close affordance.
+- Removed `Save + Next` button and its code path from the shared editor footer/workflow.
+- Compact footer now uses one row: `Clear` (secondary) + `Save` (primary).
+- Repositioned pickup time to appear earlier in the form flow.
+- Added short time label (`Time`) to reduce visual density and improve scan speed.
+
+## Refined Form UX Pass (2026-02-18)
+
+### Applied improvements
+- Reordered operator flow to better match entry intent:
+  - `Customer search -> Pickup time -> Notes -> Total -> Save`.
+- Moved pickup time into the customer/schedule section so schedule is captured earlier.
+- Added quick pickup chips (`09:00`, `12:00`, `15:00`, `18:00`) for fewer taps.
+- Updated customer field IME flow to move next focus toward pickup time.
+- Made total field full-width and visually stronger for financial clarity.
+- Reworked amount chips to additive quick-entry increments (`+100`, `+500`, `+1000`).
+- Added sticky footer total summary (`Total: KSh ...`) above actions.
+- Added mode-aware initial focus: new form starts at customer, edit mode starts at notes.
+- Kept compact action footer (`Clear` + `Save`) with single top close affordance.

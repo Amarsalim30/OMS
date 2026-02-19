@@ -52,14 +52,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.zeynbakers.order_management_system.R
-import com.zeynbakers.order_management_system.core.ui.components.AppScreenHeaderCard
 import com.zeynbakers.order_management_system.core.ui.rememberCurrentDate
-import com.zeynbakers.order_management_system.core.util.formatKes
 import com.zeynbakers.order_management_system.order.data.OrderEntity
 import java.math.BigDecimal
 import kotlinx.datetime.LocalDate
@@ -168,22 +165,21 @@ fun UnpaidOrdersScreen(
                     acc + (order.totalAmount - paid)
                 }
             }
-    val followUpCountLabel =
-        pluralStringResource(
-            id = R.plurals.unpaid_orders_count,
-            count = filteredOrders.size,
-            filteredOrders.size
-        )
-    val ownerHighlight =
-        if (hideBalances) {
-            followUpCountLabel
-        } else {
-            stringResource(
-                R.string.unpaid_owner_highlight,
-                followUpCountLabel,
-                formatKes(totalOutstanding)
-            )
-        }
+    val activeContextLabel =
+            when {
+                searchQuery.isNotBlank() ->
+                        stringResource(
+                                R.string.unpaid_active_context_filter_search,
+                                stringResource(selectedFilter.labelRes),
+                                searchQuery.trim()
+                        )
+                selectedFilter != OrdersFilter.NEWEST ->
+                        stringResource(
+                                R.string.unpaid_active_context_filter_only,
+                                stringResource(selectedFilter.labelRes)
+                        )
+                else -> null
+            }
 
     // Headers
     val dates =
@@ -312,18 +308,8 @@ fun UnpaidOrdersScreen(
         LazyColumn(
                 modifier = Modifier.fillMaxSize().padding(padding),
                 contentPadding = PaddingValues(bottom = 80.dp), // Extra padding for bottom content
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+                verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            item {
-                AppScreenHeaderCard(
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                    title = stringResource(R.string.unpaid_owner_title),
-                    subtitle = stringResource(R.string.unpaid_owner_subtitle),
-                    leadingIcon = Icons.Outlined.Payments,
-                    highlight = ownerHighlight
-                )
-            }
-
             item {
                 SummaryCard(
                         count = filteredOrders.size,
@@ -347,13 +333,36 @@ fun UnpaidOrdersScreen(
                         }
                     }
                 }
+                if (activeContextLabel != null) {
+                    item {
+                        Surface(
+                                modifier = Modifier.padding(horizontal = 16.dp),
+                                color = MaterialTheme.colorScheme.surfaceVariant,
+                                shape = MaterialTheme.shapes.large
+                        ) {
+                            Text(
+                                    text = activeContextLabel,
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier =
+                                            Modifier.padding(
+                                                    horizontal = 10.dp,
+                                                    vertical = 6.dp
+                                            )
+                            )
+                        }
+                    }
+                }
             }
 
             if (filteredOrders.isEmpty()) {
                 item {
                     val emptyText =
                             if (searchQuery.isNotBlank()) {
-                                stringResource(R.string.day_empty_no_matches_title)
+                                stringResource(
+                                        R.string.unpaid_empty_search_result,
+                                        searchQuery.trim()
+                                )
                             } else {
                                 stringResource(R.string.unpaid_empty_all_caught_up)
                             }

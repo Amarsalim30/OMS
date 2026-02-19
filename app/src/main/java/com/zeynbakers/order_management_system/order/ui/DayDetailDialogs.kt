@@ -95,6 +95,13 @@ internal fun DayOrderEditorDialog(
     val normalizedPickupTime =
         if (pickupTimeText.isBlank()) null else normalizePickupTime(pickupTimeText)
     val isPickupTimeInvalid = pickupTimeText.isNotBlank() && normalizedPickupTime == null
+    val attachedCustomerPhone = customerPhone.trim()
+    val attachedCustomerName =
+        if (attachedCustomerPhone.isNotBlank()) {
+            customerName.trim()
+        } else {
+            ""
+        }
     val notesRequiredText = stringResource(R.string.day_editor_notes_required)
     val validTotalRequiredText = stringResource(R.string.day_editor_valid_total_required)
     val canSave =
@@ -134,13 +141,14 @@ internal fun DayOrderEditorDialog(
                 onSaveOrder(
                     trimmedNotes,
                     finalTotal,
-                    customerName.trim(),
-                    customerPhone.trim(),
+                    attachedCustomerName,
+                    attachedCustomerPhone,
                     normalizedPickupTime,
                     editingOrderId
                 )
                 onSetNotes("")
                 onSetTotalText("")
+                onSetSuggestions(emptyList())
                 onSetCustomerName("")
                 onSetCustomerPhone("")
                 onSetPickupTimeText("")
@@ -206,7 +214,8 @@ internal fun DayOrderEditorDialog(
         },
         customerError = customerError,
         canSave = canSave,
-        onSave = { submitOrder() },
+        onSave = ::submitOrder,
+        focusNotesInitially = editingOrderId != null,
         onClear = {
             onSetNotes("")
             onSetTotalText("")
@@ -218,13 +227,6 @@ internal fun DayOrderEditorDialog(
             onSetTotalError(null)
             onSetCustomerError(null)
             onDraftChange(null)
-        },
-        onClearOptional = {
-            onSetCustomerName("")
-            onSetCustomerPhone("")
-            onSetPickupTimeText("")
-            onSetSuggestions(emptyList())
-            onSetCustomerError(null)
         },
         onCancel = { onSetEditorOpen(false) },
         onNotesFocused = { voiceRouter.onFocusTarget(VoiceTarget.Notes) },
