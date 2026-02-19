@@ -32,7 +32,6 @@ internal fun NavGraphBuilder.ordersGraph(
             onReceivePayment = { order ->
                 navigationActions.navigateToMoneyRecord(order.customerId)
             },
-            onSettingsClick = navigationActions.onOpenMore,
             title = "Orders",
             showBack = false
         )

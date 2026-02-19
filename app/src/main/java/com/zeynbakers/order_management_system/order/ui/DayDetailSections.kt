@@ -14,8 +14,12 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -252,7 +256,7 @@ internal fun OrderListItem(
 
     AppCard(
             modifier =
-                    Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 6.dp).clickable {
+                    Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp).clickable {
                         onEdit()
                     }
     ) {
@@ -260,37 +264,37 @@ internal fun OrderListItem(
             Surface(
                     color = stateColor,
                     shape = RoundedCornerShape(3.dp),
-                    modifier = Modifier.width(6.dp).heightIn(min = 48.dp)
+                    modifier = Modifier.width(5.dp).heightIn(min = 40.dp)
             ) {}
-            Spacer(Modifier.width(12.dp))
+            Spacer(Modifier.width(8.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
                     Text(
                             text = order.notes,
-                            style = MaterialTheme.typography.titleMedium,
-                            maxLines = 2,
+                            style = MaterialTheme.typography.titleSmall,
+                            maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.weight(1f)
                     )
-                    Spacer(Modifier.width(8.dp))
+                    Spacer(Modifier.width(6.dp))
                     Text(
                             text = formatKes(order.totalAmount),
-                            style = MaterialTheme.typography.titleMedium,
+                            style = MaterialTheme.typography.titleSmall,
                             fontWeight = FontWeight.SemiBold,
                             maxLines = 1,
                             softWrap = false,
                             textAlign = TextAlign.End,
                             overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.widthIn(min = 84.dp)
+                            modifier = Modifier.widthIn(min = 72.dp)
                     )
                 }
-                Spacer(Modifier.height(4.dp))
+                Spacer(Modifier.height(2.dp))
                 Text(
                         text = customerLabel,
-                        style = MaterialTheme.typography.bodyMedium,
+                        style = MaterialTheme.typography.bodySmall,
                         color = customerTextColor
                 )
-                Spacer(Modifier.height(6.dp))
+                Spacer(Modifier.height(4.dp))
                 Row(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically
@@ -306,13 +310,6 @@ internal fun OrderListItem(
                     )
                 }
                 Spacer(Modifier.height(4.dp))
-                Text(
-                        text = stringResource(R.string.day_tap_to_edit_hint),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontStyle = androidx.compose.ui.text.font.FontStyle.Italic
-                )
-                Spacer(Modifier.height(6.dp))
                 Row(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
@@ -327,13 +324,15 @@ internal fun OrderListItem(
                         }
                     }
                     Spacer(Modifier.weight(1f))
-                    TextButton(
+                    IconButton(
                             onClick = onDelete,
-                            colors =
-                                    ButtonDefaults.textButtonColors(
-                                            contentColor = MaterialTheme.colorScheme.error
-                                    )
-                    ) { Text(stringResource(R.string.day_delete_order)) }
+                    ) {
+                        Icon(
+                                imageVector = Icons.Filled.Delete,
+                                contentDescription = stringResource(R.string.day_delete_order),
+                                tint = MaterialTheme.colorScheme.error
+                        )
+                    }
                 }
             }
         }

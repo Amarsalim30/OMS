@@ -1,6 +1,6 @@
 # Screen-by-Screen UI/UX Backlog
 
-Last updated: 2026-02-17
+Last updated: 2026-02-19
 
 ## Purpose
 This folder tracks UI/UX issues per screen so work can be planned, implemented, and verified in small, clear batches.
@@ -12,9 +12,6 @@ This folder tracks UI/UX issues per screen so work can be planned, implemented, 
 4. Mark items Done with file evidence.
 
 ## Screen files
-- `01-calendar-screen.md`
-- `02-day-detail-screen.md`
-- `03-unpaid-orders-screen.md`
 - `04-summary-screen.md`
 - `05-customers-list-screen.md`
 - `06-customer-detail-screen.md`

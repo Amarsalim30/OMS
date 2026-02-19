@@ -565,6 +565,14 @@
     <string name="customer_detail_filter_open">Open</string>
     <string name="customer_detail_filter_closed">Closed</string>
     <string name="customer_detail_filter_orders">Orders</string>
+    <string name="customer_orders_owes_summary">Customer still owes %1$s across orders</string>
+    <string name="customer_orders_clear_summary">All orders are settled</string>
+    <string name="customer_order_title_with_date">Order - %1$s</string>
+    <string name="customer_order_owes_value">Owes %1$s</string>
+    <string name="customer_order_credit_value">Credit %1$s</string>
+    <string name="customer_order_settled">Settled</string>
+    <string name="customer_order_paid_of_total">Paid %1$s of %2$s</string>
+    <string name="customer_order_action_payments">Payments</string>
     <string name="customer_statement_title">Customer statement</string>
     <string name="customer_statement_action_add_order">+ Order</string>
     <string name="customer_statement_action_add_payment">+ Payment</string>

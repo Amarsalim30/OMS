@@ -48,8 +48,7 @@ import kotlinx.datetime.toJavaLocalDate
 @Composable
 internal fun SummaryCard(
     count: Int,
-    totalOutstanding: BigDecimal,
-    hideBalances: Boolean
+    totalOutstanding: BigDecimal
 ) {
     AppCard(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
         Row(
@@ -64,12 +63,7 @@ internal fun SummaryCard(
                     color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
                 )
                 Text(
-                    text =
-                        if (hideBalances) {
-                            stringResource(R.string.money_amount_hidden)
-                        } else {
-                            formatKes(totalOutstanding)
-                        },
+                    text = formatKes(totalOutstanding),
                     style = MaterialTheme.typography.headlineMedium,
                     fontWeight = FontWeight.Bold,
                     fontFamily = FontFamily.Monospace,
@@ -151,7 +145,6 @@ internal fun UnpaidOrderRow(
     customerLabel: String?,
     paidAmount: BigDecimal,
     balance: BigDecimal,
-    hideBalances: Boolean,
     onOpenDay: () -> Unit,
     onReceivePayment: () -> Unit
 ) {
@@ -213,12 +206,7 @@ internal fun UnpaidOrderRow(
 
                         Column(horizontalAlignment = Alignment.End) {
                             Text(
-                                text =
-                                    if (hideBalances) {
-                                        stringResource(R.string.money_amount_hidden)
-                                    } else {
-                                        formatKes(balance)
-                                    },
+                                text = formatKes(balance),
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold,
                                 fontFamily = FontFamily.Monospace,
@@ -231,15 +219,7 @@ internal fun UnpaidOrderRow(
                             )
                             if (paidAmount > BigDecimal.ZERO) {
                                 Text(
-                                    text =
-                                        if (hideBalances) {
-                                            stringResource(
-                                                R.string.unpaid_paid_amount,
-                                                stringResource(R.string.money_amount_hidden)
-                                            )
-                                        } else {
-                                            stringResource(R.string.unpaid_paid_amount, formatKes(paidAmount))
-                                        },
+                                    text = stringResource(R.string.unpaid_paid_amount, formatKes(paidAmount)),
                                     style = MaterialTheme.typography.labelSmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )

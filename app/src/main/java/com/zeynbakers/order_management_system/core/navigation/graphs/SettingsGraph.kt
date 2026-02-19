@@ -14,8 +14,7 @@ internal fun NavGraphBuilder.settingsGraph(
 ) {
     composable(AppRoutes.Backup) {
         BackupSettingsScreen(
-            onBack = { navController.popBackStack() },
-            onImportContacts = navigationActions.openImportContacts
+            onBack = { navController.popBackStack() }
         )
     }
 

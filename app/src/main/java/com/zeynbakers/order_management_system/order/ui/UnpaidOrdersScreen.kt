@@ -23,9 +23,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Visibility
-import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material.icons.outlined.Payments
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -77,7 +74,6 @@ fun UnpaidOrdersScreen(
         onBack: () -> Unit,
         onOpenDay: (LocalDate) -> Unit,
         onReceivePayment: (OrderEntity) -> Unit,
-        onSettingsClick: () -> Unit = {},
         title: String? = null,
         showBack: Boolean = true
 ) {
@@ -93,7 +89,6 @@ fun UnpaidOrdersScreen(
     // Search State
     var isSearchActive by rememberSaveable { mutableStateOf(false) }
     var searchQuery by rememberSaveable { mutableStateOf("") }
-    var hideBalances by rememberSaveable { mutableStateOf(false) }
     var pendingSwipePayOrder by remember { mutableStateOf<OrderEntity?>(null) }
 
     BackHandler(enabled = isSearchActive) {
@@ -270,34 +265,11 @@ fun UnpaidOrdersScreen(
                                 }
                             },
                             actions = {
-                                IconButton(onClick = { hideBalances = !hideBalances }) {
-                                    Icon(
-                                            imageVector =
-                                                    if (hideBalances) {
-                                                        Icons.Filled.VisibilityOff
-                                                    } else {
-                                                        Icons.Filled.Visibility
-                                                    },
-                                            contentDescription =
-                                                    if (hideBalances) {
-                                                        stringResource(R.string.action_show_balances)
-                                                    } else {
-                                                        stringResource(R.string.action_hide_balances)
-                                                    }
-                                    )
-                                }
                                 IconButton(onClick = { isSearchActive = true }) {
                                     Icon(
                                             imageVector = Icons.Filled.Search,
                                             contentDescription =
                                                     stringResource(R.string.action_search)
-                                    )
-                                }
-                                IconButton(onClick = onSettingsClick) {
-                                    Icon(
-                                            imageVector = Icons.Filled.Settings,
-                                            contentDescription =
-                                                    stringResource(R.string.action_settings)
                                     )
                                 }
                             }
@@ -313,8 +285,7 @@ fun UnpaidOrdersScreen(
             item {
                 SummaryCard(
                         count = filteredOrders.size,
-                        totalOutstanding = totalOutstanding,
-                        hideBalances = hideBalances
+                        totalOutstanding = totalOutstanding
                 )
             }
 
@@ -402,12 +373,11 @@ fun UnpaidOrdersScreen(
                                     UnpaidOrderRow(
                                             order = order,
                                             customerLabel = customerLabel,
-                                            paidAmount = paid,
-                                            balance = balance,
-                                            hideBalances = hideBalances,
-                                            onOpenDay = { onOpenDay(order.orderDate) },
-                                            onReceivePayment = { onReceivePayment(order) }
-                                    )
+                                    paidAmount = paid,
+                                    balance = balance,
+                                    onOpenDay = { onOpenDay(order.orderDate) },
+                                    onReceivePayment = { onReceivePayment(order) }
+                            )
                                 }
                         )
                     }

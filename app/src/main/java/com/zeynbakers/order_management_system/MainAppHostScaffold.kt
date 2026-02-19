@@ -6,9 +6,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ListAlt
-import androidx.compose.material.icons.automirrored.filled.ReceiptLong
 import androidx.compose.material.icons.filled.AccountBalanceWallet
-import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.People
@@ -97,14 +95,6 @@ internal fun MainAppHostScaffold(
         )
 
         val moreActions = listOf(
-            MoreAction(stringResource(R.string.more_order_summary), Icons.Filled.BarChart) {
-                onShowMoreSheetChange(false)
-                navController.navigate(AppRoutes.Summary)
-            },
-            MoreAction(stringResource(R.string.more_payment_history), Icons.AutoMirrored.Filled.ReceiptLong) {
-                onShowMoreSheetChange(false)
-                navController.navigate(AppRoutes.paymentHistoryAll())
-            },
             MoreAction(stringResource(R.string.more_backup_restore), Icons.Filled.Settings) {
                 onShowMoreSheetChange(false)
                 navController.navigate(AppRoutes.Backup)

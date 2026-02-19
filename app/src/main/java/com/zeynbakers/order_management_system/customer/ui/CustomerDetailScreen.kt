@@ -97,6 +97,7 @@ fun CustomerDetailScreen(
 
             item {
                 OrdersHeader(
+                    orders = orders,
                     orderFilter = orderFilter,
                     onFilterChange = { orderFilter = it },
                     orderCount = filteredOrders.size

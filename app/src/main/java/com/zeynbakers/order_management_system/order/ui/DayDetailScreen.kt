@@ -336,7 +336,8 @@ fun DayDetailScreen(
                                 selectedKey = orderFilter.name,
                                 onSelect = { selected ->
                                     orderFilter = DayOrderFilter.valueOf(selected)
-                                }
+                                },
+                                showMoreAsIcon = true
                         )
                         Spacer(Modifier.height(6.dp))
                         val orderCountLabel =

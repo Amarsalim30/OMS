@@ -110,7 +110,8 @@ internal fun CustomerSearchTopBar(
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .windowInsetsPadding(WindowInsets.statusBars),
+            .windowInsetsPadding(WindowInsets.statusBars)
+            .height(64.dp),
         color = MaterialTheme.colorScheme.surface,
         shadowElevation = 4.dp
     ) {
@@ -121,7 +122,7 @@ internal fun CustomerSearchTopBar(
                 Text(stringResource(R.string.customer_name_or_phone))
             },
             singleLine = true,
-            modifier = Modifier.fillMaxWidth().height(64.dp),
+            modifier = Modifier.fillMaxWidth(),
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
             colors = TextFieldDefaults.colors(
                 focusedContainerColor = MaterialTheme.colorScheme.surface,

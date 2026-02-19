@@ -194,13 +194,43 @@ internal fun SummaryRow(
 
 @Composable
 internal fun OrdersHeader(
+    orders: List<CustomerOrderUi>,
     orderFilter: OrderFilter,
     onFilterChange: (OrderFilter) -> Unit,
     orderCount: Int
 ) {
+    val totalOwed =
+        remember(orders) {
+            orders.fold(BigDecimal.ZERO) { acc, order ->
+                val due = order.order.totalAmount - order.paidAmount
+                if (due > BigDecimal.ZERO) acc + due else acc
+            }
+        }
     Column(modifier = Modifier.fillMaxWidth()) {
-        Text(text = stringResource(R.string.summary_orders), style = MaterialTheme.typography.titleMedium)
-        Spacer(Modifier.height(6.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(text = stringResource(R.string.summary_orders), style = MaterialTheme.typography.titleMedium)
+            Text(
+                text = pluralStringResource(R.plurals.day_orders_count_plural, orderCount, orderCount),
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        Spacer(Modifier.height(4.dp))
+        Text(
+            text =
+                if (totalOwed > BigDecimal.ZERO) {
+                    stringResource(R.string.customer_orders_owes_summary, formatKes(totalOwed))
+                } else {
+                    stringResource(R.string.customer_orders_clear_summary)
+                },
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(Modifier.height(8.dp))
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -215,12 +245,6 @@ internal fun OrdersHeader(
                 )
             }
         }
-        Spacer(Modifier.height(8.dp))
-        Text(
-            text = pluralStringResource(R.plurals.day_orders_count_plural, orderCount, orderCount),
-            style = MaterialTheme.typography.labelLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
     }
 }
 
@@ -235,23 +259,90 @@ internal fun OrderRow(
     var pendingOverride by remember { mutableStateOf<OrderStatusOverride?>(null) }
     var confirmWriteOff by remember { mutableStateOf(false) }
     val today = rememberCurrentDate()
-    val primaryLine = buildOrderPrimaryLine(order)
-    val notes = order.order.notes.ifBlank { stringResource(R.string.customer_detail_no_notes) }.take(60)
-    val chipLabel = orderStatusChipLabel(order)
-    val chipColor = orderStatusChipColor(order)
+    val notes = order.order.notes.trim().take(80)
+    val dateLabel = formatShortDate(order.order.orderDate)
+    val dueAmount = (order.order.totalAmount - order.paidAmount).max(BigDecimal.ZERO)
+    val creditAmount = (order.paidAmount - order.order.totalAmount).max(BigDecimal.ZERO)
     val canWriteOff = canWriteOff(order, today)
+    val accountStateLabel =
+        when {
+            dueAmount > BigDecimal.ZERO ->
+                stringResource(R.string.customer_order_owes_value, formatKes(dueAmount))
+            creditAmount > BigDecimal.ZERO ->
+                stringResource(R.string.customer_order_credit_value, formatKes(creditAmount))
+            else -> stringResource(R.string.customer_order_settled)
+        }
+    val accountStateColor =
+        when {
+            dueAmount > BigDecimal.ZERO -> MaterialTheme.colorScheme.error
+            creditAmount > BigDecimal.ZERO -> MaterialTheme.colorScheme.primary
+            else -> MaterialTheme.colorScheme.tertiary
+        }
+    val lifecycleLabel =
+        if (order.effectiveStatus == OrderEffectiveStatus.CLOSED) {
+            stringResource(R.string.customer_detail_filter_closed)
+        } else {
+            stringResource(R.string.customer_detail_filter_open)
+        }
+    val lifecycleContainer =
+        if (order.effectiveStatus == OrderEffectiveStatus.CLOSED) {
+            MaterialTheme.colorScheme.secondaryContainer
+        } else {
+            MaterialTheme.colorScheme.surfaceVariant
+        }
+    val lifecycleContent =
+        if (order.effectiveStatus == OrderEffectiveStatus.CLOSED) {
+            MaterialTheme.colorScheme.onSecondaryContainer
+        } else {
+            MaterialTheme.colorScheme.onSurfaceVariant
+        }
 
     Surface(
         tonalElevation = 1.dp,
         shape = MaterialTheme.shapes.medium,
         modifier = Modifier.fillMaxWidth()
     ) {
-        Row(
-            modifier = Modifier.padding(12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(text = primaryLine, style = MaterialTheme.typography.titleMedium)
+        Column(modifier = Modifier.padding(12.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = stringResource(R.string.customer_order_title_with_date, dateLabel),
+                    style = MaterialTheme.typography.titleMedium
+                )
+                Text(
+                    text = formatKes(order.order.totalAmount),
+                    style = MaterialTheme.typography.titleMedium
+                )
+            }
+
+            Spacer(Modifier.height(6.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Surface(
+                    color = lifecycleContainer,
+                    shape = MaterialTheme.shapes.small
+                ) {
+                    Text(
+                        text = lifecycleLabel,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = lifecycleContent,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                    )
+                }
+                Text(
+                    text = accountStateLabel,
+                    style = MaterialTheme.typography.labelLarge,
+                    color = accountStateColor
+                )
+            }
+
+            if (notes.isNotBlank()) {
                 Spacer(Modifier.height(4.dp))
                 Text(
                     text = notes,
@@ -260,61 +351,37 @@ internal fun OrderRow(
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis
                 )
-                val paymentDetail =
-                    when (order.paymentState) {
-                        OrderPaymentState.PARTIAL ->
-                            stringResource(
-                                R.string.customer_detail_paid_vs_total,
-                                formatKes(order.paidAmount),
-                                formatKes(order.order.totalAmount)
-                            )
-                        OrderPaymentState.OVERPAID -> {
-                            val overpaidAmount = order.paidAmount - order.order.totalAmount
-                            stringResource(
-                                R.string.customer_detail_paid_vs_total_over,
-                                formatKes(order.paidAmount),
-                                formatKes(order.order.totalAmount),
-                                formatKes(overpaidAmount)
-                            )
-                        }
-                        else -> null
-                    }
-                if (paymentDetail != null) {
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        text = paymentDetail,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
             }
+            Spacer(Modifier.height(8.dp))
+            Text(
+                text =
+                    stringResource(
+                        R.string.customer_order_paid_of_total,
+                        formatKes(order.paidAmount.max(BigDecimal.ZERO)),
+                        formatKes(order.order.totalAmount)
+                    ),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(Modifier.height(6.dp))
 
-            Column(horizontalAlignment = Alignment.End) {
-                Surface(
-                    color = chipColor,
-                    shape = MaterialTheme.shapes.small
-                ) {
-                    Text(
-                        text = chipLabel,
-                        style = MaterialTheme.typography.labelSmall,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                    )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                TextButton(onClick = onPaymentHistory) {
+                    Text(stringResource(R.string.customer_order_action_payments))
                 }
-                Spacer(Modifier.height(6.dp))
+                if (canWriteOff) {
+                    TextButton(onClick = { confirmWriteOff = true }) {
+                        Text(stringResource(R.string.customer_detail_write_off_action))
+                    }
+                }
+                Spacer(modifier = Modifier.weight(1f))
                 IconButton(onClick = { menuExpanded = true }) {
-                    Icon(
-                        imageVector = Icons.Filled.MoreVert,
-                        contentDescription = stringResource(R.string.customer_actions)
-                    )
+                    Icon(imageVector = Icons.Filled.MoreVert, contentDescription = stringResource(R.string.customer_actions))
                 }
                 DropdownMenu(expanded = menuExpanded, onDismissRequest = { menuExpanded = false }) {
-                    DropdownMenuItem(
-                        text = { Text(stringResource(R.string.customer_action_payment_history)) },
-                        onClick = {
-                            onPaymentHistory()
-                            menuExpanded = false
-                        }
-                    )
                     DropdownMenuItem(
                         text = { Text(stringResource(R.string.customer_detail_close_order)) },
                         onClick = {
@@ -526,12 +593,9 @@ internal fun filterOrders(orders: List<CustomerOrderUi>, filter: OrderFilter): L
     return orders.filter { order ->
         when (filter) {
             OrderFilter.All -> true
-            OrderFilter.Open -> order.effectiveStatus == OrderEffectiveStatus.OPEN
+            OrderFilter.Owes -> order.order.totalAmount > order.paidAmount
+            OrderFilter.Paid -> order.paidAmount >= order.order.totalAmount
             OrderFilter.Closed -> order.effectiveStatus == OrderEffectiveStatus.CLOSED
-            OrderFilter.Unpaid -> order.paymentState == OrderPaymentState.UNPAID
-            OrderFilter.Partial -> order.paymentState == OrderPaymentState.PARTIAL
-            OrderFilter.Paid -> order.paymentState == OrderPaymentState.PAID
-            OrderFilter.Overpaid -> order.paymentState == OrderPaymentState.OVERPAID
         }
     }
 }
@@ -683,12 +747,9 @@ internal data class LedgerSection(
 
 internal enum class OrderFilter(val labelRes: Int) {
     All(R.string.customer_filter_all),
-    Open(R.string.customer_detail_filter_open),
-    Closed(R.string.customer_detail_filter_closed),
-    Unpaid(R.string.day_filter_unpaid),
-    Partial(R.string.day_filter_partial),
+    Owes(R.string.customer_filter_owes),
     Paid(R.string.day_filter_paid),
-    Overpaid(R.string.day_filter_overpaid)
+    Closed(R.string.customer_detail_filter_closed)
 }
 
 internal enum class LedgerFilter(val labelRes: Int) {
