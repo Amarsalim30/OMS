@@ -14,12 +14,21 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.outlined.Circle
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
@@ -406,6 +415,72 @@ fun BackupSettingsScreen(onBack: () -> Unit) {
                                 .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
+            val isLocationConfigured = state.targetType == BackupTargetType.AppPrivate || !state.targetUri.isNullOrBlank()
+            val isProtected = state.autoEnabled && state.targetHealth == BackupTargetHealth.Healthy && latestBackupName != null
+
+            Card(
+                    modifier = Modifier.fillMaxWidth().padding(bottom = 8.dp),
+                    colors = CardDefaults.cardColors(
+                            containerColor = if (isProtected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.errorContainer,
+                            contentColor = if (isProtected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onErrorContainer
+                    )
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                                imageVector = if (isProtected) Icons.Default.CheckCircle else Icons.Default.Warning,
+                                contentDescription = null,
+                                modifier = Modifier.size(32.dp)
+                        )
+                        Spacer(modifier = Modifier.width(16.dp))
+                        Column {
+                            Text(
+                                    text = if (isProtected) "Fully Protected" else "Action Required",
+                                    style = MaterialTheme.typography.titleLarge
+                            )
+                            Text(
+                                    text = if (isProtected) "Your data is backed up and safe." else "Complete setup to protect your data.",
+                                    style = MaterialTheme.typography.bodyMedium
+                            )
+                        }
+                    }
+                    if (!isProtected) {
+                        Spacer(modifier = Modifier.height(16.dp))
+                        Text(text = "Setup Checklist:", style = MaterialTheme.typography.titleSmall)
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                    imageVector = if (isLocationConfigured) Icons.Default.Check else Icons.Outlined.Circle,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text("Choose a backup location", style = MaterialTheme.typography.bodySmall)
+                        }
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                    imageVector = if (state.autoEnabled) Icons.Default.Check else Icons.Outlined.Circle,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text("Enable automatic backups", style = MaterialTheme.typography.bodySmall)
+                        }
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                    imageVector = if (latestBackupName != null) Icons.Default.Check else Icons.Outlined.Circle,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text("Run your first backup", style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
+                }
+            }
+
             Row(
                     modifier = Modifier.fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
@@ -485,31 +560,59 @@ fun BackupSettingsScreen(onBack: () -> Unit) {
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                Text(
-                        text = currentModeLabelTemplate.format(targetModeLabel),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                if (state.targetType != BackupTargetType.AppPrivate) {
-                    TextButton(
-                            onClick = {
-                                prefs.setTargetType(BackupTargetType.AppPrivate)
-                                BackupScheduler.ensureScheduled(context)
-                                scope.launch { refreshStateAndLatest.invoke() }
-                            }
-                    ) { Text(useAppStorageQuickLabel) }
-                }
-                Text(
-                        text = targetLabel,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                if (state.targetType != BackupTargetType.AppPrivate) {
-                    Text(
-                            text = stringResource(R.string.backup_provider_label, providerLabel),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                Card(
+                        colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceVariant,
+                                contentColor = MaterialTheme.colorScheme.onSurfaceVariant
+                        ),
+                        modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        Text(
+                                text = "Current Settings:",
+                                style = MaterialTheme.typography.titleSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                                text = currentModeLabelTemplate.format(targetModeLabel),
+                                style = MaterialTheme.typography.bodySmall
+                        )
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                                text = targetLabel,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        if (state.targetType != BackupTargetType.AppPrivate) {
+                            Text(
+                                    text = "Provider: $providerLabel",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.secondary
+                            )
+                        }
+                        Spacer(Modifier.height(8.dp))
+                        val explanation = when (state.targetType) {
+                            BackupTargetType.AppPrivate -> "Data is kept in an isolated folder inside the app. If the app is uninstalled or device is wiped, backups will be lost."
+                            BackupTargetType.SafDirectory -> "Backups are automatically written to your selected folder. If you chose a cloud provider like Google Drive, it may take some time to sync to the cloud after completion."
+                            BackupTargetType.SafFile -> "Data overwrites the single file you selected. This saves space, but you only keep the most recent backup."
+                        }
+                        Text(
+                                text = "How this works: $explanation",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        if (state.targetType != BackupTargetType.AppPrivate) {
+                            Spacer(Modifier.height(8.dp))
+                            TextButton(
+                                    onClick = {
+                                        prefs.setTargetType(BackupTargetType.AppPrivate)
+                                        BackupScheduler.ensureScheduled(context)
+                                        scope.launch { refreshStateAndLatest.invoke() }
+                                    }
+                            ) { Text(useAppStorageQuickLabel) }
+                        }
+                    }
                 }
                 Text(
                         text = stringResource(R.string.backup_health_label, healthText),
@@ -754,15 +857,39 @@ fun BackupSettingsScreen(onBack: () -> Unit) {
     if (restoreRequest != null) {
         AlertDialog(
                 onDismissRequest = { pendingRestore = null },
-                title = { Text(stringResource(R.string.restore_confirm_title)) },
-                text = { Text(stringResource(R.string.restore_confirm_body)) },
+                icon = { Icon(Icons.Default.Warning, contentDescription = null, tint = MaterialTheme.colorScheme.error) },
+                title = { Text(stringResource(R.string.restore_confirm_title), color = MaterialTheme.colorScheme.error) },
+                text = {
+                    Column {
+                        Text(
+                                stringResource(R.string.restore_confirm_body),
+                                style = MaterialTheme.typography.bodyLarge
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        Surface(
+                                color = MaterialTheme.colorScheme.errorContainer,
+                                contentColor = MaterialTheme.colorScheme.onErrorContainer,
+                                shape = MaterialTheme.shapes.medium
+                        ) {
+                            Text(
+                                    text = "WARNING: This will permanently overwrite all your current data with the selected backup. Any changes made since the backup will be lost forever. The app will restart after the restore.",
+                                    modifier = Modifier.padding(12.dp),
+                                    style = MaterialTheme.typography.labelMedium
+                            )
+                        }
+                    }
+                },
                 confirmButton = {
                     Button(
                             onClick = {
                                 BackupScheduler.enqueueRestore(context, restoreRequest.uriString)
                                 scope.launch { uiEvents.showSnackbar(restoreStartedMessage) }
                                 pendingRestore = null
-                            }
+                            },
+                            colors = ButtonDefaults.buttonColors(
+                                    containerColor = MaterialTheme.colorScheme.error,
+                                    contentColor = MaterialTheme.colorScheme.onError
+                            )
                     ) { Text(stringResource(R.string.restore_action)) }
                 },
                 dismissButton = {
@@ -863,22 +990,36 @@ private fun formatTimestamp(timestamp: Long): String {
 @Composable
 private fun ProgressRow(title: String, stage: String, progress: Int) {
     val clampedProgress = progress.coerceIn(0, 100)
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text(text = title, style = MaterialTheme.typography.titleMedium)
-        Text(
-                text = stage,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+    Card(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.secondaryContainer,
+            contentColor = MaterialTheme.colorScheme.onSecondaryContainer
         )
-        LinearProgressIndicator(
-                progress = { clampedProgress / 100f },
-                modifier = Modifier.fillMaxWidth()
-        )
-        Text(
-                text = stringResource(R.string.backup_progress_percent, clampedProgress),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Column {
+                Text(text = title, style = MaterialTheme.typography.titleMedium)
+                Text(
+                    text = stage,
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            }
+            LinearProgressIndicator(
+                    progress = { clampedProgress / 100f },
+                    modifier = Modifier.fillMaxWidth().height(8.dp),
+                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                    trackColor = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.2f)
+            )
+            Text(
+                    text = stringResource(R.string.backup_progress_percent, clampedProgress),
+                    style = MaterialTheme.typography.labelMedium,
+                    modifier = Modifier.align(Alignment.End)
+            )
+        }
     }
 }
 
