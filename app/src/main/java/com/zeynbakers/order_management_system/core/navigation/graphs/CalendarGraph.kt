@@ -59,6 +59,7 @@ internal fun NavGraphBuilder.calendarGraph(
             },
             searchCustomers = { query -> orderViewModel.searchCustomers(query) },
             onSummaryClick = { navController.navigate(AppRoutes.Summary) },
+            onOpenMore = navigationActions.onOpenMore,
             onMonthSettled = { year, month -> calendarCallbacks.onMonthSettled(year, month) },
             openQuickAddDate = calendarState.quickAddDate,
             onQuickAddConsumed = { calendarCallbacks.onQuickAddDateChange(null) }

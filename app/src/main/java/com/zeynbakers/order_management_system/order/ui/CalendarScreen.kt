@@ -66,6 +66,7 @@ fun CalendarScreen(
     onSaveOrder: (LocalDate, String, BigDecimal, String, String, String?) -> Unit,
     searchCustomers: suspend (String) -> List<CustomerEntity>,
     onSummaryClick: () -> Unit,
+    onOpenMore: () -> Unit,
     onMonthSettled: (Int, Int) -> Unit,
     openQuickAddDate: LocalDate?,
     onQuickAddConsumed: () -> Unit
@@ -225,7 +226,8 @@ fun CalendarScreen(
                         onSelectDate(today)
                     }
                 },
-                onSummaryClick = onSummaryClick
+                onSummaryClick = onSummaryClick,
+                onMoreClick = onOpenMore
             )
         },
         floatingActionButton = {
@@ -251,8 +253,6 @@ fun CalendarScreen(
                 .padding(padding)
         ) {
             MonthSummaryCard(
-                ownerTitle = stringResource(R.string.calendar_owner_title),
-                ownerSubtitle = stringResource(R.string.calendar_owner_subtitle),
                 monthTotal = displayedMonthTotal,
                 dueCount = displayedBadgeCount,
                 hasOrders = hasOrdersInVisibleMonth,

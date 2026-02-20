@@ -1,5 +1,6 @@
 package com.zeynbakers.order_management_system.customer.ui
 
+import androidx.room.withTransaction
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.zeynbakers.order_management_system.accounting.data.AccountEntryEntity
@@ -10,6 +11,8 @@ import com.zeynbakers.order_management_system.accounting.data.PaymentAllocationE
 import com.zeynbakers.order_management_system.accounting.data.PaymentAllocationStatus
 import com.zeynbakers.order_management_system.accounting.data.PaymentAllocationType
 import com.zeynbakers.order_management_system.accounting.data.PaymentMethod
+import com.zeynbakers.order_management_system.accounting.data.PaymentReceiptEntity
+import com.zeynbakers.order_management_system.accounting.data.PaymentReceiptStatus
 import com.zeynbakers.order_management_system.accounting.domain.PaymentReceiptProcessor
 import com.zeynbakers.order_management_system.accounting.domain.ReceiptAllocation
 import com.zeynbakers.order_management_system.core.db.AppDatabase
@@ -146,7 +149,8 @@ class CustomerAccountsViewModel(private val database: AppDatabase) : ViewModel()
                 val orderTotal = financeTotals.orderBilled ?: BigDecimal.ZERO
                 val paidToOrders = financeTotals.orderPaid ?: BigDecimal.ZERO
                 val availableCredit = financeTotals.extraCredit ?: BigDecimal.ZERO
-                val netBalance = orderTotal - paidToOrders - availableCredit
+                // Single source of truth for customer net position.
+                val netBalance = _balance.value
                 _financeSummary.value =
                     CustomerFinanceSummary(
                         orderTotal = orderTotal,
@@ -246,6 +250,7 @@ class CustomerAccountsViewModel(private val database: AppDatabase) : ViewModel()
         viewModelScope.launch {
             recordPaymentInternal(customerId, amount, method, note, orderId)
             loadCustomer(customerId)
+            refreshSummaries()
         }
     }
 
@@ -253,8 +258,7 @@ class CustomerAccountsViewModel(private val database: AppDatabase) : ViewModel()
         viewModelScope.launch {
             val order = orderDao.getOrderById(orderId) ?: return@launch
             if (!isOlderThanOneMonth(order.orderDate)) return@launch
-            val paidSoFar = accountingDao.getPaidForOrder(orderId)
-            val remaining = order.totalAmount - paidSoFar
+            val remaining = order.totalAmount - accountingDao.getPaidForOrder(orderId)
             if (remaining <= BigDecimal.ZERO) return@launch
 
             val customerName = _customer.value?.name
@@ -265,20 +269,60 @@ class CustomerAccountsViewModel(private val database: AppDatabase) : ViewModel()
                     notes = order.notes,
                     totalAmount = order.totalAmount
                 )
-            accountingDao.insertAccountEntry(
-                AccountEntryEntity(
-                    orderId = orderId,
-                    customerId = order.customerId,
-                    type = EntryType.WRITE_OFF,
-                    amount = remaining,
-                    date = Clock.System.now().toEpochMilliseconds(),
-                    description = "Bad debt write-off: $orderLabel"
+            val note = "Bad debt write-off: $orderLabel"
+            val now = Clock.System.now().toEpochMilliseconds()
+            database.withTransaction {
+                val receiptId =
+                    receiptDao.insert(
+                        PaymentReceiptEntity(
+                            amount = remaining,
+                            receivedAt = now,
+                            method = PaymentMethod.CASH,
+                            transactionCode = null,
+                            hash = null,
+                            senderName = null,
+                            senderPhone = null,
+                            rawText = null,
+                            customerId = order.customerId,
+                            note = note,
+                            status = PaymentReceiptStatus.APPLIED,
+                            createdAt = now,
+                            voidedAt = null,
+                            voidReason = null
+                        )
+                    )
+                val entryId =
+                    accountingDao.insertAccountEntry(
+                        AccountEntryEntity(
+                            orderId = orderId,
+                            customerId = order.customerId,
+                            type = EntryType.WRITE_OFF,
+                            amount = remaining,
+                            date = now,
+                            description = note
+                        )
+                    )
+                allocationDao.insert(
+                    PaymentAllocationEntity(
+                        receiptId = receiptId,
+                        orderId = orderId,
+                        customerId = order.customerId,
+                        amount = remaining,
+                        type = PaymentAllocationType.ORDER,
+                        status = PaymentAllocationStatus.APPLIED,
+                        accountEntryId = entryId,
+                        reversalEntryId = null,
+                        createdAt = now,
+                        voidedAt = null,
+                        voidReason = null
+                    )
                 )
-            )
+            }
             orderDao.updateStatusOverride(orderId, null, Clock.System.now().toEpochMilliseconds())
 
             val customerId = _customer.value?.id ?: return@launch
             loadCustomer(customerId)
+            refreshSummaries()
         }
     }
 
@@ -290,16 +334,107 @@ class CustomerAccountsViewModel(private val database: AppDatabase) : ViewModel()
                     .takeIf { it.isNotBlank() }
                     ?.let { "Bad debt - $it" }
                     ?: "Bad debt"
-            accountingDao.insertAccountEntry(
-                AccountEntryEntity(
-                    orderId = null,
-                    customerId = customerId,
-                    type = EntryType.WRITE_OFF,
-                    amount = amount,
-                    date = Clock.System.now().toEpochMilliseconds(),
-                    description = description
-                )
-            )
+            database.withTransaction {
+                val outstanding = accountingDao.getCustomerBalance(customerId).max(BigDecimal.ZERO)
+                if (outstanding <= BigDecimal.ZERO) return@withTransaction
+                val appliedAmount = if (amount > outstanding) outstanding else amount
+                if (appliedAmount <= BigDecimal.ZERO) return@withTransaction
+                var remainingAmount = appliedAmount
+                val now = Clock.System.now().toEpochMilliseconds()
+                val receiptId =
+                    receiptDao.insert(
+                        PaymentReceiptEntity(
+                            amount = appliedAmount,
+                            receivedAt = now,
+                            method = PaymentMethod.CASH,
+                            transactionCode = null,
+                            hash = null,
+                            senderName = null,
+                            senderPhone = null,
+                            rawText = null,
+                            customerId = customerId,
+                            note = description,
+                            status = PaymentReceiptStatus.APPLIED,
+                            createdAt = now,
+                            voidedAt = null,
+                            voidReason = null
+                        )
+                    )
+
+                val oldestOpenOrders =
+                    orderDao.getOrdersByCustomer(customerId)
+                        .filter { it.status != OrderStatus.CANCELLED }
+                        .sortedWith(
+                            compareBy<OrderEntity> { it.orderDate }
+                                .thenBy { it.createdAt }
+                                .thenBy { it.id }
+                        )
+
+                for (order in oldestOpenOrders) {
+                    if (remainingAmount <= BigDecimal.ZERO) break
+                    val paidSoFar = accountingDao.getPaidForOrder(order.id)
+                    val due = order.totalAmount - paidSoFar
+                    if (due <= BigDecimal.ZERO) continue
+                    val applyAmount = if (remainingAmount > due) due else remainingAmount
+                    val entryId =
+                        accountingDao.insertAccountEntry(
+                            AccountEntryEntity(
+                                orderId = order.id,
+                                customerId = customerId,
+                                type = EntryType.WRITE_OFF,
+                                amount = applyAmount,
+                                date = now,
+                                description = description
+                            )
+                        )
+                    allocationDao.insert(
+                        PaymentAllocationEntity(
+                            receiptId = receiptId,
+                            orderId = order.id,
+                            customerId = customerId,
+                            amount = applyAmount,
+                            type = PaymentAllocationType.ORDER,
+                            status = PaymentAllocationStatus.APPLIED,
+                            accountEntryId = entryId,
+                            reversalEntryId = null,
+                            createdAt = now,
+                            voidedAt = null,
+                            voidReason = null
+                        )
+                    )
+                    remainingAmount -= applyAmount
+                }
+
+                // Fallback only if customer has positive net exposure not tied to open orders.
+                if (remainingAmount > BigDecimal.ZERO) {
+                    val entryId =
+                        accountingDao.insertAccountEntry(
+                            AccountEntryEntity(
+                                orderId = null,
+                                customerId = customerId,
+                                type = EntryType.WRITE_OFF,
+                                amount = remainingAmount,
+                                date = now,
+                                description = description
+                            )
+                        )
+                    allocationDao.insert(
+                        PaymentAllocationEntity(
+                            receiptId = receiptId,
+                            orderId = null,
+                            customerId = customerId,
+                            amount = remainingAmount,
+                            type = PaymentAllocationType.CUSTOMER_CREDIT,
+                            status = PaymentAllocationStatus.APPLIED,
+                            accountEntryId = entryId,
+                            reversalEntryId = null,
+                            createdAt = now,
+                            voidedAt = null,
+                            voidReason = null
+                        )
+                    )
+                }
+            }
             loadCustomer(customerId)
             refreshSummaries()
         }

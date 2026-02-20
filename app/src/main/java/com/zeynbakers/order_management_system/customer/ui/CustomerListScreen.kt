@@ -264,9 +264,7 @@ private fun CustomersScreenM3(
                 hideZeroBalances = hideZeroBalances,
                 showInactive = showInactive,
                 onFilterClick = { showFilterSheet = true },
-                onSortClick = { showSortSheet = true },
-                onToggleHideZero = { hideZeroBalances = !hideZeroBalances },
-                onToggleShowInactive = { showInactive = !showInactive }
+                onSortClick = { showSortSheet = true }
             )
 
             if (hasActiveControls) {
@@ -480,7 +478,11 @@ private fun CustomersScreenM3(
     if (showFilterSheet) {
         CustomerFilterSheet(
             selectedFilter = selectedFilter,
+            hideZeroBalances = hideZeroBalances,
+            showInactive = showInactive,
             onSelect = { selectedFilter = it },
+            onToggleHideZero = { hideZeroBalances = !hideZeroBalances },
+            onToggleShowInactive = { showInactive = !showInactive },
             onDismiss = { showFilterSheet = false }
         )
     }

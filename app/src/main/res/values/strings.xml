@@ -376,6 +376,10 @@
     <string name="unpaid_overdue_cd">Overdue</string>
     <string name="unpaid_paid_amount">Paid %1$s</string>
     <string name="unpaid_action_pay">Pay</string>
+    <string name="unpaid_swipe_hint">Swipe right to pay, left to delete</string>
+    <string name="unpaid_delete_title">Delete order?</string>
+    <string name="unpaid_delete_message_plain">This will cancel the order and remove it from unpaid totals.</string>
+    <string name="unpaid_delete_message_with_payments">This order has %1$s paid. Deleting will cancel the order and keep paid money as customer credit.</string>
     <string name="unpaid_customer_walk_in">Walk-in</string>
     <string name="unpaid_date_today">Today</string>
     <string name="unpaid_date_yesterday">Yesterday</string>
@@ -410,6 +414,7 @@
     <string name="money_receipt_status_voided">Voided</string>
     <string name="money_customer_id_fallback">Customer #%1$d</string>
     <string name="money_method_code">%1$s %2$s</string>
+    <string name="money_history_swipe_hint">Swipe right to move, left to void</string>
     <string name="money_orders_count">Orders (%1$d)</string>
     <string name="money_row_datetime_amount">%1$s - %2$s</string>
     <string name="money_row_code_target">%1$s - %2$s</string>

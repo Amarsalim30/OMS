@@ -51,7 +51,7 @@ internal fun BalanceCard(
     val orderTotal = summary?.orderTotal ?: BigDecimal.ZERO
     val paidToOrders = summary?.paidToOrders ?: BigDecimal.ZERO
     val availableCredit = summary?.availableCredit ?: BigDecimal.ZERO
-    val netBalance = summary?.netBalance ?: balance
+    val netBalance = balance
     val netLabel =
         if (summary == null) {
             stringResource(R.string.customer_detail_balance)

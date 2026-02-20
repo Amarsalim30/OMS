@@ -29,6 +29,7 @@ import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.ChevronLeft
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
@@ -71,7 +72,8 @@ internal fun CalendarTopAppBar(
     todayDay: Int,
     onMonthPickerClick: () -> Unit,
     onToday: () -> Unit,
-    onSummaryClick: () -> Unit
+    onSummaryClick: () -> Unit,
+    onMoreClick: () -> Unit
 ) {
     CenterAlignedTopAppBar(
         title = {
@@ -119,6 +121,12 @@ internal fun CalendarTopAppBar(
                             .padding(top = 5.dp)
                     )
                 }
+            }
+            IconButton(onClick = onMoreClick) {
+                Icon(
+                    imageVector = Icons.Filled.MoreVert,
+                    contentDescription = stringResource(R.string.action_more)
+                )
             }
         }
     )

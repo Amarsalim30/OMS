@@ -9,6 +9,7 @@ import com.zeynbakers.order_management_system.customer.ui.CustomerAccountsViewMo
 import com.zeynbakers.order_management_system.order.data.OrderEntity
 import com.zeynbakers.order_management_system.order.domain.OrderProcessor
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.delay
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.atStartOfDayIn
@@ -188,5 +189,84 @@ class AccountingLogicTest {
         assertEquals(BigDecimal("100.00"), firstPaid)
         assertEquals(BigDecimal("50.00"), secondPaid)
         assertEquals(0, unallocatedCredits.size)
+    }
+
+    @Test
+    fun markBadDebt_allocatesToOldestOpenOrders_beforeCustomerLevel() = runBlocking {
+        val orderDao = db.orderDao()
+        val accountingDao = db.accountingDao()
+        val viewModel = CustomerAccountsViewModel(db)
+
+        val firstOrderDate = LocalDate(2026, 5, 1)
+        val secondOrderDate = LocalDate(2026, 5, 2)
+
+        val firstOrderId = orderDao.insert(
+            OrderEntity(
+                orderDate = firstOrderDate,
+                notes = "First",
+                totalAmount = BigDecimal("2000.00"),
+                customerId = 1L
+            )
+        )
+        val secondOrderId = orderDao.insert(
+            OrderEntity(
+                orderDate = secondOrderDate,
+                notes = "Second",
+                totalAmount = BigDecimal("1500.00"),
+                customerId = 1L
+            )
+        )
+
+        accountingDao.upsertDebitForOrder(
+            orderId = firstOrderId,
+            customerId = 1L,
+            amount = BigDecimal("2000.00"),
+            date = firstOrderDate.atStartOfDayIn(TimeZone.currentSystemDefault()).toEpochMilliseconds(),
+            description = "Charge: Order #$firstOrderId"
+        )
+        accountingDao.upsertDebitForOrder(
+            orderId = secondOrderId,
+            customerId = 1L,
+            amount = BigDecimal("1500.00"),
+            date = secondOrderDate.atStartOfDayIn(TimeZone.currentSystemDefault()).toEpochMilliseconds(),
+            description = "Charge: Order #$secondOrderId"
+        )
+
+        viewModel.recordPaymentInternal(
+            customerId = 1L,
+            amount = BigDecimal("1000.00"),
+            method = com.zeynbakers.order_management_system.accounting.data.PaymentMethod.CASH,
+            note = "",
+            orderId = null
+        )
+
+        viewModel.markBadDebt(
+            customerId = 1L,
+            amount = BigDecimal("1200.00"),
+            note = "Unreachable"
+        )
+
+        // markBadDebt is async via viewModelScope; wait for persistence.
+        var synced = false
+        for (attempt in 0 until 20) {
+            if (accountingDao.getCustomerBalance(1L) == BigDecimal("1300.00")) {
+                synced = true
+                break
+            }
+            delay(50)
+        }
+        if (!synced) delay(100)
+
+        val firstPaid = accountingDao.getPaidForOrder(firstOrderId)
+        val secondPaid = accountingDao.getPaidForOrder(secondOrderId)
+        val balance = accountingDao.getCustomerBalance(1L)
+        val customerLevelWriteOffs =
+            accountingDao.getLedgerForCustomer(1L)
+                .filter { it.type == EntryType.WRITE_OFF && it.orderId == null }
+
+        assertEquals(BigDecimal("2000.00"), firstPaid)
+        assertEquals(BigDecimal("200.00"), secondPaid)
+        assertEquals(BigDecimal("1300.00"), balance)
+        assertEquals(0, customerLevelWriteOffs.size)
     }
 }

@@ -23,7 +23,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Payments
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
@@ -38,6 +40,7 @@ import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -54,6 +57,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.zeynbakers.order_management_system.R
 import com.zeynbakers.order_management_system.core.ui.rememberCurrentDate
+import com.zeynbakers.order_management_system.core.util.formatKes
 import com.zeynbakers.order_management_system.order.data.OrderEntity
 import java.math.BigDecimal
 import kotlinx.datetime.LocalDate
@@ -74,6 +78,7 @@ fun UnpaidOrdersScreen(
         onBack: () -> Unit,
         onOpenDay: (LocalDate) -> Unit,
         onReceivePayment: (OrderEntity) -> Unit,
+        onDeleteOrder: (OrderEntity) -> Unit,
         title: String? = null,
         showBack: Boolean = true
 ) {
@@ -90,6 +95,7 @@ fun UnpaidOrdersScreen(
     var isSearchActive by rememberSaveable { mutableStateOf(false) }
     var searchQuery by rememberSaveable { mutableStateOf("") }
     var pendingSwipePayOrder by remember { mutableStateOf<OrderEntity?>(null) }
+    var pendingSwipeDeleteOrder by remember { mutableStateOf<OrderEntity?>(null) }
 
     BackHandler(enabled = isSearchActive) {
         isSearchActive = false
@@ -291,6 +297,14 @@ fun UnpaidOrdersScreen(
 
             if (orders.isNotEmpty()) {
                 item {
+                    Text(
+                            text = stringResource(R.string.unpaid_swipe_hint),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(horizontal = 16.dp)
+                    )
+                }
+                item {
                     LazyRow(
                             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -354,11 +368,16 @@ fun UnpaidOrdersScreen(
                         val dismissState =
                                 rememberSwipeToDismissBoxState(
                                         confirmValueChange = {
-                                            if (it == SwipeToDismissBoxValue.StartToEnd) {
-                                                pendingSwipePayOrder = order
-                                                false
-                                            } else {
-                                                false
+                                            when (it) {
+                                                SwipeToDismissBoxValue.StartToEnd -> {
+                                                    pendingSwipePayOrder = order
+                                                    false
+                                                }
+                                                SwipeToDismissBoxValue.EndToStart -> {
+                                                    pendingSwipeDeleteOrder = order
+                                                    false
+                                                }
+                                                SwipeToDismissBoxValue.Settled -> false
                                             }
                                         }
                                 )
@@ -367,7 +386,7 @@ fun UnpaidOrdersScreen(
                                 state = dismissState,
                                 modifier = Modifier,
                                 enableDismissFromStartToEnd = true,
-                                enableDismissFromEndToStart = false,
+                                enableDismissFromEndToStart = true,
                                 backgroundContent = { SwipeBackground(dismissState) },
                                 content = {
                                     UnpaidOrderRow(
@@ -385,23 +404,54 @@ fun UnpaidOrdersScreen(
             }
         }
     }
+
+    pendingSwipeDeleteOrder?.let { order ->
+        val paid = paidAmounts[order.id] ?: BigDecimal.ZERO
+        AlertDialog(
+                onDismissRequest = { pendingSwipeDeleteOrder = null },
+                title = { Text(stringResource(R.string.unpaid_delete_title)) },
+                text = {
+                    Text(
+                            if (paid > BigDecimal.ZERO) {
+                                stringResource(
+                                        R.string.unpaid_delete_message_with_payments,
+                                        formatKes(paid)
+                                )
+                            } else {
+                                stringResource(R.string.unpaid_delete_message_plain)
+                            }
+                    )
+                },
+                confirmButton = {
+                    TextButton(
+                            onClick = {
+                                onDeleteOrder(order)
+                                pendingSwipeDeleteOrder = null
+                            }
+                    ) {
+                        Text(stringResource(R.string.customer_action_delete))
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { pendingSwipeDeleteOrder = null }) {
+                        Text(stringResource(R.string.action_cancel))
+                    }
+                }
+        )
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun SwipeBackground(dismissState: SwipeToDismissBoxState) {
-    val color =
-            if (dismissState.dismissDirection == SwipeToDismissBoxValue.StartToEnd) {
-                MaterialTheme.colorScheme.primaryContainer
-            } else {
-                Color.Transparent
-            }
-
     val direction = dismissState.dismissDirection
 
     if (direction == SwipeToDismissBoxValue.StartToEnd) {
         Box(
-                modifier = Modifier.fillMaxSize().background(color).padding(horizontal = 20.dp),
+                modifier =
+                        Modifier.fillMaxSize()
+                                .background(MaterialTheme.colorScheme.primaryContainer)
+                                .padding(horizontal = 20.dp),
                 contentAlignment = Alignment.CenterStart
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -416,6 +466,29 @@ private fun SwipeBackground(dismissState: SwipeToDismissBoxState) {
                         style = MaterialTheme.typography.labelLarge,
                         color = MaterialTheme.colorScheme.onPrimaryContainer,
                         fontWeight = FontWeight.Bold
+                )
+            }
+        }
+    } else if (direction == SwipeToDismissBoxValue.EndToStart) {
+        Box(
+                modifier =
+                        Modifier.fillMaxSize()
+                                .background(MaterialTheme.colorScheme.errorContainer)
+                                .padding(horizontal = 20.dp),
+                contentAlignment = Alignment.CenterEnd
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                        text = stringResource(R.string.customer_action_delete).uppercase(),
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onErrorContainer,
+                        fontWeight = FontWeight.Bold
+                )
+                Spacer(Modifier.size(8.dp))
+                Icon(
+                        imageVector = Icons.Outlined.Delete,
+                        contentDescription = stringResource(R.string.customer_action_delete),
+                        tint = MaterialTheme.colorScheme.onErrorContainer
                 )
             }
         }

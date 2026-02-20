@@ -154,7 +154,7 @@ internal fun UnpaidOrderRow(
         modifier =
             modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 4.dp)
+                .padding(horizontal = 16.dp, vertical = 2.dp)
                 .clickable(onClick = onOpenDay)
     ) {
         Column {
@@ -162,7 +162,7 @@ internal fun UnpaidOrderRow(
                 Surface(
                     shape = MaterialTheme.shapes.medium,
                     color = MaterialTheme.colorScheme.primaryContainer,
-                    modifier = Modifier.size(40.dp)
+                    modifier = Modifier.size(36.dp)
                 ) {
                     Box(contentAlignment = Alignment.Center) {
                         Text(
@@ -174,7 +174,7 @@ internal fun UnpaidOrderRow(
                     }
                 }
 
-                Spacer(modifier = Modifier.width(12.dp))
+                Spacer(modifier = Modifier.width(10.dp))
 
                 Column(modifier = Modifier.weight(1f)) {
                     Row(
@@ -229,7 +229,7 @@ internal fun UnpaidOrderRow(
                 }
             }
 
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -247,13 +247,13 @@ internal fun UnpaidOrderRow(
 
                 LinearProgressIndicator(
                     progress = { progress },
-                    modifier = Modifier.weight(1f).height(6.dp),
+                    modifier = Modifier.weight(1f).height(5.dp),
                     color = MaterialTheme.colorScheme.tertiary,
                     trackColor = MaterialTheme.colorScheme.surfaceVariant,
                     strokeCap = StrokeCap.Round
                 )
 
-                Spacer(modifier = Modifier.width(12.dp))
+                Spacer(modifier = Modifier.width(8.dp))
 
                 Surface(
                     color = MaterialTheme.colorScheme.tertiaryContainer,
@@ -265,14 +265,14 @@ internal fun UnpaidOrderRow(
                         }
                 ) {
                     Row(
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Icon(
                             imageVector = Icons.Outlined.Payments,
                             contentDescription = stringResource(R.string.unpaid_action_pay),
                             tint = MaterialTheme.colorScheme.onTertiaryContainer,
-                            modifier = Modifier.size(16.dp)
+                            modifier = Modifier.size(14.dp)
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(

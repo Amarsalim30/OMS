@@ -263,6 +263,10 @@ internal fun MainAppContent(
                     }
                     orderViewModel.loadUnpaidOrders()
                     selectedDate?.let { orderViewModel.loadOrdersForDate(it) }
+                    customerViewModel.searchCustomers(customerQuery)
+                    customerDetail?.id?.let { activeCustomerId ->
+                        customerViewModel.loadCustomer(activeCustomerId)
+                    }
                     WidgetUpdater.enqueue(context)
                     NotificationScheduler.enqueueNow(context)
                 }

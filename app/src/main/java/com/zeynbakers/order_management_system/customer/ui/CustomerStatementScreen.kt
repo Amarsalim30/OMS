@@ -60,7 +60,7 @@ fun CustomerStatementScreen(
     onRecordPayment: () -> Unit,
     onMarkBadDebt: (BigDecimal, String) -> Unit
 ) {
-    val netBalance = financeSummary?.netBalance ?: balance
+    val netBalance = balance
     val availableCredit = (financeSummary?.availableCredit ?: BigDecimal.ZERO).max(BigDecimal.ZERO)
     var showBadDebtDialog by remember { mutableStateOf(false) }
     var badDebtAmount by remember(netBalance) { mutableStateOf(netBalance.max(BigDecimal.ZERO).stripTrailingZeros().toPlainString()) }
