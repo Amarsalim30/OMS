@@ -60,6 +60,9 @@ object BackupManager {
     private const val LATEST_POINTER_NAME = "oms_backup_latest.json"
     private const val MIME_ZIP = "application/zip"
     private const val MIME_JSON = "application/json"
+    private const val MAX_ZIP_ENTRY_BYTES = 64L * 1024L * 1024L
+    private const val MAX_ZIP_TOTAL_BYTES = 256L * 1024L * 1024L
+    private const val MAX_SAFE_ROLLBACK_BYTES = 64L * 1024L * 1024L
     // Legacy-only backup field. Keep for backward-compatible import until schema retirement is complete.
     private const val LEGACY_AMOUNT_PAID_FIELD = "amountPaid"
 
@@ -147,6 +150,12 @@ object BackupManager {
                             )
                             writtenName
                         }
+
+                        BackupTargetType.SafFile -> {
+                            val fileUri = state.targetUri
+                            val writtenName = writeSafFileBackup(context, fileUri, archive.bytes) ?: return@withContext null
+                            writtenName
+                        }
                     }
                 }
 
@@ -167,6 +176,8 @@ object BackupManager {
             val message =
                 if (state.targetType == BackupTargetType.AppPrivate) {
                     "Saved to app storage"
+                } else if (state.targetType == BackupTargetType.SafFile) {
+                    "Saved to selected file"
                 } else {
                     "Saved to selected folder"
                 }
@@ -270,6 +281,18 @@ object BackupManager {
                             probeDoc.delete()
                         }
                     }
+
+                    BackupTargetType.SafFile -> {
+                        val fileUri = state.targetUri ?: return@withContext BackupResult(false, "Backup file unavailable")
+                        val fileUriObj = fileUri.toUri()
+                        val canRead = openSafInput(context, fileUri) != null
+                        val canWrite =
+                            runCatching {
+                                context.contentResolver.openFileDescriptor(fileUriObj, "rw")?.use { true } ?: false
+                            }.getOrElse { hasPersistedReadWritePermission(context, fileUri) }
+                        if (canRead && canWrite) BackupResult(true, "Write test passed")
+                        else BackupResult(false, "Backup file unavailable")
+                    }
                 }
             } catch (t: Exception) {
                 BackupResult(
@@ -313,6 +336,13 @@ object BackupManager {
                     }
                     listSafBackups(tree).firstOrNull()?.name
                 }
+
+                BackupTargetType.SafFile -> {
+                    if (targetUri.isNullOrBlank()) {
+                        return@withContext null
+                    }
+                    resolveDisplayNameForUri(context, targetUri) ?: "selected_backup.zip"
+                }
             }
         }
     }
@@ -335,6 +365,18 @@ object BackupManager {
                     BackupTargetHealth.Healthy
                 }
             }
+
+            BackupTargetType.SafFile -> {
+                if (state.targetUri.isNullOrBlank()) {
+                    BackupTargetHealth.NeedsRelink
+                } else if (!hasPersistedReadWritePermission(context, state.targetUri)) {
+                    BackupTargetHealth.NeedsRelink
+                } else if (!isSafFileAccessible(context, state.targetUri)) {
+                    BackupTargetHealth.Unavailable
+                } else {
+                    BackupTargetHealth.Healthy
+                }
+            }
         }
     }
 
@@ -342,6 +384,13 @@ object BackupManager {
         val uri = uriString?.toUri() ?: return false
         val tree = DocumentFile.fromTreeUri(context, uri) ?: return false
         return tree.exists() && tree.isDirectory
+    }
+
+    fun isSafFileAccessible(context: Context, uriString: String?): Boolean {
+        val uri = uriString?.toUri() ?: return false
+        return runCatching {
+            context.contentResolver.openInputStream(uri)?.use { true } ?: false
+        }.getOrDefault(false)
     }
 
     fun buildDriveTroubleshootReport(context: Context, state: BackupState): DriveTroubleshootReport {
@@ -412,8 +461,16 @@ object BackupManager {
             ?: emptyList()
     }
 
-    internal fun readBackupPayloadsForTest(inputStream: InputStream): Map<String, String> {
-        return readZipEntries(inputStream)
+    internal fun readBackupPayloadsForTest(
+        inputStream: InputStream,
+        maxEntryBytes: Long = MAX_ZIP_ENTRY_BYTES,
+        maxTotalBytes: Long = MAX_ZIP_TOTAL_BYTES
+    ): Map<String, String> {
+        return readZipEntries(
+            inputStream = inputStream,
+            maxEntryBytes = maxEntryBytes,
+            maxTotalBytes = maxTotalBytes
+        )
             .mapValues { (_, payload) -> payload.toString(Charsets.UTF_8) }
     }
 
@@ -445,6 +502,7 @@ object BackupManager {
         return when (state.targetType) {
             BackupTargetType.AppPrivate -> openLatestAppPrivateInput(context)
             BackupTargetType.SafDirectory -> openLatestSafInput(context, state.targetUri)
+            BackupTargetType.SafFile -> state.targetUri?.let { openSafInput(context, it) }
         }
     }
 
@@ -508,23 +566,28 @@ object BackupManager {
         progress: ProgressCallback?
     ): BackupArchive {
         progress?.invoke(10, "Reading data")
-        val customers = database.customerDao().getAllCustomers()
-        val orders = database.orderDao().getAllOrders()
-        val orderItems = database.orderItemDao().getAllOrderItems()
-        val entries = database.accountingDao().getAllAccountEntries()
-        val payments = database.accountingDao().getAllPayments()
-        val receipts = database.paymentReceiptDao().getAll()
-        val allocations = database.paymentAllocationDao().getAll()
+        val snapshot =
+            database.withTransaction {
+                BackupSnapshot(
+                    customers = database.customerDao().getAllCustomers(),
+                    orders = database.orderDao().getAllOrders(),
+                    orderItems = database.orderItemDao().getAllOrderItems(),
+                    accountEntries = database.accountingDao().getAllAccountEntries(),
+                    payments = database.accountingDao().getAllPayments(),
+                    paymentReceipts = database.paymentReceiptDao().getAll(),
+                    paymentAllocations = database.paymentAllocationDao().getAll()
+                )
+            }
 
         val payloadEntries = linkedMapOf<String, ByteArray>()
         payloadEntries[ENTRY_METADATA] = buildMetadata(exportedAt).toString().toByteArray(Charsets.UTF_8)
-        payloadEntries[ENTRY_CUSTOMERS] = customersToJson(customers).toString().toByteArray(Charsets.UTF_8)
-        payloadEntries[ENTRY_ORDERS] = ordersToJson(orders).toString().toByteArray(Charsets.UTF_8)
-        payloadEntries[ENTRY_ORDER_ITEMS] = orderItemsToJson(orderItems).toString().toByteArray(Charsets.UTF_8)
-        payloadEntries[ENTRY_ACCOUNT_ENTRIES] = accountEntriesToJson(entries).toString().toByteArray(Charsets.UTF_8)
-        payloadEntries[ENTRY_PAYMENTS] = paymentsToJson(payments).toString().toByteArray(Charsets.UTF_8)
-        payloadEntries[ENTRY_PAYMENT_RECEIPTS] = paymentReceiptsToJson(receipts).toString().toByteArray(Charsets.UTF_8)
-        payloadEntries[ENTRY_PAYMENT_ALLOCATIONS] = paymentAllocationsToJson(allocations).toString().toByteArray(Charsets.UTF_8)
+        payloadEntries[ENTRY_CUSTOMERS] = customersToJson(snapshot.customers).toString().toByteArray(Charsets.UTF_8)
+        payloadEntries[ENTRY_ORDERS] = ordersToJson(snapshot.orders).toString().toByteArray(Charsets.UTF_8)
+        payloadEntries[ENTRY_ORDER_ITEMS] = orderItemsToJson(snapshot.orderItems).toString().toByteArray(Charsets.UTF_8)
+        payloadEntries[ENTRY_ACCOUNT_ENTRIES] = accountEntriesToJson(snapshot.accountEntries).toString().toByteArray(Charsets.UTF_8)
+        payloadEntries[ENTRY_PAYMENTS] = paymentsToJson(snapshot.payments).toString().toByteArray(Charsets.UTF_8)
+        payloadEntries[ENTRY_PAYMENT_RECEIPTS] = paymentReceiptsToJson(snapshot.paymentReceipts).toString().toByteArray(Charsets.UTF_8)
+        payloadEntries[ENTRY_PAYMENT_ALLOCATIONS] = paymentAllocationsToJson(snapshot.paymentAllocations).toString().toByteArray(Charsets.UTF_8)
 
         progress?.invoke(65, "Writing manifest")
         payloadEntries[ENTRY_MANIFEST] = buildManifest(exportedAt, payloadEntries).toByteArray(Charsets.UTF_8)
@@ -634,7 +697,10 @@ object BackupManager {
 
         val renamed = partial.renameTo(fileName)
         if (renamed) {
-            return tree.findFile(fileName)?.name ?: fileName
+            val finalized = tree.findFile(fileName) ?: return fileName
+            context.contentResolver.openInputStream(finalized.uri)?.use { verifyArchiveStream(it) }
+                ?: return null
+            return finalized.name ?: fileName
         }
 
         tree.findFile(fileName)?.delete()
@@ -646,7 +712,47 @@ object BackupManager {
             }
         } ?: return null
         partial.delete()
+        context.contentResolver.openInputStream(finalFile.uri)?.use { verifyArchiveStream(it) }
+            ?: return null
         return finalFile.name ?: fileName
+    }
+
+    private fun writeSafFileBackup(
+        context: Context,
+        fileUriString: String?,
+        archiveBytes: ByteArray
+    ): String? {
+        val fileUri = fileUriString?.toUri() ?: return null
+        val rollbackBytes =
+            runCatching {
+                readUriBytesLimited(
+                    context = context,
+                    uri = fileUri,
+                    maxBytes = MAX_SAFE_ROLLBACK_BYTES
+                )
+            }.getOrNull()
+
+        return try {
+            context.contentResolver.openOutputStream(fileUri, "w")?.use { out ->
+                out.write(archiveBytes)
+                out.flush()
+            } ?: throw IOException("Backup file unavailable")
+
+            context.contentResolver.openInputStream(fileUri)?.use { verifyArchiveStream(it) }
+                ?: throw IOException("Backup file unavailable")
+
+            resolveDisplayNameForUri(context, fileUriString) ?: "selected_backup.zip"
+        } catch (error: Exception) {
+            if (rollbackBytes != null) {
+                runCatching {
+                    context.contentResolver.openOutputStream(fileUri, "w")?.use { out ->
+                        out.write(rollbackBytes)
+                        out.flush()
+                    }
+                }
+            }
+            throw error
+        }
     }
 
     private fun updateAppPrivateLatestPointer(context: Context, pointer: LatestPointer) {
@@ -686,6 +792,23 @@ object BackupManager {
         return parseLatestPointer(payload)
     }
 
+    private fun resolveDisplayNameForUri(context: Context, uriString: String?): String? {
+        val uri = uriString?.toUri() ?: return null
+        return runCatching {
+            context.contentResolver.query(
+                uri,
+                arrayOf(DocumentsContract.Document.COLUMN_DISPLAY_NAME),
+                null,
+                null,
+                null
+            )?.use { cursor ->
+                if (!cursor.moveToFirst()) return@use null
+                val idx = cursor.getColumnIndex(DocumentsContract.Document.COLUMN_DISPLAY_NAME)
+                if (idx >= 0) cursor.getString(idx)?.trim().takeIf { !it.isNullOrBlank() } else null
+            }
+        }.getOrNull()
+    }
+
     private fun parseLatestPointer(payload: String): LatestPointer? {
         return runCatching {
             val json = JSONObject(payload)
@@ -700,6 +823,26 @@ object BackupManager {
                 )
             }
         }.getOrNull()
+    }
+
+    private fun readUriBytesLimited(context: Context, uri: android.net.Uri, maxBytes: Long): ByteArray? {
+        if (maxBytes <= 0L) return null
+        val input = context.contentResolver.openInputStream(uri) ?: return null
+        input.use { stream ->
+            val buffer = ByteArray(8_192)
+            val output = ByteArrayOutputStream()
+            var total = 0L
+            var read = stream.read(buffer)
+            while (read >= 0) {
+                if (read > 0) {
+                    total += read.toLong()
+                    if (total > maxBytes) return null
+                    output.write(buffer, 0, read)
+                }
+                read = stream.read(buffer)
+            }
+            return output.toByteArray()
+        }
     }
 
     private fun verifyArchiveStream(inputStream: InputStream) {
@@ -858,13 +1001,29 @@ object BackupManager {
             .getOrElse { throw IllegalArgumentException("Backup payload is invalid for $entryName") }
     }
 
-    private fun readZipEntries(inputStream: InputStream): Map<String, ByteArray> {
+    private fun readZipEntries(
+        inputStream: InputStream,
+        maxEntryBytes: Long = MAX_ZIP_ENTRY_BYTES,
+        maxTotalBytes: Long = MAX_ZIP_TOTAL_BYTES
+    ): Map<String, ByteArray> {
         val result = linkedMapOf<String, ByteArray>()
+        var totalBytes = 0L
         ZipInputStream(BufferedInputStream(inputStream)).use { zip ->
             var entry = zip.nextEntry
             while (entry != null) {
                 if (!entry.isDirectory) {
-                    result[entry.name] = readEntryBytes(zip)
+                    if (result.containsKey(entry.name)) {
+                        throw IllegalArgumentException("Backup archive contains duplicate entry: ${entry.name}")
+                    }
+                    val payload =
+                        readEntryBytes(
+                            zip = zip,
+                            entryName = entry.name,
+                            maxEntryBytes = maxEntryBytes,
+                            maxRemainingBytes = maxTotalBytes - totalBytes
+                        )
+                    totalBytes += payload.size.toLong()
+                    result[entry.name] = payload
                 }
                 zip.closeEntry()
                 entry = zip.nextEntry
@@ -873,12 +1032,28 @@ object BackupManager {
         return result
     }
 
-    private fun readEntryBytes(zip: ZipInputStream): ByteArray {
+    private fun readEntryBytes(
+        zip: ZipInputStream,
+        entryName: String,
+        maxEntryBytes: Long,
+        maxRemainingBytes: Long
+    ): ByteArray {
+        if (maxRemainingBytes <= 0L) {
+            throw IllegalArgumentException("Backup archive exceeds supported size")
+        }
         val buffer = ByteArray(4_096)
         val output = ByteArrayOutputStream()
+        var written = 0L
         var read = zip.read(buffer)
         while (read >= 0) {
             if (read > 0) {
+                written += read.toLong()
+                if (written > maxEntryBytes) {
+                    throw IllegalArgumentException("Backup entry is too large: $entryName")
+                }
+                if (written > maxRemainingBytes) {
+                    throw IllegalArgumentException("Backup archive exceeds supported size")
+                }
                 output.write(buffer, 0, read)
             }
             read = zip.read(buffer)
@@ -1361,6 +1536,16 @@ object BackupManager {
         val digest = MessageDigest.getInstance("SHA-256").digest(bytes)
         return digest.joinToString(separator = "") { "%02x".format(it) }
     }
+
+    private data class BackupSnapshot(
+        val customers: List<CustomerEntity>,
+        val orders: List<OrderEntity>,
+        val orderItems: List<OrderItemEntity>,
+        val accountEntries: List<AccountEntryEntity>,
+        val payments: List<PaymentEntity>,
+        val paymentReceipts: List<PaymentReceiptEntity>,
+        val paymentAllocations: List<PaymentAllocationEntity>
+    )
 
     private data class BackupArchive(
         val bytes: ByteArray,

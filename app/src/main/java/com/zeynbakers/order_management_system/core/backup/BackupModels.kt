@@ -16,7 +16,8 @@ data class BackupState(
 
 enum class BackupTargetType {
     AppPrivate,
-    SafDirectory
+    SafDirectory,
+    SafFile
 }
 
 enum class BackupStatus {

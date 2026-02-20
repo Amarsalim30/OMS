@@ -8,6 +8,7 @@ Update on 2026-02-20:
 - Removed all app-side `EXTRA_INITIAL_URI` usage.
 - Added separate `Browse backups` action that lists ZIP files from saved backup folder in-app (no picker re-launch).
 - Added package visibility queries in manifest for Drive/DocumentsProvider detection.
+- Added fallback target mode `Backup file` (SAF single-file via `CreateDocument`) for devices where folder tree picker does not expose Drive.
 
 ## Goal
 - Primary goal: user can back up to Google Drive from Backup settings.
@@ -34,6 +35,7 @@ Update on 2026-02-20:
 2. App must separate actions:
 - `Change backup folder`: provider/root chooser flow.
 - `Browse backups`: open current selected folder content view.
+ - `Backup file` mode: select one backup ZIP file destination via SAF file picker when folder picker is limited.
 3. App must not auto-force picker into last selected folder for the change-folder action.
 4. Troubleshoot UI must explain that Drive visibility depends on system picker/provider availability.
 

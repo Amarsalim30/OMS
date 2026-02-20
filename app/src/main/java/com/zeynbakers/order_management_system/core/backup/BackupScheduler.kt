@@ -88,7 +88,7 @@ object BackupScheduler {
             Constraints.Builder()
             .setRequiresBatteryNotLow(true)
             .setRequiresStorageNotLow(true)
-        if (state.targetType == BackupTargetType.SafDirectory) {
+        if (state.targetType == BackupTargetType.SafDirectory || state.targetType == BackupTargetType.SafFile) {
             builder.setRequiredNetworkType(NetworkType.CONNECTED)
         }
         return builder.build()

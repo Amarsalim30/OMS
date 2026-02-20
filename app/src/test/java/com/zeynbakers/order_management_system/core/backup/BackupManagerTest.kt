@@ -110,6 +110,44 @@ class BackupManagerTest {
         )
     }
 
+    @Test
+    fun `zip reader rejects oversized single entry`() {
+        val zipBytes = buildZip(mapOf("orders.json" to "x".repeat(128)))
+        val error =
+            runCatching {
+                BackupManager.readBackupPayloadsForTest(
+                    inputStream = ByteArrayInputStream(zipBytes),
+                    maxEntryBytes = 64,
+                    maxTotalBytes = 1_024
+                )
+            }.exceptionOrNull()
+
+        assertNotNull(error)
+        assertTrue(error is IllegalArgumentException)
+    }
+
+    @Test
+    fun `zip reader rejects oversized total payload`() {
+        val zipBytes =
+            buildZip(
+                mapOf(
+                    "customers.json" to "a".repeat(80),
+                    "orders.json" to "b".repeat(80)
+                )
+            )
+        val error =
+            runCatching {
+                BackupManager.readBackupPayloadsForTest(
+                    inputStream = ByteArrayInputStream(zipBytes),
+                    maxEntryBytes = 200,
+                    maxTotalBytes = 120
+                )
+            }.exceptionOrNull()
+
+        assertNotNull(error)
+        assertTrue(error is IllegalArgumentException)
+    }
+
     private fun assertDecimal(raw: String, expected: String) {
         val parsed = BackupManager.parseBackupDecimal(raw)
         assertNotNull("Expected decimal parse for '$raw'", parsed)

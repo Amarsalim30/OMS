@@ -10,7 +10,7 @@ class DailyBackupWorker(
 ) : CoroutineWorker(appContext, params) {
     override suspend fun doWork(): Result {
         val prefs = BackupPreferences(applicationContext)
-        val force = inputData.getBoolean(KEY_FORCE, false)
+        val force = inputData.getBoolean(BackupScheduler.KEY_FORCE, false)
         val state = prefs.readState()
         if (!force && !state.autoEnabled) {
             return Result.success()
@@ -49,7 +49,6 @@ class DailyBackupWorker(
     }
 
     companion object {
-        const val KEY_FORCE = "force"
         private const val BACKUP_ATTENTION_THRESHOLD = 3
     }
 }

@@ -65,6 +65,15 @@ class BackupPreferences(context: Context) {
         }
     }
 
+    fun setFileTargetSelection(uri: String, displayName: String?, authority: String?) {
+        prefs.edit {
+            putString(KEY_TARGET_TYPE, BackupTargetType.SafFile.name)
+            putString(KEY_TARGET_URI, uri)
+            putString(KEY_TARGET_DISPLAY_NAME, displayName)
+            putString(KEY_TARGET_AUTHORITY, authority)
+        }
+    }
+
     fun clearSafTargetSelection() {
         prefs.edit {
             putString(KEY_TARGET_URI, null)
@@ -103,7 +112,10 @@ class BackupPreferences(context: Context) {
             BackupTargetType.AppPrivate -> BackupTargetHealth.Healthy
             BackupTargetType.SafDirectory ->
                 if (targetUri.isNullOrBlank()) BackupTargetHealth.NeedsRelink
-                else BackupTargetHealth.Healthy
+                else BackupTargetHealth.Unavailable
+            BackupTargetType.SafFile ->
+                if (targetUri.isNullOrBlank()) BackupTargetHealth.NeedsRelink
+                else BackupTargetHealth.Unavailable
         }
     }
 
