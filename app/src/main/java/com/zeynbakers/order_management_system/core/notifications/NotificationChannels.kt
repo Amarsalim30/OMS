@@ -9,6 +9,7 @@ import com.zeynbakers.order_management_system.R
 object NotificationChannels {
     const val DUE_REMINDER_CHANNEL = "due_reminder"
     const val DAILY_SUMMARY_CHANNEL = "daily_summary"
+    const val BACKUP_ATTENTION_CHANNEL = "backup_attention"
 
     fun ensureCreated(context: Context) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
@@ -30,7 +31,16 @@ object NotificationChannels {
             description = context.getString(R.string.notification_channel_summary_desc)
         }
 
+        val backupAttentionChannel = NotificationChannel(
+            BACKUP_ATTENTION_CHANNEL,
+            context.getString(R.string.notification_channel_backup_attention),
+            NotificationManager.IMPORTANCE_HIGH
+        ).apply {
+            description = context.getString(R.string.notification_channel_backup_attention_desc)
+        }
+
         manager.createNotificationChannel(dueChannel)
         manager.createNotificationChannel(summaryChannel)
+        manager.createNotificationChannel(backupAttentionChannel)
     }
 }

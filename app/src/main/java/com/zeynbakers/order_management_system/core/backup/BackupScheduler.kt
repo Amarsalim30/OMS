@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.work.Constraints
 import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.ExistingWorkPolicy
+import androidx.work.NetworkType
 import androidx.work.Data
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequestBuilder
@@ -21,8 +22,14 @@ object BackupScheduler {
 
     fun ensureScheduled(context: Context) {
         val prefs = BackupPreferences(context)
-        if (prefs.readState().autoEnabled) {
-            scheduleDaily(context)
+        val state = prefs.readState()
+        if (state.autoEnabled) {
+            val health = BackupManager.evaluateTargetHealth(context, state)
+            if (health == BackupTargetHealth.Healthy) {
+                scheduleDaily(context)
+            } else {
+                cancelDaily(context)
+            }
         } else {
             cancelDaily(context)
         }
@@ -37,7 +44,6 @@ object BackupScheduler {
         val data = Data.Builder().putBoolean(KEY_FORCE, true).build()
         val request =
             OneTimeWorkRequestBuilder<ManualBackupWorker>()
-                .setConstraints(defaultConstraints())
                 .setInputData(data)
                 .addTag(UNIQUE_MANUAL_WORK)
                 .build()
@@ -52,7 +58,6 @@ object BackupScheduler {
                 .build()
         val request =
             OneTimeWorkRequestBuilder<RestoreWorker>()
-                .setConstraints(defaultConstraints())
                 .setInputData(data)
                 .addTag(UNIQUE_RESTORE_WORK)
                 .build()
@@ -63,7 +68,7 @@ object BackupScheduler {
     private fun scheduleDaily(context: Context) {
         val request =
             PeriodicWorkRequestBuilder<DailyBackupWorker>(24, TimeUnit.HOURS)
-                .setConstraints(defaultConstraints())
+                .setConstraints(dailyConstraints(context))
                 .addTag(UNIQUE_DAILY_WORK)
                 .build()
         WorkManager.getInstance(context).enqueueUniquePeriodicWork(
@@ -77,10 +82,15 @@ object BackupScheduler {
         WorkManager.getInstance(context).cancelUniqueWork(UNIQUE_DAILY_WORK)
     }
 
-    private fun defaultConstraints(): Constraints {
-        return Constraints.Builder()
+    private fun dailyConstraints(context: Context): Constraints {
+        val state = BackupPreferences(context).readState()
+        val builder =
+            Constraints.Builder()
             .setRequiresBatteryNotLow(true)
             .setRequiresStorageNotLow(true)
-            .build()
+        if (state.targetType == BackupTargetType.SafDirectory) {
+            builder.setRequiredNetworkType(NetworkType.CONNECTED)
+        }
+        return builder.build()
     }
 }

@@ -318,6 +318,11 @@ internal fun MainAppContent(
                             selectedTopLevelRoute = AppRoutes.Calendar
                             navigateTopLevel(navController, AppRoutes.Calendar, resetToRoot = true)
                         }
+                        AppIntents.ACTION_SHOW_BACKUP -> {
+                            navController.navigate(AppRoutes.Backup) {
+                                launchSingleTop = true
+                            }
+                        }
                         Intent.ACTION_SEND,
                         Intent.ACTION_SEND_MULTIPLE -> {
                             val sharedText = extractSharedText(intent) ?: return@LaunchedEffect

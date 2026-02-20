@@ -1,6 +1,8 @@
 package com.zeynbakers.order_management_system.core.backup
 
+import android.app.Activity
 import android.content.Intent
+import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
@@ -25,6 +27,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -48,13 +51,15 @@ import androidx.work.WorkManager
 import com.zeynbakers.order_management_system.R
 import com.zeynbakers.order_management_system.core.ui.LocalUiEventDispatcher
 import com.zeynbakers.order_management_system.core.ui.showSnackbar
-import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+
+private const val GOOGLE_DOCUMENTS_UI_PACKAGE = "com.google.android.documentsui"
+private const val AOSP_DOCUMENTS_UI_PACKAGE = "com.android.documentsui"
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -70,27 +75,110 @@ fun BackupSettingsScreen(
     val restoreFailedMessage = stringResource(R.string.restore_failed)
     val pickFolderFirstMessage = stringResource(R.string.backup_pick_folder_first)
     val backupStartedMessage = stringResource(R.string.backup_started)
-    val noBackupFoundMessage = stringResource(R.string.backup_no_app_storage_backups)
+    val noBackupFoundMessage = stringResource(R.string.backup_no_backups_found)
     val restoreStartedMessage = stringResource(R.string.restore_started)
+    val browseBackupsUnavailableMessage = stringResource(R.string.backup_browse_backups_unavailable)
+    val testWritePassedMessage = stringResource(R.string.backup_test_write_passed)
+    val testWriteFailedMessage = stringResource(R.string.backup_test_write_failed)
+    val targetPermissionFailedMessage = stringResource(R.string.backup_folder_permission_failed)
+    val targetUnavailableMessage = stringResource(R.string.backup_folder_unavailable)
+    val cloudFolderInfo = stringResource(R.string.backup_cloud_folder_mode_info)
+    val driveBrowseHint = stringResource(R.string.backup_drive_picker_hint)
+    val driveSystemPickerHint = stringResource(R.string.backup_drive_picker_system_hint)
+    val troubleshootingTitle = stringResource(R.string.backup_troubleshoot_drive_title)
+    val manifestPolicyStrictLabel = stringResource(R.string.backup_manifest_policy_strict)
+    val manifestPolicyLegacyLabel = stringResource(R.string.backup_manifest_policy_legacy)
+    val legacyModeWarning = stringResource(R.string.backup_manifest_legacy_warning)
+    val strictModeInfo = stringResource(R.string.backup_manifest_strict_info)
+    val manifestPolicyTitle = stringResource(R.string.backup_manifest_policy_title)
+    val healthAttentionTitle = stringResource(R.string.backup_health_attention_title)
+    val needsRelinkHint = stringResource(R.string.backup_health_needs_relink_hint)
+    val unavailableHint = stringResource(R.string.backup_health_unavailable_hint)
+    val troubleshootDriveInstalled = stringResource(R.string.backup_troubleshoot_drive_installed)
+    val troubleshootDriveEnabled = stringResource(R.string.backup_troubleshoot_drive_enabled)
+    val troubleshootDocumentsUiEnabled = stringResource(R.string.backup_troubleshoot_documents_ui_enabled)
+    val troubleshootSelectedAuthority = stringResource(R.string.backup_troubleshoot_selected_authority)
+    val troubleshootPersistedPermission = stringResource(R.string.backup_troubleshoot_persisted_permission)
+    val troubleshootManagedProfile = stringResource(R.string.backup_troubleshoot_managed_profile)
+    val troubleshootGuidance = stringResource(R.string.backup_troubleshoot_guidance)
+    val valueYes = stringResource(R.string.backup_value_yes)
+    val valueNo = stringResource(R.string.backup_value_no)
+    val valueUnknown = stringResource(R.string.backup_value_unknown)
     val prefs = remember { BackupPreferences(context) }
     var state by remember { mutableStateOf(prefs.readState()) }
-    var appBackups by remember { mutableStateOf<List<File>>(emptyList()) }
+    var latestBackupName by remember { mutableStateOf<String?>(null) }
     var pendingRestore by remember { mutableStateOf<RestoreRequest?>(null) }
+    var browseBackups by remember { mutableStateOf<List<BackupBrowseEntry>?>(null) }
+    var troubleshootReport by remember { mutableStateOf<DriveTroubleshootReport?>(null) }
     val uiEvents = LocalUiEventDispatcher.current
     val scope = rememberCoroutineScope()
 
+    val refreshStateAndLatest: suspend () -> Unit = {
+        val baseState = prefs.readState()
+        state = baseState.copy(targetHealth = BackupManager.evaluateTargetHealth(context, baseState))
+        latestBackupName =
+            withContext(Dispatchers.IO) {
+                BackupManager.findLatestBackupName(
+                    context = context,
+                    targetType = baseState.targetType,
+                    targetUri = baseState.targetUri
+                )
+            }
+    }
+
     val folderPicker =
-        rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
-            if (uri != null) {
-                val flags =
-                    Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
-                context.contentResolver.takePersistableUriPermission(uri, flags)
-                prefs.setTargetType(BackupTargetType.SafDirectory)
-                prefs.setTargetUri(uri.toString())
-                state = prefs.readState()
+        rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+            if (result.resultCode != Activity.RESULT_OK) return@rememberLauncherForActivityResult
+            val uri = result.data?.data ?: return@rememberLauncherForActivityResult
+            val flags =
+                Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+            scope.launch {
+                val grantSucceeded =
+                    runCatching {
+                        context.contentResolver.takePersistableUriPermission(uri, flags)
+                    }.isSuccess
+                if (!grantSucceeded) {
+                    uiEvents.showSnackbar(targetPermissionFailedMessage)
+                    return@launch
+                }
+                val targetUri = uri.toString()
+                val accessible = withContext(Dispatchers.IO) { BackupManager.isSafTargetAccessible(context, targetUri) }
+                if (!accessible) {
+                    uiEvents.showSnackbar(targetUnavailableMessage)
+                    return@launch
+                }
+                val label =
+                    runCatching { DocumentFile.fromTreeUri(context, uri)?.name }
+                        .getOrNull()
+                prefs.setTargetSelection(
+                    uri = targetUri,
+                    displayName = label,
+                    authority = uri.authority
+                )
                 BackupScheduler.ensureScheduled(context)
+                refreshStateAndLatest.invoke()
             }
         }
+    val launchFolderPicker: () -> Unit = {
+        val baseIntent =
+            Intent(Intent.ACTION_OPEN_DOCUMENT_TREE).apply {
+                addFlags(
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION or
+                        Intent.FLAG_GRANT_WRITE_URI_PERMISSION or
+                        Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION or
+                        Intent.FLAG_GRANT_PREFIX_URI_PERMISSION
+                )
+            }
+        val packageManager = context.packageManager
+        val preferredPackage =
+            listOf(GOOGLE_DOCUMENTS_UI_PACKAGE, AOSP_DOCUMENTS_UI_PACKAGE)
+                .firstOrNull { pkg ->
+                    packageEnabled(packageManager, pkg) &&
+                        Intent(baseIntent).setPackage(pkg).resolveActivity(packageManager) != null
+                }
+        val intent = if (preferredPackage == null) baseIntent else Intent(baseIntent).setPackage(preferredPackage)
+        folderPicker.launch(intent)
+    }
 
     val restorePicker =
         rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
@@ -104,10 +192,39 @@ fun BackupSettingsScreen(
                 pendingRestore = RestoreRequest(uri.toString())
             }
         }
+    val launchBrowseBackups: () -> Unit = {
+        val treeUri = state.targetUri
+        if (state.targetType != BackupTargetType.SafDirectory || treeUri.isNullOrBlank()) {
+            scope.launch { uiEvents.showSnackbar(browseBackupsUnavailableMessage) }
+        } else {
+            scope.launch {
+                val backups =
+                    withContext(Dispatchers.IO) {
+                        val tree = DocumentFile.fromTreeUri(context, treeUri.toUri()) ?: return@withContext emptyList()
+                        tree.listFiles()
+                            .asSequence()
+                            .filter { it.isFile && (it.name?.endsWith(".zip", ignoreCase = true) == true) }
+                            .sortedWith(
+                                compareByDescending<DocumentFile> { it.lastModified() }
+                                    .thenByDescending { it.name ?: "" }
+                            )
+                            .mapNotNull { file ->
+                                val name = file.name?.trim().orEmpty()
+                                if (name.isBlank()) null else BackupBrowseEntry(name = name, uriString = file.uri.toString())
+                            }
+                            .toList()
+                    }
+                if (backups.isEmpty()) {
+                    uiEvents.showSnackbar(noBackupFoundMessage)
+                } else {
+                    browseBackups = backups
+                }
+            }
+        }
+    }
 
     LaunchedEffect(Unit) {
-        state = prefs.readState()
-        appBackups = withContext(Dispatchers.IO) { BackupManager.listAppPrivateBackups(context) }
+        refreshStateAndLatest.invoke()
     }
 
     val backupWorkInfos by WorkManager.getInstance(context)
@@ -127,8 +244,7 @@ fun BackupSettingsScreen(
     val restoreStage = restoreInfo?.progress?.getString(BackupScheduler.KEY_STAGE) ?: restoreStageDefault
 
     LaunchedEffect(backupInfo?.state, restoreInfo?.state) {
-        state = prefs.readState()
-        appBackups = withContext(Dispatchers.IO) { BackupManager.listAppPrivateBackups(context) }
+        refreshStateAndLatest.invoke()
     }
 
     LaunchedEffect(backupInfo?.state) {
@@ -163,14 +279,28 @@ fun BackupSettingsScreen(
         if (state.targetType == BackupTargetType.AppPrivate) {
             stringResource(R.string.backup_target_app_storage_private)
         } else {
-            val label =
-                state.targetUri?.let { uri ->
+            val label = state.targetDisplayName
+                ?: state.targetUri?.let { uri ->
                     runCatching {
                         DocumentFile.fromTreeUri(context, uri.toUri())?.name
                     }.getOrNull()
                 }
             label?.let { stringResource(R.string.backup_target_folder_named, it) }
                 ?: stringResource(R.string.backup_target_folder_not_selected)
+        }
+    val providerLabel =
+        state.targetAuthority ?: stringResource(R.string.backup_provider_unknown)
+    val healthText =
+        when (state.targetHealth) {
+            BackupTargetHealth.Healthy -> stringResource(R.string.backup_health_healthy)
+            BackupTargetHealth.NeedsRelink -> stringResource(R.string.backup_health_needs_relink)
+            BackupTargetHealth.Unavailable -> stringResource(R.string.backup_health_unavailable)
+        }
+    val healthHint =
+        when (state.targetHealth) {
+            BackupTargetHealth.Healthy -> null
+            BackupTargetHealth.NeedsRelink -> needsRelinkHint
+            BackupTargetHealth.Unavailable -> unavailableHint
         }
 
     Scaffold(
@@ -216,13 +346,16 @@ fun BackupSettingsScreen(
                 Switch(
                     checked = state.autoEnabled,
                     onCheckedChange = { enabled ->
-                        if (enabled && state.targetType == BackupTargetType.SafDirectory && state.targetUri == null) {
-                            scope.launch { uiEvents.showSnackbar(pickFolderFirstMessage) }
-                            folderPicker.launch(null)
-                            return@Switch
+                        scope.launch {
+                            val health = BackupManager.evaluateTargetHealth(context, state)
+                            if (enabled && state.targetType == BackupTargetType.SafDirectory && health != BackupTargetHealth.Healthy) {
+                                uiEvents.showSnackbar(pickFolderFirstMessage)
+                                launchFolderPicker()
+                                return@launch
+                            }
+                            BackupScheduler.setAutomaticEnabled(context, enabled)
+                            refreshStateAndLatest.invoke()
                         }
-                        BackupScheduler.setAutomaticEnabled(context, enabled)
-                        state = prefs.readState()
                     }
                 )
             }
@@ -261,16 +394,16 @@ fun BackupSettingsScreen(
                         selected = state.targetType == BackupTargetType.AppPrivate,
                         onClick = {
                             prefs.setTargetType(BackupTargetType.AppPrivate)
-                            prefs.setTargetUri(null)
-                            state = prefs.readState()
+                            prefs.clearSafTargetSelection()
                             BackupScheduler.ensureScheduled(context)
+                            scope.launch { refreshStateAndLatest.invoke() }
                         },
                         label = { Text(stringResource(R.string.backup_target_app_storage)) }
                     )
                     FilterChip(
                         selected = state.targetType == BackupTargetType.SafDirectory,
                         onClick = {
-                            folderPicker.launch(null)
+                            launchFolderPicker()
                         },
                         label = { Text(stringResource(R.string.backup_target_folder)) }
                     )
@@ -281,10 +414,141 @@ fun BackupSettingsScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 if (state.targetType == BackupTargetType.SafDirectory) {
-                    TextButton(onClick = { folderPicker.launch(null) }) {
+                    Text(
+                        text = stringResource(R.string.backup_provider_label, providerLabel),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Text(
+                    text = stringResource(R.string.backup_health_label, healthText),
+                    style = MaterialTheme.typography.bodySmall,
+                    color =
+                        when (state.targetHealth) {
+                            BackupTargetHealth.Healthy -> MaterialTheme.colorScheme.primary
+                            BackupTargetHealth.NeedsRelink -> MaterialTheme.colorScheme.error
+                            BackupTargetHealth.Unavailable -> MaterialTheme.colorScheme.error
+                        }
+                )
+                Text(
+                    text = cloudFolderInfo,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    text = driveBrowseHint,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    text = driveSystemPickerHint,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                if (state.targetType == BackupTargetType.SafDirectory) {
+                    TextButton(onClick = { launchFolderPicker() }) {
                         Text(stringResource(R.string.backup_change_folder))
                     }
                 }
+                if (state.targetType == BackupTargetType.SafDirectory && state.targetHealth != BackupTargetHealth.Healthy) {
+                    Surface(
+                        color = MaterialTheme.colorScheme.errorContainer,
+                        contentColor = MaterialTheme.colorScheme.onErrorContainer,
+                        shape = MaterialTheme.shapes.medium
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Text(
+                                text = healthAttentionTitle,
+                                style = MaterialTheme.typography.titleSmall
+                            )
+                            healthHint?.let { hint ->
+                                Text(
+                                    text = hint,
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            }
+                            if (state.consecutiveAutoFailures > 0) {
+                                Text(
+                                    text = stringResource(R.string.backup_consecutive_failures_label, state.consecutiveAutoFailures),
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            }
+                            TextButton(onClick = { launchFolderPicker() }) {
+                                Text(stringResource(R.string.backup_change_folder))
+                            }
+                        }
+                    }
+                }
+                TextButton(
+                    onClick = {
+                        scope.launch {
+                            val result = BackupManager.runStorageProbe(context)
+                            if (result.success) {
+                                uiEvents.showSnackbar(testWritePassedMessage)
+                            } else {
+                                uiEvents.showSnackbar(
+                                    buildString {
+                                        append(testWriteFailedMessage)
+                                        result.message?.takeIf { it.isNotBlank() }?.let { detail ->
+                                            append(": ")
+                                            append(detail)
+                                        }
+                                    }
+                                )
+                            }
+                        }
+                    }
+                ) {
+                    Text(stringResource(R.string.backup_test_write))
+                }
+                TextButton(
+                    onClick = { troubleshootReport = BackupManager.buildDriveTroubleshootReport(context, state) }
+                ) {
+                    Text(stringResource(R.string.backup_troubleshoot_drive))
+                }
+            }
+
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    text = manifestPolicyTitle,
+                    style = MaterialTheme.typography.titleMedium
+                )
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilterChip(
+                        selected = state.manifestPolicy == RestoreManifestPolicy.Strict,
+                        onClick = {
+                            prefs.setManifestPolicy(RestoreManifestPolicy.Strict)
+                            scope.launch { refreshStateAndLatest.invoke() }
+                        },
+                        label = { Text(manifestPolicyStrictLabel) }
+                    )
+                    FilterChip(
+                        selected = state.manifestPolicy == RestoreManifestPolicy.LegacyCompatible,
+                        onClick = {
+                            prefs.setManifestPolicy(RestoreManifestPolicy.LegacyCompatible)
+                            scope.launch { refreshStateAndLatest.invoke() }
+                        },
+                        label = { Text(manifestPolicyLegacyLabel) }
+                    )
+                }
+                Text(
+                    text =
+                        if (state.manifestPolicy == RestoreManifestPolicy.Strict) {
+                            strictModeInfo
+                        } else {
+                            legacyModeWarning
+                        },
+                    style = MaterialTheme.typography.bodySmall,
+                    color =
+                        if (state.manifestPolicy == RestoreManifestPolicy.Strict) {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        } else {
+                            MaterialTheme.colorScheme.error
+                        }
+                )
             }
 
             if (isBackupRunning) {
@@ -305,9 +569,10 @@ fun BackupSettingsScreen(
 
             Button(
                 onClick = {
-                    if (state.targetType == BackupTargetType.SafDirectory && state.targetUri == null) {
+                    val health = BackupManager.evaluateTargetHealth(context, state)
+                    if (state.targetType == BackupTargetType.SafDirectory && (state.targetUri == null || health != BackupTargetHealth.Healthy)) {
                         scope.launch { uiEvents.showSnackbar(pickFolderFirstMessage) }
-                        folderPicker.launch(null)
+                        launchFolderPicker()
                         return@Button
                     }
                     BackupScheduler.enqueueManualBackup(context)
@@ -323,10 +588,9 @@ fun BackupSettingsScreen(
 
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 Text(text = stringResource(R.string.restore_title), style = MaterialTheme.typography.titleMedium)
-                val latestBackup = appBackups.firstOrNull()
-                val latestLabel = latestBackup?.name ?: stringResource(R.string.backup_none)
+                val latestLabel = latestBackupName ?: stringResource(R.string.backup_none)
                 Text(
-                    text = stringResource(R.string.backup_latest_app_storage_backup, latestLabel),
+                    text = stringResource(R.string.backup_latest_selected_backup, latestLabel),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -334,24 +598,38 @@ fun BackupSettingsScreen(
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Button(
                         onClick = {
-                            if (latestBackup == null) {
+                            if (latestBackupName == null) {
                                 scope.launch { uiEvents.showSnackbar(noBackupFoundMessage) }
                                 return@Button
                             }
                             pendingRestore = RestoreRequest(null)
                         },
-                        enabled = !isBackupRunning && !isRestoreRunning && latestBackup != null,
+                        enabled = !isBackupRunning && !isRestoreRunning && latestBackupName != null,
                         modifier = Modifier.weight(1f)
                     ) {
                         Text(stringResource(R.string.restore_latest))
                     }
                     Button(
-                        onClick = { restorePicker.launch(arrayOf("application/zip")) },
-                        enabled = !isBackupRunning && !isRestoreRunning,
+                        onClick = { launchBrowseBackups() },
+                        enabled = !isBackupRunning && !isRestoreRunning && state.targetType == BackupTargetType.SafDirectory && !state.targetUri.isNullOrBlank(),
                         modifier = Modifier.weight(1f)
                     ) {
-                        Text(stringResource(R.string.restore_from_file))
+                        Text(stringResource(R.string.backup_browse_backups))
                     }
+                }
+                Button(
+                    onClick = { restorePicker.launch(arrayOf("application/zip")) },
+                    enabled = !isBackupRunning && !isRestoreRunning,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(stringResource(R.string.restore_from_file))
+                }
+                if (state.targetType == BackupTargetType.SafDirectory && state.targetUri.isNullOrBlank()) {
+                    Text(
+                        text = browseBackupsUnavailableMessage,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
                 Text(
                     text = stringResource(R.string.restore_replaces_data),
@@ -381,6 +659,82 @@ fun BackupSettingsScreen(
             },
             dismissButton = {
                 TextButton(onClick = { pendingRestore = null }) {
+                    Text(stringResource(R.string.action_cancel))
+                }
+            }
+        )
+    }
+
+    val backupChoices = browseBackups
+    if (backupChoices != null) {
+        AlertDialog(
+            onDismissRequest = { browseBackups = null },
+            title = { Text(stringResource(R.string.backup_browse_backups)) },
+            text = {
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
+                    backupChoices.forEach { entry ->
+                        TextButton(
+                            onClick = {
+                                pendingRestore = RestoreRequest(entry.uriString)
+                                browseBackups = null
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(text = entry.name)
+                        }
+                    }
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { browseBackups = null }) {
+                    Text(stringResource(R.string.action_cancel))
+                }
+            },
+            confirmButton = {}
+        )
+    }
+
+    val report = troubleshootReport
+    if (report != null) {
+        val reportBody =
+            buildString {
+                fun boolLabel(value: Boolean): String = if (value) valueYes else valueNo
+                appendLine("$troubleshootDriveInstalled: ${boolLabel(report.driveAppInstalled)}")
+                appendLine("$troubleshootDriveEnabled: ${boolLabel(report.driveAppEnabled)}")
+                appendLine("$troubleshootDocumentsUiEnabled: ${boolLabel(report.documentsUiEnabled)}")
+                appendLine("$troubleshootPersistedPermission: ${boolLabel(report.persistedPermissionValid)}")
+                appendLine("$troubleshootManagedProfile: ${boolLabel(report.managedProfile)}")
+                appendLine(
+                    "$troubleshootSelectedAuthority: ${
+                        report.selectedAuthority?.takeIf { it.isNotBlank() } ?: valueUnknown
+                    }"
+                )
+                if (report.guidance.isNotEmpty()) {
+                    appendLine()
+                    appendLine("$troubleshootGuidance:")
+                    report.guidance.forEach { line ->
+                        appendLine("- $line")
+                    }
+                }
+            }
+        AlertDialog(
+            onDismissRequest = { troubleshootReport = null },
+            title = { Text(troubleshootingTitle) },
+            text = { Text(reportBody) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        troubleshootReport = null
+                        launchFolderPicker()
+                    }
+                ) {
+                    Text(stringResource(R.string.backup_change_folder))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { troubleshootReport = null }) {
                     Text(stringResource(R.string.action_cancel))
                 }
             }
@@ -416,4 +770,13 @@ private fun ProgressRow(title: String, stage: String, progress: Int) {
 }
 
 private data class RestoreRequest(val uriString: String?)
+
+private data class BackupBrowseEntry(
+    val name: String,
+    val uriString: String
+)
+
+private fun packageEnabled(packageManager: PackageManager, packageName: String): Boolean {
+    return runCatching { packageManager.getApplicationInfo(packageName, 0).enabled }.getOrDefault(false)
+}
 
