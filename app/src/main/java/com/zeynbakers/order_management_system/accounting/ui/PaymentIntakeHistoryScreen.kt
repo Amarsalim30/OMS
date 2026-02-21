@@ -1,6 +1,9 @@
 package com.zeynbakers.order_management_system.accounting.ui
 
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -11,9 +14,12 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -23,9 +29,13 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
+import androidx.compose.material3.SwipeToDismissBox
+import androidx.compose.material3.SwipeToDismissBoxState
+import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -35,13 +45,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import com.zeynbakers.order_management_system.R
 import com.zeynbakers.order_management_system.core.ui.LocalUiEventDispatcher
 import com.zeynbakers.order_management_system.core.ui.showSnackbar
-import com.zeynbakers.order_management_system.accounting.data.PaymentAllocationStatus
 import com.zeynbakers.order_management_system.accounting.data.PaymentMethod
 import com.zeynbakers.order_management_system.accounting.data.PaymentReceiptStatus
 import com.zeynbakers.order_management_system.accounting.domain.ReceiptAllocation
@@ -49,7 +60,6 @@ import com.zeynbakers.order_management_system.core.ui.components.AppCard
 import com.zeynbakers.order_management_system.core.ui.components.AppEmptyState
 import com.zeynbakers.order_management_system.core.ui.components.AppFilterOption
 import com.zeynbakers.order_management_system.core.ui.components.AppFilterRow
-import com.zeynbakers.order_management_system.core.util.formatOrderLabel
 import com.zeynbakers.order_management_system.core.util.formatDateTime
 import com.zeynbakers.order_management_system.core.util.formatKes
 import kotlinx.coroutines.launch
@@ -137,6 +147,14 @@ fun PaymentIntakeHistoryScreen(
             if (!isLoading && items.isEmpty() && error == null) {
                 EmptyHistoryState()
             } else {
+                if (items.isNotEmpty()) {
+                    Text(
+                        text = stringResource(R.string.money_history_swipe_hint),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                }
                 LazyColumn(
                     state = listState,
                     verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -299,107 +317,158 @@ private fun PaymentHistoryRow(
     onMove: () -> Unit,
     onVoid: () -> Unit
 ) {
+    val canMove = item.customerId != null && !item.isBadDebt
+    val canVoid = item.status != PaymentReceiptStatus.VOIDED
+    val dismissState =
+        rememberSwipeToDismissBoxState(
+            confirmValueChange = { target ->
+                when (target) {
+                    SwipeToDismissBoxValue.StartToEnd -> {
+                        if (canMove) onMove()
+                        false
+                    }
+                    SwipeToDismissBoxValue.EndToStart -> {
+                        if (canVoid) onVoid()
+                        false
+                    }
+                    SwipeToDismissBoxValue.Settled -> false
+                }
+            }
+        )
+    val accentColor =
+        when (item.status) {
+            PaymentReceiptStatus.UNAPPLIED -> MaterialTheme.colorScheme.outline
+            PaymentReceiptStatus.PARTIAL -> MaterialTheme.colorScheme.tertiary
+            PaymentReceiptStatus.APPLIED -> MaterialTheme.colorScheme.primary
+            PaymentReceiptStatus.VOIDED -> MaterialTheme.colorScheme.error
+        }
+    val containerColor =
+        if (item.status == PaymentReceiptStatus.VOIDED) {
+            MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.32f)
+        } else {
+            MaterialTheme.colorScheme.surfaceContainerLow
+        }
+    val amountDecoration =
+        if (item.status == PaymentReceiptStatus.VOIDED) {
+            TextDecoration.LineThrough
+        } else {
+            TextDecoration.None
+        }
+    val contentAlpha =
+        if (item.status == PaymentReceiptStatus.VOIDED) 0.74f else 1f
     val methodLabel =
-        if (item.method == PaymentMethod.MPESA) {
+        if (item.isBadDebt) {
+            stringResource(R.string.money_entry_bad_debt_writeoff)
+        } else if (item.method == PaymentMethod.MPESA) {
             stringResource(R.string.money_method_mpesa)
         } else {
             stringResource(R.string.money_method_cash)
         }
-    val codeLabel =
-        item.transactionCode?.let { stringResource(R.string.money_method_code, methodLabel, it) }
-            ?: methodLabel
-    val orderAllocations =
-        item.allocations.filter { it.orderId != null && it.status == PaymentAllocationStatus.APPLIED }
-    val orderLabel =
-        when {
-            orderAllocations.isEmpty() -> null
-            orderAllocations.size == 1 -> {
-                val allocation = orderAllocations.first()
-                val label =
-                    formatOrderLabel(
-                    date = allocation.orderDate,
-                    customerName = item.customerName,
-                    notes = allocation.orderNotes,
-                    totalAmount = null
-                )
-                allocation.orderId?.let {
-                    stringResource(R.string.money_order_with_id, label, it)
-                } ?: label
-            }
-            else -> stringResource(R.string.money_orders_count, orderAllocations.size)
+    val supportingLabel =
+        if (item.isBadDebt) {
+            item.note?.trim()?.takeIf { it.isNotBlank() }
+        } else {
+            null
         }
-    val customerLabel =
-        item.customerName
-            ?: item.customerId?.let { stringResource(R.string.money_customer_id_fallback, it) }
-            ?: stringResource(R.string.money_customer)
-    val targetLabel = orderLabel ?: customerLabel
-    val statusLabel = item.status.label()
-    val statusColor = item.status.color()
 
-    AppCard {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(12.dp),
-            horizontalArrangement = Arrangement.SpaceBetween
+    SwipeToDismissBox(
+        state = dismissState,
+        enableDismissFromStartToEnd = canMove,
+        enableDismissFromEndToStart = canVoid,
+        backgroundContent = { PaymentHistorySwipeBackground(dismissState) }
+    ) {
+        Surface(
+            color = containerColor,
+            shape = RoundedCornerShape(16.dp),
+            border = BorderStroke(1.dp, accentColor.copy(alpha = 0.24f))
         ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text =
-                        stringResource(
-                            R.string.money_row_datetime_amount,
-                            formatDateTime(item.receivedAt),
-                            formatKes(item.displayAmount)
-                        ),
-                    style = MaterialTheme.typography.titleSmall
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .width(4.dp)
+                        .height(40.dp)
+                        .background(accentColor, RoundedCornerShape(2.dp))
                 )
-                Text(
-                    text = stringResource(R.string.money_row_code_target, codeLabel, targetLabel),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                item.secondaryAmount?.let { secondary ->
+                Spacer(modifier = Modifier.width(10.dp))
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
                     Text(
-                        text = stringResource(R.string.money_receipt_total, formatKes(secondary)),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        text = methodLabel,
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = contentAlpha)
                     )
+                    Text(
+                        text = formatDateTime(item.receivedAt),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = contentAlpha)
+                    )
+                    supportingLabel?.let { label ->
+                        Text(
+                            text = label,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = contentAlpha)
+                        )
+                    }
                 }
-            }
-            Column(horizontalAlignment = androidx.compose.ui.Alignment.End) {
-                StatusPill(label = statusLabel, color = statusColor)
-                Spacer(modifier = Modifier.height(6.dp))
-                TextButton(
-                    onClick = onMove,
-                    enabled = item.customerId != null
-                ) {
-                    Text(stringResource(R.string.action_move))
-                }
-                TextButton(
-                    onClick = onVoid,
-                    enabled = item.status != PaymentReceiptStatus.VOIDED
-                ) {
-                    Text(stringResource(R.string.action_void))
-                }
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = formatKes(item.displayAmount),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    textDecoration = amountDecoration,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = contentAlpha)
+                )
             }
         }
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun StatusPill(label: String, color: androidx.compose.ui.graphics.Color) {
-    Surface(
-        color = color.copy(alpha = 0.15f),
-        shape = MaterialTheme.shapes.small
-    ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelSmall,
-            color = color,
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-        )
+private fun PaymentHistorySwipeBackground(dismissState: SwipeToDismissBoxState) {
+    val direction = dismissState.dismissDirection
+    when (direction) {
+        SwipeToDismissBoxValue.StartToEnd -> {
+            Row(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(MaterialTheme.colorScheme.primaryContainer)
+                    .padding(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.Start,
+                verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+            ) {
+                Text(
+                    text = stringResource(R.string.action_move),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                )
+            }
+        }
+        SwipeToDismissBoxValue.EndToStart -> {
+            Row(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(MaterialTheme.colorScheme.errorContainer)
+                    .padding(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.End,
+                verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+            ) {
+                Text(
+                    text = stringResource(R.string.action_void),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onErrorContainer
+                )
+            }
+        }
+        SwipeToDismissBoxValue.Settled -> Unit
     }
 }
 
@@ -441,25 +510,5 @@ private enum class MoveMode {
     ORDER,
     OLDEST_ORDERS,
     CUSTOMER_CREDIT
-}
-
-@Composable
-private fun PaymentReceiptStatus.label(): String {
-    return when (this) {
-        PaymentReceiptStatus.UNAPPLIED -> stringResource(R.string.money_receipt_status_not_used)
-        PaymentReceiptStatus.PARTIAL -> stringResource(R.string.money_receipt_status_part_used)
-        PaymentReceiptStatus.APPLIED -> stringResource(R.string.money_receipt_status_used)
-        PaymentReceiptStatus.VOIDED -> stringResource(R.string.money_receipt_status_voided)
-    }
-}
-
-@Composable
-private fun PaymentReceiptStatus.color(): androidx.compose.ui.graphics.Color {
-    return when (this) {
-        PaymentReceiptStatus.UNAPPLIED -> MaterialTheme.colorScheme.secondary
-        PaymentReceiptStatus.PARTIAL -> MaterialTheme.colorScheme.tertiary
-        PaymentReceiptStatus.APPLIED -> MaterialTheme.colorScheme.primary
-        PaymentReceiptStatus.VOIDED -> MaterialTheme.colorScheme.error
-    }
 }
 

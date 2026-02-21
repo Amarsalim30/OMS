@@ -101,6 +101,53 @@ class BackupManagerTest {
         assertEquals(0, parsedLegacyAmountPaid!!.compareTo(BigDecimal("1200.50")))
     }
 
+    @Test
+    fun `sha256 helper is stable for known payload`() {
+        val digest = BackupManager.sha256HexForTest("orders-payload")
+        assertEquals(
+            "68799d4b0af65bcb3df4f38871cc90eb629b5ca8985623691aab5a26017ea895",
+            digest
+        )
+    }
+
+    @Test
+    fun `zip reader rejects oversized single entry`() {
+        val zipBytes = buildZip(mapOf("orders.json" to "x".repeat(128)))
+        val error =
+            runCatching {
+                BackupManager.readBackupPayloadsForTest(
+                    inputStream = ByteArrayInputStream(zipBytes),
+                    maxEntryBytes = 64,
+                    maxTotalBytes = 1_024
+                )
+            }.exceptionOrNull()
+
+        assertNotNull(error)
+        assertTrue(error is IllegalArgumentException)
+    }
+
+    @Test
+    fun `zip reader rejects oversized total payload`() {
+        val zipBytes =
+            buildZip(
+                mapOf(
+                    "customers.json" to "a".repeat(80),
+                    "orders.json" to "b".repeat(80)
+                )
+            )
+        val error =
+            runCatching {
+                BackupManager.readBackupPayloadsForTest(
+                    inputStream = ByteArrayInputStream(zipBytes),
+                    maxEntryBytes = 200,
+                    maxTotalBytes = 120
+                )
+            }.exceptionOrNull()
+
+        assertNotNull(error)
+        assertTrue(error is IllegalArgumentException)
+    }
+
     private fun assertDecimal(raw: String, expected: String) {
         val parsed = BackupManager.parseBackupDecimal(raw)
         assertNotNull("Expected decimal parse for '$raw'", parsed)
@@ -123,4 +170,5 @@ class BackupManagerTest {
         val pattern = Regex("\"$key\"\\s*:\\s*\"([^\"]*)\"")
         return pattern.find(payload)?.groupValues?.get(1)
     }
+
 }

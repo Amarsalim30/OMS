@@ -23,10 +23,7 @@ This document captures the current logic, UI, and UX of the Order Management Sys
   - Orders (unpaid view)
   - Customers
   - Money
-- "More" bottom sheet actions:
-  - Order oNotes Summary
-  - customer Ledgers
-  - Payment history (all)
+- "Settings" bottom sheet actions:
   - Backup and restore
   - Notifications
   - Import contacts

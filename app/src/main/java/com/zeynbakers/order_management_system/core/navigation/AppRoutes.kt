@@ -14,6 +14,7 @@ object AppRoutes {
 
     const val Day = "day/{date}"
     const val CustomerDetail = "customer/{customerId}"
+    const val CustomerStatement = "customer/{customerId}/statement"
 
     const val PaymentHistoryAll = "payment_history/all"
     const val PaymentHistoryCustomer = "payment_history/customer/{customerId}"
@@ -26,6 +27,7 @@ object AppRoutes {
 
     fun day(date: LocalDate): String = "day/${date}"
     fun customerDetail(customerId: Long): String = "customer/$customerId"
+    fun customerStatement(customerId: Long): String = "customer/$customerId/statement"
     fun paymentHistoryCustomer(customerId: Long): String = "payment_history/customer/$customerId"
     fun paymentHistoryOrder(orderId: Long): String = "payment_history/order/$orderId"
     fun paymentHistoryAll(focusReceiptId: Long? = null): String {

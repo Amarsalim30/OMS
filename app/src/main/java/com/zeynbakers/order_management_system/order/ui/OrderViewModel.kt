@@ -334,6 +334,7 @@ class OrderViewModel(private val database: AppDatabase) : ViewModel() {
             }
             loadOrdersForDate(date)
             refreshMonthTotals()
+            loadUnpaidOrders()
         }
     }
 
@@ -440,6 +441,7 @@ class OrderViewModel(private val database: AppDatabase) : ViewModel() {
         }
         loadOrdersForDate(date)
         refreshMonthTotals()
+        loadUnpaidOrders()
         return true
     }
 

@@ -48,8 +48,7 @@ import kotlinx.datetime.toJavaLocalDate
 @Composable
 internal fun SummaryCard(
     count: Int,
-    totalOutstanding: BigDecimal,
-    hideBalances: Boolean
+    totalOutstanding: BigDecimal
 ) {
     AppCard(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
         Row(
@@ -64,12 +63,7 @@ internal fun SummaryCard(
                     color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
                 )
                 Text(
-                    text =
-                        if (hideBalances) {
-                            stringResource(R.string.money_amount_hidden)
-                        } else {
-                            formatKes(totalOutstanding)
-                        },
+                    text = formatKes(totalOutstanding),
                     style = MaterialTheme.typography.headlineMedium,
                     fontWeight = FontWeight.Bold,
                     fontFamily = FontFamily.Monospace,
@@ -151,7 +145,6 @@ internal fun UnpaidOrderRow(
     customerLabel: String?,
     paidAmount: BigDecimal,
     balance: BigDecimal,
-    hideBalances: Boolean,
     onOpenDay: () -> Unit,
     onReceivePayment: () -> Unit
 ) {
@@ -161,7 +154,7 @@ internal fun UnpaidOrderRow(
         modifier =
             modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 4.dp)
+                .padding(horizontal = 16.dp, vertical = 2.dp)
                 .clickable(onClick = onOpenDay)
     ) {
         Column {
@@ -169,7 +162,7 @@ internal fun UnpaidOrderRow(
                 Surface(
                     shape = MaterialTheme.shapes.medium,
                     color = MaterialTheme.colorScheme.primaryContainer,
-                    modifier = Modifier.size(40.dp)
+                    modifier = Modifier.size(36.dp)
                 ) {
                     Box(contentAlignment = Alignment.Center) {
                         Text(
@@ -181,7 +174,7 @@ internal fun UnpaidOrderRow(
                     }
                 }
 
-                Spacer(modifier = Modifier.width(12.dp))
+                Spacer(modifier = Modifier.width(10.dp))
 
                 Column(modifier = Modifier.weight(1f)) {
                     Row(
@@ -213,12 +206,7 @@ internal fun UnpaidOrderRow(
 
                         Column(horizontalAlignment = Alignment.End) {
                             Text(
-                                text =
-                                    if (hideBalances) {
-                                        stringResource(R.string.money_amount_hidden)
-                                    } else {
-                                        formatKes(balance)
-                                    },
+                                text = formatKes(balance),
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold,
                                 fontFamily = FontFamily.Monospace,
@@ -231,15 +219,7 @@ internal fun UnpaidOrderRow(
                             )
                             if (paidAmount > BigDecimal.ZERO) {
                                 Text(
-                                    text =
-                                        if (hideBalances) {
-                                            stringResource(
-                                                R.string.unpaid_paid_amount,
-                                                stringResource(R.string.money_amount_hidden)
-                                            )
-                                        } else {
-                                            stringResource(R.string.unpaid_paid_amount, formatKes(paidAmount))
-                                        },
+                                    text = stringResource(R.string.unpaid_paid_amount, formatKes(paidAmount)),
                                     style = MaterialTheme.typography.labelSmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -249,7 +229,7 @@ internal fun UnpaidOrderRow(
                 }
             }
 
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -267,13 +247,13 @@ internal fun UnpaidOrderRow(
 
                 LinearProgressIndicator(
                     progress = { progress },
-                    modifier = Modifier.weight(1f).height(6.dp),
+                    modifier = Modifier.weight(1f).height(5.dp),
                     color = MaterialTheme.colorScheme.tertiary,
                     trackColor = MaterialTheme.colorScheme.surfaceVariant,
                     strokeCap = StrokeCap.Round
                 )
 
-                Spacer(modifier = Modifier.width(12.dp))
+                Spacer(modifier = Modifier.width(8.dp))
 
                 Surface(
                     color = MaterialTheme.colorScheme.tertiaryContainer,
@@ -285,14 +265,14 @@ internal fun UnpaidOrderRow(
                         }
                 ) {
                     Row(
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Icon(
                             imageVector = Icons.Outlined.Payments,
                             contentDescription = stringResource(R.string.unpaid_action_pay),
                             tint = MaterialTheme.colorScheme.onTertiaryContainer,
-                            modifier = Modifier.size(16.dp)
+                            modifier = Modifier.size(14.dp)
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(

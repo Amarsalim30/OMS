@@ -5,7 +5,6 @@
 
 package com.zeynbakers.order_management_system.customer.ui
 
-import android.content.Intent
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
@@ -32,12 +31,12 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material3.Button
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -45,9 +44,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.layout.PaddingValues
-import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
@@ -60,7 +57,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.core.net.toUri
 import com.zeynbakers.order_management_system.R
 import com.zeynbakers.order_management_system.accounting.data.CustomerAccountSummary
 import com.zeynbakers.order_management_system.core.util.formatKes
@@ -112,7 +108,8 @@ internal fun CustomerSearchTopBar(
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .windowInsetsPadding(WindowInsets.statusBars),
+            .windowInsetsPadding(WindowInsets.statusBars)
+            .height(64.dp),
         color = MaterialTheme.colorScheme.surface,
         shadowElevation = 4.dp
     ) {
@@ -123,7 +120,7 @@ internal fun CustomerSearchTopBar(
                 Text(stringResource(R.string.customer_name_or_phone))
             },
             singleLine = true,
-            modifier = Modifier.fillMaxWidth().height(64.dp),
+            modifier = Modifier.fillMaxWidth(),
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
             colors = TextFieldDefaults.colors(
                 focusedContainerColor = MaterialTheme.colorScheme.surface,
@@ -161,50 +158,35 @@ internal fun CustomerListControlRow(
     showInactive: Boolean,
     onFilterClick: () -> Unit,
     onSortClick: () -> Unit,
-    onToggleHideZero: () -> Unit,
-    onToggleShowInactive: () -> Unit
 ) {
-    LazyRow(
+    Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        item {
-            FilterChip(
-                selected = selectedFilter != CustomerFilter.All,
-                onClick = onFilterClick,
-                label = { Text(getCustomerFilterLabel(selectedFilter)) },
-                trailingIcon = { Icon(Icons.Filled.ArrowDropDown, contentDescription = null) }
-            )
-        }
-        item {
-            FilterChip(
-                selected = selectedSort != CustomerSort.BalanceDesc,
-                onClick = onSortClick,
-                label = { Text(getCustomerSortLabel(selectedSort)) },
-                trailingIcon = { Icon(Icons.Filled.ArrowDropDown, contentDescription = null) }
-            )
-        }
-        item {
-            FilterChip(
-                selected = hideZeroBalances,
-                onClick = onToggleHideZero,
-                label = { Text(stringResource(R.string.customer_hide_zero_balances)) }
-            )
-        }
-        item {
-            FilterChip(
-                selected = showInactive,
-                onClick = onToggleShowInactive,
-                label = { Text(stringResource(R.string.customer_show_inactive_no_orders)) }
-            )
-        }
+        ControlIconButton(
+            icon = Icons.Filled.Tune,
+            contentDescription = stringResource(R.string.action_more_filters),
+            active = selectedFilter != CustomerFilter.All || !hideZeroBalances || showInactive,
+            onClick = onFilterClick
+        )
+        ControlIconButton(
+            icon = Icons.AutoMirrored.Filled.Sort,
+            contentDescription = stringResource(R.string.action_sort),
+            active = selectedSort != CustomerSort.BalanceDesc,
+            onClick = onSortClick
+        )
     }
 }
 
 @Composable
 internal fun CustomerFilterSheet(
     selectedFilter: CustomerFilter,
+    hideZeroBalances: Boolean,
+    showInactive: Boolean,
     onSelect: (CustomerFilter) -> Unit,
+    onToggleHideZero: () -> Unit,
+    onToggleShowInactive: () -> Unit,
     onDismiss: () -> Unit
 ) {
     ModalBottomSheet(onDismissRequest = onDismiss) {
@@ -230,6 +212,66 @@ internal fun CustomerFilterSheet(
                     }
                 )
             }
+            ListItem(
+                headlineContent = { Text(stringResource(R.string.customer_hide_zero_balances)) },
+                leadingContent = {
+                    if (hideZeroBalances) {
+                        Icon(Icons.Filled.Check, contentDescription = null)
+                    } else {
+                        Spacer(Modifier.size(24.dp))
+                    }
+                },
+                modifier = Modifier.clickable {
+                    onToggleHideZero()
+                    onDismiss()
+                }
+            )
+            ListItem(
+                headlineContent = { Text(stringResource(R.string.customer_show_inactive_no_orders)) },
+                leadingContent = {
+                    if (showInactive) {
+                        Icon(Icons.Filled.Check, contentDescription = null)
+                    } else {
+                        Spacer(Modifier.size(24.dp))
+                    }
+                },
+                modifier = Modifier.clickable {
+                    onToggleShowInactive()
+                    onDismiss()
+                }
+            )
+        }
+    }
+}
+
+@Composable
+private fun ControlIconButton(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    contentDescription: String,
+    active: Boolean,
+    onClick: () -> Unit
+) {
+    Surface(
+        shape = CircleShape,
+        color = if (active) {
+            MaterialTheme.colorScheme.primaryContainer
+        } else {
+            MaterialTheme.colorScheme.surfaceVariant
+        }
+    ) {
+        IconButton(
+            onClick = onClick,
+            modifier = Modifier.size(40.dp)
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = contentDescription,
+                tint = if (active) {
+                    MaterialTheme.colorScheme.onPrimaryContainer
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                }
+            )
         }
     }
 }
@@ -512,11 +554,4 @@ internal fun ActionRow(
                 verticalAlignment = Alignment.CenterVertically
         ) { Text(text = label, style = MaterialTheme.typography.bodyLarge, color = displayColor) }
     }
-}
-
-internal fun launchSms(context: android.content.Context, phone: String) {
-    if (phone.isBlank()) return
-    val intent =
-            Intent(Intent.ACTION_VIEW, "sms:$phone".toUri()).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-    context.startActivity(intent)
 }

@@ -1,0 +1,3782 @@
+Index: app/src/main/res/values/strings.xml
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/app/src/main/res/values/strings.xml b/app/src/main/res/values/strings.xml
+--- a/app/src/main/res/values/strings.xml
++++ b/app/src/main/res/values/strings.xml
+@@ -111,6 +111,8 @@
+     <string name="customers_subtitle">Find customers and collect payments</string>
+     <string name="customer_search_customers">Search customers</string>
+     <string name="customer_name_or_phone">Name or phone</string>
++    <string name="customer_filter_label">Filter</string>
++    <string name="customer_sort_label">Sort</string>
+     <string name="customer_hide_zero_balances">Hide zero balances</string>
+     <string name="customer_show_inactive_no_orders">Show inactive (no orders)</string>
+     <string name="customer_all_customers">All customers</string>
+@@ -137,6 +139,9 @@
+     <string name="customer_sort_balance_high_to_low">Balance: High to low</string>
+     <string name="customer_sort_balance_low_to_high">Balance: Low to high</string>
+     <string name="customer_sort_name_a_to_z">Name: A to Z</string>
++    <string name="customer_sort_balance_desc_short">Balance High-Low</string>
++    <string name="customer_sort_balance_asc_short">Balance Low-High</string>
++    <string name="customer_sort_name_asc_short">Name A-Z</string>
+     <string name="customer_sort_selected">Selected</string>
+     <string name="customer_billed_paid">Billed %1$s - Paid %2$s</string>
+     <string name="customer_action_pay_short">Pay</string>
+@@ -144,9 +149,13 @@
+     <string name="customer_actions">Customer actions</string>
+     <string name="customer_no_customers_icon">No customers</string>
+     <string name="customer_no_customers_found">No customers found</string>
++    <string name="customer_no_customers_for_filters">No customers match these filters</string>
+     <string name="customer_no_customers_yet">No customers yet</string>
+     <string name="customer_try_different_search">Try a different search.</string>
++    <string name="customer_adjust_or_clear_filters">Adjust filters or clear them to see more customers.</string>
+     <string name="customer_add_first">Add your first customer to get started.</string>
++    <string name="customer_reset_filters">Reset filters</string>
++    <string name="customer_filters_active">Filters active</string>
+     <string name="customer_add">Add customer</string>
+     <string name="summary_title">Summary</string>
+     <string name="summary_range_day">Day</string>
+Index: app/src/main/java/com/zeynbakers/order_management_system/order/ui/UnpaidOrdersScreen.kt
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/app/src/main/java/com/zeynbakers/order_management_system/order/ui/UnpaidOrdersScreen.kt b/app/src/main/java/com/zeynbakers/order_management_system/order/ui/UnpaidOrdersScreen.kt
+--- a/app/src/main/java/com/zeynbakers/order_management_system/order/ui/UnpaidOrdersScreen.kt
++++ b/app/src/main/java/com/zeynbakers/order_management_system/order/ui/UnpaidOrdersScreen.kt
+@@ -13,6 +13,8 @@
+ import androidx.compose.foundation.layout.height
+ import androidx.compose.foundation.layout.padding
+ import androidx.compose.foundation.layout.size
++import androidx.compose.foundation.layout.statusBars
++import androidx.compose.foundation.layout.windowInsetsPadding
+ import androidx.compose.foundation.lazy.LazyColumn
+ import androidx.compose.foundation.lazy.LazyRow
+ import androidx.compose.foundation.lazy.items
+@@ -181,7 +183,10 @@
+             topBar = {
+                 if (isSearchActive) {
+                     Surface(
+-                            modifier = Modifier.fillMaxWidth().height(64.dp),
++                            modifier = Modifier
++                                .fillMaxWidth()
++                                .windowInsetsPadding(WindowInsets.statusBars)
++                                .height(64.dp),
+                             color = MaterialTheme.colorScheme.surface,
+                             shadowElevation = 4.dp
+                     ) {
+@@ -292,7 +297,7 @@
+                 )
+             }
+ 
+-            if (filteredOrders.isNotEmpty()) {
++            if (orders.isNotEmpty()) {
+                 item {
+                     LazyRow(
+                             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+Index: app/src/main/java/com/zeynbakers/order_management_system/customer/ui/CustomerListScreen.kt
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/app/src/main/java/com/zeynbakers/order_management_system/customer/ui/CustomerListScreen.kt b/app/src/main/java/com/zeynbakers/order_management_system/customer/ui/CustomerListScreen.kt
+--- a/app/src/main/java/com/zeynbakers/order_management_system/customer/ui/CustomerListScreen.kt
++++ b/app/src/main/java/com/zeynbakers/order_management_system/customer/ui/CustomerListScreen.kt
+@@ -23,23 +23,23 @@
+ import androidx.compose.foundation.layout.heightIn
+ import androidx.compose.foundation.layout.padding
+ import androidx.compose.foundation.layout.size
++import androidx.compose.foundation.layout.height
++import androidx.compose.foundation.layout.heightIn
++import androidx.compose.foundation.layout.padding
++import androidx.compose.foundation.layout.size
+ import androidx.compose.foundation.layout.width
+ import androidx.compose.foundation.lazy.LazyColumn
+ import androidx.compose.foundation.lazy.items
+ import androidx.compose.foundation.shape.CircleShape
+ import androidx.compose.foundation.text.KeyboardOptions
+ import androidx.compose.material.icons.Icons
+-import androidx.compose.material.icons.filled.Check
+ import androidx.compose.material.icons.filled.Close
+ import androidx.compose.material.icons.filled.MoreVert
+ import androidx.compose.material.icons.filled.Search
+-import androidx.compose.material.icons.automirrored.filled.Sort
+ import androidx.compose.material.icons.outlined.Person
+ import androidx.compose.material3.Button
+ import androidx.compose.material3.CenterAlignedTopAppBar
+ import androidx.compose.material3.AlertDialog
+-import androidx.compose.material3.DropdownMenu
+-import androidx.compose.material3.DropdownMenuItem
+ import androidx.compose.material3.FilterChip
+ import androidx.compose.material3.Icon
+ import androidx.compose.material3.IconButton
+@@ -73,8 +73,6 @@
+ import androidx.core.net.toUri
+ import com.zeynbakers.order_management_system.R
+ import com.zeynbakers.order_management_system.accounting.data.CustomerAccountSummary
+-import com.zeynbakers.order_management_system.core.ui.components.AppFilterOption
+-import com.zeynbakers.order_management_system.core.ui.components.AppFilterRow
+ import com.zeynbakers.order_management_system.core.ui.LocalUiEventDispatcher
+ import com.zeynbakers.order_management_system.core.ui.showSnackbar
+ import com.zeynbakers.order_management_system.core.util.formatKes
+@@ -133,23 +131,44 @@
+     showBack: Boolean
+ ) {
+     var queryText by rememberSaveable { mutableStateOf(query) }
++    var isSearchActive by rememberSaveable { mutableStateOf(query.isNotBlank()) }
+     var selectedFilter by rememberSaveable { mutableStateOf(CustomerFilter.All) }
+     var selectedSort by rememberSaveable { mutableStateOf(CustomerSort.BalanceDesc) }
+-    var isSortMenuOpen by remember { mutableStateOf(false) }
+     var hideZeroBalances by rememberSaveable { mutableStateOf(true) }
+     var showInactive by rememberSaveable { mutableStateOf(false) }
++    var showFilterSheet by rememberSaveable { mutableStateOf(false) }
++    var showSortSheet by rememberSaveable { mutableStateOf(false) }
+     var longPressedCustomer by remember { mutableStateOf<CustomerAccountSummary?>(null) }
+     var pendingArchiveCustomer by remember { mutableStateOf<CustomerAccountSummary?>(null) }
++    val hasActiveFilters by remember(selectedFilter, hideZeroBalances, showInactive) {
++        derivedStateOf {
++            selectedFilter != CustomerFilter.All || !hideZeroBalances || showInactive
++        }
++    }
++    val hasActiveControls by remember(hasActiveFilters, selectedSort) {
++        derivedStateOf {
++            hasActiveFilters || selectedSort != CustomerSort.BalanceDesc
++        }
++    }
+     val uiEvents = LocalUiEventDispatcher.current
+     val scope = rememberCoroutineScope()
+     val context = LocalContext.current
+     val customerArchivedMessage = stringResource(R.string.customer_archived)
+     val undoActionLabel = stringResource(R.string.action_undo)
++    val resetFiltersAndSort: () -> Unit = {
++        selectedFilter = CustomerFilter.All
++        selectedSort = CustomerSort.BalanceDesc
++        hideZeroBalances = true
++        showInactive = false
++    }
+ 
+     LaunchedEffect(query) {
+         if (queryText != query) {
+             queryText = query
+         }
++        if (query.isNotBlank()) {
++            isSearchActive = true
++        }
+     }
+ 
+     LaunchedEffect(queryText) {
+@@ -198,10 +217,22 @@
+     Scaffold(
+         contentWindowInsets = WindowInsets(0),
+         topBar = {
+-            CustomersTopBar(
+-                onBack = onBack,
+-                showBack = showBack
+-            )
++            if (isSearchActive) {
++                CustomerSearchTopBar(
++                    queryText = queryText,
++                    onQueryTextChange = { queryText = it },
++                    onBack = {
++                        isSearchActive = false
++                        queryText = ""
++                    }
++                )
++            } else {
++                CustomersTopBar(
++                    onBack = onBack,
++                    showBack = showBack,
++                    onSearchClick = { isSearchActive = true }
++                )
++            }
+         }
+     ) { padding ->
+         Column(
+@@ -209,46 +240,33 @@
+                 .padding(padding)
+                 .padding(start = 12.dp, end = 12.dp, top = 12.dp)
+         ) {
+-            SearchField(
+-                queryText = queryText,
+-                onQueryTextChange = { queryText = it }
+-            )
+-
+-            Spacer(Modifier.height(6.dp))
+-
+-            FilterSortBar(
++            CustomerListControlRow(
+                 selectedFilter = selectedFilter,
+-                onFilterChange = { selectedFilter = it },
+-                onSortMenuToggle = { isSortMenuOpen = !isSortMenuOpen }
+-            )
+-
+-            SortMenu(
+-                expanded = isSortMenuOpen,
+                 selectedSort = selectedSort,
+-                onDismiss = { isSortMenuOpen = false },
+-                onSelect = {
+-                    selectedSort = it
+-                    isSortMenuOpen = false
+-                }
++                hideZeroBalances = hideZeroBalances,
++                showInactive = showInactive,
++                onFilterClick = { showFilterSheet = true },
++                onSortClick = { showSortSheet = true },
++                onToggleHideZero = { hideZeroBalances = !hideZeroBalances },
++                onToggleShowInactive = { showInactive = !showInactive }
+             )
+ 
+-            Spacer(Modifier.height(6.dp))
+-
+-            FlowRow(
+-                modifier = Modifier.fillMaxWidth(),
+-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+-                verticalArrangement = Arrangement.spacedBy(8.dp)
+-            ) {
+-                FilterChip(
+-                    selected = hideZeroBalances,
+-                    onClick = { hideZeroBalances = !hideZeroBalances },
+-                    label = { Text(stringResource(R.string.customer_hide_zero_balances)) }
+-                )
+-                FilterChip(
+-                    selected = showInactive,
+-                    onClick = { showInactive = !showInactive },
+-                    label = { Text(stringResource(R.string.customer_show_inactive_no_orders)) }
+-                )
++            if (hasActiveControls) {
++                Spacer(Modifier.height(6.dp))
++                Row(
++                    modifier = Modifier.fillMaxWidth(),
++                    horizontalArrangement = Arrangement.SpaceBetween,
++                    verticalAlignment = Alignment.CenterVertically
++                ) {
++                    Text(
++                        text = stringResource(R.string.customer_filters_active),
++                        style = MaterialTheme.typography.labelMedium,
++                        color = MaterialTheme.colorScheme.onSurfaceVariant
++                    )
++                    TextButton(onClick = resetFiltersAndSort) {
++                        Text(text = stringResource(R.string.customer_reset_filters))
++                    }
++                }
+             }
+ 
+             Spacer(Modifier.height(6.dp))
+@@ -281,12 +299,14 @@
+             if (filteredCustomers.isEmpty()) {
+                 EmptyCustomersState(
+                     isSearching = queryText.isNotBlank(),
++                    hasActiveFilters = hasActiveFilters,
++                    onClearFilters = resetFiltersAndSort,
+                     onAddCustomer = onAddCustomer
+                 )
+             } else {
+                 LazyColumn(
+                     verticalArrangement = Arrangement.spacedBy(6.dp),
+-                    contentPadding = PaddingValues(bottom = 0.dp)
++                    contentPadding = PaddingValues(bottom = 16.dp)
+                 ) {
+                     items(filteredCustomers, key = { it.customerId }) { customer ->
+                         CustomerRowItem(
+@@ -395,6 +415,22 @@
+             }
+         )
+     }
++
++    if (showFilterSheet) {
++        CustomerFilterSheet(
++            selectedFilter = selectedFilter,
++            onSelect = { selectedFilter = it },
++            onDismiss = { showFilterSheet = false }
++        )
++    }
++
++    if (showSortSheet) {
++        CustomerSortSheet(
++            selectedSort = selectedSort,
++            onSelect = { selectedSort = it },
++            onDismiss = { showSortSheet = false }
++        )
++    }
+ }
+ 
+ internal enum class CustomerFilter {
+Index: app/src/main/java/com/zeynbakers/order_management_system/customer/ui/CustomerListSections.kt
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/app/src/main/java/com/zeynbakers/order_management_system/customer/ui/CustomerListSections.kt b/app/src/main/java/com/zeynbakers/order_management_system/customer/ui/CustomerListSections.kt
+--- a/app/src/main/java/com/zeynbakers/order_management_system/customer/ui/CustomerListSections.kt
++++ b/app/src/main/java/com/zeynbakers/order_management_system/customer/ui/CustomerListSections.kt
+@@ -1,4 +1,7 @@
+-@file:OptIn(androidx.compose.material3.ExperimentalMaterial3Api::class)
++@file:OptIn(
++        androidx.compose.material3.ExperimentalMaterial3Api::class,
++        androidx.compose.foundation.layout.ExperimentalLayoutApi::class
++)
+ 
+ package com.zeynbakers.order_management_system.customer.ui
+ 
+@@ -9,15 +12,17 @@
+ import androidx.compose.foundation.layout.Arrangement
+ import androidx.compose.foundation.layout.Box
+ import androidx.compose.foundation.layout.Column
+-import androidx.compose.foundation.layout.PaddingValues
+ import androidx.compose.foundation.layout.Row
+ import androidx.compose.foundation.layout.Spacer
++import androidx.compose.foundation.layout.WindowInsets
+ import androidx.compose.foundation.layout.fillMaxWidth
+ import androidx.compose.foundation.layout.height
+ import androidx.compose.foundation.layout.heightIn
+ import androidx.compose.foundation.layout.padding
+ import androidx.compose.foundation.layout.size
++import androidx.compose.foundation.layout.statusBars
+ import androidx.compose.foundation.layout.width
++import androidx.compose.foundation.layout.windowInsetsPadding
+ import androidx.compose.foundation.shape.CircleShape
+ import androidx.compose.foundation.text.KeyboardOptions
+ import androidx.compose.material.icons.Icons
+@@ -32,16 +37,25 @@
+ import androidx.compose.material3.CenterAlignedTopAppBar
+ import androidx.compose.material3.DropdownMenu
+ import androidx.compose.material3.DropdownMenuItem
++import androidx.compose.material3.FilterChip
+ import androidx.compose.material3.Icon
+ import androidx.compose.material3.IconButton
+ import androidx.compose.material3.MaterialTheme
+ import androidx.compose.material3.OutlinedTextField
+ import androidx.compose.material3.Surface
++import androidx.compose.material3.ListItem
++import androidx.compose.material3.ModalBottomSheet
++import androidx.compose.foundation.lazy.LazyRow
++import androidx.compose.foundation.layout.PaddingValues
++import androidx.compose.material.icons.filled.ArrowDropDown
+ import androidx.compose.material3.Text
++import androidx.compose.material3.TextField
++import androidx.compose.material3.TextFieldDefaults
+ import androidx.compose.material3.TextButton
+ import androidx.compose.runtime.Composable
+ import androidx.compose.ui.Alignment
+ import androidx.compose.ui.Modifier
++import androidx.compose.ui.graphics.Color
+ import androidx.compose.ui.res.stringResource
+ import androidx.compose.ui.text.input.ImeAction
+ import androidx.compose.ui.text.style.TextOverflow
+@@ -49,262 +63,340 @@
+ import androidx.core.net.toUri
+ import com.zeynbakers.order_management_system.R
+ import com.zeynbakers.order_management_system.accounting.data.CustomerAccountSummary
+-import com.zeynbakers.order_management_system.core.ui.components.AppFilterOption
+-import com.zeynbakers.order_management_system.core.ui.components.AppFilterRow
+ import com.zeynbakers.order_management_system.core.util.formatKes
+ import java.math.BigDecimal
+ 
+ @Composable
+-internal fun CustomersTopBar(
+-    onBack: () -> Unit,
+-    showBack: Boolean
+-) {
++internal fun CustomersTopBar(onBack: () -> Unit, showBack: Boolean, onSearchClick: () -> Unit) {
+     CenterAlignedTopAppBar(
+-        title = {
+-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+-                Text(text = stringResource(R.string.customers_title), style = MaterialTheme.typography.titleLarge)
+-                Text(
+-                    text = stringResource(R.string.customers_subtitle),
+-                    style = MaterialTheme.typography.bodySmall,
+-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+-                )
+-            }
+-        },
+-        navigationIcon = {
+-            if (showBack) {
+-                IconButton(onClick = onBack) {
+-                    Icon(
+-                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+-                        contentDescription = stringResource(R.string.action_back)
+-                    )
++            title = {
++                Column(horizontalAlignment = Alignment.CenterHorizontally) {
++                    Text(
++                            text = stringResource(R.string.customers_title),
++                            style = MaterialTheme.typography.titleLarge
++                    )
++                    Text(
++                            text = stringResource(R.string.customers_subtitle),
++                            style = MaterialTheme.typography.bodySmall,
++                            color = MaterialTheme.colorScheme.onSurfaceVariant
++                    )
++                }
++            },
++            navigationIcon = {
++                if (showBack) {
++                    IconButton(onClick = onBack) {
++                        Icon(
++                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
++                                contentDescription = stringResource(R.string.action_back)
++                        )
++                    }
+                 }
+-            }
+-        }
++            },
++            actions = {
++                IconButton(onClick = onSearchClick) {
++                    Icon(
++                        imageVector = Icons.Filled.Search,
++                        contentDescription = stringResource(R.string.action_search)
++                    )
++                }
++            }
+     )
+ }
+ 
+ @Composable
+-internal fun SearchField(
++internal fun CustomerSearchTopBar(
+     queryText: String,
+-    onQueryTextChange: (String) -> Unit
++    onQueryTextChange: (String) -> Unit,
++    onBack: () -> Unit
+ ) {
+-    OutlinedTextField(
+-        value = queryText,
+-        onValueChange = onQueryTextChange,
+-        label = { Text(stringResource(R.string.customer_search_customers)) },
+-        placeholder = { Text(stringResource(R.string.customer_name_or_phone)) },
+-        leadingIcon = {
+-            Icon(
+-                imageVector = Icons.Filled.Search,
+-                contentDescription = stringResource(R.string.action_search)
+-            )
+-        },
+-        trailingIcon = {
+-            if (queryText.isNotBlank()) {
+-                IconButton(onClick = { onQueryTextChange("") }) {
+-                    Icon(
+-                        imageVector = Icons.Filled.Close,
+-                        contentDescription = stringResource(R.string.action_clear)
+-                    )
++    Surface(
++        modifier = Modifier
++            .fillMaxWidth()
++            .windowInsetsPadding(WindowInsets.statusBars),
++        color = MaterialTheme.colorScheme.surface,
++        shadowElevation = 4.dp
++    ) {
++        TextField(
++            value = queryText,
++            onValueChange = onQueryTextChange,
++            placeholder = {
++                Text(stringResource(R.string.customer_name_or_phone))
++            },
++            singleLine = true,
++            modifier = Modifier.fillMaxWidth().height(64.dp),
++            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
++            colors = TextFieldDefaults.colors(
++                focusedContainerColor = MaterialTheme.colorScheme.surface,
++                unfocusedContainerColor = MaterialTheme.colorScheme.surface,
++                focusedIndicatorColor = Color.Transparent,
++                unfocusedIndicatorColor = Color.Transparent
++            ),
++            leadingIcon = {
++                IconButton(onClick = onBack) {
++                    Icon(
++                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
++                        contentDescription = stringResource(R.string.action_back)
++                    )
++                }
++            },
++            trailingIcon = {
++                if (queryText.isNotBlank()) {
++                    IconButton(onClick = { onQueryTextChange("") }) {
++                        Icon(
++                            imageVector = Icons.Filled.Close,
++                            contentDescription = stringResource(R.string.action_clear)
++                        )
++                    }
+                 }
+             }
+-        },
+-        singleLine = true,
+-        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+-        modifier = Modifier.fillMaxWidth()
+-    )
++        )
++    }
+ }
+ 
+ @Composable
+-internal fun FilterSortBar(
++internal fun CustomerListControlRow(
+     selectedFilter: CustomerFilter,
+-    onFilterChange: (CustomerFilter) -> Unit,
+-    onSortMenuToggle: () -> Unit
++    selectedSort: CustomerSort,
++    hideZeroBalances: Boolean,
++    showInactive: Boolean,
++    onFilterClick: () -> Unit,
++    onSortClick: () -> Unit,
++    onToggleHideZero: () -> Unit,
++    onToggleShowInactive: () -> Unit
+ ) {
+-    Column(
++    LazyRow(
+         modifier = Modifier.fillMaxWidth(),
+-        verticalArrangement = Arrangement.spacedBy(8.dp)
+-    ) {
+-        AppFilterRow(
+-            options = customerFilterOptions(),
+-            selectedKey = selectedFilter.name,
+-            onSelect = { onFilterChange(CustomerFilter.valueOf(it)) }
+-        )
+-
+-        Row(
+-            modifier = Modifier.fillMaxWidth(),
+-            horizontalArrangement = Arrangement.End,
+-            verticalAlignment = Alignment.CenterVertically
+-        ) {
+-            IconButton(onClick = onSortMenuToggle) {
+-                Icon(
+-                    imageVector = Icons.AutoMirrored.Filled.Sort,
+-                    contentDescription = stringResource(R.string.action_sort)
+-                )
+-            }
++        horizontalArrangement = Arrangement.spacedBy(8.dp)
++    ) {
++        item {
++            FilterChip(
++                selected = selectedFilter != CustomerFilter.All,
++                onClick = onFilterClick,
++                label = { Text(getCustomerFilterLabel(selectedFilter)) },
++                trailingIcon = { Icon(Icons.Filled.ArrowDropDown, contentDescription = null) }
++            )
++        }
++        item {
++            FilterChip(
++                selected = selectedSort != CustomerSort.BalanceDesc,
++                onClick = onSortClick,
++                label = { Text(getCustomerSortLabel(selectedSort)) },
++                trailingIcon = { Icon(Icons.Filled.ArrowDropDown, contentDescription = null) }
++            )
++        }
++        item {
++            FilterChip(
++                selected = hideZeroBalances,
++                onClick = onToggleHideZero,
++                label = { Text(stringResource(R.string.customer_hide_zero_balances)) }
++            )
+         }
++        item {
++            FilterChip(
++                selected = showInactive,
++                onClick = onToggleShowInactive,
++                label = { Text(stringResource(R.string.customer_show_inactive_no_orders)) }
++            )
++        }
+     }
+ }
+ 
+ @Composable
+-private fun customerFilterOptions(): List<AppFilterOption> {
+-    return listOf(
+-        AppFilterOption(CustomerFilter.All.name, stringResource(R.string.customer_filter_all)),
+-        AppFilterOption(CustomerFilter.Owing.name, stringResource(R.string.customer_filter_owes)),
+-        AppFilterOption(CustomerFilter.Credit.name, stringResource(R.string.customer_filter_credit)),
+-        AppFilterOption(CustomerFilter.Settled.name, stringResource(R.string.customer_filter_settled))
+-    )
++internal fun CustomerFilterSheet(
++    selectedFilter: CustomerFilter,
++    onSelect: (CustomerFilter) -> Unit,
++    onDismiss: () -> Unit
++) {
++    ModalBottomSheet(onDismissRequest = onDismiss) {
++        Column(modifier = Modifier.padding(bottom = 24.dp)) {
++            Text(
++                text = stringResource(R.string.customer_filter_label),
++                style = MaterialTheme.typography.titleMedium,
++                modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
++            )
++            CustomerFilter.values().forEach { filter ->
++                ListItem(
++                    headlineContent = { Text(getCustomerFilterLabel(filter)) },
++                    leadingContent = {
++                        if (filter == selectedFilter) {
++                            Icon(Icons.Filled.Check, contentDescription = null)
++                        } else {
++                            Spacer(Modifier.size(24.dp))
++                        }
++                    },
++                    modifier = Modifier.clickable {
++                        onSelect(filter)
++                        onDismiss()
++                    }
++                )
++            }
++        }
++    }
+ }
+ 
+ @Composable
+-internal fun SortMenu(
+-    expanded: Boolean,
++internal fun CustomerSortSheet(
+     selectedSort: CustomerSort,
+-    onDismiss: () -> Unit,
+-    onSelect: (CustomerSort) -> Unit
++    onSelect: (CustomerSort) -> Unit,
++    onDismiss: () -> Unit
+ ) {
+-    DropdownMenu(expanded = expanded, onDismissRequest = onDismiss) {
+-        DropdownMenuItem(
+-            text = { Text(stringResource(R.string.customer_sort_balance_high_to_low)) },
+-            onClick = { onSelect(CustomerSort.BalanceDesc) },
+-            trailingIcon = {
+-                if (selectedSort == CustomerSort.BalanceDesc) {
+-                    Icon(
+-                        imageVector = Icons.Filled.Check,
+-                        contentDescription = stringResource(R.string.customer_sort_selected)
+-                    )
+-                }
+-            }
+-        )
+-        DropdownMenuItem(
+-            text = { Text(stringResource(R.string.customer_sort_balance_low_to_high)) },
+-            onClick = { onSelect(CustomerSort.BalanceAsc) },
+-            trailingIcon = {
+-                if (selectedSort == CustomerSort.BalanceAsc) {
+-                    Icon(
+-                        imageVector = Icons.Filled.Check,
+-                        contentDescription = stringResource(R.string.customer_sort_selected)
+-                    )
+-                }
+-            }
+-        )
+-        DropdownMenuItem(
+-            text = { Text(stringResource(R.string.customer_sort_name_a_to_z)) },
+-            onClick = { onSelect(CustomerSort.NameAsc) },
+-            trailingIcon = {
+-                if (selectedSort == CustomerSort.NameAsc) {
+-                    Icon(
+-                        imageVector = Icons.Filled.Check,
+-                        contentDescription = stringResource(R.string.customer_sort_selected)
+-                    )
+-                }
+-            }
+-        )
++    ModalBottomSheet(onDismissRequest = onDismiss) {
++        Column(modifier = Modifier.padding(bottom = 24.dp)) {
++            Text(
++                text = stringResource(R.string.customer_sort_label),
++                style = MaterialTheme.typography.titleMedium,
++                modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)
++            )
++            CustomerSort.values().forEach { sort ->
++                ListItem(
++                    headlineContent = { Text(getCustomerSortLabel(sort)) },
++                    leadingContent = {
++                        if (sort == selectedSort) {
++                            Icon(Icons.Filled.Check, contentDescription = null)
++                        } else {
++                            Spacer(Modifier.size(24.dp))
++                        }
++                    },
++                    modifier = Modifier.clickable {
++                        onSelect(sort)
++                        onDismiss()
++                    }
++                )
++            }
++        }
++    }
++}
++
++@Composable
++private fun getCustomerFilterLabel(filter: CustomerFilter): String {
++    return when (filter) {
++        CustomerFilter.All -> stringResource(R.string.customer_filter_all)
++        CustomerFilter.Owing -> stringResource(R.string.customer_filter_owes)
++        CustomerFilter.Credit -> stringResource(R.string.customer_filter_credit)
++        CustomerFilter.Settled -> stringResource(R.string.customer_filter_settled)
+     }
+ }
++
++@Composable
++private fun getCustomerSortLabel(sort: CustomerSort): String {
++    return when (sort) {
++        CustomerSort.BalanceDesc -> stringResource(R.string.customer_sort_balance_desc_short)
++        CustomerSort.BalanceAsc -> stringResource(R.string.customer_sort_balance_asc_short)
++        CustomerSort.NameAsc -> stringResource(R.string.customer_sort_name_asc_short)
++    }
++}
+ 
+ @OptIn(ExperimentalFoundationApi::class)
+ @Composable
+ internal fun CustomerRowItem(
+-    customer: CustomerAccountSummary,
+-    onClick: () -> Unit,
+-    onLongClick: () -> Unit,
+-    onMenuClick: () -> Unit,
+-    onRecordPayment: () -> Unit,
+-    onAddOrder: () -> Unit,
+-    onMessage: () -> Unit,
+-    hasPhone: Boolean
++        customer: CustomerAccountSummary,
++        onClick: () -> Unit,
++        onLongClick: () -> Unit,
++        onMenuClick: () -> Unit,
++        onRecordPayment: () -> Unit,
++        onAddOrder: () -> Unit,
++        onMessage: () -> Unit,
++        hasPhone: Boolean
+ ) {
+     val name = customer.name.ifBlank { stringResource(R.string.customer_unknown) }
+     val initials =
+-        name.trim().split(" ").take(2).mapNotNull { it.firstOrNull() }.joinToString("").ifBlank { "?" }
++            name.trim()
++                    .split(" ")
++                    .take(2)
++                    .mapNotNull { it.firstOrNull() }
++                    .joinToString("")
++                    .uppercase()
++                    .ifBlank { "?" }
+     val phone = customer.phone.trim()
+ 
+     Surface(
+-        color = MaterialTheme.colorScheme.surfaceContainerLow,
+-        shape = MaterialTheme.shapes.large,
+-        modifier =
+-            Modifier.fillMaxWidth()
+-                .heightIn(min = 56.dp)
+-                .combinedClickable(onClick = onClick, onLongClick = onLongClick)
+-                .padding(vertical = 2.dp)
++            color = MaterialTheme.colorScheme.surfaceContainerLow,
++            shape = MaterialTheme.shapes.medium,
++            modifier =
++                    Modifier.fillMaxWidth()
++                            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
+     ) {
+         Row(
+-            modifier = Modifier.padding(10.dp),
+-            verticalAlignment = Alignment.CenterVertically
++                modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
++                verticalAlignment = Alignment.CenterVertically
+         ) {
++            // Compact avatar
+             Surface(
+-                color = MaterialTheme.colorScheme.surfaceContainerHighest,
+-                shape = CircleShape,
+-                modifier = Modifier.size(40.dp)
++                    color = MaterialTheme.colorScheme.primaryContainer,
++                    shape = CircleShape,
++                    modifier = Modifier.size(36.dp)
+             ) {
+                 Box(contentAlignment = Alignment.Center) {
+-                    Text(text = initials, style = MaterialTheme.typography.labelLarge)
++                    Text(
++                            text = initials,
++                            style = MaterialTheme.typography.labelMedium,
++                            color = MaterialTheme.colorScheme.onPrimaryContainer
++                    )
+                 }
+             }
+ 
+-            Spacer(Modifier.width(8.dp))
++            Spacer(Modifier.width(12.dp))
+ 
++            // Main content - name and phone in compact vertical stack
+             Column(modifier = Modifier.weight(1f)) {
+-                Text(
+-                    text = name,
+-                    style = MaterialTheme.typography.titleMedium,
+-                    maxLines = 1,
+-                    overflow = TextOverflow.Ellipsis
+-                )
+-                if (phone.isNotBlank()) {
+-                    Text(
+-                        text = phone,
+-                        style = MaterialTheme.typography.bodySmall,
+-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+-                        maxLines = 1,
+-                        overflow = TextOverflow.Ellipsis
+-                    )
+-                }
+-                Spacer(Modifier.height(6.dp))
+-                Text(
+-                    text =
+-                        stringResource(
+-                            R.string.customer_billed_paid,
+-                            formatKes(customer.billed),
+-                            formatKes(customer.paid)
+-                        ),
+-                    style = MaterialTheme.typography.bodySmall,
+-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+-                    maxLines = 1,
+-                    overflow = TextOverflow.Ellipsis
+-                )
+-                Spacer(Modifier.height(4.dp))
+-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+-                    TextButton(
+-                        onClick = onRecordPayment,
+-                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
+-                    ) {
+-                        Text(stringResource(R.string.customer_action_pay_short))
+-                    }
+-                    TextButton(
+-                        onClick = onAddOrder,
+-                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
+-                    ) {
+-                        Text(stringResource(R.string.customer_action_order_short))
+-                    }
+-                    TextButton(
+-                        onClick = onMessage,
+-                        enabled = hasPhone,
+-                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
+-                    ) {
+-                        Text(stringResource(R.string.customer_action_message))
+-                    }
++                Row(
++                        modifier = Modifier.fillMaxWidth(),
++                        horizontalArrangement = Arrangement.SpaceBetween,
++                        verticalAlignment = Alignment.CenterVertically
++                ) {
++                    Text(
++                            text = name,
++                            style = MaterialTheme.typography.bodyLarge,
++                            maxLines = 1,
++                            overflow = TextOverflow.Ellipsis,
++                            modifier = Modifier.weight(1f, fill = false)
++                    )
++                    Spacer(Modifier.width(8.dp))
++                    // Balance chip on the right
++                    CompactBalanceChip(balance = customer.balance)
++                }
++
++                Spacer(Modifier.height(2.dp))
++
++                // Secondary info row: phone + billed/paid summary
++                Row(
++                        modifier = Modifier.fillMaxWidth(),
++                        horizontalArrangement = Arrangement.SpaceBetween,
++                        verticalAlignment = Alignment.CenterVertically
++                ) {
++                    if (phone.isNotBlank()) {
++                        Text(
++                                text = phone,
++                                style = MaterialTheme.typography.bodySmall,
++                                color = MaterialTheme.colorScheme.onSurfaceVariant,
++                                maxLines = 1,
++                                overflow = TextOverflow.Ellipsis,
++                                modifier = Modifier.weight(1f, fill = false)
++                        )
++                        Spacer(Modifier.width(8.dp))
++                    }
++                    Text(
++                            text =
++                                    stringResource(
++                                            R.string.customer_billed_paid,
++                                            formatKes(customer.billed),
++                                            formatKes(customer.paid)
++                                    ),
++                            style = MaterialTheme.typography.labelSmall,
++                            color = MaterialTheme.colorScheme.onSurfaceVariant,
++                            maxLines = 1
++                    )
+                 }
+             }
+ 
+-            Spacer(Modifier.width(6.dp))
++            Spacer(Modifier.width(4.dp))
+ 
+-            BalanceChip(balance = customer.balance)
+-            IconButton(onClick = onMenuClick) {
++            // Smaller menu icon
++            IconButton(onClick = onMenuClick, modifier = Modifier.size(32.dp)) {
+                 Icon(
+-                    imageVector = Icons.Filled.MoreVert,
+-                    contentDescription = stringResource(R.string.customer_actions)
++                        imageVector = Icons.Filled.MoreVert,
++                        contentDescription = stringResource(R.string.customer_actions),
++                        modifier = Modifier.size(20.dp)
+                 )
+             }
+         }
+@@ -312,114 +404,119 @@
+ }
+ 
+ @Composable
+-private fun BalanceChip(balance: BigDecimal) {
+-    val (label, color) =
+-        when {
+-            balance > BigDecimal.ZERO ->
+-                stringResource(R.string.customer_filter_owes) to MaterialTheme.colorScheme.errorContainer
+-            balance < BigDecimal.ZERO ->
+-                stringResource(R.string.customer_filter_credit) to MaterialTheme.colorScheme.tertiaryContainer
+-            else ->
+-                stringResource(R.string.customer_filter_settled) to MaterialTheme.colorScheme.secondaryContainer
+-        }
+-    Surface(
+-        color = color,
+-        shape = MaterialTheme.shapes.small,
+-        modifier = Modifier.heightIn(min = 32.dp)
+-    ) {
+-        Row(
+-            modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp),
+-            verticalAlignment = Alignment.CenterVertically
+-        ) {
+-            Text(
++private fun CompactBalanceChip(balance: BigDecimal) {
++    val (label, containerColor, contentColor) =
++            when {
++                balance > BigDecimal.ZERO ->
++                        Triple(
++                                formatKes(balance),
++                                MaterialTheme.colorScheme.errorContainer,
++                                MaterialTheme.colorScheme.onErrorContainer
++                        )
++                balance < BigDecimal.ZERO ->
++                        Triple(
++                                formatKes(balance.abs()),
++                                MaterialTheme.colorScheme.tertiaryContainer,
++                                MaterialTheme.colorScheme.onTertiaryContainer
++                        )
++                else ->
++                        Triple(
++                                "Settled",
++                                MaterialTheme.colorScheme.secondaryContainer,
++                                MaterialTheme.colorScheme.onSecondaryContainer
++                        )
++            }
++    Surface(color = containerColor, shape = MaterialTheme.shapes.small) {
++        Text(
+                 text = label,
+                 style = MaterialTheme.typography.labelSmall,
+-                color = MaterialTheme.colorScheme.onSurface
+-            )
+-            Spacer(Modifier.width(4.dp))
+-            Text(
+-                text = formatKes(balance.abs()),
+-                style = MaterialTheme.typography.labelLarge,
+-                color = MaterialTheme.colorScheme.onSurface
+-            )
+-        }
++                color = contentColor,
++                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
++        )
+     }
+ }
+ 
+ @Composable
+ internal fun EmptyCustomersState(
+-    isSearching: Boolean,
+-    onAddCustomer: () -> Unit
++        isSearching: Boolean,
++        hasActiveFilters: Boolean,
++        onClearFilters: () -> Unit,
++        onAddCustomer: () -> Unit
+ ) {
+     Column(
+-        modifier = Modifier.fillMaxWidth().padding(top = 20.dp),
+-        horizontalAlignment = Alignment.CenterHorizontally
++            modifier = Modifier.fillMaxWidth().padding(top = 20.dp),
++            horizontalAlignment = Alignment.CenterHorizontally
+     ) {
+         Icon(
+-            imageVector = Icons.Outlined.Person,
+-            contentDescription = stringResource(R.string.customer_no_customers_icon),
+-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+-            modifier = Modifier.size(48.dp)
++                imageVector = Icons.Outlined.Person,
++                contentDescription = stringResource(R.string.customer_no_customers_icon),
++                tint = MaterialTheme.colorScheme.onSurfaceVariant,
++                modifier = Modifier.size(48.dp)
+         )
+         Spacer(Modifier.height(6.dp))
+         Text(
+-            text =
+-                if (isSearching) {
+-                    stringResource(R.string.customer_no_customers_found)
+-                } else {
+-                    stringResource(R.string.customer_no_customers_yet)
+-                },
+-            style = MaterialTheme.typography.titleMedium
++                text =
++                        if (isSearching) {
++                            stringResource(R.string.customer_no_customers_found)
++                        } else if (hasActiveFilters) {
++                            stringResource(R.string.customer_no_customers_for_filters)
++                        } else {
++                            stringResource(R.string.customer_no_customers_yet)
++                        },
++                style = MaterialTheme.typography.titleMedium
+         )
+         Spacer(Modifier.height(6.dp))
+         Text(
+-            text =
+-                if (isSearching) {
+-                    stringResource(R.string.customer_try_different_search)
+-                } else {
+-                    stringResource(R.string.customer_add_first)
+-                },
+-            style = MaterialTheme.typography.bodyMedium,
+-            color = MaterialTheme.colorScheme.onSurfaceVariant
++                text =
++                        if (isSearching) {
++                            stringResource(R.string.customer_try_different_search)
++                        } else if (hasActiveFilters) {
++                            stringResource(R.string.customer_adjust_or_clear_filters)
++                        } else {
++                            stringResource(R.string.customer_add_first)
++                        },
++                style = MaterialTheme.typography.bodyMedium,
++                color = MaterialTheme.colorScheme.onSurfaceVariant
+         )
+         Spacer(Modifier.height(6.dp))
+-        Button(onClick = onAddCustomer) {
+-            Text(stringResource(R.string.customer_add))
++        if (hasActiveFilters) {
++            Button(onClick = onClearFilters) {
++                Text(stringResource(R.string.customer_reset_filters))
++            }
++            Spacer(Modifier.height(4.dp))
++            TextButton(onClick = onAddCustomer) { Text(stringResource(R.string.customer_add)) }
++        } else {
++            Button(onClick = onAddCustomer) { Text(stringResource(R.string.customer_add)) }
+         }
+     }
+ }
+ 
+ @Composable
+ internal fun ActionRow(
+-    label: String,
+-    onClick: () -> Unit,
+-    enabled: Boolean = true,
+-    textColor: androidx.compose.ui.graphics.Color? = null
++        label: String,
++        onClick: () -> Unit,
++        enabled: Boolean = true,
++        textColor: androidx.compose.ui.graphics.Color? = null
+ ) {
+     val resolvedColor = textColor ?: MaterialTheme.colorScheme.onSurface
+     val displayColor = if (enabled) resolvedColor else MaterialTheme.colorScheme.onSurfaceVariant
+     Surface(
+-        modifier =
+-            Modifier.fillMaxWidth()
+-                .heightIn(min = 48.dp)
+-                .clickable(enabled = enabled) { onClick() },
+-        color = MaterialTheme.colorScheme.surface
++            modifier =
++                    Modifier.fillMaxWidth().heightIn(min = 48.dp).clickable(enabled = enabled) {
++                        onClick()
++                    },
++            color = MaterialTheme.colorScheme.surface
+     ) {
+         Row(
+-            modifier = Modifier.padding(vertical = 10.dp),
+-            verticalAlignment = Alignment.CenterVertically
+-        ) {
+-            Text(
+-                text = label,
+-                style = MaterialTheme.typography.bodyLarge,
+-                color = displayColor
+-            )
+-        }
++                modifier = Modifier.padding(vertical = 10.dp),
++                verticalAlignment = Alignment.CenterVertically
++        ) { Text(text = label, style = MaterialTheme.typography.bodyLarge, color = displayColor) }
+     }
+ }
+ 
+ internal fun launchSms(context: android.content.Context, phone: String) {
+     if (phone.isBlank()) return
+-    val intent = Intent(Intent.ACTION_VIEW, "sms:$phone".toUri()).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
++    val intent =
++            Intent(Intent.ACTION_VIEW, "sms:$phone".toUri()).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+     context.startActivity(intent)
+ }
+Index: app/src/main/java/com/zeynbakers/order_management_system/accounting/ui/LedgerScreen.kt
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/app/src/main/java/com/zeynbakers/order_management_system/accounting/ui/LedgerScreen.kt b/app/src/main/java/com/zeynbakers/order_management_system/accounting/ui/LedgerScreen.kt
+--- a/app/src/main/java/com/zeynbakers/order_management_system/accounting/ui/LedgerScreen.kt
++++ b/app/src/main/java/com/zeynbakers/order_management_system/accounting/ui/LedgerScreen.kt
+@@ -1,5 +1,7 @@
+ package com.zeynbakers.order_management_system.accounting.ui
+ 
++import androidx.compose.foundation.ExperimentalFoundationApi
++import androidx.compose.foundation.horizontalScroll
+ import androidx.compose.foundation.layout.Arrangement
+ import androidx.compose.foundation.layout.Column
+ import androidx.compose.foundation.layout.PaddingValues
+@@ -14,7 +16,6 @@
+ import androidx.compose.foundation.lazy.LazyColumn
+ import androidx.compose.foundation.lazy.items
+ import androidx.compose.foundation.rememberScrollState
+-import androidx.compose.foundation.horizontalScroll
+ import androidx.compose.material.icons.Icons
+ import androidx.compose.material.icons.automirrored.filled.ArrowBack
+ import androidx.compose.material.icons.filled.Visibility
+@@ -42,9 +43,9 @@
+ import androidx.compose.ui.text.style.TextOverflow
+ import androidx.compose.ui.unit.dp
+ import com.zeynbakers.order_management_system.R
++import com.zeynbakers.order_management_system.accounting.data.EntryType
+ import com.zeynbakers.order_management_system.core.ui.components.AppCard
+ import com.zeynbakers.order_management_system.core.ui.components.AppEmptyState
+-import com.zeynbakers.order_management_system.accounting.data.EntryType
+ import com.zeynbakers.order_management_system.core.util.formatDateTime
+ import com.zeynbakers.order_management_system.core.util.formatKes
+ 
+@@ -55,89 +56,92 @@
+     Adjustments(R.string.ledger_filter_adjustments)
+ }
+ 
+-@OptIn(ExperimentalMaterial3Api::class)
++@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
+ @Composable
+ fun LedgerScreen(
+-    viewModel: LedgerViewModel,
+-    onBack: () -> Unit,
+-    showTopBar: Boolean = true,
+-    externalPadding: PaddingValues = PaddingValues(0.dp)
++        viewModel: LedgerViewModel,
++        onBack: () -> Unit,
++        showTopBar: Boolean = true,
++        externalPadding: PaddingValues = PaddingValues(0.dp)
+ ) {
+     val entries by viewModel.entries.collectAsState()
+     val summary by viewModel.summary.collectAsState()
+     var filter by remember { mutableStateOf(LedgerFilter.All) }
+     var hideAmounts by rememberSaveable { mutableStateOf(false) }
+ 
+-    LaunchedEffect(Unit) {
+-        viewModel.load()
+-    }
++    LaunchedEffect(Unit) { viewModel.load() }
+ 
+     val filtered =
+-        remember(entries, filter) {
+-            entries.filter { entry ->
+-                when (filter) {
+-                    LedgerFilter.All -> true
+-                    LedgerFilter.Charges -> entry.type == EntryType.DEBIT
+-                    LedgerFilter.Payments -> entry.type == EntryType.CREDIT || entry.type == EntryType.REVERSAL
+-                    LedgerFilter.Adjustments -> entry.type == EntryType.WRITE_OFF
+-                }
+-            }
+-        }
++            remember(entries, filter) {
++                entries.filter { entry ->
++                    when (filter) {
++                        LedgerFilter.All -> true
++                        LedgerFilter.Charges -> entry.type == EntryType.DEBIT
++                        LedgerFilter.Payments ->
++                                entry.type == EntryType.CREDIT || entry.type == EntryType.REVERSAL
++                        LedgerFilter.Adjustments -> entry.type == EntryType.WRITE_OFF
++                    }
++                }
++            }
+ 
+     Scaffold(
+-        contentWindowInsets = WindowInsets(0),
+-        topBar = {
+-            if (showTopBar) {
+-                CenterAlignedTopAppBar(
+-                    title = { Text(stringResource(R.string.money_ledger_title)) },
+-                    navigationIcon = {
+-                        IconButton(onClick = onBack) {
+-                            Icon(imageVector = Icons.AutoMirrored.Filled.ArrowBack, contentDescription = stringResource(R.string.action_back))
+-                        }
+-                    },
+-                    actions = {
+-                        IconButton(onClick = { hideAmounts = !hideAmounts }) {
+-                            Icon(
+-                                imageVector =
+-                                    if (hideAmounts) {
+-                                        Icons.Filled.VisibilityOff
+-                                    } else {
+-                                        Icons.Filled.Visibility
+-                                    },
+-                                contentDescription =
+-                                    if (hideAmounts) {
+-                                        stringResource(R.string.action_show_balances)
+-                                    } else {
+-                                        stringResource(R.string.action_hide_balances)
+-                                    }
+-                            )
+-                        }
+-                    }
+-                )
+-            }
+-        }
++            contentWindowInsets = WindowInsets(0),
++            topBar = {
++                if (showTopBar) {
++                    CenterAlignedTopAppBar(
++                            title = { Text(stringResource(R.string.money_ledger_title)) },
++                            navigationIcon = {
++                                IconButton(onClick = onBack) {
++                                    Icon(
++                                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
++                                            contentDescription =
++                                                    stringResource(R.string.action_back)
++                                    )
++                                }
++                            },
++                            actions = {
++                                IconButton(onClick = { hideAmounts = !hideAmounts }) {
++                                    Icon(
++                                            imageVector =
++                                                    if (hideAmounts) {
++                                                        Icons.Filled.VisibilityOff
++                                                    } else {
++                                                        Icons.Filled.Visibility
++                                                    },
++                                            contentDescription =
++                                                    if (hideAmounts) {
++                                                        stringResource(
++                                                                R.string.action_show_balances
++                                                        )
++                                                    } else {
++                                                        stringResource(
++                                                                R.string.action_hide_balances
++                                                        )
++                                                    }
++                                    )
++                                }
++                            }
++                    )
++                }
++            }
+     ) { padding ->
+         LazyColumn(
+-            modifier = Modifier.fillMaxSize().padding(padding).padding(externalPadding),
+-            contentPadding = androidx.compose.foundation.layout.PaddingValues(12.dp),
+-            verticalArrangement = Arrangement.spacedBy(8.dp)
++                modifier = Modifier.fillMaxSize().padding(padding).padding(externalPadding),
++                contentPadding = androidx.compose.foundation.layout.PaddingValues(12.dp),
++                verticalArrangement = Arrangement.spacedBy(8.dp)
+         ) {
+-            item {
+-                LedgerSummaryCard(summary = summary, hideAmounts = hideAmounts)
+-            }
++            item { LedgerSummaryCard(summary = summary, hideAmounts = hideAmounts) }
+ 
+             item {
+                 Row(
+-                    modifier = Modifier
+-                        .fillMaxWidth()
+-                        .horizontalScroll(rememberScrollState()),
+-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
++                        modifier = Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()),
++                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                 ) {
+                     LedgerFilter.values().forEach { option ->
+                         FilterChip(
+-                            selected = filter == option,
+-                            onClick = { filter = option },
+-                            label = { Text(stringResource(option.labelRes)) }
++                                selected = filter == option,
++                                onClick = { filter = option },
++                                label = { Text(stringResource(option.labelRes)) }
+                         )
+                     }
+                 }
+@@ -147,7 +151,11 @@
+                 item { EmptyLedgerState() }
+             } else {
+                 items(filtered, key = { it.id }) { entry ->
+-                    LedgerEntryCard(entry = entry, hideAmounts = hideAmounts)
++                    LedgerEntryCard(
++                            modifier = Modifier.animateItem(),
++                            entry = entry,
++                            hideAmounts = hideAmounts
++                    )
+                 }
+             }
+         }
+@@ -157,26 +165,49 @@
+ @Composable
+ private fun LedgerSummaryCard(summary: LedgerSummaryUi?, hideAmounts: Boolean) {
+     Surface(
+-        tonalElevation = 2.dp,
+-        shape = MaterialTheme.shapes.large,
+-        color = MaterialTheme.colorScheme.surfaceContainerHighest
++            tonalElevation = 2.dp,
++            shape = MaterialTheme.shapes.large,
++            color = MaterialTheme.colorScheme.surfaceContainerHighest
+     ) {
+         Column(modifier = Modifier.fillMaxWidth().padding(12.dp)) {
+-            Text(text = stringResource(R.string.ledger_snapshot), style = MaterialTheme.typography.titleSmall)
++            Text(
++                    text = stringResource(R.string.ledger_snapshot),
++                    style = MaterialTheme.typography.titleSmall
++            )
+             Spacer(Modifier.height(4.dp))
+             if (summary == null) {
+                 Text(
+-                    text = stringResource(R.string.ledger_loading_totals),
+-                    style = MaterialTheme.typography.bodySmall,
+-                    color = MaterialTheme.colorScheme.onSurfaceVariant
++                        text = stringResource(R.string.ledger_loading_totals),
++                        style = MaterialTheme.typography.bodySmall,
++                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                 )
+             } else {
+-                LedgerSummaryRow(label = stringResource(R.string.ledger_filter_charges), amount = formatKes(summary.totalDebits), hideAmounts = hideAmounts)
+-                LedgerSummaryRow(label = stringResource(R.string.ledger_filter_payments), amount = formatKes(summary.totalCredits), hideAmounts = hideAmounts)
+-                LedgerSummaryRow(label = stringResource(R.string.ledger_write_offs), amount = formatKes(summary.totalWriteOffs), hideAmounts = hideAmounts)
+-                LedgerSummaryRow(label = stringResource(R.string.ledger_reversals), amount = formatKes(summary.totalReversals), hideAmounts = hideAmounts)
++                LedgerSummaryRow(
++                        label = stringResource(R.string.ledger_filter_charges),
++                        amount = formatKes(summary.totalDebits),
++                        hideAmounts = hideAmounts
++                )
++                LedgerSummaryRow(
++                        label = stringResource(R.string.ledger_filter_payments),
++                        amount = formatKes(summary.totalCredits),
++                        hideAmounts = hideAmounts
++                )
++                LedgerSummaryRow(
++                        label = stringResource(R.string.ledger_write_offs),
++                        amount = formatKes(summary.totalWriteOffs),
++                        hideAmounts = hideAmounts
++                )
++                LedgerSummaryRow(
++                        label = stringResource(R.string.ledger_reversals),
++                        amount = formatKes(summary.totalReversals),
++                        hideAmounts = hideAmounts
++                )
+                 Spacer(Modifier.height(4.dp))
+-                LedgerSummaryRow(label = stringResource(R.string.ledger_net_balance), amount = formatKes(summary.netBalance), hideAmounts = hideAmounts)
++                LedgerSummaryRow(
++                        label = stringResource(R.string.ledger_net_balance),
++                        amount = formatKes(summary.netBalance),
++                        hideAmounts = hideAmounts
++                )
+             }
+         }
+     }
+@@ -184,63 +215,84 @@
+ 
+ @Composable
+ private fun LedgerSummaryRow(label: String, amount: String, hideAmounts: Boolean) {
+-    Row(
+-        modifier = Modifier.fillMaxWidth(),
+-        horizontalArrangement = Arrangement.SpaceBetween
+-    ) {
+-        Text(text = label, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
++    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
++        Text(
++                text = label,
++                style = MaterialTheme.typography.bodySmall,
++                color = MaterialTheme.colorScheme.onSurfaceVariant
++        )
+         Text(
+-            text =
+-                if (hideAmounts) {
+-                    stringResource(R.string.money_amount_hidden)
+-                } else {
+-                    amount
+-                },
+-            style = MaterialTheme.typography.bodySmall
++                text =
++                        if (hideAmounts) {
++                            stringResource(R.string.money_amount_hidden)
++                        } else {
++                            amount
++                        },
++                style = MaterialTheme.typography.bodySmall
+         )
+     }
+ }
+ 
+ @Composable
+-private fun LedgerEntryCard(entry: LedgerEntryUi, hideAmounts: Boolean) {
++private fun LedgerEntryCard(
++        modifier: Modifier = Modifier,
++        entry: LedgerEntryUi,
++        hideAmounts: Boolean
++) {
+     val typeLabel = entryTypeLabel(entry.type)
+     val amountColor = ledgerEntryTypeColor(entry.type)
+     val sign = if (entry.type == EntryType.DEBIT || entry.type == EntryType.REVERSAL) "+" else "-"
+-    AppCard {
++    AppCard(modifier = modifier) {
+         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+             Row(
+-                modifier = Modifier.fillMaxWidth(),
+-                horizontalArrangement = Arrangement.SpaceBetween,
+-                verticalAlignment = Alignment.Top
++                    modifier = Modifier.fillMaxWidth(),
++                    horizontalArrangement = Arrangement.SpaceBetween,
++                    verticalAlignment = Alignment.Top
+             ) {
+                 Column(modifier = Modifier.weight(1f)) {
+-                    Text(text = typeLabel, style = MaterialTheme.typography.labelLarge, color = amountColor)
++                    Text(
++                            text = typeLabel,
++                            style = MaterialTheme.typography.labelLarge,
++                            color = amountColor
++                    )
+                     Text(
+-                        text = entry.description,
+-                        style = MaterialTheme.typography.bodyMedium,
+-                        maxLines = 2,
+-                        overflow = TextOverflow.Ellipsis
++                            text = entry.description,
++                            style = MaterialTheme.typography.bodyMedium,
++                            maxLines = 2,
++                            overflow = TextOverflow.Ellipsis
+                     )
+                 }
+                 Spacer(Modifier.width(8.dp))
+                 Text(
+-                    text =
+-                        if (hideAmounts) {
+-                            stringResource(R.string.money_amount_hidden)
+-                        } else {
+-                            "$sign ${formatKes(entry.amount)}"
+-                        },
+-                    style = MaterialTheme.typography.titleMedium,
+-                    color = amountColor
++                        text =
++                                if (hideAmounts) {
++                                    stringResource(R.string.money_amount_hidden)
++                                } else {
++                                    "$sign ${formatKes(entry.amount)}"
++                                },
++                        style = MaterialTheme.typography.titleMedium,
++                        color = amountColor
+                 )
+             }
+             entry.orderLabel?.let {
+-                Text(text = it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
++                Text(
++                        text = it,
++                        style = MaterialTheme.typography.bodySmall,
++                        color = MaterialTheme.colorScheme.onSurfaceVariant
++                )
+             }
+             entry.customerLabel?.let {
+-                Text(text = it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
++                Text(
++                        text = it,
++                        style = MaterialTheme.typography.bodySmall,
++                        color = MaterialTheme.colorScheme.onSurfaceVariant
++                )
+             }
+-            Text(text = formatDateTime(entry.date), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
++            Text(
++                    text = formatDateTime(entry.date),
++                    style = MaterialTheme.typography.bodySmall,
++                    color = MaterialTheme.colorScheme.onSurfaceVariant
++            )
+         }
+     }
+ }
+@@ -248,8 +300,8 @@
+ @Composable
+ private fun EmptyLedgerState() {
+     AppEmptyState(
+-        title = stringResource(R.string.money_ledger_title),
+-        body = stringResource(R.string.ledger_no_entries)
++            title = stringResource(R.string.money_ledger_title),
++            body = stringResource(R.string.ledger_no_entries)
+     )
+ }
+ 
+@@ -265,9 +317,9 @@
+ 
+ @Composable
+ private fun ledgerEntryTypeColor(type: EntryType) =
+-    when (type) {
+-        EntryType.DEBIT -> MaterialTheme.colorScheme.error
+-        EntryType.CREDIT -> MaterialTheme.colorScheme.primary
+-        EntryType.WRITE_OFF -> MaterialTheme.colorScheme.secondary
+-        EntryType.REVERSAL -> MaterialTheme.colorScheme.tertiary
+-    }
++        when (type) {
++            EntryType.DEBIT -> MaterialTheme.colorScheme.error
++            EntryType.CREDIT -> MaterialTheme.colorScheme.primary
++            EntryType.WRITE_OFF -> MaterialTheme.colorScheme.secondary
++            EntryType.REVERSAL -> MaterialTheme.colorScheme.tertiary
++        }
+Index: app/src/main/java/com/zeynbakers/order_management_system/accounting/ui/CustomerStatementsScreen.kt
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/app/src/main/java/com/zeynbakers/order_management_system/accounting/ui/CustomerStatementsScreen.kt b/app/src/main/java/com/zeynbakers/order_management_system/accounting/ui/CustomerStatementsScreen.kt
+--- a/app/src/main/java/com/zeynbakers/order_management_system/accounting/ui/CustomerStatementsScreen.kt
++++ b/app/src/main/java/com/zeynbakers/order_management_system/accounting/ui/CustomerStatementsScreen.kt
+@@ -1,11 +1,11 @@
+ @file:OptIn(
+-    androidx.compose.material3.ExperimentalMaterial3Api::class,
+-    kotlinx.coroutines.FlowPreview::class
++        androidx.compose.material3.ExperimentalMaterial3Api::class,
++        androidx.compose.foundation.ExperimentalFoundationApi::class,
++        kotlinx.coroutines.FlowPreview::class
+ )
+ 
+ package com.zeynbakers.order_management_system.accounting.ui
+ 
+-import androidx.compose.foundation.clickable
+ import androidx.compose.foundation.layout.Arrangement
+ import androidx.compose.foundation.layout.Column
+ import androidx.compose.foundation.layout.PaddingValues
+@@ -15,34 +15,28 @@
+ import androidx.compose.foundation.layout.fillMaxSize
+ import androidx.compose.foundation.layout.fillMaxWidth
+ import androidx.compose.foundation.layout.height
+-import androidx.compose.foundation.layout.heightIn
+ import androidx.compose.foundation.layout.padding
+ import androidx.compose.foundation.layout.size
+-import androidx.compose.foundation.layout.width
+ import androidx.compose.foundation.lazy.LazyColumn
+ import androidx.compose.foundation.lazy.items
+ import androidx.compose.material.icons.Icons
+ import androidx.compose.material.icons.automirrored.filled.ArrowBack
+ import androidx.compose.material.icons.filled.Close
+-import androidx.compose.material.icons.filled.Info
+-import androidx.compose.material.icons.filled.KeyboardArrowDown
+ import androidx.compose.material.icons.filled.MoreVert
+ import androidx.compose.material.icons.filled.Search
+-import androidx.compose.material.icons.filled.ShoppingBag
+-import androidx.compose.material.icons.filled.MoneyOff
+-import androidx.compose.material.icons.filled.Warning
+-import androidx.compose.material.icons.outlined.Payments
++import androidx.compose.material.icons.filled.Visibility
++import androidx.compose.material.icons.filled.VisibilityOff
++import androidx.compose.material3.CenterAlignedTopAppBar
+ import androidx.compose.material3.DropdownMenu
+ import androidx.compose.material3.DropdownMenuItem
+-import androidx.compose.material3.FilterChip
+ import androidx.compose.material3.Icon
+ import androidx.compose.material3.IconButton
+ import androidx.compose.material3.MaterialTheme
+-import androidx.compose.material3.OutlinedTextField
+ import androidx.compose.material3.Scaffold
+ import androidx.compose.material3.Surface
+ import androidx.compose.material3.Text
+-import androidx.compose.material3.TextButton
++import androidx.compose.material3.TextField
++import androidx.compose.material3.TextFieldDefaults
+ import androidx.compose.runtime.Composable
+ import androidx.compose.runtime.LaunchedEffect
+ import androidx.compose.runtime.collectAsState
+@@ -55,30 +49,20 @@
+ import androidx.compose.runtime.snapshotFlow
+ import androidx.compose.ui.Alignment
+ import androidx.compose.ui.Modifier
++import androidx.compose.ui.graphics.Color
+ import androidx.compose.ui.res.pluralStringResource
+ import androidx.compose.ui.res.stringResource
+ import androidx.compose.ui.text.font.FontWeight
+-import androidx.compose.ui.text.style.TextOverflow
+ import androidx.compose.ui.unit.dp
+ import com.zeynbakers.order_management_system.R
+ import com.zeynbakers.order_management_system.accounting.data.AccountEntryEntity
+-import com.zeynbakers.order_management_system.accounting.data.CustomerAccountSummary
+ import com.zeynbakers.order_management_system.accounting.data.EntryType
+-import com.zeynbakers.order_management_system.core.ui.components.AppCard
+-import com.zeynbakers.order_management_system.core.ui.components.AppEmptyState
+-import com.zeynbakers.order_management_system.core.ui.components.AppFilterOption
+-import com.zeynbakers.order_management_system.core.ui.components.AppFilterRow
+ import com.zeynbakers.order_management_system.core.ui.rememberCurrentDate
+-import com.zeynbakers.order_management_system.core.util.formatDateTime
+-import com.zeynbakers.order_management_system.core.util.formatKes
+ import com.zeynbakers.order_management_system.customer.ui.CustomerAccountsViewModel
+ import java.math.BigDecimal
+ import kotlinx.coroutines.flow.debounce
+ import kotlinx.coroutines.flow.distinctUntilChanged
+-import kotlinx.datetime.Instant
+ import kotlinx.datetime.LocalDate
+-import kotlinx.datetime.TimeZone
+-import kotlinx.datetime.toLocalDateTime
+ 
+ internal enum class StatementRangeType {
+     All,
+@@ -86,40 +70,36 @@
+     Custom
+ }
+ 
+-internal data class MonthOption(
+-    val year: Int,
+-    val month: Int,
+-    val label: String
+-)
++internal data class MonthOption(val year: Int, val month: Int, val label: String)
+ 
+ internal data class StatementEntryUi(
+-    val entry: AccountEntryEntity,
+-    val date: LocalDate,
+-    val runningBalance: BigDecimal
++        val entry: AccountEntryEntity,
++        val date: LocalDate,
++        val runningBalance: BigDecimal
+ )
+ 
+ internal data class StatementTotals(
+-    val charges: BigDecimal,
+-    val payments: BigDecimal,
+-    val writeOffs: BigDecimal,
+-    val reversals: BigDecimal,
+-    val net: BigDecimal
++        val charges: BigDecimal,
++        val payments: BigDecimal,
++        val writeOffs: BigDecimal,
++        val reversals: BigDecimal,
++        val net: BigDecimal
+ )
+ 
+ internal data class StatementRange(
+-    val label: String,
+-    val start: LocalDate?,
+-    val end: LocalDate?,
+-    val isValid: Boolean
++        val label: String,
++        val start: LocalDate?,
++        val end: LocalDate?,
++        val isValid: Boolean
+ )
+ 
+ @Composable
+ fun CustomerStatementsScreen(
+-    customerViewModel: CustomerAccountsViewModel,
+-    ledgerViewModel: LedgerViewModel,
+-    initialCustomerId: Long?,
+-    onContextConsumed: () -> Unit,
+-    externalPadding: PaddingValues = PaddingValues(0.dp)
++        customerViewModel: CustomerAccountsViewModel,
++        ledgerViewModel: LedgerViewModel,
++        initialCustomerId: Long?,
++        onContextConsumed: () -> Unit,
++        externalPadding: PaddingValues = PaddingValues(0.dp)
+ ) {
+     val summaries by customerViewModel.summaries.collectAsState()
+     val customer by customerViewModel.customer.collectAsState()
+@@ -140,6 +120,7 @@
+     var showReversals by rememberSaveable { mutableStateOf(false) }
+     var hideAmounts by rememberSaveable { mutableStateOf(false) }
+     var isMenuOpen by remember { mutableStateOf(false) }
++    var isSearchActive by rememberSaveable { mutableStateOf(false) }
+ 
+     LaunchedEffect(initialCustomerId) {
+         if (initialCustomerId != null) {
+@@ -154,48 +135,44 @@
+     }
+ 
+     LaunchedEffect(Unit) {
+-        snapshotFlow { queryText }
+-            .debounce(300)
+-            .distinctUntilChanged()
+-            .collect { customerViewModel.searchCustomers(it) }
++        snapshotFlow { queryText }.debounce(300).distinctUntilChanged().collect {
++            customerViewModel.searchCustomers(it)
++        }
+     }
+ 
+     if (showAllLedger) {
+         Scaffold(contentWindowInsets = WindowInsets(0)) { padding ->
+-            Column(
+-                modifier = Modifier
+-                    .fillMaxSize()
+-                    .padding(padding)
+-                    .padding(externalPadding)
+-            ) {
++            Column(modifier = Modifier.fillMaxSize().padding(padding).padding(externalPadding)) {
+                 Row(
+-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+-                    horizontalArrangement = Arrangement.SpaceBetween,
+-                    verticalAlignment = Alignment.CenterVertically
++                        modifier =
++                                Modifier.fillMaxWidth()
++                                        .padding(horizontal = 12.dp, vertical = 8.dp),
++                        horizontalArrangement = Arrangement.SpaceBetween,
++                        verticalAlignment = Alignment.CenterVertically
+                 ) {
+                     Column(modifier = Modifier.weight(1f)) {
+                         Text(
+-                            text = stringResource(R.string.money_advanced_ledger_title),
+-                            style = MaterialTheme.typography.titleMedium
++                                text = stringResource(R.string.money_advanced_ledger_title),
++                                style = MaterialTheme.typography.titleMedium
+                         )
+                         Text(
+-                            text = stringResource(R.string.money_advanced_ledger_subtitle),
+-                            style = MaterialTheme.typography.bodySmall,
+-                            color = MaterialTheme.colorScheme.onSurfaceVariant
++                                text = stringResource(R.string.money_advanced_ledger_subtitle),
++                                style = MaterialTheme.typography.bodySmall,
++                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                         )
+                     }
+                     IconButton(onClick = { showAllLedger = false }) {
+                         Icon(
+-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+-                            contentDescription = stringResource(R.string.action_back)
++                                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
++                                contentDescription = stringResource(R.string.action_back)
+                         )
+                     }
+                 }
+                 LedgerScreen(
+-                    viewModel = ledgerViewModel,
+-                    onBack = { showAllLedger = false },
+-                    showTopBar = false,
+-                    externalPadding = PaddingValues(0.dp)
++                        viewModel = ledgerViewModel,
++                        onBack = { showAllLedger = false },
++                        showTopBar = false,
++                        externalPadding = PaddingValues(0.dp)
+                 )
+             }
+         }
+@@ -207,137 +184,291 @@
+     val allTimeLabel = stringResource(R.string.money_all_time)
+     val rangeToSeparator = stringResource(R.string.money_to_separator)
+     val dateInputPlaceholder = stringResource(R.string.money_date_placeholder)
+-    val range = remember(
+-        rangeType,
+-        selectedMonth,
+-        selectedYear,
+-        customStart,
+-        customEnd,
+-        customRangeLabel,
+-        allTimeLabel,
+-        rangeToSeparator
+-    ) {
+-        buildStatementRange(
+-            rangeType = rangeType,
+-            selectedYear = selectedYear,
+-            selectedMonth = selectedMonth,
+-            customStart = customStart,
+-            customEnd = customEnd,
+-            customRangeLabel = customRangeLabel,
+-            allTimeLabel = allTimeLabel,
+-            rangeToSeparator = rangeToSeparator
+-        )
+-    }
++    val range =
++            remember(
++                    rangeType,
++                    selectedMonth,
++                    selectedYear,
++                    customStart,
++                    customEnd,
++                    customRangeLabel,
++                    allTimeLabel,
++                    rangeToSeparator
++            ) {
++                buildStatementRange(
++                        rangeType = rangeType,
++                        selectedYear = selectedYear,
++                        selectedMonth = selectedMonth,
++                        customStart = customStart,
++                        customEnd = customEnd,
++                        customRangeLabel = customRangeLabel,
++                        allTimeLabel = allTimeLabel,
++                        rangeToSeparator = rangeToSeparator
++                )
++            }
+ 
+-    val filteredEntries by remember(statementEntries, range, showReversals) {
+-        derivedStateOf {
+-            if (!range.isValid) {
+-                emptyList()
+-            } else {
+-                statementEntries.filter { entry ->
+-                    val afterStart = range.start?.let { entry.date >= it } ?: true
+-                    val beforeEnd = range.end?.let { entry.date <= it } ?: true
+-                    val typeMatch = showReversals || entry.entry.type != EntryType.REVERSAL
+-                    afterStart && beforeEnd && typeMatch
+-                }
+-            }
+-        }
+-    }
++    val filteredEntries by
++            remember(statementEntries, range, showReversals) {
++                derivedStateOf {
++                    if (!range.isValid) {
++                        emptyList()
++                    } else {
++                        statementEntries.filter { entry ->
++                            val afterStart = range.start?.let { entry.date >= it } ?: true
++                            val beforeEnd = range.end?.let { entry.date <= it } ?: true
++                            val typeMatch = showReversals || entry.entry.type != EntryType.REVERSAL
++                            afterStart && beforeEnd && typeMatch
++                        }
++                    }
++                }
++            }
+ 
+-    val openingBalance by remember(statementEntries, range) {
+-        derivedStateOf {
+-            val start = range.start ?: return@derivedStateOf BigDecimal.ZERO
+-            statementEntries.lastOrNull { it.date < start }?.runningBalance ?: BigDecimal.ZERO
+-        }
+-    }
++    val openingBalance by
++            remember(statementEntries, range) {
++                derivedStateOf {
++                    val start = range.start ?: return@derivedStateOf BigDecimal.ZERO
++                    statementEntries.lastOrNull { it.date < start }?.runningBalance
++                            ?: BigDecimal.ZERO
++                }
++            }
+ 
+-    val totals by remember(filteredEntries) {
+-        derivedStateOf { buildTotals(filteredEntries) }
+-    }
++    val totals by remember(filteredEntries) { derivedStateOf { buildTotals(filteredEntries) } }
+ 
+-    val closingBalance by remember(filteredEntries, openingBalance, range.isValid) {
+-        derivedStateOf {
+-            if (!range.isValid) {
+-                openingBalance
+-            } else {
+-                filteredEntries.lastOrNull()?.runningBalance ?: openingBalance
+-            }
+-        }
+-    }
++    val closingBalance by
++            remember(filteredEntries, openingBalance, range.isValid) {
++                derivedStateOf {
++                    if (!range.isValid) {
++                        openingBalance
++                    } else {
++                        filteredEntries.lastOrNull()?.runningBalance ?: openingBalance
++                    }
++                }
++            }
+ 
+-    Scaffold(contentWindowInsets = WindowInsets(0)) { padding ->
+-        if (activeCustomerId == null) {
+-            Column(
+-                modifier = Modifier
+-                    .fillMaxSize()
+-                    .padding(padding)
+-                    .padding(externalPadding)
+-                    .padding(horizontal = 12.dp, vertical = 10.dp)
+-            ) {
+-                Row(
+-                    modifier = Modifier.fillMaxWidth(),
+-                    horizontalArrangement = Arrangement.SpaceBetween,
+-                    verticalAlignment = Alignment.CenterVertically
+-                ) {
+-                    Column(modifier = Modifier.weight(1f)) {
+-                        Text(text = stringResource(R.string.money_statement_title), style = MaterialTheme.typography.titleLarge)
+-                        Text(
+-                            text = stringResource(R.string.money_statement_pick_customer),
+-                            style = MaterialTheme.typography.bodySmall,
+-                            color = MaterialTheme.colorScheme.onSurfaceVariant
++    Scaffold(
++            contentWindowInsets = WindowInsets(0),
++            topBar = {
++                if (activeCustomerId == null) {
++                    // Customer List Mode Top Bar
++                    if (isSearchActive) {
++                        Surface(
++                                modifier = Modifier.fillMaxWidth().height(64.dp),
++                                color = MaterialTheme.colorScheme.surface,
++                                shadowElevation = 4.dp
++                        ) {
++                            TextField(
++                                    value = queryText,
++                                    onValueChange = { queryText = it },
++                                    placeholder = {
++                                        Text(stringResource(R.string.money_name_or_phone))
++                                    },
++                                    singleLine = true,
++                                    modifier = Modifier.fillMaxWidth(),
++                                    colors =
++                                            TextFieldDefaults.colors(
++                                                    focusedContainerColor =
++                                                            MaterialTheme.colorScheme.surface,
++                                                    unfocusedContainerColor =
++                                                            MaterialTheme.colorScheme.surface,
++                                                    focusedIndicatorColor = Color.Transparent,
++                                                    unfocusedIndicatorColor = Color.Transparent
++                                            ),
++                                    leadingIcon = {
++                                        IconButton(
++                                                onClick = {
++                                                    isSearchActive = false
++                                                    queryText = ""
++                                                }
++                                        ) {
++                                            Icon(
++                                                    imageVector =
++                                                            Icons.AutoMirrored.Filled.ArrowBack,
++                                                    contentDescription =
++                                                            stringResource(R.string.action_back)
++                                            )
++                                        }
++                                    },
++                                    trailingIcon = {
++                                        if (queryText.isNotEmpty()) {
++                                            IconButton(onClick = { queryText = "" }) {
++                                                Icon(
++                                                        imageVector = Icons.Filled.Close,
++                                                        contentDescription =
++                                                                stringResource(
++                                                                        R.string.action_clear
++                                                                )
++                                                )
++                                            }
++                                        }
++                                    }
++                            )
++                        }
++                    } else {
++                        CenterAlignedTopAppBar(
++                                title = { Text(stringResource(R.string.money_statement_title)) },
++                                actions = {
++                                    IconButton(onClick = { hideAmounts = !hideAmounts }) {
++                                        Icon(
++                                                imageVector =
++                                                        if (hideAmounts) Icons.Filled.VisibilityOff
++                                                        else Icons.Filled.Visibility,
++                                                contentDescription =
++                                                        if (hideAmounts)
++                                                                stringResource(
++                                                                        R.string
++                                                                                .action_show_balances
++                                                                )
++                                                        else
++                                                                stringResource(
++                                                                        R.string
++                                                                                .action_hide_balances
++                                                                )
++                                        )
++                                    }
++                                    IconButton(onClick = { isSearchActive = true }) {
++                                        Icon(
++                                                imageVector = Icons.Filled.Search,
++                                                contentDescription =
++                                                        stringResource(R.string.action_search)
++                                        )
++                                    }
++                                    IconButton(onClick = { isMenuOpen = true }) {
++                                        Icon(
++                                                imageVector = Icons.Filled.MoreVert,
++                                                contentDescription =
++                                                        stringResource(R.string.action_more)
++                                        )
++                                    }
++                                    DropdownMenu(
++                                            expanded = isMenuOpen,
++                                            onDismissRequest = { isMenuOpen = false }
++                                    ) {
++                                        DropdownMenuItem(
++                                                text = {
++                                                    Text(
++                                                            stringResource(
++                                                                    R.string
++                                                                            .money_advanced_ledger_title
++                                                            )
++                                                    )
++                                                },
++                                                onClick = {
++                                                    showAllLedger = true
++                                                    isMenuOpen = false
++                                                }
++                                        )
++                                    }
++                                }
+                         )
+                     }
+-                    IconButton(onClick = { isMenuOpen = true }) {
+-                        Icon(imageVector = Icons.Filled.MoreVert, contentDescription = stringResource(R.string.action_more))
+-                    }
+-                    DropdownMenu(expanded = isMenuOpen, onDismissRequest = { isMenuOpen = false }) {
+-                        DropdownMenuItem(
+-                            text = { Text(stringResource(R.string.money_advanced_ledger_title)) },
+-                            onClick = {
+-                                showAllLedger = true
+-                                isMenuOpen = false
+-                            }
+-                        )
+-                    }
+-                }
+-
+-                Spacer(Modifier.height(8.dp))
+-
+-                OutlinedTextField(
+-                    value = queryText,
+-                    onValueChange = { queryText = it },
+-                    label = { Text(stringResource(R.string.money_search_customers)) },
+-                    placeholder = { Text(stringResource(R.string.money_name_or_phone)) },
+-                    leadingIcon = { Icon(imageVector = Icons.Filled.Search, contentDescription = stringResource(R.string.action_search)) },
+-                    trailingIcon = {
+-                        if (queryText.isNotBlank()) {
+-                            IconButton(onClick = { queryText = "" }) {
+-                                Icon(imageVector = Icons.Filled.Close, contentDescription = stringResource(R.string.action_clear))
+-                            }
+-                        }
+-                    },
+-                    singleLine = true,
+-                    modifier = Modifier.fillMaxWidth()
+-                )
+-
+-                Spacer(Modifier.height(8.dp))
+-
++                } else {
++                    // Statement Detail Mode Top Bar
++                    CenterAlignedTopAppBar(
++                            title = { Text(stringResource(R.string.money_statement_title)) },
++                            navigationIcon = {
++                                IconButton(onClick = { activeCustomerId = null }) {
++                                    Icon(
++                                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
++                                            contentDescription =
++                                                    stringResource(R.string.action_back)
++                                    )
++                                }
++                            },
++                            actions = {
++                                IconButton(onClick = { hideAmounts = !hideAmounts }) {
++                                    Icon(
++                                            imageVector =
++                                                    if (hideAmounts) Icons.Filled.VisibilityOff
++                                                    else Icons.Filled.Visibility,
++                                            contentDescription =
++                                                    if (hideAmounts)
++                                                            stringResource(
++                                                                    R.string.action_show_balances
++                                                            )
++                                                    else
++                                                            stringResource(
++                                                                    R.string.action_hide_balances
++                                                            )
++                                    )
++                                }
++                                IconButton(onClick = { isMenuOpen = true }) {
++                                    Icon(
++                                            imageVector = Icons.Filled.MoreVert,
++                                            contentDescription =
++                                                    stringResource(R.string.action_more)
++                                    )
++                                }
++                                DropdownMenu(
++                                        expanded = isMenuOpen,
++                                        onDismissRequest = { isMenuOpen = false }
++                                ) {
++                                    DropdownMenuItem(
++                                            text = {
++                                                Text(
++                                                        if (showReversals)
++                                                                stringResource(
++                                                                        R.string
++                                                                                .action_hide_reversals
++                                                                )
++                                                        else
++                                                                stringResource(
++                                                                        R.string
++                                                                                .action_show_reversals
++                                                                )
++                                                )
++                                            },
++                                            onClick = {
++                                                showReversals = !showReversals
++                                                isMenuOpen = false
++                                            }
++                                    )
++                                    DropdownMenuItem(
++                                            text = {
++                                                Text(
++                                                        stringResource(
++                                                                R.string.money_advanced_ledger_title
++                                                        )
++                                                )
++                                            },
++                                            onClick = {
++                                                showAllLedger = true
++                                                isMenuOpen = false
++                                            }
++                                    )
++                                }
++                            }
++                    )
++                }
++            }
++    ) { padding ->
++        if (activeCustomerId == null) {
++            Column(
++                    modifier =
++                            Modifier.fillMaxSize()
++                                    .padding(padding)
++                                    .padding(externalPadding)
++                                    .padding(horizontal = 12.dp, vertical = 10.dp)
++            ) {
+                 Row(
+-                    modifier = Modifier.fillMaxWidth(),
+-                    horizontalArrangement = Arrangement.SpaceBetween
++                        modifier = Modifier.fillMaxWidth(),
++                        horizontalArrangement = Arrangement.SpaceBetween
+                 ) {
+                     Text(
+-                        text = if (queryText.isBlank()) stringResource(R.string.money_all_customers) else stringResource(R.string.money_search_results),
+-                        style = MaterialTheme.typography.labelLarge
++                            text =
++                                    if (queryText.isBlank())
++                                            stringResource(R.string.money_all_customers)
++                                    else stringResource(R.string.money_search_results),
++                            style = MaterialTheme.typography.labelLarge
+                     )
+                     Text(
+-                        text = pluralStringResource(
+-                            id = R.plurals.money_result_count,
+-                            count = summaries.size,
+-                            summaries.size
+-                        ),
+-                        style = MaterialTheme.typography.labelLarge,
+-                        color = MaterialTheme.colorScheme.onSurfaceVariant
++                            text =
++                                    pluralStringResource(
++                                            id = R.plurals.money_result_count,
++                                            count = summaries.size,
++                                            summaries.size
++                                    ),
++                            style = MaterialTheme.typography.labelLarge,
++                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                     )
+                 }
+ 
+@@ -345,97 +476,105 @@
+ 
+                 if (summaries.isEmpty()) {
+                     EmptyState(
+-                        text = if (queryText.isBlank()) {
+-                            stringResource(R.string.money_no_customers_yet)
+-                        } else {
+-                            stringResource(R.string.money_no_customers_found)
+-                        }
++                            text =
++                                    if (queryText.isBlank()) {
++                                        stringResource(R.string.money_no_customers_yet)
++                                    } else {
++                                        stringResource(R.string.money_no_customers_found)
++                                    }
+                     )
+                 } else {
+                     LazyColumn(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                         items(summaries, key = { it.customerId }) { summary ->
+                             StatementCustomerRow(
+-                                customer = summary,
+-                                hideAmounts = hideAmounts,
+-                                onClick = { activeCustomerId = summary.customerId }
++                                    modifier = Modifier.animateItem(),
++                                    customer = summary,
++                                    hideAmounts = hideAmounts,
++                                    onClick = { activeCustomerId = summary.customerId }
+                             )
+                         }
+                     }
+                 }
+             }
+         } else {
+-            val customerName = customer?.name?.ifBlank { stringResource(R.string.money_customer) }
+-                ?: stringResource(R.string.money_customer)
++            val customerName =
++                    customer?.name?.ifBlank { stringResource(R.string.money_customer) }
++                            ?: stringResource(R.string.money_customer)
+             val phone = customer?.phone?.trim().orEmpty()
+             val displayEntries = remember(filteredEntries) { filteredEntries.asReversed() }
+ 
+             LazyColumn(
+-                modifier = Modifier
+-                    .fillMaxSize()
+-                    .padding(padding)
+-                    .padding(externalPadding),
+-                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
+-                verticalArrangement = Arrangement.spacedBy(10.dp)
++                    modifier = Modifier.fillMaxSize().padding(padding).padding(externalPadding),
++                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 10.dp),
++                    verticalArrangement = Arrangement.spacedBy(10.dp)
+             ) {
+                 item {
+-                    StatementHeader(
+-                        customerName = customerName,
+-                        phone = phone,
+-                        rangeLabel = range.label,
+-                        hideAmounts = hideAmounts,
+-                        showReversals = showReversals,
+-                        onToggleHideAmounts = { hideAmounts = !hideAmounts },
+-                        onToggleReversals = { showReversals = !showReversals },
+-                        onChangeCustomer = { activeCustomerId = null },
+-                        onOpenAllLedger = { showAllLedger = true }
+-                    )
++                    Column(modifier = Modifier.padding(bottom = 8.dp)) {
++                        Text(
++                                text = customerName,
++                                style = MaterialTheme.typography.headlineSmall,
++                                fontWeight = FontWeight.Bold
++                        )
++                        if (phone.isNotBlank()) {
++                            Text(
++                                    text = phone,
++                                    style = MaterialTheme.typography.bodyMedium,
++                                    color = MaterialTheme.colorScheme.onSurfaceVariant
++                            )
++                        }
++                        Spacer(Modifier.height(4.dp))
++                        Text(
++                                text = range.label,
++                                style = MaterialTheme.typography.labelMedium,
++                                color = MaterialTheme.colorScheme.primary
++                        )
++                    }
+                 }
+ 
+                 item {
+                     RangeSelector(
+-                        rangeType = rangeType,
+-                        onRangeTypeChange = { rangeType = it },
+-                        monthOptions = monthOptions,
+-                        selectedMonth = selectedMonth,
+-                        selectedYear = selectedYear,
+-                        onMonthSelected = { year, month ->
+-                            selectedYear = year
+-                            selectedMonth = month
+-                        },
+-                        customStart = customStart,
+-                        customEnd = customEnd,
+-                        onCustomStartChange = { customStart = it },
+-                        onCustomEndChange = { customEnd = it },
+-                        dateInputPlaceholder = dateInputPlaceholder
++                            rangeType = rangeType,
++                            onRangeTypeChange = { rangeType = it },
++                            monthOptions = monthOptions,
++                            selectedMonth = selectedMonth,
++                            selectedYear = selectedYear,
++                            onMonthSelected = { year, month ->
++                                selectedYear = year
++                                selectedMonth = month
++                            },
++                            customStart = customStart,
++                            customEnd = customEnd,
++                            onCustomStartChange = { customStart = it },
++                            onCustomEndChange = { customEnd = it },
++                            dateInputPlaceholder = dateInputPlaceholder
+                     )
+                 }
+ 
+                 item {
+                     StatementSummaryCard(
+-                        openingBalance = openingBalance,
+-                        charges = totals.charges,
+-                        payments = totals.payments,
+-                        writeOffs = totals.writeOffs,
+-                        reversals = totals.reversals,
+-                        hideAmounts = hideAmounts,
+-                        showReversals = showReversals,
+-                        closingBalance = closingBalance
++                            openingBalance = openingBalance,
++                            charges = totals.charges,
++                            payments = totals.payments,
++                            writeOffs = totals.writeOffs,
++                            reversals = totals.reversals,
++                            hideAmounts = hideAmounts,
++                            showReversals = showReversals,
++                            closingBalance = closingBalance
+                     )
+                 }
+ 
+                 if (!range.isValid) {
+-                    item {
+-                        InfoCard(text = stringResource(R.string.money_invalid_custom_range))
+-                    }
++                    item { InfoCard(text = stringResource(R.string.money_invalid_custom_range)) }
+                 } else if (displayEntries.isEmpty()) {
+                     item { EmptyState(text = stringResource(R.string.money_no_entries_in_range)) }
+                 } else {
+                     items(displayEntries, key = { it.entry.id }) { entry ->
+                         val orderLabel = entry.entry.orderId?.let { orderLabels[it] }
+                         StatementEntryRow(
+-                            entry = entry,
+-                            hideAmounts = hideAmounts,
+-                            orderLabel = orderLabel
++                                modifier = Modifier.animateItem(),
++                                entry = entry,
++                                hideAmounts = hideAmounts,
++                                orderLabel = orderLabel
+                         )
+                     }
+                 }
+@@ -443,4 +582,3 @@
+         }
+     }
+ }
+-
+Index: app/src/main/java/com/zeynbakers/order_management_system/accounting/ui/CustomerStatementsSections.kt
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/app/src/main/java/com/zeynbakers/order_management_system/accounting/ui/CustomerStatementsSections.kt b/app/src/main/java/com/zeynbakers/order_management_system/accounting/ui/CustomerStatementsSections.kt
+--- a/app/src/main/java/com/zeynbakers/order_management_system/accounting/ui/CustomerStatementsSections.kt
++++ b/app/src/main/java/com/zeynbakers/order_management_system/accounting/ui/CustomerStatementsSections.kt
+@@ -1,12 +1,13 @@
+ package com.zeynbakers.order_management_system.accounting.ui
+ 
++import androidx.compose.foundation.ExperimentalFoundationApi
+ import androidx.compose.foundation.clickable
++import androidx.compose.foundation.combinedClickable
+ import androidx.compose.foundation.layout.*
+ import androidx.compose.material.icons.Icons
+ import androidx.compose.material.icons.filled.KeyboardArrowDown
+-import androidx.compose.material.icons.filled.MoreVert
+ import androidx.compose.material.icons.filled.MoneyOff
+-import androidx.compose.material.icons.filled.Search
++import androidx.compose.material.icons.filled.MoreVert
+ import androidx.compose.material.icons.filled.ShoppingBag
+ import androidx.compose.material.icons.filled.Visibility
+ import androidx.compose.material.icons.filled.VisibilityOff
+@@ -16,7 +17,6 @@
+ import androidx.compose.runtime.*
+ import androidx.compose.ui.Alignment
+ import androidx.compose.ui.Modifier
+-import androidx.compose.ui.res.pluralStringResource
+ import androidx.compose.ui.res.stringResource
+ import androidx.compose.ui.text.font.FontWeight
+ import androidx.compose.ui.text.style.TextOverflow
+@@ -38,76 +38,83 @@
+ import kotlinx.datetime.LocalDate
+ import kotlinx.datetime.TimeZone
+ import kotlinx.datetime.toLocalDateTime
++
+ @Composable
+ internal fun StatementHeader(
+-    customerName: String,
+-    phone: String,
+-    rangeLabel: String,
+-    hideAmounts: Boolean,
+-    showReversals: Boolean,
+-    onToggleHideAmounts: () -> Unit,
+-    onToggleReversals: () -> Unit,
+-    onChangeCustomer: () -> Unit,
+-    onOpenAllLedger: () -> Unit
++        customerName: String,
++        phone: String,
++        rangeLabel: String,
++        hideAmounts: Boolean,
++        showReversals: Boolean,
++        onToggleHideAmounts: () -> Unit,
++        onToggleReversals: () -> Unit,
++        onChangeCustomer: () -> Unit,
++        onOpenAllLedger: () -> Unit
+ ) {
+     var showMenu by remember { mutableStateOf(false) }
+ 
+     Column(modifier = Modifier.fillMaxWidth()) {
+         Row(
+-            modifier = Modifier.fillMaxWidth(),
+-            horizontalArrangement = Arrangement.SpaceBetween,
+-            verticalAlignment = Alignment.CenterVertically
++                modifier = Modifier.fillMaxWidth(),
++                horizontalArrangement = Arrangement.SpaceBetween,
++                verticalAlignment = Alignment.CenterVertically
+         ) {
+             Column(modifier = Modifier.weight(1f)) {
+-                Text(text = stringResource(R.string.money_statement_title), style = MaterialTheme.typography.titleLarge)
++                Text(
++                        text = stringResource(R.string.money_statement_title),
++                        style = MaterialTheme.typography.titleLarge
++                )
+                 Text(
+-                    text = rangeLabel,
+-                    style = MaterialTheme.typography.bodySmall,
+-                    color = MaterialTheme.colorScheme.onSurfaceVariant
++                        text = rangeLabel,
++                        style = MaterialTheme.typography.bodySmall,
++                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                 )
+             }
+             IconButton(onClick = onToggleHideAmounts) {
+                 Icon(
+-                    imageVector =
+-                        if (hideAmounts) {
+-                            Icons.Filled.VisibilityOff
+-                        } else {
+-                            Icons.Filled.Visibility
+-                        },
+-                    contentDescription =
+-                        if (hideAmounts) {
+-                            stringResource(R.string.action_show_balances)
+-                        } else {
+-                            stringResource(R.string.action_hide_balances)
+-                        }
++                        imageVector =
++                                if (hideAmounts) {
++                                    Icons.Filled.VisibilityOff
++                                } else {
++                                    Icons.Filled.Visibility
++                                },
++                        contentDescription =
++                                if (hideAmounts) {
++                                    stringResource(R.string.action_show_balances)
++                                } else {
++                                    stringResource(R.string.action_hide_balances)
++                                }
+                 )
+             }
+             TextButton(onClick = onChangeCustomer) { Text(stringResource(R.string.action_change)) }
+             IconButton(onClick = { showMenu = true }) {
+-                Icon(imageVector = Icons.Filled.MoreVert, contentDescription = stringResource(R.string.action_more))
++                Icon(
++                        imageVector = Icons.Filled.MoreVert,
++                        contentDescription = stringResource(R.string.action_more)
++                )
+             }
+             DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
+                 DropdownMenuItem(
+-                    text = {
+-                        Text(
+-                            if (showReversals) {
+-                                stringResource(R.string.action_hide_reversals)
+-                            } else {
+-                                stringResource(R.string.action_show_reversals)
+-                            }
+-                        )
+-                    },
+-                    onClick = {
+-                        onToggleReversals()
+-                        showMenu = false
+-                    }
++                        text = {
++                            Text(
++                                    if (showReversals) {
++                                        stringResource(R.string.action_hide_reversals)
++                                    } else {
++                                        stringResource(R.string.action_show_reversals)
++                                    }
++                            )
++                        },
++                        onClick = {
++                            onToggleReversals()
++                            showMenu = false
++                        }
+                 )
+                 DropdownMenuItem(
+-                    text = { Text(stringResource(R.string.money_advanced_ledger_title)) },
+-                    onClick = {
+-                        onOpenAllLedger()
+-                        showMenu = false
+-                    }
++                        text = { Text(stringResource(R.string.money_advanced_ledger_title)) },
++                        onClick = {
++                            onOpenAllLedger()
++                            showMenu = false
++                        }
+                 )
+             }
+         }
+@@ -115,9 +122,9 @@
+         Text(text = customerName, style = MaterialTheme.typography.titleMedium)
+         if (phone.isNotBlank()) {
+             Text(
+-                text = phone,
+-                style = MaterialTheme.typography.bodySmall,
+-                color = MaterialTheme.colorScheme.onSurfaceVariant
++                    text = phone,
++                    style = MaterialTheme.typography.bodySmall,
++                    color = MaterialTheme.colorScheme.onSurfaceVariant
+             )
+         }
+     }
+@@ -125,58 +132,67 @@
+ 
+ @Composable
+ internal fun RangeSelector(
+-    rangeType: StatementRangeType,
+-    onRangeTypeChange: (StatementRangeType) -> Unit,
+-    monthOptions: List<MonthOption>,
+-    selectedMonth: Int,
+-    selectedYear: Int,
+-    onMonthSelected: (Int, Int) -> Unit,
+-    customStart: String,
+-    customEnd: String,
+-    onCustomStartChange: (String) -> Unit,
+-    onCustomEndChange: (String) -> Unit,
+-    dateInputPlaceholder: String
++        rangeType: StatementRangeType,
++        onRangeTypeChange: (StatementRangeType) -> Unit,
++        monthOptions: List<MonthOption>,
++        selectedMonth: Int,
++        selectedYear: Int,
++        onMonthSelected: (Int, Int) -> Unit,
++        customStart: String,
++        customEnd: String,
++        onCustomStartChange: (String) -> Unit,
++        onCustomEndChange: (String) -> Unit,
++        dateInputPlaceholder: String
+ ) {
+     var isMonthMenuOpen by remember { mutableStateOf(false) }
+-    val selectedLabel = monthOptions
+-        .firstOrNull { it.year == selectedYear && it.month == selectedMonth }
+-        ?.label ?: "${monthName(selectedMonth)} $selectedYear"
++    val selectedLabel =
++            monthOptions.firstOrNull { it.year == selectedYear && it.month == selectedMonth }?.label
++                    ?: "${monthName(selectedMonth)} $selectedYear"
+ 
+     Column(modifier = Modifier.fillMaxWidth()) {
+         AppFilterRow(
+-            options = rangeTypeOptions(),
+-            selectedKey = rangeType.name,
+-            onSelect = { onRangeTypeChange(StatementRangeType.valueOf(it)) }
++                options = rangeTypeOptions(),
++                selectedKey = rangeType.name,
++                onSelect = { onRangeTypeChange(StatementRangeType.valueOf(it)) }
+         )
+ 
+         if (rangeType == StatementRangeType.Month) {
+             Spacer(Modifier.height(8.dp))
+             Row(
+-                modifier = Modifier
+-                    .fillMaxWidth()
+-                    .clickable { isMonthMenuOpen = true }
+-                    .padding(vertical = 4.dp),
+-                horizontalArrangement = Arrangement.SpaceBetween,
+-                verticalAlignment = Alignment.CenterVertically
++                    modifier =
++                            Modifier.fillMaxWidth()
++                                    .clickable { isMonthMenuOpen = true }
++                                    .padding(vertical = 4.dp),
++                    horizontalArrangement = Arrangement.SpaceBetween,
++                    verticalAlignment = Alignment.CenterVertically
+             ) {
+                 Column(modifier = Modifier.weight(1f)) {
+-                    Text(text = stringResource(R.string.money_month), style = MaterialTheme.typography.labelLarge)
++                    Text(
++                            text = stringResource(R.string.money_month),
++                            style = MaterialTheme.typography.labelLarge
++                    )
+                     Text(
+-                        text = selectedLabel,
+-                        style = MaterialTheme.typography.bodyMedium,
+-                        color = MaterialTheme.colorScheme.onSurfaceVariant
++                            text = selectedLabel,
++                            style = MaterialTheme.typography.bodyMedium,
++                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                     )
+                 }
+-                Icon(imageVector = Icons.Filled.KeyboardArrowDown, contentDescription = stringResource(R.string.money_select_month))
++                Icon(
++                        imageVector = Icons.Filled.KeyboardArrowDown,
++                        contentDescription = stringResource(R.string.money_select_month)
++                )
+             }
+-            DropdownMenu(expanded = isMonthMenuOpen, onDismissRequest = { isMonthMenuOpen = false }) {
++            DropdownMenu(
++                    expanded = isMonthMenuOpen,
++                    onDismissRequest = { isMonthMenuOpen = false }
++            ) {
+                 monthOptions.forEach { option ->
+                     DropdownMenuItem(
+-                        text = { Text(option.label) },
+-                        onClick = {
+-                            onMonthSelected(option.year, option.month)
+-                            isMonthMenuOpen = false
+-                        }
++                            text = { Text(option.label) },
++                            onClick = {
++                                onMonthSelected(option.year, option.month)
++                                isMonthMenuOpen = false
++                            }
+                     )
+                 }
+             }
+@@ -186,20 +202,20 @@
+             Spacer(Modifier.height(8.dp))
+             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                 OutlinedTextField(
+-                    value = customStart,
+-                    onValueChange = onCustomStartChange,
+-                    label = { Text(stringResource(R.string.money_start_date)) },
+-                    placeholder = { Text(dateInputPlaceholder) },
+-                    singleLine = true,
+-                    modifier = Modifier.fillMaxWidth()
++                        value = customStart,
++                        onValueChange = onCustomStartChange,
++                        label = { Text(stringResource(R.string.money_start_date)) },
++                        placeholder = { Text(dateInputPlaceholder) },
++                        singleLine = true,
++                        modifier = Modifier.fillMaxWidth()
+                 )
+                 OutlinedTextField(
+-                    value = customEnd,
+-                    onValueChange = onCustomEndChange,
+-                    label = { Text(stringResource(R.string.money_end_date)) },
+-                    placeholder = { Text(dateInputPlaceholder) },
+-                    singleLine = true,
+-                    modifier = Modifier.fillMaxWidth()
++                        value = customEnd,
++                        onValueChange = onCustomEndChange,
++                        label = { Text(stringResource(R.string.money_end_date)) },
++                        placeholder = { Text(dateInputPlaceholder) },
++                        singleLine = true,
++                        modifier = Modifier.fillMaxWidth()
+                 )
+             }
+         }
+@@ -208,47 +224,75 @@
+ 
+ @Composable
+ internal fun StatementSummaryCard(
+-    openingBalance: BigDecimal,
+-    charges: BigDecimal,
+-    payments: BigDecimal,
+-    writeOffs: BigDecimal,
+-    reversals: BigDecimal,
+-    hideAmounts: Boolean,
+-    showReversals: Boolean,
+-    closingBalance: BigDecimal
++        openingBalance: BigDecimal,
++        charges: BigDecimal,
++        payments: BigDecimal,
++        writeOffs: BigDecimal,
++        reversals: BigDecimal,
++        hideAmounts: Boolean,
++        showReversals: Boolean,
++        closingBalance: BigDecimal
+ ) {
+     AppCard {
+         Column(modifier = Modifier.fillMaxWidth()) {
+-            Text(text = stringResource(R.string.money_statement_summary_title), style = MaterialTheme.typography.titleSmall)
++            Text(
++                    text = stringResource(R.string.money_statement_summary_title),
++                    style = MaterialTheme.typography.titleSmall
++            )
+             Spacer(Modifier.height(6.dp))
+-            SummaryRow(label = stringResource(R.string.money_statement_opening_balance), amount = formatKes(openingBalance), hideAmounts = hideAmounts)
+-            SummaryRow(label = stringResource(R.string.money_statement_charges), amount = formatKes(charges), hideAmounts = hideAmounts)
+-            SummaryRow(label = stringResource(R.string.money_statement_payments), amount = formatKes(payments), hideAmounts = hideAmounts)
+-            SummaryRow(label = stringResource(R.string.money_statement_write_offs), amount = formatKes(writeOffs), hideAmounts = hideAmounts)
++            SummaryRow(
++                    label = stringResource(R.string.money_statement_opening_balance),
++                    amount = formatKes(openingBalance),
++                    hideAmounts = hideAmounts
++            )
++            SummaryRow(
++                    label = stringResource(R.string.money_statement_charges),
++                    amount = formatKes(charges),
++                    hideAmounts = hideAmounts
++            )
++            SummaryRow(
++                    label = stringResource(R.string.money_statement_payments),
++                    amount = formatKes(payments),
++                    hideAmounts = hideAmounts
++            )
++            SummaryRow(
++                    label = stringResource(R.string.money_statement_write_offs),
++                    amount = formatKes(writeOffs),
++                    hideAmounts = hideAmounts
++            )
+             if (showReversals) {
+-                SummaryRow(label = stringResource(R.string.money_statement_reversals), amount = formatKes(reversals), hideAmounts = hideAmounts)
++                SummaryRow(
++                        label = stringResource(R.string.money_statement_reversals),
++                        amount = formatKes(reversals),
++                        hideAmounts = hideAmounts
++                )
+             }
+             Spacer(Modifier.height(4.dp))
+-            SummaryRow(label = stringResource(R.string.money_statement_closing_balance), amount = formatKes(closingBalance), hideAmounts = hideAmounts)
++            SummaryRow(
++                    label = stringResource(R.string.money_statement_closing_balance),
++                    amount = formatKes(closingBalance),
++                    hideAmounts = hideAmounts
++            )
+         }
+     }
+ }
+ 
+ @Composable
+ internal fun SummaryRow(label: String, amount: String, hideAmounts: Boolean) {
+-    Row(
+-        modifier = Modifier.fillMaxWidth(),
+-        horizontalArrangement = Arrangement.SpaceBetween
+-    ) {
+-        Text(text = label, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
++    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
++        Text(
++                text = label,
++                style = MaterialTheme.typography.bodySmall,
++                color = MaterialTheme.colorScheme.onSurfaceVariant
++        )
+         Text(
+-            text =
+-                if (hideAmounts) {
+-                    stringResource(R.string.money_amount_hidden)
+-                } else {
+-                    amount
+-                },
+-            style = MaterialTheme.typography.bodySmall
++                text =
++                        if (hideAmounts) {
++                            stringResource(R.string.money_amount_hidden)
++                        } else {
++                            amount
++                        },
++                style = MaterialTheme.typography.bodySmall
+         )
+     }
+ }
+@@ -256,135 +300,141 @@
+ @Composable
+ internal fun rangeTypeOptions(): List<AppFilterOption> {
+     return listOf(
+-        AppFilterOption(StatementRangeType.All.name, stringResource(R.string.money_all_time)),
+-        AppFilterOption(StatementRangeType.Month.name, stringResource(R.string.money_month)),
+-        AppFilterOption(StatementRangeType.Custom.name, stringResource(R.string.money_custom))
++            AppFilterOption(StatementRangeType.All.name, stringResource(R.string.money_all_time)),
++            AppFilterOption(StatementRangeType.Month.name, stringResource(R.string.money_month)),
++            AppFilterOption(StatementRangeType.Custom.name, stringResource(R.string.money_custom))
+     )
+ }
+ 
+ @Composable
+ internal fun StatementEntryRow(
+-    modifier: Modifier = Modifier,
+-    entry: StatementEntryUi,
+-    hideAmounts: Boolean,
+-    orderLabel: String?
++        modifier: Modifier = Modifier,
++        entry: StatementEntryUi,
++        hideAmounts: Boolean,
++        orderLabel: String?
+ ) {
+     val typeLabel =
+-        when (entry.entry.type) {
+-            EntryType.DEBIT -> stringResource(R.string.money_entry_order)
+-            EntryType.CREDIT -> if (entry.entry.orderId == null) {
+-                stringResource(R.string.money_entry_extra_credit)
+-            } else {
+-                stringResource(R.string.money_entry_payment)
+-            }
+-            EntryType.WRITE_OFF -> stringResource(R.string.money_entry_bad_debt_writeoff)
+-            EntryType.REVERSAL -> if (entry.entry.orderId == null) {
+-                stringResource(R.string.money_entry_credit_reversal)
+-            } else {
+-                stringResource(R.string.money_entry_payment_reversal)
+-            }
+-        }
++            when (entry.entry.type) {
++                EntryType.DEBIT -> stringResource(R.string.money_entry_order)
++                EntryType.CREDIT ->
++                        if (entry.entry.orderId == null) {
++                            stringResource(R.string.money_entry_extra_credit)
++                        } else {
++                            stringResource(R.string.money_entry_payment)
++                        }
++                EntryType.WRITE_OFF -> stringResource(R.string.money_entry_bad_debt_writeoff)
++                EntryType.REVERSAL ->
++                        if (entry.entry.orderId == null) {
++                            stringResource(R.string.money_entry_credit_reversal)
++                        } else {
++                            stringResource(R.string.money_entry_payment_reversal)
++                        }
++            }
+     val amountColor = entryTypeColor(entry.entry.type)
+-    val sign = if (entry.entry.type == EntryType.DEBIT || entry.entry.type == EntryType.REVERSAL) "+" else "-"
++    val sign =
++            if (entry.entry.type == EntryType.DEBIT || entry.entry.type == EntryType.REVERSAL) "+"
++            else "-"
+     val balanceSign = if (entry.runningBalance < BigDecimal.ZERO) "-" else ""
+     val balanceColor =
+-        when {
+-            entry.runningBalance > BigDecimal.ZERO -> MaterialTheme.colorScheme.error
+-            entry.runningBalance < BigDecimal.ZERO -> MaterialTheme.colorScheme.tertiary
+-            else -> MaterialTheme.colorScheme.onSurfaceVariant
+-        }
+-    
+-    val icon = when (entry.entry.type) {
+-        EntryType.DEBIT -> Icons.Filled.ShoppingBag
+-        EntryType.CREDIT -> Icons.Outlined.Payments
+-        EntryType.WRITE_OFF -> Icons.Filled.MoneyOff
+-        EntryType.REVERSAL -> Icons.Filled.Warning
+-    }
++            when {
++                entry.runningBalance > BigDecimal.ZERO -> MaterialTheme.colorScheme.error
++                entry.runningBalance < BigDecimal.ZERO -> MaterialTheme.colorScheme.tertiary
++                else -> MaterialTheme.colorScheme.onSurfaceVariant
++            }
++
++    val icon =
++            when (entry.entry.type) {
++                EntryType.DEBIT -> Icons.Filled.ShoppingBag
++                EntryType.CREDIT -> Icons.Outlined.Payments
++                EntryType.WRITE_OFF -> Icons.Filled.MoneyOff
++                EntryType.REVERSAL -> Icons.Filled.Warning
++            }
+ 
+     AppCard(modifier = modifier) {
+-        Row(
+-            modifier = Modifier.fillMaxWidth(),
+-            verticalAlignment = Alignment.Top
+-        ) {
++        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
+             Surface(
+-                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+-                shape = MaterialTheme.shapes.small,
+-                modifier = Modifier.padding(top = 2.dp)
++                    color = MaterialTheme.colorScheme.surfaceContainerHigh,
++                    shape = MaterialTheme.shapes.small,
++                    modifier = Modifier.padding(top = 2.dp)
+             ) {
+-                 Icon(
+-                     imageVector = icon,
+-                     contentDescription = null,
+-                     modifier = Modifier.padding(4.dp).size(16.dp),
+-                     tint = MaterialTheme.colorScheme.onSurfaceVariant
+-                 )
++                Icon(
++                        imageVector = icon,
++                        contentDescription = null,
++                        modifier = Modifier.padding(4.dp).size(16.dp),
++                        tint = MaterialTheme.colorScheme.onSurfaceVariant
++                )
+             }
+-            
++
+             Spacer(Modifier.width(12.dp))
+-            
++
+             Column(modifier = Modifier.weight(1f)) {
+                 Row(
+-                   modifier = Modifier.fillMaxWidth(),
+-                   horizontalArrangement = Arrangement.SpaceBetween 
++                        modifier = Modifier.fillMaxWidth(),
++                        horizontalArrangement = Arrangement.SpaceBetween
+                 ) {
+                     Text(
+-                        text = typeLabel,
+-                        style = MaterialTheme.typography.titleSmall,
+-                        color = MaterialTheme.colorScheme.onSurface
++                            text = typeLabel,
++                            style = MaterialTheme.typography.titleSmall,
++                            color = MaterialTheme.colorScheme.onSurface
+                     )
+                     Text(
+-                        text =
+-                            if (hideAmounts) {
+-                                stringResource(R.string.money_amount_hidden)
+-                            } else {
+-                                "$sign ${formatKes(entry.entry.amount)}"
+-                            },
+-                        style = MaterialTheme.typography.titleSmall,
+-                        color = amountColor,
+-                        fontWeight = FontWeight.Bold
++                            text =
++                                    if (hideAmounts) {
++                                        stringResource(R.string.money_amount_hidden)
++                                    } else {
++                                        "$sign ${formatKes(entry.entry.amount)}"
++                                    },
++                            style = MaterialTheme.typography.titleSmall,
++                            color = amountColor,
++                            fontWeight = FontWeight.Bold
+                     )
+                 }
+-                
++
+                 Row(
+-                   modifier = Modifier.fillMaxWidth(),
+-                   horizontalArrangement = Arrangement.SpaceBetween 
++                        modifier = Modifier.fillMaxWidth(),
++                        horizontalArrangement = Arrangement.SpaceBetween
+                 ) {
+                     Column(modifier = Modifier.weight(1f)) {
+-                         Text(text = formatDateTime(entry.entry.date), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+-                         
+-                         orderLabel?.let {
++                        Text(
++                                text = formatDateTime(entry.entry.date),
++                                style = MaterialTheme.typography.bodySmall,
++                                color = MaterialTheme.colorScheme.onSurfaceVariant
++                        )
++
++                        orderLabel?.let {
+                             Text(
+-                                text = it,
+-                                style = MaterialTheme.typography.bodySmall,
+-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+-                                maxLines = 1,
+-                                overflow = TextOverflow.Ellipsis
++                                    text = it,
++                                    style = MaterialTheme.typography.bodySmall,
++                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
++                                    maxLines = 1,
++                                    overflow = TextOverflow.Ellipsis
+                             )
+                         }
+                         if (entry.entry.description.isNotBlank()) {
+                             Text(
+-                                text = entry.entry.description,
+-                                style = MaterialTheme.typography.bodySmall,
+-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+-                                maxLines = 1,
+-                                overflow = TextOverflow.Ellipsis
++                                    text = entry.entry.description,
++                                    style = MaterialTheme.typography.bodySmall,
++                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
++                                    maxLines = 1,
++                                    overflow = TextOverflow.Ellipsis
+                             )
+                         }
+                     }
+-                    
++
+                     Text(
+-                        text =
+-                            if (hideAmounts) {
+-                                stringResource(R.string.money_amount_hidden)
+-                            } else {
+-                                stringResource(
+-                                    R.string.money_balance_label,
+-                                    balanceSign,
+-                                    formatKes(entry.runningBalance.abs())
+-                                )
+-                            },
+-                        style = MaterialTheme.typography.labelSmall,
+-                        color = balanceColor,
+-                        modifier = Modifier.padding(start = 8.dp)
++                            text =
++                                    if (hideAmounts) {
++                                        stringResource(R.string.money_amount_hidden)
++                                    } else {
++                                        stringResource(
++                                                R.string.money_balance_label,
++                                                balanceSign,
++                                                formatKes(entry.runningBalance.abs())
++                                        )
++                                    },
++                            style = MaterialTheme.typography.labelSmall,
++                            color = balanceColor,
++                            modifier = Modifier.padding(start = 8.dp)
+                     )
+                 }
+             }
+@@ -392,44 +442,87 @@
+     }
+ }
+ 
++@OptIn(ExperimentalFoundationApi::class)
+ @Composable
+ internal fun StatementCustomerRow(
++    modifier: Modifier = Modifier,
+     customer: CustomerAccountSummary,
+     hideAmounts: Boolean,
+     onClick: () -> Unit
+ ) {
++    val name = customer.name.ifBlank { stringResource(R.string.customer_unknown) }
++    val initials = name.trim()
++        .split(" ")
++        .take(2)
++        .mapNotNull { it.firstOrNull() }
++        .joinToString("")
++        .uppercase()
++        .ifBlank { "?" }
++    val phone = customer.phone.trim()
++
+     Surface(
+         color = MaterialTheme.colorScheme.surfaceContainerLow,
+-        shape = MaterialTheme.shapes.large,
+-        modifier = Modifier
+-            .fillMaxWidth()
+-            .heightIn(min = 56.dp)
+-            .clickable(onClick = onClick)
++        shape = MaterialTheme.shapes.medium,
++        modifier = modifier.fillMaxWidth().combinedClickable(onClick = onClick, onLongClick = null)
+     ) {
+         Row(
+-            modifier = Modifier.padding(10.dp),
++            modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+             verticalAlignment = Alignment.CenterVertically
+         ) {
++            // Avatar
++            Surface(
++                color = MaterialTheme.colorScheme.primaryContainer,
++                shape = androidx.compose.foundation.shape.CircleShape,
++                modifier = Modifier.size(36.dp)
++            ) {
++                Box(contentAlignment = Alignment.Center) {
++                    Text(
++                        text = initials,
++                        style = MaterialTheme.typography.labelMedium,
++                        color = MaterialTheme.colorScheme.onPrimaryContainer
++                    )
++                }
++            }
++
++            Spacer(Modifier.width(12.dp))
++
+             Column(modifier = Modifier.weight(1f)) {
+-                Text(
+-                    text = customer.name.ifBlank { stringResource(R.string.customer_unknown) },
+-                    style = MaterialTheme.typography.titleMedium,
+-                    maxLines = 1,
+-                    overflow = TextOverflow.Ellipsis
+-                )
+-                if (customer.phone.isNotBlank()) {
+-                    Text(
+-                        text = customer.phone,
+-                        style = MaterialTheme.typography.bodySmall,
+-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+-                        maxLines = 1,
+-                        overflow = TextOverflow.Ellipsis
+-                    )
+-                }
+-                Spacer(Modifier.height(6.dp))
+-                Text(
+-                    text =
+-                        if (hideAmounts) {
++                Row(
++                    modifier = Modifier.fillMaxWidth(),
++                    horizontalArrangement = Arrangement.SpaceBetween,
++                    verticalAlignment = Alignment.CenterVertically
++                ) {
++                    Text(
++                        text = name,
++                        style = MaterialTheme.typography.bodyLarge,
++                        maxLines = 1,
++                        overflow = TextOverflow.Ellipsis,
++                        modifier = Modifier.weight(1f, fill = false)
++                    )
++                    Spacer(Modifier.width(8.dp))
++                    CompactBalanceChip(balance = customer.balance, hideAmounts = hideAmounts)
++                }
++
++                Spacer(Modifier.height(2.dp))
++
++                Row(
++                    modifier = Modifier.fillMaxWidth(),
++                    horizontalArrangement = Arrangement.SpaceBetween,
++                    verticalAlignment = Alignment.CenterVertically
++                ) {
++                     if (phone.isNotBlank()) {
++                        Text(
++                            text = phone,
++                            style = MaterialTheme.typography.bodySmall,
++                            color = MaterialTheme.colorScheme.onSurfaceVariant,
++                            maxLines = 1,
++                            overflow = TextOverflow.Ellipsis,
++                             modifier = Modifier.weight(1f, fill = false)
++                        )
++                        Spacer(Modifier.width(8.dp))
++                    }
++                    Text(
++                        text = if (hideAmounts) {
+                             stringResource(
+                                 R.string.money_billed_paid,
+                                 stringResource(R.string.money_amount_hidden),
+@@ -442,47 +535,43 @@
+                                 formatKes(customer.paid)
+                             )
+                         },
+-                    style = MaterialTheme.typography.bodySmall,
+-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+-                    maxLines = 1,
+-                    overflow = TextOverflow.Ellipsis
+-                )
++                        style = MaterialTheme.typography.labelSmall,
++                        color = MaterialTheme.colorScheme.onSurfaceVariant,
++                        maxLines = 1
++                    )
++                }
+             }
+-            Spacer(Modifier.width(8.dp))
+-            BalanceChip(balance = customer.balance, hideAmounts = hideAmounts)
+         }
+     }
+ }
+ 
+ @Composable
+-internal fun BalanceChip(balance: BigDecimal, hideAmounts: Boolean) {
+-    val (label, color) =
+-        when {
+-            balance > BigDecimal.ZERO -> stringResource(R.string.money_balance_due) to MaterialTheme.colorScheme.errorContainer
+-            balance < BigDecimal.ZERO -> stringResource(R.string.money_balance_extra) to MaterialTheme.colorScheme.tertiaryContainer
+-            else -> stringResource(R.string.money_balance_clear) to MaterialTheme.colorScheme.secondaryContainer
+-        }
+-    Surface(
+-        color = color,
+-        shape = MaterialTheme.shapes.small,
+-        modifier = Modifier.heightIn(min = 32.dp)
+-    ) {
+-        Row(
+-            modifier = Modifier.padding(horizontal = 6.dp, vertical = 4.dp),
+-            verticalAlignment = Alignment.CenterVertically
+-        ) {
+-            Text(text = label, style = MaterialTheme.typography.labelSmall)
+-            Spacer(Modifier.width(4.dp))
+-            Text(
+-                text =
+-                    if (hideAmounts) {
+-                        stringResource(R.string.money_amount_hidden)
+-                    } else {
+-                        formatKes(balance.abs())
+-                    },
+-                style = MaterialTheme.typography.labelLarge
+-            )
+-        }
++internal fun CompactBalanceChip(balance: BigDecimal, hideAmounts: Boolean) {
++    val (label, containerColor, contentColor) = when {
++        balance > BigDecimal.ZERO -> Triple(
++            if (hideAmounts) stringResource(R.string.money_amount_hidden) else formatKes(balance),
++            MaterialTheme.colorScheme.errorContainer,
++            MaterialTheme.colorScheme.onErrorContainer
++        )
++        balance < BigDecimal.ZERO -> Triple(
++            if (hideAmounts) stringResource(R.string.money_amount_hidden) else formatKes(balance.abs()),
++            MaterialTheme.colorScheme.tertiaryContainer,
++            MaterialTheme.colorScheme.onTertiaryContainer
++        )
++        else -> Triple(
++            stringResource(R.string.money_balance_clear),
++            MaterialTheme.colorScheme.secondaryContainer,
++            MaterialTheme.colorScheme.onSecondaryContainer
++        )
++    }
++
++    Surface(color = containerColor, shape = MaterialTheme.shapes.small) {
++        Text(
++            text = label,
++            style = MaterialTheme.typography.labelSmall,
++            color = contentColor,
++            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
++        )
+     }
+ }
+ 
+@@ -490,20 +579,17 @@
+ internal fun InfoCard(text: String) {
+     AppCard {
+         Text(
+-            text = text,
+-            style = MaterialTheme.typography.bodyMedium,
+-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+-            modifier = Modifier.fillMaxWidth()
++                text = text,
++                style = MaterialTheme.typography.bodyMedium,
++                color = MaterialTheme.colorScheme.onSurfaceVariant,
++                modifier = Modifier.fillMaxWidth()
+         )
+     }
+ }
+ 
+ @Composable
+ internal fun EmptyState(text: String) {
+-    AppEmptyState(
+-        title = stringResource(R.string.money_statement_title),
+-        body = text
+-    )
++    AppEmptyState(title = stringResource(R.string.money_statement_title), body = text)
+ }
+ 
+ internal fun buildStatementEntries(entries: List<AccountEntryEntity>): List<StatementEntryUi> {
+@@ -512,24 +598,25 @@
+     return sorted.map { entry ->
+         running += signedAmount(entry)
+         StatementEntryUi(
+-            entry = entry,
+-            date = Instant.fromEpochMilliseconds(entry.date)
+-                .toLocalDateTime(TimeZone.currentSystemDefault())
+-                .date,
+-            runningBalance = running
++                entry = entry,
++                date =
++                        Instant.fromEpochMilliseconds(entry.date)
++                                .toLocalDateTime(TimeZone.currentSystemDefault())
++                                .date,
++                runningBalance = running
+         )
+     }
+ }
+ 
+ internal fun buildStatementRange(
+-    rangeType: StatementRangeType,
+-    selectedYear: Int,
+-    selectedMonth: Int,
+-    customStart: String,
+-    customEnd: String,
+-    customRangeLabel: String,
+-    allTimeLabel: String,
+-    rangeToSeparator: String
++        rangeType: StatementRangeType,
++        selectedYear: Int,
++        selectedMonth: Int,
++        customStart: String,
++        customEnd: String,
++        customRangeLabel: String,
++        allTimeLabel: String,
++        rangeToSeparator: String
+ ): StatementRange {
+     return when (rangeType) {
+         StatementRangeType.All -> StatementRange(allTimeLabel, null, null, true)
+@@ -577,12 +664,12 @@
+ 
+ @Composable
+ internal fun entryTypeColor(type: EntryType) =
+-    when (type) {
+-        EntryType.DEBIT -> MaterialTheme.colorScheme.error
+-        EntryType.CREDIT -> MaterialTheme.colorScheme.primary
+-        EntryType.WRITE_OFF -> MaterialTheme.colorScheme.secondary
+-        EntryType.REVERSAL -> MaterialTheme.colorScheme.tertiary
+-    }
++        when (type) {
++            EntryType.DEBIT -> MaterialTheme.colorScheme.error
++            EntryType.CREDIT -> MaterialTheme.colorScheme.primary
++            EntryType.WRITE_OFF -> MaterialTheme.colorScheme.secondary
++            EntryType.REVERSAL -> MaterialTheme.colorScheme.tertiary
++        }
+ 
+ internal fun buildMonthOptions(anchorDate: LocalDate, count: Int = 12): List<MonthOption> {
+     val results = mutableListOf<MonthOption>()
+@@ -631,4 +718,3 @@
+         DateFormatSymbols.getInstance(Locale.getDefault()).months[0]
+     }
+ }
+-
+Index: app/build/generated/ksp/debug/java/com/zeynbakers/order_management_system/customer/data/CustomerDao_Impl.java
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/app/build/generated/ksp/debug/java/com/zeynbakers/order_management_system/customer/data/CustomerDao_Impl.java b/app/build/generated/ksp/debug/java/com/zeynbakers/order_management_system/customer/data/CustomerDao_Impl.java
+--- a/app/build/generated/ksp/debug/java/com/zeynbakers/order_management_system/customer/data/CustomerDao_Impl.java
++++ b/app/build/generated/ksp/debug/java/com/zeynbakers/order_management_system/customer/data/CustomerDao_Impl.java
+@@ -1,0 +1,525 @@
++package com.zeynbakers.order_management_system.customer.data;
++
++import android.database.Cursor;
++import android.os.CancellationSignal;
++import androidx.annotation.NonNull;
++import androidx.annotation.Nullable;
++import androidx.room.CoroutinesRoom;
++import androidx.room.EntityDeletionOrUpdateAdapter;
++import androidx.room.EntityInsertionAdapter;
++import androidx.room.RoomDatabase;
++import androidx.room.RoomSQLiteQuery;
++import androidx.room.SharedSQLiteStatement;
++import androidx.room.util.CursorUtil;
++import androidx.room.util.DBUtil;
++import androidx.room.util.StringUtil;
++import androidx.sqlite.db.SupportSQLiteStatement;
++import java.lang.Class;
++import java.lang.Exception;
++import java.lang.Long;
++import java.lang.Object;
++import java.lang.Override;
++import java.lang.String;
++import java.lang.StringBuilder;
++import java.lang.SuppressWarnings;
++import java.util.ArrayList;
++import java.util.Collections;
++import java.util.List;
++import java.util.concurrent.Callable;
++import javax.annotation.processing.Generated;
++import kotlin.Unit;
++import kotlin.coroutines.Continuation;
++
++@Generated("androidx.room.RoomProcessor")
++@SuppressWarnings({"unchecked", "deprecation"})
++public final class CustomerDao_Impl implements CustomerDao {
++  private final RoomDatabase __db;
++
++  private final EntityInsertionAdapter<CustomerEntity> __insertionAdapterOfCustomerEntity;
++
++  private final EntityDeletionOrUpdateAdapter<CustomerEntity> __deletionAdapterOfCustomerEntity;
++
++  private final EntityDeletionOrUpdateAdapter<CustomerEntity> __updateAdapterOfCustomerEntity;
++
++  private final SharedSQLiteStatement __preparedStmtOfArchiveById;
++
++  private final SharedSQLiteStatement __preparedStmtOfUnarchiveById;
++
++  public CustomerDao_Impl(@NonNull final RoomDatabase __db) {
++    this.__db = __db;
++    this.__insertionAdapterOfCustomerEntity = new EntityInsertionAdapter<CustomerEntity>(__db) {
++      @Override
++      @NonNull
++      protected String createQuery() {
++        return "INSERT OR REPLACE INTO `customers` (`id`,`name`,`phone`,`isArchived`) VALUES (nullif(?, 0),?,?,?)";
++      }
++
++      @Override
++      protected void bind(@NonNull final SupportSQLiteStatement statement,
++          @NonNull final CustomerEntity entity) {
++        statement.bindLong(1, entity.getId());
++        statement.bindString(2, entity.getName());
++        statement.bindString(3, entity.getPhone());
++        final int _tmp = entity.isArchived() ? 1 : 0;
++        statement.bindLong(4, _tmp);
++      }
++    };
++    this.__deletionAdapterOfCustomerEntity = new EntityDeletionOrUpdateAdapter<CustomerEntity>(__db) {
++      @Override
++      @NonNull
++      protected String createQuery() {
++        return "DELETE FROM `customers` WHERE `id` = ?";
++      }
++
++      @Override
++      protected void bind(@NonNull final SupportSQLiteStatement statement,
++          @NonNull final CustomerEntity entity) {
++        statement.bindLong(1, entity.getId());
++      }
++    };
++    this.__updateAdapterOfCustomerEntity = new EntityDeletionOrUpdateAdapter<CustomerEntity>(__db) {
++      @Override
++      @NonNull
++      protected String createQuery() {
++        return "UPDATE OR ABORT `customers` SET `id` = ?,`name` = ?,`phone` = ?,`isArchived` = ? WHERE `id` = ?";
++      }
++
++      @Override
++      protected void bind(@NonNull final SupportSQLiteStatement statement,
++          @NonNull final CustomerEntity entity) {
++        statement.bindLong(1, entity.getId());
++        statement.bindString(2, entity.getName());
++        statement.bindString(3, entity.getPhone());
++        final int _tmp = entity.isArchived() ? 1 : 0;
++        statement.bindLong(4, _tmp);
++        statement.bindLong(5, entity.getId());
++      }
++    };
++    this.__preparedStmtOfArchiveById = new SharedSQLiteStatement(__db) {
++      @Override
++      @NonNull
++      public String createQuery() {
++        final String _query = "UPDATE customers SET isArchived = 1 WHERE id = ?";
++        return _query;
++      }
++    };
++    this.__preparedStmtOfUnarchiveById = new SharedSQLiteStatement(__db) {
++      @Override
++      @NonNull
++      public String createQuery() {
++        final String _query = "UPDATE customers SET isArchived = 0 WHERE id = ?";
++        return _query;
++      }
++    };
++  }
++
++  @Override
++  public Object insert(final CustomerEntity customer,
++      final Continuation<? super Long> $completion) {
++    return CoroutinesRoom.execute(__db, true, new Callable<Long>() {
++      @Override
++      @NonNull
++      public Long call() throws Exception {
++        __db.beginTransaction();
++        try {
++          final Long _result = __insertionAdapterOfCustomerEntity.insertAndReturnId(customer);
++          __db.setTransactionSuccessful();
++          return _result;
++        } finally {
++          __db.endTransaction();
++        }
++      }
++    }, $completion);
++  }
++
++  @Override
++  public Object insertAll(final List<CustomerEntity> customers,
++      final Continuation<? super Unit> $completion) {
++    return CoroutinesRoom.execute(__db, true, new Callable<Unit>() {
++      @Override
++      @NonNull
++      public Unit call() throws Exception {
++        __db.beginTransaction();
++        try {
++          __insertionAdapterOfCustomerEntity.insert(customers);
++          __db.setTransactionSuccessful();
++          return Unit.INSTANCE;
++        } finally {
++          __db.endTransaction();
++        }
++      }
++    }, $completion);
++  }
++
++  @Override
++  public Object delete(final CustomerEntity customer,
++      final Continuation<? super Unit> $completion) {
++    return CoroutinesRoom.execute(__db, true, new Callable<Unit>() {
++      @Override
++      @NonNull
++      public Unit call() throws Exception {
++        __db.beginTransaction();
++        try {
++          __deletionAdapterOfCustomerEntity.handle(customer);
++          __db.setTransactionSuccessful();
++          return Unit.INSTANCE;
++        } finally {
++          __db.endTransaction();
++        }
++      }
++    }, $completion);
++  }
++
++  @Override
++  public Object update(final CustomerEntity customer,
++      final Continuation<? super Unit> $completion) {
++    return CoroutinesRoom.execute(__db, true, new Callable<Unit>() {
++      @Override
++      @NonNull
++      public Unit call() throws Exception {
++        __db.beginTransaction();
++        try {
++          __updateAdapterOfCustomerEntity.handle(customer);
++          __db.setTransactionSuccessful();
++          return Unit.INSTANCE;
++        } finally {
++          __db.endTransaction();
++        }
++      }
++    }, $completion);
++  }
++
++  @Override
++  public Object archiveById(final long id, final Continuation<? super Unit> $completion) {
++    return CoroutinesRoom.execute(__db, true, new Callable<Unit>() {
++      @Override
++      @NonNull
++      public Unit call() throws Exception {
++        final SupportSQLiteStatement _stmt = __preparedStmtOfArchiveById.acquire();
++        int _argIndex = 1;
++        _stmt.bindLong(_argIndex, id);
++        try {
++          __db.beginTransaction();
++          try {
++            _stmt.executeUpdateDelete();
++            __db.setTransactionSuccessful();
++            return Unit.INSTANCE;
++          } finally {
++            __db.endTransaction();
++          }
++        } finally {
++          __preparedStmtOfArchiveById.release(_stmt);
++        }
++      }
++    }, $completion);
++  }
++
++  @Override
++  public Object unarchiveById(final long id, final Continuation<? super Unit> $completion) {
++    return CoroutinesRoom.execute(__db, true, new Callable<Unit>() {
++      @Override
++      @NonNull
++      public Unit call() throws Exception {
++        final SupportSQLiteStatement _stmt = __preparedStmtOfUnarchiveById.acquire();
++        int _argIndex = 1;
++        _stmt.bindLong(_argIndex, id);
++        try {
++          __db.beginTransaction();
++          try {
++            _stmt.executeUpdateDelete();
++            __db.setTransactionSuccessful();
++            return Unit.INSTANCE;
++          } finally {
++            __db.endTransaction();
++          }
++        } finally {
++          __preparedStmtOfUnarchiveById.release(_stmt);
++        }
++      }
++    }, $completion);
++  }
++
++  @Override
++  public Object getById(final long id, final Continuation<? super CustomerEntity> $completion) {
++    final String _sql = "SELECT * FROM customers WHERE id = ?";
++    final RoomSQLiteQuery _statement = RoomSQLiteQuery.acquire(_sql, 1);
++    int _argIndex = 1;
++    _statement.bindLong(_argIndex, id);
++    final CancellationSignal _cancellationSignal = DBUtil.createCancellationSignal();
++    return CoroutinesRoom.execute(__db, false, _cancellationSignal, new Callable<CustomerEntity>() {
++      @Override
++      @Nullable
++      public CustomerEntity call() throws Exception {
++        final Cursor _cursor = DBUtil.query(__db, _statement, false, null);
++        try {
++          final int _cursorIndexOfId = CursorUtil.getColumnIndexOrThrow(_cursor, "id");
++          final int _cursorIndexOfName = CursorUtil.getColumnIndexOrThrow(_cursor, "name");
++          final int _cursorIndexOfPhone = CursorUtil.getColumnIndexOrThrow(_cursor, "phone");
++          final int _cursorIndexOfIsArchived = CursorUtil.getColumnIndexOrThrow(_cursor, "isArchived");
++          final CustomerEntity _result;
++          if (_cursor.moveToFirst()) {
++            final long _tmpId;
++            _tmpId = _cursor.getLong(_cursorIndexOfId);
++            final String _tmpName;
++            _tmpName = _cursor.getString(_cursorIndexOfName);
++            final String _tmpPhone;
++            _tmpPhone = _cursor.getString(_cursorIndexOfPhone);
++            final boolean _tmpIsArchived;
++            final int _tmp;
++            _tmp = _cursor.getInt(_cursorIndexOfIsArchived);
++            _tmpIsArchived = _tmp != 0;
++            _result = new CustomerEntity(_tmpId,_tmpName,_tmpPhone,_tmpIsArchived);
++          } else {
++            _result = null;
++          }
++          return _result;
++        } finally {
++          _cursor.close();
++          _statement.release();
++        }
++      }
++    }, $completion);
++  }
++
++  @Override
++  public Object getByPhone(final String phone,
++      final Continuation<? super CustomerEntity> $completion) {
++    final String _sql = "SELECT * FROM customers WHERE phone = ? LIMIT 1";
++    final RoomSQLiteQuery _statement = RoomSQLiteQuery.acquire(_sql, 1);
++    int _argIndex = 1;
++    _statement.bindString(_argIndex, phone);
++    final CancellationSignal _cancellationSignal = DBUtil.createCancellationSignal();
++    return CoroutinesRoom.execute(__db, false, _cancellationSignal, new Callable<CustomerEntity>() {
++      @Override
++      @Nullable
++      public CustomerEntity call() throws Exception {
++        final Cursor _cursor = DBUtil.query(__db, _statement, false, null);
++        try {
++          final int _cursorIndexOfId = CursorUtil.getColumnIndexOrThrow(_cursor, "id");
++          final int _cursorIndexOfName = CursorUtil.getColumnIndexOrThrow(_cursor, "name");
++          final int _cursorIndexOfPhone = CursorUtil.getColumnIndexOrThrow(_cursor, "phone");
++          final int _cursorIndexOfIsArchived = CursorUtil.getColumnIndexOrThrow(_cursor, "isArchived");
++          final CustomerEntity _result;
++          if (_cursor.moveToFirst()) {
++            final long _tmpId;
++            _tmpId = _cursor.getLong(_cursorIndexOfId);
++            final String _tmpName;
++            _tmpName = _cursor.getString(_cursorIndexOfName);
++            final String _tmpPhone;
++            _tmpPhone = _cursor.getString(_cursorIndexOfPhone);
++            final boolean _tmpIsArchived;
++            final int _tmp;
++            _tmp = _cursor.getInt(_cursorIndexOfIsArchived);
++            _tmpIsArchived = _tmp != 0;
++            _result = new CustomerEntity(_tmpId,_tmpName,_tmpPhone,_tmpIsArchived);
++          } else {
++            _result = null;
++          }
++          return _result;
++        } finally {
++          _cursor.close();
++          _statement.release();
++        }
++      }
++    }, $completion);
++  }
++
++  @Override
++  public Object getByPhones(final List<String> phones,
++      final Continuation<? super CustomerEntity> $completion) {
++    final StringBuilder _stringBuilder = StringUtil.newStringBuilder();
++    _stringBuilder.append("SELECT * FROM customers WHERE phone IN (");
++    final int _inputSize = phones.size();
++    StringUtil.appendPlaceholders(_stringBuilder, _inputSize);
++    _stringBuilder.append(") LIMIT 1");
++    final String _sql = _stringBuilder.toString();
++    final int _argCount = 0 + _inputSize;
++    final RoomSQLiteQuery _statement = RoomSQLiteQuery.acquire(_sql, _argCount);
++    int _argIndex = 1;
++    for (String _item : phones) {
++      _statement.bindString(_argIndex, _item);
++      _argIndex++;
++    }
++    final CancellationSignal _cancellationSignal = DBUtil.createCancellationSignal();
++    return CoroutinesRoom.execute(__db, false, _cancellationSignal, new Callable<CustomerEntity>() {
++      @Override
++      @Nullable
++      public CustomerEntity call() throws Exception {
++        final Cursor _cursor = DBUtil.query(__db, _statement, false, null);
++        try {
++          final int _cursorIndexOfId = CursorUtil.getColumnIndexOrThrow(_cursor, "id");
++          final int _cursorIndexOfName = CursorUtil.getColumnIndexOrThrow(_cursor, "name");
++          final int _cursorIndexOfPhone = CursorUtil.getColumnIndexOrThrow(_cursor, "phone");
++          final int _cursorIndexOfIsArchived = CursorUtil.getColumnIndexOrThrow(_cursor, "isArchived");
++          final CustomerEntity _result;
++          if (_cursor.moveToFirst()) {
++            final long _tmpId;
++            _tmpId = _cursor.getLong(_cursorIndexOfId);
++            final String _tmpName;
++            _tmpName = _cursor.getString(_cursorIndexOfName);
++            final String _tmpPhone;
++            _tmpPhone = _cursor.getString(_cursorIndexOfPhone);
++            final boolean _tmpIsArchived;
++            final int _tmp;
++            _tmp = _cursor.getInt(_cursorIndexOfIsArchived);
++            _tmpIsArchived = _tmp != 0;
++            _result = new CustomerEntity(_tmpId,_tmpName,_tmpPhone,_tmpIsArchived);
++          } else {
++            _result = null;
++          }
++          return _result;
++        } finally {
++          _cursor.close();
++          _statement.release();
++        }
++      }
++    }, $completion);
++  }
++
++  @Override
++  public Object getByIds(final List<Long> ids,
++      final Continuation<? super List<CustomerEntity>> $completion) {
++    final StringBuilder _stringBuilder = StringUtil.newStringBuilder();
++    _stringBuilder.append("SELECT * FROM customers WHERE id IN (");
++    final int _inputSize = ids.size();
++    StringUtil.appendPlaceholders(_stringBuilder, _inputSize);
++    _stringBuilder.append(")");
++    final String _sql = _stringBuilder.toString();
++    final int _argCount = 0 + _inputSize;
++    final RoomSQLiteQuery _statement = RoomSQLiteQuery.acquire(_sql, _argCount);
++    int _argIndex = 1;
++    for (long _item : ids) {
++      _statement.bindLong(_argIndex, _item);
++      _argIndex++;
++    }
++    final CancellationSignal _cancellationSignal = DBUtil.createCancellationSignal();
++    return CoroutinesRoom.execute(__db, false, _cancellationSignal, new Callable<List<CustomerEntity>>() {
++      @Override
++      @NonNull
++      public List<CustomerEntity> call() throws Exception {
++        final Cursor _cursor = DBUtil.query(__db, _statement, false, null);
++        try {
++          final int _cursorIndexOfId = CursorUtil.getColumnIndexOrThrow(_cursor, "id");
++          final int _cursorIndexOfName = CursorUtil.getColumnIndexOrThrow(_cursor, "name");
++          final int _cursorIndexOfPhone = CursorUtil.getColumnIndexOrThrow(_cursor, "phone");
++          final int _cursorIndexOfIsArchived = CursorUtil.getColumnIndexOrThrow(_cursor, "isArchived");
++          final List<CustomerEntity> _result = new ArrayList<CustomerEntity>(_cursor.getCount());
++          while (_cursor.moveToNext()) {
++            final CustomerEntity _item_1;
++            final long _tmpId;
++            _tmpId = _cursor.getLong(_cursorIndexOfId);
++            final String _tmpName;
++            _tmpName = _cursor.getString(_cursorIndexOfName);
++            final String _tmpPhone;
++            _tmpPhone = _cursor.getString(_cursorIndexOfPhone);
++            final boolean _tmpIsArchived;
++            final int _tmp;
++            _tmp = _cursor.getInt(_cursorIndexOfIsArchived);
++            _tmpIsArchived = _tmp != 0;
++            _item_1 = new CustomerEntity(_tmpId,_tmpName,_tmpPhone,_tmpIsArchived);
++            _result.add(_item_1);
++          }
++          return _result;
++        } finally {
++          _cursor.close();
++          _statement.release();
++        }
++      }
++    }, $completion);
++  }
++
++  @Override
++  public Object searchCustomers(final String query,
++      final Continuation<? super List<CustomerEntity>> $completion) {
++    final String _sql = "\n"
++            + "        SELECT * FROM customers\n"
++            + "        WHERE isArchived = 0 AND (name LIKE ? OR phone LIKE ?)\n"
++            + "        ORDER BY name\n"
++            + "        LIMIT 5\n"
++            + "        ";
++    final RoomSQLiteQuery _statement = RoomSQLiteQuery.acquire(_sql, 2);
++    int _argIndex = 1;
++    _statement.bindString(_argIndex, query);
++    _argIndex = 2;
++    _statement.bindString(_argIndex, query);
++    final CancellationSignal _cancellationSignal = DBUtil.createCancellationSignal();
++    return CoroutinesRoom.execute(__db, false, _cancellationSignal, new Callable<List<CustomerEntity>>() {
++      @Override
++      @NonNull
++      public List<CustomerEntity> call() throws Exception {
++        final Cursor _cursor = DBUtil.query(__db, _statement, false, null);
++        try {
++          final int _cursorIndexOfId = CursorUtil.getColumnIndexOrThrow(_cursor, "id");
++          final int _cursorIndexOfName = CursorUtil.getColumnIndexOrThrow(_cursor, "name");
++          final int _cursorIndexOfPhone = CursorUtil.getColumnIndexOrThrow(_cursor, "phone");
++          final int _cursorIndexOfIsArchived = CursorUtil.getColumnIndexOrThrow(_cursor, "isArchived");
++          final List<CustomerEntity> _result = new ArrayList<CustomerEntity>(_cursor.getCount());
++          while (_cursor.moveToNext()) {
++            final CustomerEntity _item;
++            final long _tmpId;
++            _tmpId = _cursor.getLong(_cursorIndexOfId);
++            final String _tmpName;
++            _tmpName = _cursor.getString(_cursorIndexOfName);
++            final String _tmpPhone;
++            _tmpPhone = _cursor.getString(_cursorIndexOfPhone);
++            final boolean _tmpIsArchived;
++            final int _tmp;
++            _tmp = _cursor.getInt(_cursorIndexOfIsArchived);
++            _tmpIsArchived = _tmp != 0;
++            _item = new CustomerEntity(_tmpId,_tmpName,_tmpPhone,_tmpIsArchived);
++            _result.add(_item);
++          }
++          return _result;
++        } finally {
++          _cursor.close();
++          _statement.release();
++        }
++      }
++    }, $completion);
++  }
++
++  @Override
++  public Object getAllCustomers(final Continuation<? super List<CustomerEntity>> $completion) {
++    final String _sql = "SELECT * FROM customers";
++    final RoomSQLiteQuery _statement = RoomSQLiteQuery.acquire(_sql, 0);
++    final CancellationSignal _cancellationSignal = DBUtil.createCancellationSignal();
++    return CoroutinesRoom.execute(__db, false, _cancellationSignal, new Callable<List<CustomerEntity>>() {
++      @Override
++      @NonNull
++      public List<CustomerEntity> call() throws Exception {
++        final Cursor _cursor = DBUtil.query(__db, _statement, false, null);
++        try {
++          final int _cursorIndexOfId = CursorUtil.getColumnIndexOrThrow(_cursor, "id");
++          final int _cursorIndexOfName = CursorUtil.getColumnIndexOrThrow(_cursor, "name");
++          final int _cursorIndexOfPhone = CursorUtil.getColumnIndexOrThrow(_cursor, "phone");
++          final int _cursorIndexOfIsArchived = CursorUtil.getColumnIndexOrThrow(_cursor, "isArchived");
++          final List<CustomerEntity> _result = new ArrayList<CustomerEntity>(_cursor.getCount());
++          while (_cursor.moveToNext()) {
++            final CustomerEntity _item;
++            final long _tmpId;
++            _tmpId = _cursor.getLong(_cursorIndexOfId);
++            final String _tmpName;
++            _tmpName = _cursor.getString(_cursorIndexOfName);
++            final String _tmpPhone;
++            _tmpPhone = _cursor.getString(_cursorIndexOfPhone);
++            final boolean _tmpIsArchived;
++            final int _tmp;
++            _tmp = _cursor.getInt(_cursorIndexOfIsArchived);
++            _tmpIsArchived = _tmp != 0;
++            _item = new CustomerEntity(_tmpId,_tmpName,_tmpPhone,_tmpIsArchived);
++            _result.add(_item);
++          }
++          return _result;
++        } finally {
++          _cursor.close();
++          _statement.release();
++        }
++      }
++    }, $completion);
++  }
++
++  @NonNull
++  public static List<Class<?>> getRequiredConverters() {
++    return Collections.emptyList();
++  }
++}

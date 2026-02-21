@@ -8,6 +8,8 @@ import com.zeynbakers.order_management_system.customer.data.CustomerDao
 import com.zeynbakers.order_management_system.customer.data.CustomerEntity
 import com.zeynbakers.order_management_system.order.data.*
 
+const val APP_DATABASE_SCHEMA_VERSION = 10
+
 @Database(
         entities =
                 [
@@ -18,7 +20,7 @@ import com.zeynbakers.order_management_system.order.data.*
                         AccountEntryEntity::class,
                         PaymentReceiptEntity::class,
                         PaymentAllocationEntity::class],
-        version = 10,
+        version = APP_DATABASE_SCHEMA_VERSION,
         exportSchema = false
 )
 @TypeConverters(Converters::class)

@@ -23,7 +23,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
-import com.zeynbakers.order_management_system.accounting.ui.LedgerViewModel
 import com.zeynbakers.order_management_system.accounting.ui.PaymentIntakeHistoryViewModel
 import com.zeynbakers.order_management_system.accounting.ui.PaymentIntakeViewModel
 import com.zeynbakers.order_management_system.core.navigation.AppRoutes
@@ -59,7 +58,6 @@ internal fun MainAppHostScaffold(
     customerViewModel: CustomerAccountsViewModel,
     paymentIntakeViewModel: PaymentIntakeViewModel,
     paymentHistoryViewModel: PaymentIntakeHistoryViewModel,
-    ledgerViewModel: LedgerViewModel,
     appSnackbarHostState: SnackbarHostState,
     hasRecordPermission: Boolean,
     onRequestRecordPermission: () -> Unit,
@@ -131,7 +129,6 @@ internal fun MainAppHostScaffold(
                 customerViewModel = customerViewModel,
                 paymentIntakeViewModel = paymentIntakeViewModel,
                 paymentHistoryViewModel = paymentHistoryViewModel,
-                ledgerViewModel = ledgerViewModel,
                 calendarState = calendarState,
                 ordersState = ordersState,
                 customersState = customersState,

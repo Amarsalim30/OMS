@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.zeynbakers.order_management_system.accounting.data.PaymentAllocationStatus
 import com.zeynbakers.order_management_system.accounting.data.PaymentAllocationType
+import com.zeynbakers.order_management_system.accounting.data.EntryType
 import com.zeynbakers.order_management_system.accounting.data.PaymentMethod
 import com.zeynbakers.order_management_system.accounting.data.PaymentReceiptEntity
 import com.zeynbakers.order_management_system.accounting.data.PaymentReceiptStatus
@@ -55,6 +56,8 @@ data class PaymentHistoryItemUi(
     val rawText: String?,
     val customerId: Long?,
     val customerName: String?,
+    val note: String?,
+    val isBadDebt: Boolean,
     val status: PaymentReceiptStatus,
     val allocations: List<PaymentHistoryAllocationUi>,
     val missingLedgerCount: Int
@@ -271,6 +274,11 @@ class PaymentIntakeHistoryViewModel(private val database: AppDatabase) : ViewMod
                             allocation.status == PaymentAllocationStatus.APPLIED &&
                                 (allocation.accountEntryId == null || entriesById[allocation.accountEntryId] == null)
                         }
+                    val isBadDebt =
+                        receiptAllocations.any { allocation ->
+                            val entry = allocation.accountEntryId?.let { entriesById[it] }
+                            entry?.type == EntryType.WRITE_OFF
+                        }
                     val displayAmount =
                         orderAllocationTotal?.takeIf { it > BigDecimal.ZERO } ?: receipt.amount
                     val secondaryAmount =
@@ -288,6 +296,8 @@ class PaymentIntakeHistoryViewModel(private val database: AppDatabase) : ViewMod
                         rawText = receipt.rawText,
                         customerId = resolvedCustomerId,
                         customerName = customerName,
+                        note = receipt.note,
+                        isBadDebt = isBadDebt,
                         status = receipt.status,
                         allocations = allocationUi,
                         missingLedgerCount = missingLedgerCount

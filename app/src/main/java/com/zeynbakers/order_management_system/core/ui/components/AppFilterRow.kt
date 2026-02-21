@@ -5,8 +5,12 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -31,7 +35,8 @@ fun AppFilterRow(
     selectedKey: String,
     onSelect: (String) -> Unit,
     modifier: Modifier = Modifier,
-    primaryCount: Int = 3
+    primaryCount: Int = 3,
+    showMoreAsIcon: Boolean = false
 ) {
     if (options.isEmpty()) return
 
@@ -52,8 +57,17 @@ fun AppFilterRow(
             )
         }
         if (secondary.isNotEmpty()) {
-            TextButton(onClick = { showMore = true }) {
-                Text(stringResource(R.string.action_more_filters))
+            if (showMoreAsIcon) {
+                IconButton(onClick = { showMore = true }) {
+                    Icon(
+                        imageVector = Icons.Filled.Tune,
+                        contentDescription = stringResource(R.string.action_more_filters)
+                    )
+                }
+            } else {
+                TextButton(onClick = { showMore = true }) {
+                    Text(stringResource(R.string.action_more_filters))
+                }
             }
         }
     }

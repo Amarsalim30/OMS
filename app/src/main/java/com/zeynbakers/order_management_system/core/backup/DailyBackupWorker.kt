@@ -10,21 +10,45 @@ class DailyBackupWorker(
 ) : CoroutineWorker(appContext, params) {
     override suspend fun doWork(): Result {
         val prefs = BackupPreferences(applicationContext)
-        val force = inputData.getBoolean(KEY_FORCE, false)
-        if (!force && !prefs.readState().autoEnabled) {
+        val force = inputData.getBoolean(BackupScheduler.KEY_FORCE, false)
+        val state = prefs.readState()
+        if (!force && !state.autoEnabled) {
             return Result.success()
+        }
+        if (!force) {
+            val health = BackupManager.evaluateTargetHealth(applicationContext, state)
+            if (health != BackupTargetHealth.Healthy) {
+                val count = prefs.incrementAutoFailure()
+                if (count >= BACKUP_ATTENTION_THRESHOLD) {
+                    BackupAttentionNotifier.notifyNeedsAttention(
+                        context = applicationContext,
+                        message = "Backup location needs re-link"
+                    )
+                }
+                return Result.success()
+            }
         }
         val result = BackupManager.runBackup(applicationContext, force = force)
         return if (result.success) {
+            prefs.resetAutoFailureCount()
+            BackupAttentionNotifier.cancel(applicationContext)
             Result.success()
         } else if (result.shouldRetry) {
+            val count = prefs.incrementAutoFailure()
+            if (count >= BACKUP_ATTENTION_THRESHOLD) {
+                BackupAttentionNotifier.notifyNeedsAttention(applicationContext, result.message)
+            }
             Result.retry()
         } else {
+            val count = prefs.incrementAutoFailure()
+            if (count >= BACKUP_ATTENTION_THRESHOLD) {
+                BackupAttentionNotifier.notifyNeedsAttention(applicationContext, result.message)
+            }
             Result.success()
         }
     }
 
     companion object {
-        const val KEY_FORCE = "force"
+        private const val BACKUP_ATTENTION_THRESHOLD = 3
     }
 }

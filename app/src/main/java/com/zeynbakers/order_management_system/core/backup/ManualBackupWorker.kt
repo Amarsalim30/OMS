@@ -12,6 +12,7 @@ class ManualBackupWorker(
 
     override suspend fun doWork(): Result {
         val force = inputData.getBoolean(BackupScheduler.KEY_FORCE, false)
+        val prefs = BackupPreferences(applicationContext)
         val result =
             BackupManager.runBackup(
                 context = applicationContext,
@@ -25,9 +26,18 @@ class ManualBackupWorker(
                 )
             }
         return when {
-            result.success -> Result.success()
+            result.success -> {
+                prefs.resetAutoFailureCount()
+                BackupAttentionNotifier.cancel(applicationContext)
+                Result.success()
+            }
             result.shouldRetry -> Result.retry()
-            else -> Result.failure()
+            else ->
+                Result.failure(
+                    workDataOf(
+                        BackupScheduler.KEY_ERROR_MESSAGE to (result.message ?: "Backup failed")
+                    )
+                )
         }
     }
 }

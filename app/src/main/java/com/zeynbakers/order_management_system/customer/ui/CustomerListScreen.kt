@@ -7,6 +7,7 @@
 package com.zeynbakers.order_management_system.customer.ui
 
 import android.content.Intent
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
@@ -23,10 +24,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -36,7 +33,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material.icons.outlined.Person
 import androidx.compose.material3.Button
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.AlertDialog
@@ -75,7 +71,6 @@ import com.zeynbakers.order_management_system.R
 import com.zeynbakers.order_management_system.accounting.data.CustomerAccountSummary
 import com.zeynbakers.order_management_system.core.ui.LocalUiEventDispatcher
 import com.zeynbakers.order_management_system.core.ui.showSnackbar
-import com.zeynbakers.order_management_system.core.util.formatKes
 import java.math.BigDecimal
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -94,6 +89,7 @@ fun CustomerListScreen(
     onAddOrder: (Long) -> Unit = {},
     onEditCustomer: (Long) -> Unit = {},
     onArchiveCustomer: (Long) -> Unit = {},
+    onDeleteCustomer: (Long) -> Unit = {},
     onRestoreCustomer: (Long) -> Unit = {},
     showBack: Boolean = true
 ) {
@@ -109,6 +105,7 @@ fun CustomerListScreen(
         onAddOrder = onAddOrder,
         onEditCustomer = onEditCustomer,
         onArchiveCustomer = onArchiveCustomer,
+        onDeleteCustomer = onDeleteCustomer,
         onRestoreCustomer = onRestoreCustomer,
         showBack = showBack
     )
@@ -127,6 +124,7 @@ private fun CustomersScreenM3(
     onAddOrder: (Long) -> Unit,
     onEditCustomer: (Long) -> Unit,
     onArchiveCustomer: (Long) -> Unit,
+    onDeleteCustomer: (Long) -> Unit,
     onRestoreCustomer: (Long) -> Unit,
     showBack: Boolean
 ) {
@@ -154,6 +152,7 @@ private fun CustomersScreenM3(
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val customerArchivedMessage = stringResource(R.string.customer_archived)
+    val customerDeletedMessage = stringResource(R.string.customer_deleted)
     val undoActionLabel = stringResource(R.string.action_undo)
     val resetFiltersAndSort: () -> Unit = {
         selectedFilter = CustomerFilter.All
@@ -176,6 +175,26 @@ private fun CustomersScreenM3(
             .debounce(300)
             .distinctUntilChanged()
             .collect { onQueryChange(it) }
+    }
+
+    BackHandler(
+        enabled =
+            pendingArchiveCustomer != null ||
+                longPressedCustomer != null ||
+                showSortSheet ||
+                showFilterSheet ||
+                isSearchActive
+    ) {
+        when {
+            pendingArchiveCustomer != null -> pendingArchiveCustomer = null
+            longPressedCustomer != null -> longPressedCustomer = null
+            showSortSheet -> showSortSheet = false
+            showFilterSheet -> showFilterSheet = false
+            isSearchActive -> {
+                isSearchActive = false
+                queryText = ""
+            }
+        }
     }
 
     val filteredCustomers by remember(
@@ -213,7 +232,6 @@ private fun CustomersScreenM3(
             }
         }
     }
-
     Scaffold(
         contentWindowInsets = WindowInsets(0),
         topBar = {
@@ -246,9 +264,7 @@ private fun CustomersScreenM3(
                 hideZeroBalances = hideZeroBalances,
                 showInactive = showInactive,
                 onFilterClick = { showFilterSheet = true },
-                onSortClick = { showSortSheet = true },
-                onToggleHideZero = { hideZeroBalances = !hideZeroBalances },
-                onToggleShowInactive = { showInactive = !showInactive }
+                onSortClick = { showSortSheet = true }
             )
 
             if (hasActiveControls) {
@@ -318,7 +334,7 @@ private fun CustomersScreenM3(
                             onAddOrder = { onAddOrder(customer.customerId) },
                             onMessage = {
                                 if (customer.phone.isNotBlank()) {
-                                    launchSms(context, customer.phone)
+                                    launchCustomerMessage(context, customer.phone)
                                 }
                             },
                             hasPhone = customer.phone.isNotBlank()
@@ -332,6 +348,10 @@ private fun CustomersScreenM3(
     longPressedCustomer?.let { customer ->
         val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
         val hasPhone = customer.phone.isNotBlank()
+        val canDelete =
+            customer.billed == BigDecimal.ZERO &&
+                customer.paid == BigDecimal.ZERO &&
+                customer.balance == BigDecimal.ZERO
         ModalBottomSheet(
             onDismissRequest = { longPressedCustomer = null },
             sheetState = sheetState
@@ -354,7 +374,7 @@ private fun CustomersScreenM3(
                     label = stringResource(R.string.customer_action_message),
                     enabled = hasPhone,
                     onClick = {
-                        launchSms(context, customer.phone)
+                        launchCustomerMessage(context, customer.phone)
                         longPressedCustomer = null
                     }
                 )
@@ -378,7 +398,14 @@ private fun CustomersScreenM3(
                     color = MaterialTheme.colorScheme.surfaceVariant
                 ) {}
                 ActionRow(
-                    label = stringResource(R.string.customer_action_archive),
+                    label =
+                        stringResource(
+                            if (canDelete) {
+                                R.string.customer_action_delete
+                            } else {
+                                R.string.customer_action_archive
+                            }
+                        ),
                     textColor = MaterialTheme.colorScheme.error,
                     onClick = {
                         pendingArchiveCustomer = customer
@@ -390,25 +417,57 @@ private fun CustomersScreenM3(
     }
 
     pendingArchiveCustomer?.let { customer ->
+        val hasTransactions =
+            customer.billed != BigDecimal.ZERO ||
+                customer.paid != BigDecimal.ZERO ||
+                customer.balance != BigDecimal.ZERO
+        val titleRes =
+            if (hasTransactions) {
+                R.string.customer_archive_title
+            } else {
+                R.string.customer_delete_title
+            }
+        val messageRes =
+            if (hasTransactions) {
+                R.string.customer_archive_message
+            } else {
+                R.string.customer_delete_message
+            }
+        val confirmRes =
+            if (hasTransactions) {
+                R.string.customer_action_archive
+            } else {
+                R.string.customer_action_delete
+            }
         AlertDialog(
             onDismissRequest = { pendingArchiveCustomer = null },
-            title = { Text(stringResource(R.string.customer_archive_title)) },
-            text = { Text(stringResource(R.string.customer_archive_message)) },
+            title = { Text(stringResource(titleRes)) },
+            text = { Text(stringResource(messageRes)) },
             confirmButton = {
                 TextButton(onClick = {
-                    onArchiveCustomer(customer.customerId)
-                    pendingArchiveCustomer = null
-                    scope.launch {
-                        val result =
+                    if (hasTransactions) {
+                        onArchiveCustomer(customer.customerId)
+                        pendingArchiveCustomer = null
+                        scope.launch {
+                            val result =
+                                uiEvents.showSnackbar(
+                                    message = customerArchivedMessage,
+                                    actionLabel = undoActionLabel
+                                )
+                            if (result == SnackbarResult.ActionPerformed) {
+                                onRestoreCustomer(customer.customerId)
+                            }
+                        }
+                    } else {
+                        onDeleteCustomer(customer.customerId)
+                        pendingArchiveCustomer = null
+                        scope.launch {
                             uiEvents.showSnackbar(
-                                message = customerArchivedMessage,
-                                actionLabel = undoActionLabel
+                                message = customerDeletedMessage
                             )
-                        if (result == SnackbarResult.ActionPerformed) {
-                            onRestoreCustomer(customer.customerId)
                         }
                     }
-                }) { Text(stringResource(R.string.customer_action_archive)) }
+                }) { Text(stringResource(confirmRes)) }
             },
             dismissButton = {
                 TextButton(onClick = { pendingArchiveCustomer = null }) { Text(stringResource(R.string.action_cancel)) }
@@ -419,7 +478,11 @@ private fun CustomersScreenM3(
     if (showFilterSheet) {
         CustomerFilterSheet(
             selectedFilter = selectedFilter,
+            hideZeroBalances = hideZeroBalances,
+            showInactive = showInactive,
             onSelect = { selectedFilter = it },
+            onToggleHideZero = { hideZeroBalances = !hideZeroBalances },
+            onToggleShowInactive = { showInactive = !showInactive },
             onDismiss = { showFilterSheet = false }
         )
     }

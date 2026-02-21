@@ -60,6 +60,7 @@ class AccessibilitySmokeTest {
                     onSaveOrder = { _, _, _, _, _, _ -> },
                     searchCustomers = { emptyList() },
                     onSummaryClick = {},
+                    onOpenMore = {},
                     onMonthSettled = { _, _ -> },
                     openQuickAddDate = null,
                     onQuickAddConsumed = {}

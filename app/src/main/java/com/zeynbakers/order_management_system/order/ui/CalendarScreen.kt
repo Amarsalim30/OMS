@@ -66,6 +66,7 @@ fun CalendarScreen(
     onSaveOrder: (LocalDate, String, BigDecimal, String, String, String?) -> Unit,
     searchCustomers: suspend (String) -> List<CustomerEntity>,
     onSummaryClick: () -> Unit,
+    onOpenMore: () -> Unit,
     onMonthSettled: (Int, Int) -> Unit,
     openQuickAddDate: LocalDate?,
     onQuickAddConsumed: () -> Unit
@@ -91,17 +92,16 @@ fun CalendarScreen(
     val scope = rememberCoroutineScope()
 
     LaunchedEffect(Unit) {
-        snapshotFlow {
-            when {
-                customerName.isNotBlank() -> customerName
-                customerPhone.isNotBlank() -> customerPhone
-                else -> ""
-            }
-        }
+        snapshotFlow { customerName.trim() to customerPhone.trim() }
             .debounce(250)
             .distinctUntilChanged()
-            .collectLatest { query ->
-                suggestions = if (query.isBlank()) emptyList() else searchCustomers(query)
+            .collectLatest { (query, selectedPhone) ->
+                suggestions =
+                    if (query.isBlank() || selectedPhone.isNotBlank()) {
+                        emptyList()
+                    } else {
+                        searchCustomers(query)
+                    }
             }
     }
 
@@ -212,7 +212,6 @@ fun CalendarScreen(
             }
         }
     }
-
     Scaffold(
         contentWindowInsets = WindowInsets(0),
         topBar = {
@@ -227,7 +226,8 @@ fun CalendarScreen(
                         onSelectDate(today)
                     }
                 },
-                onSummaryClick = onSummaryClick
+                onSummaryClick = onSummaryClick,
+                onMoreClick = onOpenMore
             )
         },
         floatingActionButton = {
@@ -347,7 +347,6 @@ fun CalendarScreen(
         val amountRegistry = LocalAmountFieldRegistry.current
         val notesRequiredMessage = stringResource(R.string.day_editor_notes_required)
         val validTotalRequiredMessage = stringResource(R.string.day_editor_valid_total_required)
-        val phoneRequiredMessage = stringResource(R.string.day_editor_phone_required_for_customer)
         val addOrderDateLabel = remember(activeDate) {
             DateTimeFormatter.ofPattern("d MMM", Locale.getDefault()).format(activeDate.toJavaLocalDate())
         }
@@ -365,12 +364,17 @@ fun CalendarScreen(
         val normalizedPickupTime =
             if (pickupTimeText.isBlank()) null else normalizePickupTime(pickupTimeText)
         val isPickupTimeInvalid = pickupTimeText.isNotBlank() && normalizedPickupTime == null
-        val hasCustomerMismatch = customerName.isNotBlank() && customerPhone.isBlank()
+        val attachedCustomerPhone = customerPhone.trim()
+        val attachedCustomerName =
+            if (attachedCustomerPhone.isNotBlank()) {
+                customerName.trim()
+            } else {
+                ""
+            }
         val canSave =
             trimmedNotes.isNotEmpty() &&
                 parsedTotal != null &&
                 parsedTotal > BigDecimal.ZERO &&
-                !hasCustomerMismatch &&
                 !isPickupTimeInvalid
 
         fun submitOrder() {
@@ -385,11 +389,6 @@ fun CalendarScreen(
                     totalError = validTotalRequiredMessage
                     customerError = null
                 }
-                hasCustomerMismatch -> {
-                    notesError = null
-                    totalError = null
-                    customerError = phoneRequiredMessage
-                }
                 isPickupTimeInvalid -> {
                     notesError = null
                     totalError = null
@@ -400,12 +399,13 @@ fun CalendarScreen(
                         activeDate,
                         trimmedNotes,
                         parsedTotal,
-                        customerName.trim(),
-                        customerPhone.trim(),
+                        attachedCustomerName,
+                        attachedCustomerPhone,
                         normalizedPickupTime
                     )
                     notes = ""
                     totalText = ""
+                    suggestions = emptyList()
                     customerName = ""
                     customerPhone = ""
                     pickupTimeText = ""
@@ -459,7 +459,8 @@ fun CalendarScreen(
             },
             customerError = customerError,
             canSave = canSave,
-            onSave = { submitOrder() },
+            onSave = ::submitOrder,
+            focusNotesInitially = false,
             onClear = {
                 notes = ""
                 totalText = ""
@@ -481,5 +482,6 @@ fun CalendarScreen(
         )
     }
 }
+
 
 

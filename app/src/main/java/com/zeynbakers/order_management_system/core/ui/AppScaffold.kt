@@ -9,24 +9,25 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material3.BottomAppBar
 import androidx.compose.material3.ElevatedButton
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.NavigationRail
 import androidx.compose.material3.NavigationRailItem
+import androidx.compose.material3.NavigationRailItemDefaults
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.windowsizeclass.WindowSizeClass
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
@@ -34,8 +35,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.zeynbakers.order_management_system.R
+import androidx.compose.foundation.shape.RoundedCornerShape
 
 data class TopLevelDestination(
     val route: String,
@@ -63,23 +66,47 @@ fun AppScaffold(
     content: @Composable (PaddingValues) -> Unit
 ) {
     val useRail = windowSizeClass.widthSizeClass >= WindowWidthSizeClass.Medium
+    val navItemColors =
+        NavigationBarItemDefaults.colors(
+            selectedIconColor = MaterialTheme.colorScheme.onSecondaryContainer,
+            selectedTextColor = MaterialTheme.colorScheme.onSurface,
+            unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+            unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
+            indicatorColor = MaterialTheme.colorScheme.secondaryContainer
+        )
+    val railItemColors =
+        NavigationRailItemDefaults.colors(
+            selectedIconColor = MaterialTheme.colorScheme.onSecondaryContainer,
+            selectedTextColor = MaterialTheme.colorScheme.onSurface,
+            unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+            unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
+            indicatorColor = MaterialTheme.colorScheme.secondaryContainer
+        )
+
     if (useRail) {
         Row(modifier = Modifier.fillMaxSize()) {
-            NavigationRail {
+            NavigationRail(
+                containerColor = MaterialTheme.colorScheme.surface
+            ) {
+                Text(
+                    text = stringResource(R.string.app_name),
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 14.dp)
+                )
+                HorizontalDivider(
+                    modifier = Modifier.padding(horizontal = 12.dp),
+                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.25f)
+                )
+                Spacer(modifier = Modifier.weight(1f, fill = false))
                 destinations.forEach { destination ->
                     NavigationRailItem(
                         selected = selectedRoute == destination.route,
                         onClick = { onDestinationSelected(destination.route) },
                         icon = { Icon(destination.icon, contentDescription = destination.label) },
                         label = { Text(destination.label) },
-                        alwaysShowLabel = false
-                    )
-                }
-                Spacer(modifier = Modifier.weight(1f))
-                IconButton(onClick = onOpenMore) {
-                    Icon(
-                        Icons.Filled.Settings,
-                        contentDescription = stringResource(R.string.action_settings)
+                        alwaysShowLabel = true,
+                        colors = railItemColors
                     )
                 }
             }
@@ -91,34 +118,27 @@ fun AppScaffold(
         Scaffold(
             contentWindowInsets = WindowInsets(0),
             bottomBar = {
-                BottomAppBar(
-                    containerColor = MaterialTheme.colorScheme.surface,
-                    tonalElevation = 0.dp
+                Surface(
+                    shape = RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp),
+                    tonalElevation = 3.dp,
+                    shadowElevation = 6.dp
                 ) {
                     NavigationBar(
-                        modifier = Modifier
-                            .weight(1f)
-                            .padding(vertical = 2.dp),
                         containerColor = MaterialTheme.colorScheme.surface,
-                        tonalElevation = 0.dp
+                        tonalElevation = 0.dp,
+                        windowInsets = WindowInsets(0),
+                        modifier = Modifier.navigationBarsPadding()
                     ) {
                         destinations.forEach { destination ->
                             NavigationBarItem(
                                 selected = selectedRoute == destination.route,
                                 onClick = { onDestinationSelected(destination.route) },
                                 icon = { Icon(destination.icon, contentDescription = destination.label) },
-                                label = { Text(destination.label) }
+                                label = { Text(destination.label) },
+                                alwaysShowLabel = true,
+                                colors = navItemColors
                             )
                         }
-                    }
-                    IconButton(
-                        onClick = onOpenMore,
-                        modifier = Modifier.padding(end = 6.dp)
-                    ) {
-                        Icon(
-                            Icons.Filled.Settings,
-                            contentDescription = stringResource(R.string.action_settings)
-                        )
                     }
                 }
             }
@@ -132,10 +152,19 @@ fun AppScaffold(
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 12.dp, vertical = 6.dp)
+                    .padding(horizontal = 14.dp, vertical = 8.dp)
                     .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(6.dp)
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
+                Text(
+                    text = stringResource(R.string.action_more),
+                    style = MaterialTheme.typography.titleMedium
+                )
+                Text(
+                    text = stringResource(R.string.more_quick_tools_subtitle),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
                 moreActions.forEach { action ->
                     ElevatedButton(
                         onClick = action.onClick,
