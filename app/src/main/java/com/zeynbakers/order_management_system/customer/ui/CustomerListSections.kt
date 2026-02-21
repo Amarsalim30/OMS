@@ -33,6 +33,7 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.outlined.Person
+import androidx.compose.material.icons.outlined.Sync
 import androidx.compose.material3.Button
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.DropdownMenu
@@ -158,24 +159,48 @@ internal fun CustomerListControlRow(
     showInactive: Boolean,
     onFilterClick: () -> Unit,
     onSortClick: () -> Unit,
+    onSyncClick: () -> Unit,
+    showSyncAction: Boolean,
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        ControlIconButton(
-            icon = Icons.Filled.Tune,
-            contentDescription = stringResource(R.string.action_more_filters),
-            active = selectedFilter != CustomerFilter.All || !hideZeroBalances || showInactive,
-            onClick = onFilterClick
-        )
-        ControlIconButton(
-            icon = Icons.AutoMirrored.Filled.Sort,
-            contentDescription = stringResource(R.string.action_sort),
-            active = selectedSort != CustomerSort.BalanceDesc,
-            onClick = onSortClick
-        )
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            ControlIconButton(
+                icon = Icons.Filled.Tune,
+                contentDescription = stringResource(R.string.action_more_filters),
+                active = selectedFilter != CustomerFilter.All || !hideZeroBalances || showInactive,
+                onClick = onFilterClick
+            )
+            ControlIconButton(
+                icon = Icons.AutoMirrored.Filled.Sort,
+                contentDescription = stringResource(R.string.action_sort),
+                active = selectedSort != CustomerSort.BalanceDesc,
+                onClick = onSortClick
+            )
+        }
+        if (showSyncAction) {
+            TextButton(
+                onClick = onSyncClick,
+                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.Sync,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(Modifier.width(4.dp))
+                Text(
+                    text = stringResource(R.string.customer_sync_contacts),
+                    maxLines = 1
+                )
+            }
+        }
     }
 }
 
@@ -532,14 +557,10 @@ internal fun EmptyCustomersState(
             Button(onClick = onClearFilters) {
                 Text(stringResource(R.string.customer_reset_filters))
             }
-            Spacer(Modifier.height(4.dp))
-            TextButton(onClick = onSyncContacts) { Text(stringResource(R.string.customer_sync_contacts)) }
         } else if (showImportedNoOrdersState) {
             Button(onClick = onRevealCustomers) {
                 Text(stringResource(R.string.customer_show_imported_contacts))
             }
-            Spacer(Modifier.height(4.dp))
-            TextButton(onClick = onSyncContacts) { Text(stringResource(R.string.customer_sync_contacts)) }
         } else if (!hasAnyCustomers) {
             Button(onClick = onSyncContacts) {
                 Text(stringResource(R.string.customer_import_contacts_action))

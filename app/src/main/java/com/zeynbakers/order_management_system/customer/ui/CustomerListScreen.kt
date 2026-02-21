@@ -151,6 +151,7 @@ private fun CustomersScreenM3(
             hasActiveFilters || selectedSort != CustomerSort.BalanceDesc
         }
     }
+    val hasAnyCustomers = summaries.isNotEmpty()
     val uiEvents = LocalUiEventDispatcher.current
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
@@ -272,7 +273,9 @@ private fun CustomersScreenM3(
                 hideZeroBalances = hideZeroBalances,
                 showInactive = showInactive,
                 onFilterClick = { showFilterSheet = true },
-                onSortClick = { showSortSheet = true }
+                onSortClick = { showSortSheet = true },
+                onSyncClick = onSyncContacts,
+                showSyncAction = hasAnyCustomers
             )
 
             if (hasActiveControls) {
@@ -319,15 +322,11 @@ private fun CustomersScreenM3(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-                TextButton(onClick = onSyncContacts) {
-                    Text(stringResource(R.string.customer_sync_contacts))
-                }
             }
 
             Spacer(Modifier.height(6.dp))
 
             if (filteredCustomers.isEmpty()) {
-                val hasAnyCustomers = summaries.isNotEmpty()
                 val allCustomersWithoutOrders =
                     hasAnyCustomers && summaries.all { it.billed == zero && it.paid == zero }
                 val showImportedNoOrdersState =
