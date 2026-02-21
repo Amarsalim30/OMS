@@ -12,6 +12,7 @@ internal fun topLevelRouteFor(route: String?): String? {
     return when {
         route == null -> null
         route == AppRoutes.Calendar -> AppRoutes.Calendar
+        route == AppRoutes.CalendarTutorial -> AppRoutes.Calendar
         route.startsWith("day/") -> AppRoutes.Calendar
         route == AppRoutes.Summary -> AppRoutes.Calendar
         route == AppRoutes.Orders -> AppRoutes.Orders

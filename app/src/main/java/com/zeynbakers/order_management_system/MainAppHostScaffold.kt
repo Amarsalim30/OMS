@@ -11,6 +11,7 @@ import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.PersonAdd
+import androidx.compose.material.icons.filled.School
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -39,6 +40,7 @@ import com.zeynbakers.order_management_system.order.ui.OrderViewModel
 internal fun MainAppHostScaffold(
     activity: ComponentActivity,
     navController: NavHostController,
+    currentRoute: String?,
     activeTopLevelRoute: String,
     selectedTopLevelRoute: String,
     onSelectedTopLevelRouteChange: (String) -> Unit,
@@ -70,6 +72,15 @@ internal fun MainAppHostScaffold(
     onDismissUpdateDialog: () -> Unit
 ) {
     Box(modifier = Modifier.fillMaxSize()) {
+        val showNavigation =
+            currentRoute != AppRoutes.Splash &&
+                currentRoute != AppRoutes.Intro &&
+                currentRoute != AppRoutes.SetupChecklist &&
+                currentRoute != AppRoutes.BusinessProfile &&
+                currentRoute != AppRoutes.ContactsPermissionPrimer &&
+                currentRoute != AppRoutes.NotificationsPermissionPrimer &&
+                currentRoute != AppRoutes.FirstRunTutorial &&
+                currentRoute != AppRoutes.CalendarTutorial
         val windowSizeClass = calculateWindowSizeClass(activity)
         val topLevelDestinations = listOf(
             TopLevelDestination(
@@ -95,6 +106,10 @@ internal fun MainAppHostScaffold(
         )
 
         val moreActions = listOf(
+            MoreAction(stringResource(R.string.more_tutorial), Icons.Filled.School) {
+                onShowMoreSheetChange(false)
+                navigateTopLevel(navController, AppRoutes.CalendarTutorial, resetToRoot = true)
+            },
             MoreAction(stringResource(R.string.more_backup_restore), Icons.Filled.Settings) {
                 onShowMoreSheetChange(false)
                 navController.navigate(AppRoutes.Backup)
@@ -117,6 +132,7 @@ internal fun MainAppHostScaffold(
                 onSelectedTopLevelRouteChange(route)
                 navigateTopLevel(navController, route, resetToRoot = true)
             },
+            showNavigation = showNavigation,
             showMoreSheet = showMoreSheet,
             onOpenMore = { onShowMoreSheetChange(true) },
             onDismissMore = { onShowMoreSheetChange(false) },

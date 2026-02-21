@@ -62,7 +62,53 @@ internal fun NavGraphBuilder.calendarGraph(
             onOpenMore = navigationActions.onOpenMore,
             onMonthSettled = { year, month -> calendarCallbacks.onMonthSettled(year, month) },
             openQuickAddDate = calendarState.quickAddDate,
-            onQuickAddConsumed = { calendarCallbacks.onQuickAddDateChange(null) }
+            onQuickAddConsumed = { calendarCallbacks.onQuickAddDateChange(null) },
+            showInteractiveTutorial = false
+        )
+    }
+
+    composable(AppRoutes.CalendarTutorial) {
+        CalendarScreen(
+            days = calendarState.calendarDays,
+            currentYear = calendarState.currentYear,
+            currentMonth = calendarState.currentMonth,
+            baseYear = calendarState.baseYear,
+            baseMonth = calendarState.baseMonth,
+            monthSnapshots = calendarState.monthSnapshots,
+            monthTotal = calendarState.monthTotal,
+            monthBadgeCount = calendarState.monthBadgeCount,
+            selectedDate = calendarState.selectedDate,
+            onSelectDate = { calendarCallbacks.onSelectedDateChange(it) },
+            onOpenDay = { date ->
+                calendarCallbacks.onSelectedDateChange(date)
+                navController.navigate(AppRoutes.day(date))
+            },
+            onSaveOrder = { date, notes, total, name, phone, pickupTime ->
+                orderViewModel.saveOrder(
+                    date = date,
+                    notes = notes,
+                    totalAmount = total,
+                    customerName = name,
+                    customerPhone = phone,
+                    pickupTime = pickupTime,
+                    existingOrderId = null
+                )
+                WidgetUpdater.enqueue(navController.context)
+                NotificationScheduler.enqueueNow(navController.context)
+            },
+            searchCustomers = { query -> orderViewModel.searchCustomers(query) },
+            onSummaryClick = { navController.navigate(AppRoutes.Summary) },
+            onOpenMore = navigationActions.onOpenMore,
+            onMonthSettled = { year, month -> calendarCallbacks.onMonthSettled(year, month) },
+            openQuickAddDate = calendarState.quickAddDate,
+            onQuickAddConsumed = { calendarCallbacks.onQuickAddDateChange(null) },
+            showInteractiveTutorial = true,
+            onInteractiveTutorialFinished = {
+                navController.navigate(AppRoutes.Calendar) {
+                    popUpTo(AppRoutes.CalendarTutorial) { inclusive = true }
+                    launchSingleTop = true
+                }
+            }
         )
     }
 

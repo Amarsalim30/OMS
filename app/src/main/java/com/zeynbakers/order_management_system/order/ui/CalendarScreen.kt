@@ -24,6 +24,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -39,6 +42,7 @@ import com.zeynbakers.order_management_system.core.ui.VoiceTarget
 import com.zeynbakers.order_management_system.core.calendar.CalendarPreferences
 import com.zeynbakers.order_management_system.customer.data.CustomerEntity
 import java.math.BigDecimal
+import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -49,7 +53,7 @@ import java.util.Locale
 import java.time.format.DateTimeFormatter
 import kotlinx.datetime.toJavaLocalDate
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, FlowPreview::class)
 @Composable
 fun CalendarScreen(
     days: List<CalendarDayUi>,
@@ -69,7 +73,9 @@ fun CalendarScreen(
     onOpenMore: () -> Unit,
     onMonthSettled: (Int, Int) -> Unit,
     openQuickAddDate: LocalDate?,
-    onQuickAddConsumed: () -> Unit
+    onQuickAddConsumed: () -> Unit,
+    showInteractiveTutorial: Boolean = false,
+    onInteractiveTutorialFinished: () -> Unit = {}
 ) {
     var isQuickAddOpen by remember { mutableStateOf(false) }
     var notes by remember { mutableStateOf("") }
@@ -90,6 +96,28 @@ fun CalendarScreen(
     val voiceCalcAccess = LocalVoiceCalcAccess.current
     val voiceRouter = LocalVoiceInputRouter.current
     val scope = rememberCoroutineScope()
+    var tutorialStep by remember(showInteractiveTutorial) {
+        mutableStateOf(
+            if (showInteractiveTutorial) CalendarTutorialStep.TapDate else CalendarTutorialStep.None
+        )
+    }
+    var tutorialFinished by remember(showInteractiveTutorial) { mutableStateOf(!showInteractiveTutorial) }
+    var monthGridBounds by remember { mutableStateOf<Rect?>(null) }
+    var selectedDayBounds by remember { mutableStateOf<Rect?>(null) }
+    var fabBounds by remember { mutableStateOf<Rect?>(null) }
+    var customerFieldBounds by remember { mutableStateOf<Rect?>(null) }
+    var notesFieldBounds by remember { mutableStateOf<Rect?>(null) }
+    var totalFieldBounds by remember { mutableStateOf<Rect?>(null) }
+    var saveButtonBounds by remember { mutableStateOf<Rect?>(null) }
+    val tutorialActive = showInteractiveTutorial && !tutorialFinished && tutorialStep != CalendarTutorialStep.None
+
+    fun finishTutorial() {
+        if (!tutorialFinished) {
+            tutorialFinished = true
+            tutorialStep = CalendarTutorialStep.None
+            onInteractiveTutorialFinished()
+        }
+    }
 
     LaunchedEffect(Unit) {
         snapshotFlow { customerName.trim() to customerPhone.trim() }
@@ -116,6 +144,46 @@ fun CalendarScreen(
         onQuickAddConsumed()
     }
 
+    LaunchedEffect(tutorialActive, tutorialStep, isQuickAddOpen) {
+        if (!tutorialActive) return@LaunchedEffect
+        if (tutorialStep == CalendarTutorialStep.AddButton && isQuickAddOpen) {
+            tutorialStep = CalendarTutorialStep.Customer
+            return@LaunchedEffect
+        }
+        if (
+            tutorialStep == CalendarTutorialStep.Customer ||
+                tutorialStep == CalendarTutorialStep.Notes ||
+                tutorialStep == CalendarTutorialStep.Total ||
+                tutorialStep == CalendarTutorialStep.Save
+        ) {
+            if (!isQuickAddOpen) {
+                tutorialStep = CalendarTutorialStep.AddButton
+            }
+        }
+    }
+
+    LaunchedEffect(tutorialActive, tutorialStep, customerName) {
+        if (!tutorialActive) return@LaunchedEffect
+        if (tutorialStep == CalendarTutorialStep.Customer && customerName.trim().isNotEmpty()) {
+            tutorialStep = CalendarTutorialStep.Notes
+        }
+    }
+
+    LaunchedEffect(tutorialActive, tutorialStep, notes) {
+        if (!tutorialActive) return@LaunchedEffect
+        if (tutorialStep == CalendarTutorialStep.Notes && notes.trim().isNotEmpty()) {
+            tutorialStep = CalendarTutorialStep.Total
+        }
+    }
+
+    LaunchedEffect(tutorialActive, tutorialStep, totalText) {
+        if (!tutorialActive) return@LaunchedEffect
+        val amount = totalText.trim().toBigDecimalOrNull()
+        if (tutorialStep == CalendarTutorialStep.Total && amount != null && amount > BigDecimal.ZERO) {
+            tutorialStep = CalendarTutorialStep.Save
+        }
+    }
+
     DisposableEffect(Unit) {
         onDispose {
             overlaySuppressed.value = false
@@ -127,6 +195,13 @@ fun CalendarScreen(
     val pageCount = remember { baseIndex * 2 }
     val pagerState = rememberPagerState(initialPage = baseIndex, pageCount = { pageCount })
     val today = rememberCurrentDate()
+    val openQuickAddSheet: () -> Unit = {
+        val date = selectedDate ?: today
+        if (selectedDate == null) {
+            onSelectDate(date)
+        }
+        isQuickAddOpen = true
+    }
     val systemWeekStart = remember { Calendar.getInstance(Locale.getDefault()).firstDayOfWeek }
     val weekStart = weekStartPreference ?: systemWeekStart
     val anchorYear =
@@ -155,6 +230,9 @@ fun CalendarScreen(
     }
     val visibleMonth by remember(pagerState, anchorYear, anchorMonth) {
         derivedStateOf { shiftMonth(anchorYear, anchorMonth, pagerState.currentPage - baseIndex) }
+    }
+    LaunchedEffect(visibleMonth.first, visibleMonth.second) {
+        selectedDayBounds = null
     }
     val monthTitle by remember(visibleMonth) {
         derivedStateOf { formatMonthTitle(visibleMonth.first, visibleMonth.second) }
@@ -218,26 +296,47 @@ fun CalendarScreen(
             CalendarTopAppBar(
                 monthTitle = monthTitle,
                 todayDay = today.dayOfMonth,
-                onMonthPickerClick = { isMonthPickerOpen = true },
-                onToday = {
-                    scope.launch {
-                        val jump = monthOffset(anchorYear, anchorMonth, today.year, today.monthNumber)
-                        pagerState.animateScrollToPage(baseIndex + jump)
-                        onSelectDate(today)
+                onMonthPickerClick = {
+                    if (!tutorialActive) {
+                        isMonthPickerOpen = true
                     }
                 },
-                onSummaryClick = onSummaryClick,
-                onMoreClick = onOpenMore
+                onToday = {
+                    if (!tutorialActive) {
+                        scope.launch {
+                            val jump = monthOffset(anchorYear, anchorMonth, today.year, today.monthNumber)
+                            pagerState.animateScrollToPage(baseIndex + jump)
+                            onSelectDate(today)
+                        }
+                    }
+                },
+                onSummaryClick = {
+                    if (!tutorialActive) {
+                        onSummaryClick()
+                    }
+                },
+                onMoreClick = {
+                    if (!tutorialActive) {
+                        onOpenMore()
+                    }
+                }
             )
         },
         floatingActionButton = {
             SmallFloatingActionButton(
+                modifier =
+                    Modifier.onGloballyPositioned { coordinates ->
+                        fabBounds = coordinates.boundsInRoot()
+                    },
                 onClick = {
-                    val date = selectedDate ?: today
-                    if (selectedDate == null) {
-                        onSelectDate(date)
+                    openQuickAddSheet()
+                    if (
+                        tutorialActive &&
+                            (tutorialStep == CalendarTutorialStep.TapDate ||
+                                tutorialStep == CalendarTutorialStep.AddButton)
+                    ) {
+                        tutorialStep = CalendarTutorialStep.Customer
                     }
-                    isQuickAddOpen = true
                 }
             ) {
                 Icon(
@@ -256,18 +355,28 @@ fun CalendarScreen(
                 monthTotal = displayedMonthTotal,
                 dueCount = displayedBadgeCount,
                 hasOrders = hasOrdersInVisibleMonth,
-                onDueClick = onSummaryClick,
-                onAddOrder = {
-                    val targetDate =
-                        if (visibleMonth.first == today.year && visibleMonth.second == today.monthNumber) {
-                            today
-                        } else {
-                            LocalDate(visibleMonth.first, visibleMonth.second, 1)
-                        }
-                    onSelectDate(targetDate)
-                    isQuickAddOpen = true
+                onDueClick = {
+                    if (!tutorialActive) {
+                        onSummaryClick()
+                    }
                 },
-                onLegendClick = { isLegendOpen = true }
+                onAddOrder = {
+                    if (!tutorialActive) {
+                        val targetDate =
+                            if (visibleMonth.first == today.year && visibleMonth.second == today.monthNumber) {
+                                today
+                            } else {
+                                LocalDate(visibleMonth.first, visibleMonth.second, 1)
+                            }
+                        onSelectDate(targetDate)
+                        isQuickAddOpen = true
+                    }
+                },
+                onLegendClick = {
+                    if (!tutorialActive) {
+                        isLegendOpen = true
+                    }
+                }
             )
 
             WeekdayHeaderRow(weekStart = weekStart)
@@ -285,7 +394,7 @@ fun CalendarScreen(
                     val snapshot = monthSnapshots[MonthKey(pageYear, pageMonth)]
                     val orderData = remember(snapshot, activeDaysByDate, pageYear, pageMonth, currentYear, currentMonth) {
                         when {
-                            snapshot != null -> snapshot.days.associateBy { it.date }
+                            snapshot != null -> snapshot.daysByDate
                             pageYear == currentYear && pageMonth == currentMonth -> activeDaysByDate
                             else -> emptyMap()
                         }
@@ -303,13 +412,41 @@ fun CalendarScreen(
                     MonthGrid(
                         days = monthDays,
                         selectedDate = selectedDate,
-                        onSelectDate = onSelectDate,
-                        onOpenDay = onOpenDay,
+                        onSelectDate = { date ->
+                            selectedDayBounds = null
+                            onSelectDate(date)
+                            if (tutorialActive && tutorialStep == CalendarTutorialStep.TapDate) {
+                                tutorialStep = CalendarTutorialStep.AddButton
+                            }
+                        },
+                        onOpenDay = { date ->
+                            if (!tutorialActive) {
+                                onOpenDay(date)
+                            }
+                        },
                         onQuickAdd = {
+                            selectedDayBounds = null
                             onSelectDate(it)
                             isQuickAddOpen = true
+                            if (
+                                tutorialActive &&
+                                    (tutorialStep == CalendarTutorialStep.TapDate ||
+                                        tutorialStep == CalendarTutorialStep.AddButton)
+                            ) {
+                                tutorialStep = CalendarTutorialStep.Customer
+                            }
                         },
-                        modifier = Modifier.fillMaxSize()
+                        modifier =
+                            Modifier
+                                .fillMaxSize()
+                                .onGloballyPositioned { coordinates ->
+                                    monthGridBounds = coordinates.boundsInRoot()
+                                },
+                        onDayBoundsChanged = { date, bounds ->
+                            if (date == selectedDate) {
+                                selectedDayBounds = bounds
+                            }
+                        }
                     )
                 }
             }
@@ -413,6 +550,9 @@ fun CalendarScreen(
                     totalError = null
                     customerError = null
                     isQuickAddOpen = false
+                    if (tutorialActive && tutorialStep == CalendarTutorialStep.Save) {
+                        finishTutorial()
+                    }
                 }
             }
         }
@@ -477,11 +617,117 @@ fun CalendarScreen(
                 amountRegistry.update(setter)
                 voiceRouter.onFocusTarget(VoiceTarget.Total)
             },
+            customerFieldModifier =
+                Modifier.onGloballyPositioned { coordinates ->
+                    customerFieldBounds = coordinates.boundsInRoot()
+                },
+            notesFieldModifier =
+                Modifier.onGloballyPositioned { coordinates ->
+                    notesFieldBounds = coordinates.boundsInRoot()
+                },
+            totalFieldModifier =
+                Modifier.onGloballyPositioned { coordinates ->
+                    totalFieldBounds = coordinates.boundsInRoot()
+                },
+            saveButtonModifier =
+                Modifier.onGloballyPositioned { coordinates ->
+                    saveButtonBounds = coordinates.boundsInRoot()
+                },
             voiceHasPermission = voiceCalcAccess.hasPermission,
             onRequestVoicePermission = voiceCalcAccess.onRequestPermission
         )
     }
+
+    val tutorialStepIndex =
+        when (tutorialStep) {
+            CalendarTutorialStep.TapDate -> 1
+            CalendarTutorialStep.AddButton -> 2
+            CalendarTutorialStep.Customer -> 3
+            CalendarTutorialStep.Notes -> 4
+            CalendarTutorialStep.Total -> 5
+            CalendarTutorialStep.Save -> 6
+            CalendarTutorialStep.None -> 0
+        }
+    val tutorialTitleRes =
+        when (tutorialStep) {
+            CalendarTutorialStep.TapDate -> R.string.calendar_tutorial_tap_date_title
+            CalendarTutorialStep.AddButton -> R.string.calendar_tutorial_add_button_title
+            CalendarTutorialStep.Customer -> R.string.calendar_tutorial_customer_title
+            CalendarTutorialStep.Notes -> R.string.calendar_tutorial_notes_title
+            CalendarTutorialStep.Total -> R.string.calendar_tutorial_total_title
+            CalendarTutorialStep.Save -> R.string.calendar_tutorial_save_title
+            CalendarTutorialStep.None -> null
+        }
+    val tutorialBodyRes =
+        when (tutorialStep) {
+            CalendarTutorialStep.TapDate -> R.string.calendar_tutorial_tap_date_body
+            CalendarTutorialStep.AddButton -> R.string.calendar_tutorial_add_button_body
+            CalendarTutorialStep.Customer -> R.string.calendar_tutorial_customer_body
+            CalendarTutorialStep.Notes -> R.string.calendar_tutorial_notes_body
+            CalendarTutorialStep.Total -> R.string.calendar_tutorial_total_body
+            CalendarTutorialStep.Save -> R.string.calendar_tutorial_save_body
+            CalendarTutorialStep.None -> null
+        }
+    val tutorialTargetBounds =
+        when (tutorialStep) {
+            CalendarTutorialStep.TapDate -> selectedDayBounds ?: monthGridBounds
+            CalendarTutorialStep.AddButton -> fabBounds
+            CalendarTutorialStep.Customer -> customerFieldBounds
+            CalendarTutorialStep.Notes -> notesFieldBounds
+            CalendarTutorialStep.Total -> totalFieldBounds
+            CalendarTutorialStep.Save -> saveButtonBounds
+            CalendarTutorialStep.None -> null
+        }
+    val tutorialShowContinue =
+        tutorialStep == CalendarTutorialStep.TapDate ||
+            tutorialStep == CalendarTutorialStep.AddButton ||
+            tutorialStep == CalendarTutorialStep.Customer ||
+            tutorialStep == CalendarTutorialStep.Notes
+    if (tutorialActive && tutorialTitleRes != null && tutorialBodyRes != null) {
+        CalendarTutorialOverlay(
+            targetBounds = tutorialTargetBounds,
+            stepText =
+                stringResource(
+                    R.string.calendar_tutorial_step_progress,
+                    tutorialStepIndex,
+                    CALENDAR_TUTORIAL_STEP_COUNT
+                ),
+            title = stringResource(tutorialTitleRes),
+            body = stringResource(tutorialBodyRes),
+            skipLabel = stringResource(R.string.calendar_tutorial_skip),
+            continueLabel = stringResource(R.string.calendar_tutorial_continue),
+            showContinue = tutorialShowContinue,
+            onSkip = ::finishTutorial,
+            onContinue = {
+                when (tutorialStep) {
+                    CalendarTutorialStep.TapDate -> {
+                        if (selectedDate == null) {
+                            onSelectDate(today)
+                        }
+                        tutorialStep = CalendarTutorialStep.AddButton
+                    }
+                    CalendarTutorialStep.AddButton -> {
+                        openQuickAddSheet()
+                        tutorialStep = CalendarTutorialStep.Customer
+                    }
+                    CalendarTutorialStep.Customer -> tutorialStep = CalendarTutorialStep.Notes
+                    CalendarTutorialStep.Notes -> tutorialStep = CalendarTutorialStep.Total
+                    CalendarTutorialStep.Total -> tutorialStep = CalendarTutorialStep.Save
+                    CalendarTutorialStep.Save, CalendarTutorialStep.None -> Unit
+                }
+            }
+        )
+    }
 }
 
+private const val CALENDAR_TUTORIAL_STEP_COUNT = 6
 
-
+private enum class CalendarTutorialStep {
+    TapDate,
+    AddButton,
+    Customer,
+    Notes,
+    Total,
+    Save,
+    None
+}

@@ -482,9 +482,30 @@ private fun CompactBalanceChip(balance: BigDecimal) {
 internal fun EmptyCustomersState(
         isSearching: Boolean,
         hasActiveFilters: Boolean,
+        hasAnyCustomers: Boolean,
+        showImportedNoOrdersState: Boolean,
         onClearFilters: () -> Unit,
-        onAddCustomer: () -> Unit
+        onAddCustomer: () -> Unit,
+        onSyncContacts: () -> Unit,
+        onRevealCustomers: () -> Unit
 ) {
+    val titleText =
+            when {
+                isSearching -> stringResource(R.string.customer_no_customers_found)
+                hasActiveFilters -> stringResource(R.string.customer_no_customers_for_filters)
+                showImportedNoOrdersState -> stringResource(R.string.customer_no_orders_for_imported_title)
+                hasAnyCustomers -> stringResource(R.string.customer_no_customers_for_filters)
+                else -> stringResource(R.string.customer_no_customers_yet)
+            }
+    val bodyText =
+            when {
+                isSearching -> stringResource(R.string.customer_try_different_search)
+                hasActiveFilters -> stringResource(R.string.customer_adjust_or_clear_filters)
+                showImportedNoOrdersState -> stringResource(R.string.customer_no_orders_for_imported_body)
+                hasAnyCustomers -> stringResource(R.string.customer_adjust_or_clear_filters)
+                else -> stringResource(R.string.customer_import_contacts_first)
+            }
+
     Column(
             modifier = Modifier.fillMaxWidth().padding(top = 20.dp),
             horizontalAlignment = Alignment.CenterHorizontally
@@ -497,26 +518,12 @@ internal fun EmptyCustomersState(
         )
         Spacer(Modifier.height(6.dp))
         Text(
-                text =
-                        if (isSearching) {
-                            stringResource(R.string.customer_no_customers_found)
-                        } else if (hasActiveFilters) {
-                            stringResource(R.string.customer_no_customers_for_filters)
-                        } else {
-                            stringResource(R.string.customer_no_customers_yet)
-                        },
+                text = titleText,
                 style = MaterialTheme.typography.titleMedium
         )
         Spacer(Modifier.height(6.dp))
         Text(
-                text =
-                        if (isSearching) {
-                            stringResource(R.string.customer_try_different_search)
-                        } else if (hasActiveFilters) {
-                            stringResource(R.string.customer_adjust_or_clear_filters)
-                        } else {
-                            stringResource(R.string.customer_add_first)
-                        },
+                text = bodyText,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -526,7 +533,17 @@ internal fun EmptyCustomersState(
                 Text(stringResource(R.string.customer_reset_filters))
             }
             Spacer(Modifier.height(4.dp))
-            TextButton(onClick = onAddCustomer) { Text(stringResource(R.string.customer_add)) }
+            TextButton(onClick = onSyncContacts) { Text(stringResource(R.string.customer_sync_contacts)) }
+        } else if (showImportedNoOrdersState) {
+            Button(onClick = onRevealCustomers) {
+                Text(stringResource(R.string.customer_show_imported_contacts))
+            }
+            Spacer(Modifier.height(4.dp))
+            TextButton(onClick = onSyncContacts) { Text(stringResource(R.string.customer_sync_contacts)) }
+        } else if (!hasAnyCustomers) {
+            Button(onClick = onSyncContacts) {
+                Text(stringResource(R.string.customer_import_contacts_action))
+            }
         } else {
             Button(onClick = onAddCustomer) { Text(stringResource(R.string.customer_add)) }
         }

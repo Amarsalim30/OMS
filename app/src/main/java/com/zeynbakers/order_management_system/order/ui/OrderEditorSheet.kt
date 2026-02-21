@@ -100,6 +100,10 @@ internal fun OrderEditorSheet(
     onCancel: () -> Unit,
     onNotesFocused: () -> Unit,
     onTotalFocused: ((String) -> Unit) -> Unit,
+    customerFieldModifier: Modifier = Modifier,
+    notesFieldModifier: Modifier = Modifier,
+    totalFieldModifier: Modifier = Modifier,
+    saveButtonModifier: Modifier = Modifier,
     voiceHasPermission: Boolean,
     onRequestVoicePermission: () -> Unit
 ) {
@@ -242,6 +246,7 @@ internal fun OrderEditorSheet(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .focusRequester(nameRequester)
+                                .then(customerFieldModifier)
                         )
 
                         if (hasSelectedCustomer) {
@@ -415,6 +420,7 @@ internal fun OrderEditorSheet(
                                         onNotesFocused()
                                     }
                                 }
+                                .then(notesFieldModifier)
                         )
                         notesError?.let {
                             Text(text = it, color = MaterialTheme.colorScheme.error)
@@ -459,6 +465,7 @@ internal fun OrderEditorSheet(
                                         onTotalFocused(setTotalText)
                                     }
                                 }
+                                .then(totalFieldModifier)
                         )
 
                         totalError?.let {
@@ -545,7 +552,8 @@ internal fun OrderEditorSheet(
                     Spacer(Modifier.width(8.dp))
                     Button(
                         onClick = onSave,
-                        enabled = canSave
+                        enabled = canSave,
+                        modifier = saveButtonModifier
                     ) {
                         Text(stringResource(R.string.action_save))
                     }

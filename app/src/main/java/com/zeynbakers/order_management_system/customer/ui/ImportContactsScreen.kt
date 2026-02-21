@@ -26,6 +26,7 @@ import androidx.compose.material3.IconToggleButton
 import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -48,7 +49,13 @@ fun ImportContactsScreen(
     contacts: List<ImportContact>,
     selectedPhones: Set<String>,
     isLoading: Boolean,
+    hasPermission: Boolean,
+    isPermissionPermanentlyDenied: Boolean,
+    errorMessage: String?,
     onBack: () -> Unit,
+    onRequestPermission: () -> Unit,
+    onOpenSettings: () -> Unit,
+    onRetryLoad: () -> Unit,
     onToggleSelect: (String) -> Unit,
     onToggleSelectAll: (List<String>) -> Unit,
     onImport: () -> Unit
@@ -88,29 +95,31 @@ fun ImportContactsScreen(
             )
         },
         bottomBar = {
-            Surface(tonalElevation = 2.dp) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(12.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = selectedLabel,
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Button(
-                        onClick = onImport,
-                        enabled = selectedCount > 0
+            if (hasPermission && errorMessage == null && !isLoading) {
+                Surface(tonalElevation = 2.dp) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(12.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                            text = stringResource(
-                                R.string.import_contacts_action_with_count,
-                                selectedCount
-                            )
+                            text = selectedLabel,
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
+                        Button(
+                            onClick = onImport,
+                            enabled = selectedCount > 0
+                        ) {
+                            Text(
+                                text = stringResource(
+                                    R.string.import_contacts_action_with_count,
+                                    selectedCount
+                                )
+                            )
+                        }
                     }
                 }
             }
@@ -128,6 +137,23 @@ fun ImportContactsScreen(
                 ) {
                     CircularProgressIndicator()
                 }
+                return@Column
+            }
+
+            if (!hasPermission) {
+                PermissionRequiredCard(
+                    isPermanentlyDenied = isPermissionPermanentlyDenied,
+                    onRequestPermission = onRequestPermission,
+                    onOpenSettings = onOpenSettings
+                )
+                return@Column
+            }
+
+            if (errorMessage != null) {
+                LoadErrorCard(
+                    message = errorMessage,
+                    onRetry = onRetryLoad
+                )
                 return@Column
             }
 
@@ -190,6 +216,81 @@ fun ImportContactsScreen(
                         onToggle = { onToggleSelect(contact.phone) }
                     )
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun PermissionRequiredCard(
+    isPermanentlyDenied: Boolean,
+    onRequestPermission: () -> Unit,
+    onOpenSettings: () -> Unit
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        tonalElevation = 1.dp,
+        shape = MaterialTheme.shapes.medium
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(
+                text = stringResource(R.string.import_contacts_permission_title),
+                style = MaterialTheme.typography.titleMedium
+            )
+            Text(
+                text = stringResource(R.string.import_contacts_permission_body),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Button(
+                onClick = onRequestPermission,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(stringResource(R.string.import_contacts_grant_permission))
+            }
+            if (isPermanentlyDenied) {
+                OutlinedButton(
+                    onClick = onOpenSettings,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(stringResource(R.string.permission_primer_open_settings))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun LoadErrorCard(
+    message: String,
+    onRetry: () -> Unit
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        tonalElevation = 1.dp,
+        shape = MaterialTheme.shapes.medium
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(
+                text = stringResource(R.string.import_contacts_error_title),
+                style = MaterialTheme.typography.titleMedium
+            )
+            Text(
+                text = message,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            OutlinedButton(
+                onClick = onRetry,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(stringResource(R.string.action_retry))
             }
         }
     }

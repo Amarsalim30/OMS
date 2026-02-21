@@ -84,6 +84,7 @@ fun CustomerListScreen(
     onCustomerClick: (Long) -> Unit,
     onBack: () -> Unit,
     onAddCustomer: () -> Unit = {},
+    onSyncContacts: () -> Unit = onAddCustomer,
     onPaymentHistory: (Long) -> Unit = {},
     onRecordPayment: (Long) -> Unit = {},
     onAddOrder: (Long) -> Unit = {},
@@ -100,6 +101,7 @@ fun CustomerListScreen(
         onCustomerClick = onCustomerClick,
         onBack = onBack,
         onAddCustomer = onAddCustomer,
+        onSyncContacts = onSyncContacts,
         onPaymentHistory = onPaymentHistory,
         onRecordPayment = onRecordPayment,
         onAddOrder = onAddOrder,
@@ -119,6 +121,7 @@ private fun CustomersScreenM3(
     onCustomerClick: (Long) -> Unit,
     onBack: () -> Unit,
     onAddCustomer: () -> Unit,
+    onSyncContacts: () -> Unit,
     onPaymentHistory: (Long) -> Unit,
     onRecordPayment: (Long) -> Unit,
     onAddOrder: (Long) -> Unit,
@@ -154,6 +157,7 @@ private fun CustomersScreenM3(
     val customerArchivedMessage = stringResource(R.string.customer_archived)
     val customerDeletedMessage = stringResource(R.string.customer_deleted)
     val undoActionLabel = stringResource(R.string.action_undo)
+    val zero = BigDecimal.ZERO
     val resetFiltersAndSort: () -> Unit = {
         selectedFilter = CustomerFilter.All
         selectedSort = CustomerSort.BalanceDesc
@@ -195,6 +199,10 @@ private fun CustomersScreenM3(
                 queryText = ""
             }
         }
+    }
+    val revealImportedCustomers: () -> Unit = {
+        showInactive = true
+        selectedFilter = CustomerFilter.All
     }
 
     val filteredCustomers by remember(
@@ -289,35 +297,53 @@ private fun CustomersScreenM3(
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = if (queryText.isBlank()) {
-                        stringResource(R.string.customer_all_customers)
-                    } else {
-                        stringResource(R.string.customer_search_results)
-                    },
-                    style = MaterialTheme.typography.labelLarge
-                )
-                Text(
-                    text = pluralStringResource(
-                        R.plurals.customer_result_count,
-                        filteredCustomers.size,
-                        filteredCustomers.size
-                    ),
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                Column {
+                    Text(
+                        text = if (queryText.isBlank()) {
+                            stringResource(R.string.customer_all_customers)
+                        } else {
+                            stringResource(R.string.customer_search_results)
+                        },
+                        style = MaterialTheme.typography.labelLarge
+                    )
+                    Text(
+                        text = pluralStringResource(
+                            R.plurals.customer_result_count,
+                            filteredCustomers.size,
+                            filteredCustomers.size
+                        ),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                TextButton(onClick = onSyncContacts) {
+                    Text(stringResource(R.string.customer_sync_contacts))
+                }
             }
 
             Spacer(Modifier.height(6.dp))
 
             if (filteredCustomers.isEmpty()) {
+                val hasAnyCustomers = summaries.isNotEmpty()
+                val allCustomersWithoutOrders =
+                    hasAnyCustomers && summaries.all { it.billed == zero && it.paid == zero }
+                val showImportedNoOrdersState =
+                    queryText.isBlank() &&
+                        !hasActiveFilters &&
+                        !showInactive &&
+                        allCustomersWithoutOrders
                 EmptyCustomersState(
                     isSearching = queryText.isNotBlank(),
                     hasActiveFilters = hasActiveFilters,
+                    hasAnyCustomers = hasAnyCustomers,
+                    showImportedNoOrdersState = showImportedNoOrdersState,
                     onClearFilters = resetFiltersAndSort,
-                    onAddCustomer = onAddCustomer
+                    onAddCustomer = onAddCustomer,
+                    onSyncContacts = onSyncContacts,
+                    onRevealCustomers = revealImportedCustomers
                 )
             } else {
                 LazyColumn(

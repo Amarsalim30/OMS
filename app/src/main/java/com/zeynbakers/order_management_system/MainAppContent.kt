@@ -233,8 +233,9 @@ internal fun MainAppContent(
                         baseYear = now.year
                     }
                 }
-                LaunchedEffect(activeTopLevelRoute) {
-                    if (activeTopLevelRoute == AppRoutes.Calendar &&
+                LaunchedEffect(currentRoute, activeTopLevelRoute) {
+                    if (currentRoute == AppRoutes.Calendar &&
+                        activeTopLevelRoute == AppRoutes.Calendar &&
                         updatePrefs.shouldShowUpdate(BuildConfig.VERSION_NAME)
                     ) {
                         showUpdateDialog = true
@@ -281,9 +282,12 @@ internal fun MainAppContent(
                         )
                     }
                 LaunchedEffect(incomingIntent) {
-                    val intent = incomingIntent ?: return@LaunchedEffect
-                    AppShortcuts.reportShortcutUsed(context.applicationContext, intent.action)
-                    when (intent.action) {
+                    val intent = incomingIntent
+                    val action = intent?.action
+                    if (intent != null) {
+                        AppShortcuts.reportShortcutUsed(context.applicationContext, action)
+                    }
+                    when (action) {
                         AppIntents.ACTION_SHOW_TODAY -> {
                             val targetDate = currentDate()
                             selectedDate = targetDate
@@ -292,7 +296,7 @@ internal fun MainAppContent(
                         }
                         AppIntents.ACTION_SHOW_DAY -> {
                             val targetDate =
-                                intent.getStringExtra(AppIntents.EXTRA_TARGET_DATE)?.let {
+                                intent?.getStringExtra(AppIntents.EXTRA_TARGET_DATE)?.let {
                                     runCatching { LocalDate.parse(it) }.getOrNull()
                                 } ?: currentDate()
                             selectedDate = targetDate
@@ -305,7 +309,7 @@ internal fun MainAppContent(
                         }
                         AppIntents.ACTION_SHOW_SUMMARY -> {
                             summaryDate =
-                                intent.getStringExtra(AppIntents.EXTRA_TARGET_DATE)?.let {
+                                intent?.getStringExtra(AppIntents.EXTRA_TARGET_DATE)?.let {
                                     runCatching { LocalDate.parse(it) }.getOrNull()
                                 } ?: currentDate()
                             selectedTopLevelRoute = AppRoutes.Calendar
@@ -338,6 +342,7 @@ internal fun MainAppContent(
                             }
                         }
                     }
+
                 }
                 CompositionLocalProvider(
                     LocalAmountFieldRegistry provides amountRegistry,
@@ -447,6 +452,7 @@ internal fun MainAppContent(
                     MainAppHostScaffold(
                         activity = activity,
                         navController = navController,
+                        currentRoute = currentRoute,
                         activeTopLevelRoute = activeTopLevelRoute,
                         selectedTopLevelRoute = selectedTopLevelRoute,
                         onSelectedTopLevelRouteChange = { selectedTopLevelRoute = it },

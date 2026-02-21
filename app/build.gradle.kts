@@ -14,8 +14,8 @@ android {
         applicationId = "com.zeynbakers.order_management_system"
         minSdk = 24
         targetSdk = 36
-        versionCode = 5
-        versionName = "1.0"
+        versionCode = 6
+        versionName = "3.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -71,6 +71,7 @@ dependencies {
     // WorkManager
     implementation(libs.androidx.work.runtime.ktx)
     implementation(libs.androidx.documentfile)
+    implementation("androidx.datastore:datastore-preferences:1.1.1")
 
     // Compose
     implementation(libs.androidx.activity.compose)

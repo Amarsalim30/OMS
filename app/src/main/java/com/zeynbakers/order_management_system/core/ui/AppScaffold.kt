@@ -59,6 +59,7 @@ fun AppScaffold(
     destinations: List<TopLevelDestination>,
     selectedRoute: String,
     onDestinationSelected: (String) -> Unit,
+    showNavigation: Boolean,
     showMoreSheet: Boolean,
     onOpenMore: () -> Unit,
     onDismissMore: () -> Unit,
@@ -83,7 +84,11 @@ fun AppScaffold(
             indicatorColor = MaterialTheme.colorScheme.secondaryContainer
         )
 
-    if (useRail) {
+    if (!showNavigation) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            content(PaddingValues(0.dp))
+        }
+    } else if (useRail) {
         Row(modifier = Modifier.fillMaxSize()) {
             NavigationRail(
                 containerColor = MaterialTheme.colorScheme.surface
@@ -147,7 +152,7 @@ fun AppScaffold(
         }
     }
 
-    if (showMoreSheet) {
+    if (showNavigation && showMoreSheet) {
         ModalBottomSheet(onDismissRequest = onDismissMore) {
             Column(
                 modifier = Modifier

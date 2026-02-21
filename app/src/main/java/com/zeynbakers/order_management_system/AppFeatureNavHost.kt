@@ -13,6 +13,7 @@ import com.zeynbakers.order_management_system.core.navigation.AppRoutes
 import com.zeynbakers.order_management_system.core.navigation.graphs.accountsGraph
 import com.zeynbakers.order_management_system.core.navigation.graphs.calendarGraph
 import com.zeynbakers.order_management_system.core.navigation.graphs.customersGraph
+import com.zeynbakers.order_management_system.core.navigation.graphs.onboardingGraph
 import com.zeynbakers.order_management_system.core.navigation.graphs.ordersGraph
 import com.zeynbakers.order_management_system.core.navigation.graphs.settingsGraph
 import com.zeynbakers.order_management_system.core.ui.MoneyTab
@@ -137,9 +138,11 @@ internal fun AppFeatureNavHost(
 ) {
     NavHost(
         navController = navController,
-        startDestination = AppRoutes.Calendar,
+        startDestination = AppRoutes.Splash,
         modifier = modifier
     ) {
+        onboardingGraph(navController = navController)
+
         calendarGraph(
             navController = navController,
             orderViewModel = orderViewModel,

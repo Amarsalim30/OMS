@@ -3,13 +3,22 @@ package com.zeynbakers.order_management_system.core.navigation
 import kotlinx.datetime.LocalDate
 
 object AppRoutes {
+    const val Splash = "splash"
+    const val Intro = "intro"
+    const val SetupChecklist = "setup_checklist"
+    const val BusinessProfile = "business_profile"
+    const val ContactsPermissionPrimer = "contacts_permission_primer"
+    const val NotificationsPermissionPrimer = "notifications_permission_primer"
     const val Calendar = "calendar"
+    const val CalendarTutorial = "calendar_tutorial"
     const val Orders = "orders"
     const val Customers = "customers"
     const val Money = "money"
     const val Summary = "summary"
     const val Backup = "backup"
     const val Notifications = "notifications"
+    const val Tutorial = "tutorial"
+    const val FirstRunTutorial = "first_run_tutorial"
     const val ImportContacts = "import_contacts"
 
     const val Day = "day/{date}"
