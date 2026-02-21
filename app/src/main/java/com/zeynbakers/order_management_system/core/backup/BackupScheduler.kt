@@ -12,6 +12,7 @@ import androidx.work.WorkManager
 import java.util.concurrent.TimeUnit
 
 object BackupScheduler {
+    const val DAILY_INTERVAL_HOURS = 24L
     const val UNIQUE_DAILY_WORK = "daily_backup"
     const val UNIQUE_MANUAL_WORK = "manual_backup"
     const val UNIQUE_RESTORE_WORK = "restore_backup"
@@ -19,10 +20,15 @@ object BackupScheduler {
     const val KEY_STAGE = "stage"
     const val KEY_FORCE = "force_backup"
     const val KEY_RESTORE_URI = "restore_uri"
+    const val KEY_ERROR_MESSAGE = "error_message"
 
     fun ensureScheduled(context: Context) {
         val prefs = BackupPreferences(context)
         val state = prefs.readState()
+        if (state.targetType == BackupTargetType.SafDirectory) {
+            cancelDaily(context)
+            return
+        }
         if (state.autoEnabled) {
             val health = BackupManager.evaluateTargetHealth(context, state)
             if (health == BackupTargetHealth.Healthy) {
@@ -67,8 +73,8 @@ object BackupScheduler {
 
     private fun scheduleDaily(context: Context) {
         val request =
-            PeriodicWorkRequestBuilder<DailyBackupWorker>(24, TimeUnit.HOURS)
-                .setConstraints(dailyConstraints(context))
+            PeriodicWorkRequestBuilder<DailyBackupWorker>(DAILY_INTERVAL_HOURS, TimeUnit.HOURS)
+                .setConstraints(dailyConstraints())
                 .addTag(UNIQUE_DAILY_WORK)
                 .build()
         WorkManager.getInstance(context).enqueueUniquePeriodicWork(
@@ -82,15 +88,11 @@ object BackupScheduler {
         WorkManager.getInstance(context).cancelUniqueWork(UNIQUE_DAILY_WORK)
     }
 
-    private fun dailyConstraints(context: Context): Constraints {
-        val state = BackupPreferences(context).readState()
-        val builder =
-            Constraints.Builder()
+    private fun dailyConstraints(): Constraints {
+        return Constraints.Builder()
             .setRequiresBatteryNotLow(true)
             .setRequiresStorageNotLow(true)
-        if (state.targetType == BackupTargetType.SafDirectory || state.targetType == BackupTargetType.SafFile) {
-            builder.setRequiredNetworkType(NetworkType.CONNECTED)
-        }
-        return builder.build()
+            .setRequiredNetworkType(NetworkType.NOT_REQUIRED)
+            .build()
     }
 }

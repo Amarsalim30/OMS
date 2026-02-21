@@ -8,7 +8,6 @@ import android.os.UserManager
 import android.provider.DocumentsContract
 import androidx.core.net.toUri
 import androidx.documentfile.provider.DocumentFile
-import androidx.room.Database
 import androidx.room.withTransaction
 import com.zeynbakers.order_management_system.BuildConfig
 import com.zeynbakers.order_management_system.accounting.data.AccountEntryEntity
@@ -20,6 +19,7 @@ import com.zeynbakers.order_management_system.accounting.data.PaymentEntity
 import com.zeynbakers.order_management_system.accounting.data.PaymentMethod
 import com.zeynbakers.order_management_system.accounting.data.PaymentReceiptEntity
 import com.zeynbakers.order_management_system.accounting.data.PaymentReceiptStatus
+import com.zeynbakers.order_management_system.core.db.APP_DATABASE_SCHEMA_VERSION
 import com.zeynbakers.order_management_system.core.db.AppDatabase
 import com.zeynbakers.order_management_system.core.db.DatabaseProvider
 import com.zeynbakers.order_management_system.customer.data.CustomerEntity
@@ -33,8 +33,10 @@ import java.io.BufferedOutputStream
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.File
+import java.io.FileOutputStream
 import java.io.IOException
 import java.io.InputStream
+import java.io.OutputStream
 import java.math.BigDecimal
 import java.security.MessageDigest
 import java.text.SimpleDateFormat
@@ -54,15 +56,20 @@ typealias ProgressCallback = (Int, String) -> Unit
 
 object BackupManager {
     private const val BACKUP_DIR_NAME = "backups"
+    private const val BACKUP_FILE_EXTENSION = ".oms"
+    private const val LEGACY_BACKUP_FILE_EXTENSION = ".zip"
     private const val MAX_APP_PRIVATE_BACKUPS = 7
+    private const val MAX_SAF_DIRECTORY_BACKUPS = 7
     private const val DEFAULT_STAGE = "Preparing"
     private const val MANIFEST_FORMAT_VERSION = 1
     private const val LATEST_POINTER_NAME = "oms_backup_latest.json"
     private const val MIME_ZIP = "application/zip"
     private const val MIME_JSON = "application/json"
+    private const val SAF_READBACK_RETRY_DELAY_MS = 650L
+    private const val SAF_READBACK_RETRY_ATTEMPTS = 3
     private const val MAX_ZIP_ENTRY_BYTES = 64L * 1024L * 1024L
     private const val MAX_ZIP_TOTAL_BYTES = 256L * 1024L * 1024L
-    private const val MAX_SAFE_ROLLBACK_BYTES = 64L * 1024L * 1024L
+    private const val MAX_SAFE_ROLLBACK_BYTES = MAX_ZIP_TOTAL_BYTES
     // Legacy-only backup field. Keep for backward-compatible import until schema retirement is complete.
     private const val LEGACY_AMOUNT_PAID_FIELD = "amountPaid"
 
@@ -110,6 +117,12 @@ object BackupManager {
     ): BackupResult {
         val prefs = BackupPreferences(context)
         val state = prefs.readState()
+        if (state.targetType == BackupTargetType.SafDirectory) {
+            val now = System.currentTimeMillis()
+            val message = "Folder backup is not supported. Choose a backup file."
+            prefs.setLastResult(BackupStatus.Failed, message, now)
+            return BackupResult(success = false, message = message)
+        }
         if (!force && !state.autoEnabled) {
             return BackupResult(success = false, message = "Automatic backup disabled")
         }
@@ -168,8 +181,12 @@ object BackupManager {
                 return BackupResult(success = false, message = "Backup location unavailable")
             }
 
-            if (state.targetType == BackupTargetType.AppPrivate) {
-                withContext(Dispatchers.IO) { pruneOldAppBackups(context) }
+            withContext(Dispatchers.IO) {
+                when (state.targetType) {
+                    BackupTargetType.AppPrivate -> pruneOldAppBackups(context)
+                    BackupTargetType.SafDirectory -> pruneOldSafBackups(context, state.targetUri)
+                    BackupTargetType.SafFile -> Unit
+                }
             }
 
             progress?.invoke(100, "Backup complete")
@@ -251,46 +268,12 @@ object BackupManager {
                         else BackupResult(false, "Write verification failed")
                     }
 
-                    BackupTargetType.SafDirectory -> {
-                        val treeUri = state.targetUri ?: return@withContext BackupResult(false, "Backup location unavailable")
-                        val tree = DocumentFile.fromTreeUri(context, treeUri.toUri())
-                            ?: return@withContext BackupResult(false, "Backup location unavailable")
-                        val probeName = "oms_probe_${System.currentTimeMillis()}.txt"
-                        tree.findFile(probeName)?.delete()
-                        val probeDoc =
-                            tree.createFile("text/plain", probeName)
-                                ?: return@withContext BackupResult(false, "Backup location unavailable")
-
-                        try {
-                            context.contentResolver.openOutputStream(probeDoc.uri, "w")?.use { out ->
-                                out.write("probe".toByteArray(Charsets.UTF_8))
-                                out.flush()
-                            } ?: return@withContext BackupResult(false, "Backup location unavailable")
-
-                            val echoed =
-                                context.contentResolver.openInputStream(probeDoc.uri)?.use { input ->
-                                    input.readBytes().toString(Charsets.UTF_8)
-                                } ?: ""
-
-                            if (echoed == "probe") {
-                                BackupResult(true, "Write test passed")
-                            } else {
-                                BackupResult(false, "Write verification failed")
-                            }
-                        } finally {
-                            probeDoc.delete()
-                        }
-                    }
+                    BackupTargetType.SafDirectory -> probeSafDirectoryInternal(context, state.targetUri)
 
                     BackupTargetType.SafFile -> {
                         val fileUri = state.targetUri ?: return@withContext BackupResult(false, "Backup file unavailable")
-                        val fileUriObj = fileUri.toUri()
-                        val canRead = openSafInput(context, fileUri) != null
-                        val canWrite =
-                            runCatching {
-                                context.contentResolver.openFileDescriptor(fileUriObj, "rw")?.use { true } ?: false
-                            }.getOrElse { hasPersistedReadWritePermission(context, fileUri) }
-                        if (canRead && canWrite) BackupResult(true, "Write test passed")
+                        val canWrite = isSafFileWritable(context, fileUri)
+                        if (canWrite) BackupResult(true, "Write test passed")
                         else BackupResult(false, "Backup file unavailable")
                     }
                 }
@@ -341,8 +324,22 @@ object BackupManager {
                     if (targetUri.isNullOrBlank()) {
                         return@withContext null
                     }
-                    resolveDisplayNameForUri(context, targetUri) ?: "selected_backup.zip"
+                    resolveDisplayNameForUri(context, targetUri) ?: "selected_backup.oms"
                 }
+            }
+        }
+    }
+
+    suspend fun runSafDirectoryProbe(context: Context, treeUriString: String?): BackupResult {
+        return withContext(Dispatchers.IO) {
+            try {
+                probeSafDirectoryInternal(context, treeUriString)
+            } catch (t: Exception) {
+                BackupResult(
+                    success = false,
+                    message = t.message,
+                    shouldRetry = isRetryableBackupException(t)
+                )
             }
         }
     }
@@ -371,7 +368,7 @@ object BackupManager {
                     BackupTargetHealth.NeedsRelink
                 } else if (!hasPersistedReadWritePermission(context, state.targetUri)) {
                     BackupTargetHealth.NeedsRelink
-                } else if (!isSafFileAccessible(context, state.targetUri)) {
+                } else if (!isSafFileWritable(context, state.targetUri)) {
                     BackupTargetHealth.Unavailable
                 } else {
                     BackupTargetHealth.Healthy
@@ -391,6 +388,16 @@ object BackupManager {
         return runCatching {
             context.contentResolver.openInputStream(uri)?.use { true } ?: false
         }.getOrDefault(false)
+    }
+
+    private fun isSafFileWritable(context: Context, uriString: String?): Boolean {
+        val uri = uriString?.toUri() ?: return false
+        val viaDescriptor =
+            runCatching {
+                context.contentResolver.openFileDescriptor(uri, "rw")?.use { true } ?: false
+            }.getOrDefault(false)
+        if (viaDescriptor) return true
+        return hasPersistedReadWritePermission(context, uriString)
     }
 
     fun buildDriveTroubleshootReport(context: Context, state: BackupState): DriveTroubleshootReport {
@@ -456,7 +463,7 @@ object BackupManager {
     fun listAppPrivateBackups(context: Context): List<File> {
         val dir = File(context.filesDir, BACKUP_DIR_NAME)
         if (!dir.exists() || !dir.isDirectory) return emptyList()
-        return dir.listFiles { file -> file.extension.equals("zip", ignoreCase = true) }
+        return dir.listFiles { file -> isBackupArchiveName(file.name) }
             ?.sortedByDescending { it.lastModified() }
             ?: emptyList()
     }
@@ -487,7 +494,7 @@ object BackupManager {
 
     private fun backupFileName(timestamp: Long): String {
         val formatter = SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US)
-        return "oms-backup-${formatter.format(Date(timestamp))}.zip"
+        return "oms-backup-${formatter.format(Date(timestamp))}$BACKUP_FILE_EXTENSION"
     }
 
     private fun ensureAppPrivateDir(context: Context): File? {
@@ -542,7 +549,7 @@ object BackupManager {
     private fun listSafBackups(tree: DocumentFile): List<DocumentFile> {
         return tree.listFiles()
             .filter { file ->
-                file.isFile && (file.name?.endsWith(".zip", ignoreCase = true) == true)
+                file.isFile && isBackupArchiveName(file.name)
             }
             .sortedWith(
                 compareByDescending<DocumentFile> { it.lastModified() }
@@ -550,14 +557,92 @@ object BackupManager {
             )
     }
 
+    private fun probeSafDirectoryInternal(context: Context, treeUriString: String?): BackupResult {
+        val treeUri = treeUriString?.toUri() ?: return BackupResult(false, "Backup location unavailable")
+        val tree = DocumentFile.fromTreeUri(context, treeUri)
+            ?: return BackupResult(false, "Backup location unavailable")
+        val probeName = "oms_probe_${System.currentTimeMillis()}.txt"
+        tree.findFile(probeName)?.delete()
+        val probeDoc =
+            tree.createFile("text/plain", probeName)
+                ?: return BackupResult(false, "Backup location unavailable")
+
+        return try {
+            context.contentResolver.openOutputStream(probeDoc.uri, "w")?.use { out ->
+                out.write("probe".toByteArray(Charsets.UTF_8))
+                out.flush()
+            } ?: return BackupResult(false, "Backup location unavailable")
+
+            val echoed =
+                context.contentResolver.openInputStream(probeDoc.uri)?.use { input ->
+                    input.readBytes().toString(Charsets.UTF_8)
+                } ?: ""
+
+            if (echoed == "probe") {
+                BackupResult(true, "Write test passed")
+            } else {
+                BackupResult(false, "Write verification failed")
+            }
+        } finally {
+            probeDoc.delete()
+        }
+    }
+
     private fun pruneOldAppBackups(context: Context) {
         val dir = File(context.filesDir, BACKUP_DIR_NAME)
         if (!dir.exists() || !dir.isDirectory) return
         val backups =
-            dir.listFiles { file -> file.extension.equals("zip", ignoreCase = true) }
+            dir.listFiles { file -> isBackupArchiveName(file.name) }
                 ?.sortedByDescending { it.lastModified() }
                 ?: return
         backups.drop(MAX_APP_PRIVATE_BACKUPS).forEach { it.delete() }
+    }
+
+    private fun pruneOldSafBackups(context: Context, treeUriString: String?) {
+        val treeUri = treeUriString?.toUri() ?: return
+        val tree = DocumentFile.fromTreeUri(context, treeUri) ?: return
+        val backups = listSafBackups(tree)
+        backups.drop(MAX_SAF_DIRECTORY_BACKUPS).forEach { it.delete() }
+    }
+
+    suspend fun buildRestorePreview(context: Context, uriString: String?): RestorePreview {
+        val state = BackupPreferences(context).readState()
+        val sourceName =
+            if (uriString.isNullOrBlank()) {
+                findLatestBackupName(context, state.targetType, state.targetUri) ?: "Latest backup"
+            } else {
+                resolveDisplayNameForUri(context, uriString) ?: "Selected backup"
+            }
+        val input =
+            if (uriString.isNullOrBlank()) {
+                openLatestInput(context, state)
+            } else {
+                openSafInput(context, uriString)
+            } ?: throw IllegalArgumentException("Backup file unavailable")
+
+        return withContext(Dispatchers.IO) {
+            input.use { stream ->
+                val rawPayloads = readZipEntries(stream)
+                val payloads =
+                    validateRestoreEntries(
+                        rawEntries = rawPayloads,
+                        currentDbVersion = currentDatabaseVersion(context = context),
+                        manifestPolicy = state.manifestPolicy
+                    )
+                val metadata =
+                    runCatching { JSONObject(payloads.getValue(ENTRY_METADATA)) }.getOrNull()
+                RestorePreview(
+                    sourceName = sourceName,
+                    exportedAt = metadata?.optLong("exportedAt")?.takeIf { it > 0L },
+                    dbVersion = metadata?.optInt("dbVersion")?.takeIf { it > 0 },
+                    appVersionName =
+                        metadata?.optString("appVersionName", "")?.trim()?.takeIf { it.isNotEmpty() },
+                    customersCount = parseArray(payloads[ENTRY_CUSTOMERS])?.length() ?: 0,
+                    ordersCount = parseArray(payloads[ENTRY_ORDERS])?.length() ?: 0,
+                    paymentsCount = parseArray(payloads[ENTRY_PAYMENTS])?.length() ?: 0
+                )
+            }
+        }
     }
 
     private suspend fun buildBackupArchive(
@@ -566,6 +651,10 @@ object BackupManager {
         progress: ProgressCallback?
     ): BackupArchive {
         progress?.invoke(10, "Reading data")
+        val currentDbVersion = currentDatabaseVersion(database = database)
+        if (currentDbVersion <= 0) {
+            throw IllegalStateException("Unable to resolve app database version")
+        }
         val snapshot =
             database.withTransaction {
                 BackupSnapshot(
@@ -580,7 +669,7 @@ object BackupManager {
             }
 
         val payloadEntries = linkedMapOf<String, ByteArray>()
-        payloadEntries[ENTRY_METADATA] = buildMetadata(exportedAt).toString().toByteArray(Charsets.UTF_8)
+        payloadEntries[ENTRY_METADATA] = buildMetadata(exportedAt, currentDbVersion).toString().toByteArray(Charsets.UTF_8)
         payloadEntries[ENTRY_CUSTOMERS] = customersToJson(snapshot.customers).toString().toByteArray(Charsets.UTF_8)
         payloadEntries[ENTRY_ORDERS] = ordersToJson(snapshot.orders).toString().toByteArray(Charsets.UTF_8)
         payloadEntries[ENTRY_ORDER_ITEMS] = orderItemsToJson(snapshot.orderItems).toString().toByteArray(Charsets.UTF_8)
@@ -590,7 +679,7 @@ object BackupManager {
         payloadEntries[ENTRY_PAYMENT_ALLOCATIONS] = paymentAllocationsToJson(snapshot.paymentAllocations).toString().toByteArray(Charsets.UTF_8)
 
         progress?.invoke(65, "Writing manifest")
-        payloadEntries[ENTRY_MANIFEST] = buildManifest(exportedAt, payloadEntries).toByteArray(Charsets.UTF_8)
+        payloadEntries[ENTRY_MANIFEST] = buildManifest(exportedAt, payloadEntries, currentDbVersion).toByteArray(Charsets.UTF_8)
 
         progress?.invoke(80, "Finalizing archive")
         val zippedBytes = zipEntries(payloadEntries)
@@ -598,21 +687,25 @@ object BackupManager {
         // Ensure every produced archive passes strict restore preflight before writing out.
         validateRestoreEntries(
             rawEntries = readZipEntries(ByteArrayInputStream(zippedBytes)),
-            currentDbVersion = currentDatabaseVersion(),
+            currentDbVersion = currentDbVersion,
             manifestPolicy = RestoreManifestPolicy.Strict
         )
         return BackupArchive(bytes = zippedBytes, sha256 = sha256Hex(zippedBytes))
     }
 
-    private fun buildMetadata(exportedAt: Long): JSONObject {
+    private fun buildMetadata(exportedAt: Long, dbVersion: Int): JSONObject {
         return JSONObject()
             .put("exportedAt", exportedAt)
             .put("appVersionName", BuildConfig.VERSION_NAME)
             .put("appVersionCode", BuildConfig.VERSION_CODE)
-            .put("dbVersion", currentDatabaseVersion())
+            .put("dbVersion", dbVersion)
     }
 
-    private fun buildManifest(exportedAt: Long, payloadEntries: Map<String, ByteArray>): String {
+    private fun buildManifest(
+        exportedAt: Long,
+        payloadEntries: Map<String, ByteArray>,
+        dbVersion: Int
+    ): String {
         val checksums = JSONArray()
         payloadEntries
             .filterKeys { it != ENTRY_MANIFEST }
@@ -628,7 +721,7 @@ object BackupManager {
         return JSONObject()
             .put("formatVersion", MANIFEST_FORMAT_VERSION)
             .put("createdAt", exportedAt)
-            .put("dbVersion", currentDatabaseVersion())
+            .put("dbVersion", dbVersion)
             .put("entries", checksums)
             .toString()
     }
@@ -655,7 +748,7 @@ object BackupManager {
             out.flush()
         }
 
-        partialFile.inputStream().use { verifyArchiveStream(it) }
+        partialFile.inputStream().use { verifyArchiveStream(it, currentDatabaseVersion(context = context)) }
 
         if (finalFile.exists() && !finalFile.delete()) {
             throw IOException("Unable to replace existing backup")
@@ -692,13 +785,13 @@ object BackupManager {
             out.flush()
         } ?: return null
 
-        context.contentResolver.openInputStream(partial.uri)?.use { verifyArchiveStream(it) }
+        context.contentResolver.openInputStream(partial.uri)?.use { verifyArchiveStream(it, currentDatabaseVersion(context = context)) }
             ?: return null
 
         val renamed = partial.renameTo(fileName)
         if (renamed) {
             val finalized = tree.findFile(fileName) ?: return fileName
-            context.contentResolver.openInputStream(finalized.uri)?.use { verifyArchiveStream(it) }
+            context.contentResolver.openInputStream(finalized.uri)?.use { verifyArchiveStream(it, currentDatabaseVersion(context = context)) }
                 ?: return null
             return finalized.name ?: fileName
         }
@@ -712,7 +805,7 @@ object BackupManager {
             }
         } ?: return null
         partial.delete()
-        context.contentResolver.openInputStream(finalFile.uri)?.use { verifyArchiveStream(it) }
+        context.contentResolver.openInputStream(finalFile.uri)?.use { verifyArchiveStream(it, currentDatabaseVersion(context = context)) }
             ?: return null
         return finalFile.name ?: fileName
     }
@@ -723,6 +816,7 @@ object BackupManager {
         archiveBytes: ByteArray
     ): String? {
         val fileUri = fileUriString?.toUri() ?: return null
+        val expectedHash = sha256Hex(archiveBytes)
         val rollbackBytes =
             runCatching {
                 readUriBytesLimited(
@@ -732,28 +826,160 @@ object BackupManager {
                 )
             }.getOrNull()
 
+        var writeCompleted = false
         return try {
-            context.contentResolver.openOutputStream(fileUri, "w")?.use { out ->
-                out.write(archiveBytes)
-                out.flush()
-            } ?: throw IOException("Backup file unavailable")
+            val wrote = writeSafFileBytes(context, fileUri, archiveBytes)
+            if (!wrote) {
+                throw IOException("Backup file unavailable")
+            }
+            writeCompleted = true
+            verifySafFileWrite(
+                context = context,
+                uri = fileUri,
+                expectedBytes = archiveBytes.size.toLong(),
+                expectedHash = expectedHash
+            )
 
-            context.contentResolver.openInputStream(fileUri)?.use { verifyArchiveStream(it) }
-                ?: throw IOException("Backup file unavailable")
-
-            resolveDisplayNameForUri(context, fileUriString) ?: "selected_backup.zip"
+            resolveDisplayNameForUri(context, fileUriString) ?: "selected_backup.oms"
         } catch (error: Exception) {
-            if (rollbackBytes != null) {
+            // Roll back only if we could not complete the write. If write finished but
+            // verification is inconclusive on cloud providers, avoid restoring stale bytes.
+            if (!writeCompleted && rollbackBytes != null) {
                 runCatching {
-                    context.contentResolver.openOutputStream(fileUri, "w")?.use { out ->
-                        out.write(rollbackBytes)
-                        out.flush()
-                    }
+                    writeSafFileBytes(context, fileUri, rollbackBytes)
                 }
             }
             throw error
         }
     }
+
+    private fun writeSafFileBytes(
+        context: Context,
+        uri: android.net.Uri,
+        bytes: ByteArray
+    ): Boolean {
+        val wroteViaDescriptor =
+            runCatching {
+                context.contentResolver.openFileDescriptor(uri, "rwt")?.use { pfd ->
+                    FileOutputStream(pfd.fileDescriptor).use { out ->
+                        out.channel.truncate(0L)
+                        out.write(bytes)
+                        out.flush()
+                        runCatching { out.fd.sync() }
+                    }
+                    true
+                } ?: false
+            }.getOrDefault(false)
+        if (wroteViaDescriptor) return true
+
+        val wroteViaReadWrite =
+            runCatching {
+                context.contentResolver.openFileDescriptor(uri, "rw")?.use { pfd ->
+                    FileOutputStream(pfd.fileDescriptor).use { out ->
+                        out.channel.truncate(0L)
+                        out.write(bytes)
+                        out.flush()
+                        runCatching { out.fd.sync() }
+                    }
+                    true
+                } ?: false
+            }.getOrDefault(false)
+        if (wroteViaReadWrite) return true
+
+        return runCatching {
+            openSafOutputStreamForWrite(context, uri)?.use { out ->
+                out.write(bytes)
+                out.flush()
+            } != null
+        }.getOrDefault(false)
+    }
+
+    private fun verifySafFileWrite(
+        context: Context,
+        uri: android.net.Uri,
+        expectedBytes: Long,
+        expectedHash: String
+    ) {
+        var lastError: Throwable? = null
+        var sawReadableFingerprint = false
+        repeat(SAF_READBACK_RETRY_ATTEMPTS) { attempt ->
+            val fingerprint =
+                runCatching { readStreamFingerprint(context, uri) }
+                    .onFailure { lastError = it }
+                    .getOrNull()
+            if (fingerprint != null) {
+                sawReadableFingerprint = true
+                if (fingerprint.length == expectedBytes && fingerprint.sha256 == expectedHash) {
+                    return
+                }
+                lastError =
+                    IOException(
+                        "Backup file verification failed (length=${fingerprint.length}, expected=$expectedBytes)"
+                    )
+            }
+            if (attempt < SAF_READBACK_RETRY_ATTEMPTS - 1) {
+                runCatching { Thread.sleep(SAF_READBACK_RETRY_DELAY_MS * (attempt + 1L)) }
+            }
+        }
+
+        // Last resort for providers that fail stream re-open entirely: size must exactly match.
+        if (!sawReadableFingerprint && isSafFileSizePlausible(context, uri, expectedBytes)) return
+
+        when (lastError) {
+            is Exception -> throw lastError as Exception
+            else -> throw IOException("Backup file verification failed")
+        }
+    }
+
+    private fun readStreamFingerprint(
+        context: Context,
+        uri: android.net.Uri
+    ): StreamFingerprint {
+        val digest = MessageDigest.getInstance("SHA-256")
+        val length =
+            context.contentResolver.openInputStream(uri)?.use { input ->
+                val buffer = ByteArray(8_192)
+                var total = 0L
+                var read = input.read(buffer)
+                while (read >= 0) {
+                    if (read > 0) {
+                        digest.update(buffer, 0, read)
+                        total += read.toLong()
+                    }
+                    read = input.read(buffer)
+                }
+                total
+            } ?: throw IOException("Backup file unavailable")
+        val hash = digest.digest().joinToString(separator = "") { "%02x".format(it) }
+        return StreamFingerprint(length = length, sha256 = hash)
+    }
+
+    private fun openSafOutputStreamForWrite(
+        context: Context,
+        uri: android.net.Uri
+    ): OutputStream? {
+        return context.contentResolver.openOutputStream(uri, "wt")
+            ?: context.contentResolver.openOutputStream(uri, "w")
+            ?: context.contentResolver.openOutputStream(uri)
+    }
+
+    private fun isSafFileSizePlausible(
+        context: Context,
+        uri: android.net.Uri,
+        expectedBytes: Long
+    ): Boolean {
+        return runCatching {
+            context.contentResolver.openFileDescriptor(uri, "r")?.use { fd ->
+                val statSize = fd.statSize
+                statSize == expectedBytes
+            } ?: false
+        }.getOrDefault(false)
+    }
+
+    private data class StreamFingerprint(
+        val length: Long,
+        val sha256: String
+    )
 
     private fun updateAppPrivateLatestPointer(context: Context, pointer: LatestPointer) {
         val dir = ensureAppPrivateDir(context) ?: return
@@ -825,6 +1051,11 @@ object BackupManager {
         }.getOrNull()
     }
 
+    private fun isBackupArchiveName(name: String?): Boolean {
+        val safeName = name?.lowercase(Locale.US) ?: return false
+        return safeName.endsWith(BACKUP_FILE_EXTENSION) || safeName.endsWith(LEGACY_BACKUP_FILE_EXTENSION)
+    }
+
     private fun readUriBytesLimited(context: Context, uri: android.net.Uri, maxBytes: Long): ByteArray? {
         if (maxBytes <= 0L) return null
         val input = context.contentResolver.openInputStream(uri) ?: return null
@@ -845,11 +1076,11 @@ object BackupManager {
         }
     }
 
-    private fun verifyArchiveStream(inputStream: InputStream) {
+    private fun verifyArchiveStream(inputStream: InputStream, currentDbVersion: Int) {
         val entries = readZipEntries(inputStream)
         validateRestoreEntries(
             rawEntries = entries,
-            currentDbVersion = currentDatabaseVersion(),
+            currentDbVersion = currentDbVersion,
             manifestPolicy = RestoreManifestPolicy.Strict
         )
     }
@@ -861,11 +1092,12 @@ object BackupManager {
         manifestPolicy: RestoreManifestPolicy
     ) {
         progress?.invoke(15, "Reading backup")
+        val currentDbVersion = currentDatabaseVersion(database = database)
         val rawPayloads = readZipEntries(inputStream)
         val payloads =
             validateRestoreEntries(
                 rawEntries = rawPayloads,
-                currentDbVersion = currentDatabaseVersion(),
+                currentDbVersion = currentDbVersion,
                 manifestPolicy = manifestPolicy
             )
 
@@ -1528,8 +1760,22 @@ object BackupManager {
         }.getOrDefault(false)
     }
 
-    private fun currentDatabaseVersion(): Int {
-        return AppDatabase::class.java.getAnnotation(Database::class.java)?.version ?: 0
+    private fun currentDatabaseVersion(
+        context: Context? = null,
+        database: AppDatabase? = null
+    ): Int {
+        val dbVersionFromOpenHelper =
+            runCatching {
+                when {
+                    database != null -> database.openHelper.readableDatabase.version
+                    context != null -> DatabaseProvider.getDatabase(context).openHelper.readableDatabase.version
+                    else -> 0
+                }
+            }.getOrDefault(0)
+        if (dbVersionFromOpenHelper > 0) {
+            return dbVersionFromOpenHelper
+        }
+        return APP_DATABASE_SCHEMA_VERSION
     }
 
     private fun sha256Hex(bytes: ByteArray): String {

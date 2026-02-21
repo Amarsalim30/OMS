@@ -52,3 +52,13 @@ data class DriveTroubleshootReport(
     val managedProfile: Boolean,
     val guidance: List<String>
 )
+
+data class RestorePreview(
+    val sourceName: String,
+    val exportedAt: Long?,
+    val dbVersion: Int?,
+    val appVersionName: String?,
+    val customersCount: Int,
+    val ordersCount: Int,
+    val paymentsCount: Int
+)

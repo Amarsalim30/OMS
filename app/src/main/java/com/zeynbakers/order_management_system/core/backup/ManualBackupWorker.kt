@@ -32,7 +32,12 @@ class ManualBackupWorker(
                 Result.success()
             }
             result.shouldRetry -> Result.retry()
-            else -> Result.failure()
+            else ->
+                Result.failure(
+                    workDataOf(
+                        BackupScheduler.KEY_ERROR_MESSAGE to (result.message ?: "Backup failed")
+                    )
+                )
         }
     }
 }
