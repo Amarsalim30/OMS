@@ -3,6 +3,7 @@
 package com.zeynbakers.order_management_system.core.db
 
 import androidx.room.*
+import com.zeynbakers.order_management_system.core.helper.data.HelperNoteType
 import kotlinx.datetime.LocalDate
 import java.math.BigDecimal
 
@@ -98,4 +99,10 @@ class Converters {
         value: String
     ): com.zeynbakers.order_management_system.accounting.data.PaymentAllocationStatus =
         com.zeynbakers.order_management_system.accounting.data.PaymentAllocationStatus.valueOf(value)
+
+    @TypeConverter
+    fun fromHelperNoteType(type: HelperNoteType): String = type.name
+
+    @TypeConverter
+    fun toHelperNoteType(value: String): HelperNoteType = HelperNoteType.valueOf(value)
 }

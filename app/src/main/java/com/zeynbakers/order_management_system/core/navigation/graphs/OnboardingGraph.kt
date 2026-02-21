@@ -39,6 +39,9 @@ import com.zeynbakers.order_management_system.R
 import com.zeynbakers.order_management_system.core.backup.BackupPreferences
 import com.zeynbakers.order_management_system.core.backup.BackupScheduler
 import com.zeynbakers.order_management_system.core.backup.BackupTargetType
+import com.zeynbakers.order_management_system.core.helper.HelperOverlayController
+import com.zeynbakers.order_management_system.core.helper.HelperPermissions
+import com.zeynbakers.order_management_system.core.helper.HelperPreferences
 import com.zeynbakers.order_management_system.core.navigation.AppRoutes
 import com.zeynbakers.order_management_system.core.onboarding.BusinessProfileScreen
 import com.zeynbakers.order_management_system.core.onboarding.IntroPagerScreen
@@ -98,6 +101,7 @@ internal fun NavGraphBuilder.onboardingGraph(
     composable(AppRoutes.SetupChecklist) {
         val context = navController.context
         val prefs = remember { OnboardingPreferences(context) }
+        val helperPrefs = remember { HelperPreferences(context) }
         val backupPrefs = remember { BackupPreferences(context) }
         val notificationPrefs = remember { NotificationPreferences(context) }
         val scope = rememberCoroutineScope()
@@ -110,6 +114,9 @@ internal fun NavGraphBuilder.onboardingGraph(
         var contactsPermissionRequested by rememberSaveable { mutableStateOf(false) }
         var notificationsPermissionGranted by remember { mutableStateOf(hasNotificationPermission(context)) }
         var notificationsPermissionRequested by rememberSaveable { mutableStateOf(false) }
+        val helperState by helperPrefs.state.collectAsState(initial = com.zeynbakers.order_management_system.core.helper.HelperSettingsState())
+        var helperMicPermissionGranted by remember { mutableStateOf(hasRecordPermission(context)) }
+        var helperOverlayPermissionGranted by remember { mutableStateOf(HelperPermissions.hasOverlayPermission(context)) }
 
         val contactsPermissionPermanentlyDenied =
             !contactsPermissionGranted &&
@@ -186,6 +193,8 @@ internal fun NavGraphBuilder.onboardingGraph(
                     notificationsPermissionGranted = hasNotificationPermission(context)
                     notificationsConfigured = notificationPrefs.readSettings().enabled
                     backupState = backupPrefs.readState()
+                    helperMicPermissionGranted = hasRecordPermission(context)
+                    helperOverlayPermissionGranted = HelperPermissions.hasOverlayPermission(context)
                 }
             }
             lifecycleOwner.lifecycle.addObserver(observer)
@@ -198,6 +207,7 @@ internal fun NavGraphBuilder.onboardingGraph(
             backupState.targetType == BackupTargetType.SafFile && backupState.targetUri?.isNotBlank() == true
         val backupConfigured = hasBackupFile
         val contactsConfigured = state.contactsSetupDone
+        val helperConfigured = state.helperSetupDone || helperState.enabled
         val backupTargetLabel =
             when {
                 !hasBackupFile -> null
@@ -215,6 +225,9 @@ internal fun NavGraphBuilder.onboardingGraph(
             contactsPermissionPermanentlyDenied = contactsPermissionPermanentlyDenied,
             notificationsConfigured = notificationsConfigured,
             notificationsPermissionPermanentlyDenied = notificationsPermissionPermanentlyDenied,
+            helperConfigured = helperConfigured,
+            helperMicGranted = helperMicPermissionGranted,
+            helperOverlayGranted = helperOverlayPermissionGranted,
             onSaveBusinessProfile = { name, currency, timezone ->
                 scope.launch {
                     prefs.saveBusinessProfile(
@@ -254,6 +267,11 @@ internal fun NavGraphBuilder.onboardingGraph(
                 NotificationScheduler.setEnabled(context, false)
                 notificationsConfigured = notificationPrefs.readSettings().enabled
                 scope.launch { prefs.setNotificationsSetupDone(false) }
+            },
+            onOpenHelperSetup = {
+                navController.navigate(AppRoutes.MicrophonePermissionPrimer) {
+                    launchSingleTop = true
+                }
             },
             onOpenAppSettings = { openAppSettings(context) },
             onStartUsingApp = {
@@ -361,6 +379,106 @@ internal fun NavGraphBuilder.onboardingGraph(
         )
     }
 
+    composable(AppRoutes.MicrophonePermissionPrimer) {
+        val context = LocalContext.current
+        val hasMicPermissionInitial = hasRecordPermission(context)
+        var hasMicPermission by remember { mutableStateOf(hasMicPermissionInitial) }
+        val launcher =
+            rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+                hasMicPermission = granted
+                if (granted) {
+                    navController.navigate(AppRoutes.OverlayPermissionPrimer) {
+                        popUpTo(AppRoutes.MicrophonePermissionPrimer) { inclusive = true }
+                        launchSingleTop = true
+                    }
+                }
+            }
+
+        PermissionPrimerScreen(
+            title = stringResource(R.string.permission_primer_microphone_title),
+            body = stringResource(R.string.permission_primer_microphone_body),
+            whyTitle = stringResource(R.string.permission_primer_why_title),
+            whyLine = stringResource(R.string.permission_primer_microphone_why_line),
+            privacyTitle = stringResource(R.string.permission_primer_privacy_title),
+            privacyLine = stringResource(R.string.permission_primer_microphone_privacy_line),
+            continueLabel = stringResource(R.string.permission_primer_continue),
+            onContinue = {
+                if (hasMicPermission) {
+                    navController.navigate(AppRoutes.OverlayPermissionPrimer) {
+                        popUpTo(AppRoutes.MicrophonePermissionPrimer) { inclusive = true }
+                        launchSingleTop = true
+                    }
+                } else {
+                    launcher.launch(Manifest.permission.RECORD_AUDIO)
+                }
+            },
+            onNotNow = { navController.popBackStack() }
+        )
+    }
+
+    composable(AppRoutes.OverlayPermissionPrimer) {
+        val context = LocalContext.current
+        val prefs = remember { OnboardingPreferences(context) }
+        val helperPrefs = remember { HelperPreferences(context) }
+        val scope = rememberCoroutineScope()
+        val lifecycleOwner = LocalLifecycleOwner.current
+        var hasOverlayPermission by remember { mutableStateOf(HelperPermissions.hasOverlayPermission(context)) }
+
+        DisposableEffect(lifecycleOwner) {
+            val observer = LifecycleEventObserver { _, event ->
+                if (event == Lifecycle.Event.ON_RESUME) {
+                    hasOverlayPermission = HelperPermissions.hasOverlayPermission(context)
+                }
+            }
+            lifecycleOwner.lifecycle.addObserver(observer)
+            onDispose {
+                lifecycleOwner.lifecycle.removeObserver(observer)
+            }
+        }
+
+        PermissionPrimerScreen(
+            title = stringResource(R.string.permission_primer_overlay_title),
+            body = stringResource(R.string.permission_primer_overlay_body),
+            whyTitle = stringResource(R.string.permission_primer_why_title),
+            whyLine = stringResource(R.string.permission_primer_overlay_why_line),
+            privacyTitle = stringResource(R.string.permission_primer_privacy_title),
+            privacyLine = stringResource(R.string.permission_primer_overlay_privacy_line),
+            continueLabel = stringResource(R.string.permission_primer_overlay_continue),
+            onContinue = {
+                if (hasOverlayPermission) {
+                    scope.launch {
+                        helperPrefs.setEnabled(true)
+                        helperPrefs.setFallbackOnly(false)
+                        prefs.setHelperSetupDone(true)
+                    }
+                    HelperOverlayController.start(context.applicationContext)
+                    navController.popBackStack(AppRoutes.SetupChecklist, inclusive = false)
+                } else {
+                    context.startActivity(HelperPermissions.overlaySettingsIntent(context))
+                }
+            },
+            onNotNow = {
+                scope.launch {
+                    helperPrefs.setEnabled(true)
+                    helperPrefs.setFallbackOnly(true)
+                    prefs.setHelperSetupDone(true)
+                }
+                HelperOverlayController.start(context.applicationContext)
+                navController.popBackStack(AppRoutes.SetupChecklist, inclusive = false)
+            },
+            secondaryActionLabel = stringResource(R.string.permission_primer_use_fallback),
+            onSecondaryAction = {
+                scope.launch {
+                    helperPrefs.setEnabled(true)
+                    helperPrefs.setFallbackOnly(true)
+                    prefs.setHelperSetupDone(true)
+                }
+                HelperOverlayController.start(context.applicationContext)
+                navController.popBackStack(AppRoutes.SetupChecklist, inclusive = false)
+            }
+        )
+    }
+
     composable(AppRoutes.FirstRunTutorial) {
         val prefs = remember { OnboardingPreferences(navController.context) }
         var routed by rememberSaveable { mutableStateOf(false) }
@@ -387,6 +505,13 @@ private fun hasContactsPermission(context: Context): Boolean {
     return ContextCompat.checkSelfPermission(
         context,
         Manifest.permission.READ_CONTACTS
+    ) == PackageManager.PERMISSION_GRANTED
+}
+
+private fun hasRecordPermission(context: Context): Boolean {
+    return ContextCompat.checkSelfPermission(
+        context,
+        Manifest.permission.RECORD_AUDIO
     ) == PackageManager.PERMISSION_GRANTED
 }
 

@@ -22,6 +22,8 @@ import com.zeynbakers.order_management_system.accounting.data.PaymentReceiptStat
 import com.zeynbakers.order_management_system.core.db.APP_DATABASE_SCHEMA_VERSION
 import com.zeynbakers.order_management_system.core.db.AppDatabase
 import com.zeynbakers.order_management_system.core.db.DatabaseProvider
+import com.zeynbakers.order_management_system.core.helper.data.HelperNoteEntity
+import com.zeynbakers.order_management_system.core.helper.data.HelperNoteType
 import com.zeynbakers.order_management_system.customer.data.CustomerEntity
 import com.zeynbakers.order_management_system.order.data.ItemCategory
 import com.zeynbakers.order_management_system.order.data.OrderEntity
@@ -81,6 +83,7 @@ object BackupManager {
     private const val ENTRY_PAYMENTS = "payments.json"
     private const val ENTRY_PAYMENT_RECEIPTS = "payment_receipts.json"
     private const val ENTRY_PAYMENT_ALLOCATIONS = "payment_allocations.json"
+    private const val ENTRY_HELPER_NOTES = "helper_notes.json"
     private const val ENTRY_LEGACY_MPESA = "mpesa_transactions.json"
     private const val ENTRY_MANIFEST = "manifest.json"
     private const val GOOGLE_DRIVE_PACKAGE = "com.google.android.apps.docs"
@@ -107,6 +110,7 @@ object BackupManager {
             ENTRY_PAYMENTS,
             ENTRY_PAYMENT_RECEIPTS,
             ENTRY_PAYMENT_ALLOCATIONS,
+            ENTRY_HELPER_NOTES,
             ENTRY_LEGACY_MPESA
         )
 
@@ -664,7 +668,8 @@ object BackupManager {
                     accountEntries = database.accountingDao().getAllAccountEntries(),
                     payments = database.accountingDao().getAllPayments(),
                     paymentReceipts = database.paymentReceiptDao().getAll(),
-                    paymentAllocations = database.paymentAllocationDao().getAll()
+                    paymentAllocations = database.paymentAllocationDao().getAll(),
+                    helperNotes = database.helperNoteDao().getAll()
                 )
             }
 
@@ -677,6 +682,7 @@ object BackupManager {
         payloadEntries[ENTRY_PAYMENTS] = paymentsToJson(snapshot.payments).toString().toByteArray(Charsets.UTF_8)
         payloadEntries[ENTRY_PAYMENT_RECEIPTS] = paymentReceiptsToJson(snapshot.paymentReceipts).toString().toByteArray(Charsets.UTF_8)
         payloadEntries[ENTRY_PAYMENT_ALLOCATIONS] = paymentAllocationsToJson(snapshot.paymentAllocations).toString().toByteArray(Charsets.UTF_8)
+        payloadEntries[ENTRY_HELPER_NOTES] = helperNotesToJson(snapshot.helperNotes).toString().toByteArray(Charsets.UTF_8)
 
         progress?.invoke(65, "Writing manifest")
         payloadEntries[ENTRY_MANIFEST] = buildManifest(exportedAt, payloadEntries, currentDbVersion).toByteArray(Charsets.UTF_8)
@@ -1108,6 +1114,7 @@ object BackupManager {
         val payments = parsePayments(payloads[ENTRY_PAYMENTS])
         val receipts = parsePaymentReceipts(payloads[ENTRY_PAYMENT_RECEIPTS])
         val allocations = parsePaymentAllocations(payloads[ENTRY_PAYMENT_ALLOCATIONS])
+        val helperNotes = parseHelperNotes(payloads[ENTRY_HELPER_NOTES])
         val legacyMpesa = parseLegacyMpesaTransactions(payloads[ENTRY_LEGACY_MPESA])
         val resolvedReceipts =
             if (receipts.isNotEmpty()) receipts else legacyMpesaToReceipts(legacyMpesa)
@@ -1124,6 +1131,7 @@ object BackupManager {
             database.accountingDao().insertPayments(payments)
             database.paymentReceiptDao().insertAll(resolvedReceipts)
             database.paymentAllocationDao().insertAll(resolvedAllocations)
+            database.helperNoteDao().insertAll(helperNotes)
         }
         progress?.invoke(95, "Finalizing")
     }
@@ -1422,6 +1430,32 @@ object BackupManager {
         return array
     }
 
+    private fun helperNotesToJson(notes: List<HelperNoteEntity>): JSONArray {
+        val array = JSONArray()
+        notes.forEach { note ->
+            array.put(
+                JSONObject()
+                    .put("id", note.id)
+                    .put("createdAt", note.createdAt)
+                    .put("updatedAt", note.updatedAt)
+                    .put("type", note.type.name)
+                    .put("rawTranscript", note.rawTranscript)
+                    .put("displayText", note.displayText)
+                    .put("calculatorExpression", note.calculatorExpression ?: JSONObject.NULL)
+                    .put("calculatorResult", note.calculatorResult ?: JSONObject.NULL)
+                    .put("detectedPhone", note.detectedPhone ?: JSONObject.NULL)
+                    .put("detectedPhoneDigits", note.detectedPhoneDigits ?: JSONObject.NULL)
+                    .put("detectedAmountRaw", note.detectedAmountRaw ?: JSONObject.NULL)
+                    .put("detectedAmountNormalized", note.detectedAmountNormalized ?: JSONObject.NULL)
+                    .put("linkedCustomerId", note.linkedCustomerId ?: JSONObject.NULL)
+                    .put("sourceApp", note.sourceApp ?: JSONObject.NULL)
+                    .put("pinned", note.pinned)
+                    .put("deleted", note.deleted)
+            )
+        }
+        return array
+    }
+
     private fun parseCustomers(payload: String?): List<CustomerEntity> {
         val array = parseArray(payload) ?: return emptyList()
         return (0 until array.length()).map { index ->
@@ -1581,6 +1615,51 @@ object BackupManager {
                 createdAt = obj.getLong("createdAt"),
                 voidedAt = voidedAt,
                 voidReason = voidReason
+            )
+        }
+    }
+
+    private fun parseHelperNotes(payload: String?): List<HelperNoteEntity> {
+        val array = parseArray(payload) ?: return emptyList()
+        return (0 until array.length()).map { index ->
+            val obj = array.getJSONObject(index)
+            val calculatorExpression =
+                if (obj.isNull("calculatorExpression")) null else obj.getString("calculatorExpression")
+            val calculatorResult =
+                if (obj.isNull("calculatorResult")) null else obj.getString("calculatorResult")
+            val detectedPhone =
+                if (obj.isNull("detectedPhone")) null else obj.getString("detectedPhone")
+            val detectedPhoneDigits =
+                if (obj.isNull("detectedPhoneDigits")) null else obj.getString("detectedPhoneDigits")
+            val detectedAmountRaw =
+                if (obj.isNull("detectedAmountRaw")) null else obj.getString("detectedAmountRaw")
+            val detectedAmountNormalized =
+                if (obj.isNull("detectedAmountNormalized")) null else obj.getString("detectedAmountNormalized")
+            val linkedCustomerId =
+                if (obj.isNull("linkedCustomerId")) null else obj.getLong("linkedCustomerId")
+            val sourceApp =
+                if (obj.isNull("sourceApp")) null else obj.getString("sourceApp")
+            val deleted = obj.optBoolean("deleted", false)
+            val pinned = obj.optBoolean("pinned", false)
+            val rawTranscript = obj.optString("rawTranscript", "")
+            val displayText = obj.optString("displayText", rawTranscript)
+            HelperNoteEntity(
+                id = obj.getLong("id"),
+                createdAt = obj.getLong("createdAt"),
+                updatedAt = obj.optLong("updatedAt", obj.getLong("createdAt")),
+                type = HelperNoteType.valueOf(obj.getString("type")),
+                rawTranscript = rawTranscript,
+                displayText = displayText,
+                calculatorExpression = calculatorExpression,
+                calculatorResult = calculatorResult,
+                detectedPhone = detectedPhone,
+                detectedPhoneDigits = detectedPhoneDigits,
+                detectedAmountRaw = detectedAmountRaw,
+                detectedAmountNormalized = detectedAmountNormalized,
+                linkedCustomerId = linkedCustomerId,
+                sourceApp = sourceApp,
+                pinned = pinned,
+                deleted = deleted
             )
         }
     }
@@ -1790,7 +1869,8 @@ object BackupManager {
         val accountEntries: List<AccountEntryEntity>,
         val payments: List<PaymentEntity>,
         val paymentReceipts: List<PaymentReceiptEntity>,
-        val paymentAllocations: List<PaymentAllocationEntity>
+        val paymentAllocations: List<PaymentAllocationEntity>,
+        val helperNotes: List<HelperNoteEntity>
     )
 
     private data class BackupArchive(

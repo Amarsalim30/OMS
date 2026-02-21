@@ -32,6 +32,37 @@ object DatabaseProvider {
     internal const val SQL_RENAME_ORDERS_NEW = "ALTER TABLE orders_new RENAME TO orders"
     internal const val SQL_INDEX_ORDERS_DATE = "CREATE INDEX IF NOT EXISTS index_orders_orderDate ON orders(orderDate)"
     internal const val SQL_INDEX_ORDERS_CUSTOMER = "CREATE INDEX IF NOT EXISTS index_orders_customerId ON orders(customerId)"
+    internal val SQL_CREATE_HELPER_NOTES_V11 =
+        """
+        CREATE TABLE IF NOT EXISTS helper_notes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+            createdAt INTEGER NOT NULL,
+            updatedAt INTEGER NOT NULL,
+            type TEXT NOT NULL,
+            rawTranscript TEXT NOT NULL,
+            displayText TEXT NOT NULL,
+            calculatorExpression TEXT,
+            calculatorResult TEXT,
+            detectedPhone TEXT,
+            detectedPhoneDigits TEXT,
+            detectedAmountRaw TEXT,
+            detectedAmountNormalized TEXT,
+            linkedCustomerId INTEGER,
+            sourceApp TEXT,
+            pinned INTEGER NOT NULL DEFAULT 0,
+            deleted INTEGER NOT NULL DEFAULT 0
+        )
+        """.trimIndent()
+    internal const val SQL_INDEX_HELPER_NOTES_CREATED_AT =
+        "CREATE INDEX IF NOT EXISTS index_helper_notes_createdAt ON helper_notes(createdAt)"
+    internal const val SQL_INDEX_HELPER_NOTES_PINNED_CREATED_AT =
+        "CREATE INDEX IF NOT EXISTS index_helper_notes_pinned_createdAt ON helper_notes(pinned, createdAt)"
+    internal const val SQL_INDEX_HELPER_NOTES_PHONE_DIGITS =
+        "CREATE INDEX IF NOT EXISTS index_helper_notes_detectedPhoneDigits ON helper_notes(detectedPhoneDigits)"
+    internal const val SQL_INDEX_HELPER_NOTES_AMOUNT_NORMALIZED =
+        "CREATE INDEX IF NOT EXISTS index_helper_notes_detectedAmountNormalized ON helper_notes(detectedAmountNormalized)"
+    internal const val SQL_INDEX_HELPER_NOTES_TYPE =
+        "CREATE INDEX IF NOT EXISTS index_helper_notes_type ON helper_notes(type)"
 
     private val migration1To2 = object : Migration(1, 2) {
         override fun migrate(db: SupportSQLiteDatabase) {
@@ -271,6 +302,17 @@ object DatabaseProvider {
         }
     }
 
+    private val migration10To11 = object : Migration(10, 11) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL(SQL_CREATE_HELPER_NOTES_V11)
+            db.execSQL(SQL_INDEX_HELPER_NOTES_CREATED_AT)
+            db.execSQL(SQL_INDEX_HELPER_NOTES_PINNED_CREATED_AT)
+            db.execSQL(SQL_INDEX_HELPER_NOTES_PHONE_DIGITS)
+            db.execSQL(SQL_INDEX_HELPER_NOTES_AMOUNT_NORMALIZED)
+            db.execSQL(SQL_INDEX_HELPER_NOTES_TYPE)
+        }
+    }
+
     fun getDatabase(context: Context): AppDatabase {
         return instance ?: synchronized(this) {
             val db = Room.databaseBuilder(
@@ -286,7 +328,8 @@ object DatabaseProvider {
                 migration6To7,
                 migration7To8,
                 migration8To9,
-                migration9To10
+                migration9To10,
+                migration10To11
             ).build()
             instance = db
             db

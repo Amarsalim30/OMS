@@ -50,6 +50,9 @@ import com.zeynbakers.order_management_system.accounting.ui.PaymentIntakeViewMod
 import com.zeynbakers.order_management_system.accounting.ui.PaymentHistoryFilter
 import com.zeynbakers.order_management_system.core.backup.BackupScheduler
 import com.zeynbakers.order_management_system.core.db.DatabaseProvider
+import com.zeynbakers.order_management_system.core.helper.HelperOverlayController
+import com.zeynbakers.order_management_system.core.helper.HelperPreferences
+import com.zeynbakers.order_management_system.core.helper.HelperSettingsState
 import com.zeynbakers.order_management_system.core.navigation.AppIntents
 import com.zeynbakers.order_management_system.core.navigation.AppRoutes
 import com.zeynbakers.order_management_system.core.navigation.AppShortcuts
@@ -147,7 +150,9 @@ internal fun MainAppContent(
                     )
                 }
                 val updatePrefs = remember { UpdatePreferences(context) }
+                val helperPrefs = remember { HelperPreferences(context) }
                 var showUpdateDialog by remember { mutableStateOf(false) }
+                val helperState by helperPrefs.state.collectAsState(initial = HelperSettingsState())
                 val navController = rememberNavController()
                 val navBackStackEntry by navController.currentBackStackEntryAsState()
                 val currentRoute = navBackStackEntry?.destination?.route
@@ -231,6 +236,13 @@ internal fun MainAppContent(
                     if (baseMonth == 0 && baseYear == 0) {
                         baseMonth = now.monthNumber
                         baseYear = now.year
+                    }
+                }
+                LaunchedEffect(helperState.enabled) {
+                    if (helperState.enabled) {
+                        HelperOverlayController.start(context.applicationContext)
+                    } else {
+                        HelperOverlayController.stop(context.applicationContext)
                     }
                 }
                 LaunchedEffect(currentRoute, activeTopLevelRoute) {

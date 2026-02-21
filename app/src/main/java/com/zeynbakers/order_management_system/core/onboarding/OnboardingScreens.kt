@@ -195,12 +195,16 @@ fun SetupChecklistScreen(
     contactsPermissionPermanentlyDenied: Boolean,
     notificationsConfigured: Boolean,
     notificationsPermissionPermanentlyDenied: Boolean,
+    helperConfigured: Boolean,
+    helperMicGranted: Boolean,
+    helperOverlayGranted: Boolean,
     onSaveBusinessProfile: (name: String, currency: String, timezone: String) -> Unit,
     onChooseBackupFile: () -> Unit,
     onRequestContactsPermission: () -> Unit,
     onOpenContactsImport: () -> Unit,
     onEnableNotifications: () -> Unit,
     onDisableNotifications: () -> Unit,
+    onOpenHelperSetup: () -> Unit,
     onOpenAppSettings: () -> Unit,
     onStartUsingApp: () -> Unit
 ) {
@@ -219,7 +223,8 @@ fun SetupChecklistScreen(
         onboardingState.businessProfileCompleted,
         backupConfigured,
         contactsConfigured,
-        notificationsConfigured
+        notificationsConfigured,
+        helperConfigured
     ) {
         listOf(
             SetupStep(
@@ -249,6 +254,13 @@ fun SetupChecklistScreen(
                 body = R.string.setup_item_notifications_body,
                 required = false,
                 done = notificationsConfigured
+            ),
+            SetupStep(
+                type = SetupStepType.Helper,
+                title = R.string.setup_item_helper_title,
+                body = R.string.setup_item_helper_body,
+                required = false,
+                done = helperConfigured
             )
         )
     }
@@ -514,6 +526,47 @@ fun SetupChecklistScreen(
                                             Text(stringResource(R.string.permission_primer_open_settings))
                                         }
                                     }
+                                }
+                            }
+                            SetupStepType.Helper -> {
+                                Text(
+                                    text =
+                                        if (helperConfigured) {
+                                            stringResource(R.string.setup_helper_ready_hint)
+                                        } else {
+                                            stringResource(R.string.setup_helper_request_hint)
+                                        },
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(top = 8.dp)
+                                )
+                                Text(
+                                    text =
+                                        buildString {
+                                            append(
+                                                if (helperMicGranted) {
+                                                    stringResource(R.string.setup_helper_status_mic_granted)
+                                                } else {
+                                                    stringResource(R.string.setup_helper_status_mic_missing)
+                                                }
+                                            )
+                                            append(" • ")
+                                            append(
+                                                if (helperOverlayGranted) {
+                                                    stringResource(R.string.setup_helper_status_overlay_granted)
+                                                } else {
+                                                    stringResource(R.string.setup_helper_status_overlay_missing)
+                                                }
+                                            )
+                                        },
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Button(
+                                    onClick = onOpenHelperSetup,
+                                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
+                                ) {
+                                    Text(stringResource(R.string.setup_helper_open_action))
                                 }
                             }
                         }
@@ -899,7 +952,8 @@ private enum class SetupStepType {
     Business,
     Backup,
     Contacts,
-    Notifications
+    Notifications,
+    Helper
 }
 
 private data class IntroValueItem(

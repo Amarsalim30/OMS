@@ -6,8 +6,10 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ListAlt
+import androidx.compose.material.icons.automirrored.filled.Notes
 import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.CalendarToday
+import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.PersonAdd
@@ -79,6 +81,8 @@ internal fun MainAppHostScaffold(
                 currentRoute != AppRoutes.BusinessProfile &&
                 currentRoute != AppRoutes.ContactsPermissionPrimer &&
                 currentRoute != AppRoutes.NotificationsPermissionPrimer &&
+                currentRoute != AppRoutes.MicrophonePermissionPrimer &&
+                currentRoute != AppRoutes.OverlayPermissionPrimer &&
                 currentRoute != AppRoutes.FirstRunTutorial &&
                 currentRoute != AppRoutes.CalendarTutorial
         val windowSizeClass = calculateWindowSizeClass(activity)
@@ -117,6 +121,14 @@ internal fun MainAppHostScaffold(
             MoreAction(stringResource(R.string.more_notifications), Icons.Filled.Notifications) {
                 onShowMoreSheetChange(false)
                 navController.navigate(AppRoutes.Notifications)
+            },
+            MoreAction(stringResource(R.string.more_notes_history), Icons.AutoMirrored.Filled.Notes) {
+                onShowMoreSheetChange(false)
+                navController.navigate(AppRoutes.NotesHistory)
+            },
+            MoreAction(stringResource(R.string.more_floating_helper), Icons.Filled.Mic) {
+                onShowMoreSheetChange(false)
+                navController.navigate(AppRoutes.HelperSettings)
             },
             MoreAction(stringResource(R.string.more_import_contacts), Icons.Filled.PersonAdd) {
                 onShowMoreSheetChange(false)

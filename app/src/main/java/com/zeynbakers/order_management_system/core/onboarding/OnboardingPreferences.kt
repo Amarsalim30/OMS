@@ -23,7 +23,8 @@ data class OnboardingState(
     val timezone: String = "",
     val backupSetupDone: Boolean = false,
     val contactsSetupDone: Boolean = false,
-    val notificationsSetupDone: Boolean = false
+    val notificationsSetupDone: Boolean = false,
+    val helperSetupDone: Boolean = false
 ) {
     val businessProfileCompleted: Boolean
         get() = businessName.isNotBlank() && currency.isNotBlank() && timezone.isNotBlank()
@@ -39,6 +40,7 @@ class OnboardingPreferences(private val context: Context) {
         val BackupDone = booleanPreferencesKey("backup_done")
         val ContactsDone = booleanPreferencesKey("contacts_done")
         val NotificationsDone = booleanPreferencesKey("notifications_done")
+        val HelperDone = booleanPreferencesKey("helper_done")
     }
 
     val state: Flow<OnboardingState> =
@@ -86,6 +88,12 @@ class OnboardingPreferences(private val context: Context) {
         }
     }
 
+    suspend fun setHelperSetupDone(done: Boolean) {
+        context.onboardingDataStore.edit { prefs ->
+            prefs[Keys.HelperDone] = done
+        }
+    }
+
     suspend fun markOnboardingCompleted() {
         context.onboardingDataStore.edit { prefs ->
             prefs[Keys.OnboardingCompleted] = true
@@ -101,8 +109,8 @@ class OnboardingPreferences(private val context: Context) {
             timezone = prefs[Keys.Timezone] ?: "",
             backupSetupDone = prefs[Keys.BackupDone] ?: false,
             contactsSetupDone = prefs[Keys.ContactsDone] ?: false,
-            notificationsSetupDone = prefs[Keys.NotificationsDone] ?: false
+            notificationsSetupDone = prefs[Keys.NotificationsDone] ?: false,
+            helperSetupDone = prefs[Keys.HelperDone] ?: false
         )
     }
 }
-
