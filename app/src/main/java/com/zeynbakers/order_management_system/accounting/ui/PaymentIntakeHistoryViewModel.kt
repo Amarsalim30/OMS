@@ -198,9 +198,11 @@ class PaymentIntakeHistoryViewModel(private val database: AppDatabase) : ViewMod
     private suspend fun buildHistory(filter: PaymentHistoryFilter): HistoryResult {
         val receipts =
             when (filter) {
-                PaymentHistoryFilter.All -> receiptDao.getAll()
-                is PaymentHistoryFilter.Customer -> receiptDao.getByCustomerId(filter.customerId)
-                is PaymentHistoryFilter.Order -> receiptDao.getByOrderId(filter.orderId)
+                PaymentHistoryFilter.All -> receiptDao.getAllLimited(HISTORY_MAX_RECEIPTS)
+                is PaymentHistoryFilter.Customer ->
+                    receiptDao.getByCustomerIdLimited(filter.customerId, HISTORY_MAX_RECEIPTS)
+                is PaymentHistoryFilter.Order ->
+                    receiptDao.getByOrderIdLimited(filter.orderId, HISTORY_MAX_RECEIPTS)
             }
 
         val header = buildHeader(filter)
@@ -388,6 +390,10 @@ class PaymentIntakeHistoryViewModel(private val database: AppDatabase) : ViewMod
         val header: PaymentHistoryHeader?,
         val items: List<PaymentHistoryItemUi>
     )
+
+    companion object {
+        private const val HISTORY_MAX_RECEIPTS = 500
+    }
 }
 
 internal fun historyLoadErrorMessageOrNull(throwable: Throwable): String? {

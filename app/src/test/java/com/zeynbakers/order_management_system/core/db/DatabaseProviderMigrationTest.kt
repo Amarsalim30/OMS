@@ -69,4 +69,34 @@ class DatabaseProviderMigrationTest {
             )
         )
     }
+
+    @Test
+    fun `migration 11 to 12 normalizes amount columns to cents`() {
+        assertTrue(DatabaseProvider.SQL_NORMALIZE_ORDERS_TOTAL_AMOUNT_V12.contains("orders", ignoreCase = true))
+        assertTrue(DatabaseProvider.SQL_NORMALIZE_PAYMENTS_AMOUNT_V12.contains("payments", ignoreCase = true))
+        assertTrue(
+            DatabaseProvider.SQL_NORMALIZE_ACCOUNT_ENTRIES_AMOUNT_V12.contains(
+                "account_entries",
+                ignoreCase = true
+            )
+        )
+        assertTrue(
+            DatabaseProvider.SQL_NORMALIZE_PAYMENT_RECEIPTS_AMOUNT_V12.contains(
+                "payment_receipts",
+                ignoreCase = true
+            )
+        )
+        assertTrue(
+            DatabaseProvider.SQL_NORMALIZE_PAYMENT_ALLOCATIONS_AMOUNT_V12.contains(
+                "payment_allocations",
+                ignoreCase = true
+            )
+        )
+    }
+
+    @Test
+    fun `migration 11 to 12 creates customer search indexes`() {
+        assertTrue(DatabaseProvider.SQL_INDEX_CUSTOMERS_NAME.contains("index_customers_name"))
+        assertTrue(DatabaseProvider.SQL_INDEX_CUSTOMERS_ARCHIVED.contains("index_customers_isArchived"))
+    }
 }

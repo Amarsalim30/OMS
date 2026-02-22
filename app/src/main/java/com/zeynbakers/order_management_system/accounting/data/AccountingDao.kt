@@ -277,8 +277,21 @@ interface AccountingDao {
     )
     suspend fun getPaidForOrder(orderId: Long): BigDecimal
 
-    @Query("SELECT * FROM account_entries WHERE customerId = :customerId ORDER BY date DESC")
+    @Query("SELECT * FROM account_entries WHERE customerId = :customerId ORDER BY date DESC, id DESC")
     suspend fun getLedgerForCustomer(customerId: Long): List<AccountEntryEntity>
+
+    @Query(
+        """
+        SELECT * FROM account_entries
+        WHERE customerId = :customerId
+        ORDER BY date DESC, id DESC
+        LIMIT :limit
+        """
+    )
+    suspend fun getLedgerForCustomerLimited(customerId: Long, limit: Int): List<AccountEntryEntity>
+
+    @Query("SELECT COUNT(*) FROM account_entries WHERE customerId = :customerId")
+    suspend fun countEntriesForCustomer(customerId: Long): Int
 
     @Query(
         """

@@ -19,5 +19,35 @@ class OrderEditorInputTest {
         assertEquals("9.30", sanitizePickupTimeInput("9.30pm"))
         assertEquals("12345", sanitizePickupTimeInput("123456"))
     }
-}
 
+    @Test
+    fun `sanitizeOrderNotesInput strips chat metadata and duplicate lines`() {
+        val raw =
+            """
+            [3:24 am, 22/02/2026] Amar Salim: Meatpie 100 ,kanzu 100
+            [3:24 am, 22/02/2026] Amar Salim: Mess 100
+            [3:27 am, 22/02/2026] Amar Salim: [22/02, 3:24 am] Amar Salim: Meatpie 100 ,kanzu 100
+            [22/02, 3:24 am] Amar Salim: Mess 100
+            [3:30 am, 22/02/2026] Amar Salim: [05/02, 3:14 pm] Mohammed Muftah: Hata sija test
+            [05/02, 3:14 pm] Mohammed Muftah: Lakini nime badilisha maneno kiasi
+            """.trimIndent()
+
+        val cleaned = sanitizeOrderNotesInput(raw)
+
+        assertEquals(
+            """
+            Meatpie 100 ,kanzu 100
+            Mess 100
+            Hata sija test
+            Lakini nime badilisha maneno kiasi
+            """.trimIndent(),
+            cleaned
+        )
+    }
+
+    @Test
+    fun `sanitizeOrderNotesInput keeps normal notes unchanged`() {
+        val raw = "Meatpie 3\nKanzu 2\nExtra chilli"
+        assertEquals(raw, sanitizeOrderNotesInput(raw))
+    }
+}

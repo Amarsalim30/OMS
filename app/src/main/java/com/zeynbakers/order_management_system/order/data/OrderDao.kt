@@ -26,6 +26,19 @@ interface OrderDao {
     @Query("SELECT * FROM orders WHERE customerId = :customerId")
     suspend fun getOrdersByCustomer(customerId: Long): List<OrderEntity>
 
+    @Query(
+        """
+        SELECT * FROM orders
+        WHERE customerId = :customerId
+        ORDER BY orderDate DESC, createdAt DESC, id DESC
+        LIMIT :limit
+        """
+    )
+    suspend fun getOrdersByCustomerLimited(customerId: Long, limit: Int): List<OrderEntity>
+
+    @Query("SELECT COUNT(*) FROM orders WHERE customerId = :customerId")
+    suspend fun countOrdersForCustomer(customerId: Long): Int
+
     @Query("SELECT * FROM orders")
     suspend fun getAllOrders(): List<OrderEntity>
 

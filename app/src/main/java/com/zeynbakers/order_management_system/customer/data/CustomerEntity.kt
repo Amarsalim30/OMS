@@ -6,7 +6,11 @@ import androidx.room.*
 
 @Entity(
     tableName = "customers",
-    indices = [Index(value = ["phone"], unique = true)]
+    indices = [
+        Index(value = ["phone"], unique = true),
+        Index(value = ["name"]),
+        Index(value = ["isArchived"])
+    ]
 )
 data class CustomerEntity(
     @PrimaryKey(autoGenerate = true)

@@ -45,6 +45,7 @@ class CustomerAccountsViewModel(private val database: AppDatabase) : ViewModel()
     private val accountingDao: AccountingDao = database.accountingDao()
     private val receiptDao = database.paymentReceiptDao()
     private val allocationDao = database.paymentAllocationDao()
+    private val helperNoteDao = database.helperNoteDao()
     private val customerDao = database.customerDao()
     private val orderDao = database.orderDao()
 
@@ -104,7 +105,21 @@ class CustomerAccountsViewModel(private val database: AppDatabase) : ViewModel()
                     customerDao.update(updated)
                 }
             } else {
-                customerDao.insert(CustomerEntity(name = cleanName, phone = normalizedPhone))
+                val insertedId =
+                    customerDao.insertIgnore(CustomerEntity(name = cleanName, phone = normalizedPhone))
+                if (insertedId == -1L) {
+                    customerDao.getByPhone(normalizedPhone)?.let { concurrent ->
+                        val shouldUpdate = concurrent.isArchived || concurrent.name != cleanName
+                        if (shouldUpdate) {
+                            customerDao.update(
+                                concurrent.copy(
+                                    name = cleanName.ifBlank { concurrent.name },
+                                    isArchived = false
+                                )
+                            )
+                        }
+                    }
+                }
             }
 
             refreshSummaries()
@@ -127,8 +142,13 @@ class CustomerAccountsViewModel(private val database: AppDatabase) : ViewModel()
 
     fun deleteCustomer(customerId: Long) {
         viewModelScope.launch {
-            val hasLedgerEntries = accountingDao.getLedgerForCustomer(customerId).isNotEmpty()
-            if (hasLedgerEntries) {
+            val hasReferences =
+                accountingDao.countEntriesForCustomer(customerId) > 0 ||
+                    orderDao.countOrdersForCustomer(customerId) > 0 ||
+                    receiptDao.countByCustomerId(customerId) > 0 ||
+                    allocationDao.countByCustomerId(customerId) > 0 ||
+                    helperNoteDao.countByLinkedCustomerId(customerId) > 0
+            if (hasReferences) {
                 customerDao.archiveById(customerId)
             } else {
                 customerDao.getById(customerId)?.let { customerDao.delete(it) }
@@ -142,7 +162,8 @@ class CustomerAccountsViewModel(private val database: AppDatabase) : ViewModel()
             _isStatementLoading.value = true
             try {
                 _customer.value = customerDao.getById(customerId)
-                val ledgerEntries = accountingDao.getLedgerForCustomer(customerId)
+                val ledgerEntries =
+                    accountingDao.getLedgerForCustomerLimited(customerId, CUSTOMER_LEDGER_MAX_ROWS)
                 _ledger.value = ledgerEntries
                 _balance.value = accountingDao.getCustomerBalance(customerId)
                 val financeTotals = accountingDao.getCustomerFinanceTotals(customerId)
@@ -158,7 +179,8 @@ class CustomerAccountsViewModel(private val database: AppDatabase) : ViewModel()
                         availableCredit = availableCredit,
                         netBalance = netBalance
                     )
-                val allOrders = orderDao.getOrdersByCustomer(customerId)
+                val allOrders =
+                    orderDao.getOrdersByCustomerLimited(customerId, CUSTOMER_ORDERS_MAX_ROWS)
                 val customerName = _customer.value?.name
                 _orderLabels.value =
                     allOrders.associate { order ->
@@ -768,6 +790,8 @@ class CustomerAccountsViewModel(private val database: AppDatabase) : ViewModel()
     }
 
     companion object {
+        private const val CUSTOMER_LEDGER_MAX_ROWS = 1_000
+        private const val CUSTOMER_ORDERS_MAX_ROWS = 500
         private val RECEIPT_ID_CAPTURE = Regex("Receipt\\s*#(\\d+)", RegexOption.IGNORE_CASE)
         private val ORDER_HASH_REGEX = Regex("Order\\s*#\\d+", RegexOption.IGNORE_CASE)
         private val ORDER_ID_PAREN_REGEX = Regex("\\(\\s*ID\\s*\\d+\\s*\\)", RegexOption.IGNORE_CASE)

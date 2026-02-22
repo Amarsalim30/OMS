@@ -6,7 +6,6 @@ import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.emptyPreferences
 import androidx.datastore.preferences.core.intPreferencesKey
-import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import java.io.IOException
 import kotlinx.coroutines.flow.Flow
@@ -19,9 +18,9 @@ private val Context.helperDataStore by preferencesDataStore(name = "helper_prefs
 data class HelperSettingsState(
     val enabled: Boolean = false,
     val fallbackOnly: Boolean = false,
-    val themePreset: HelperThemePreset = HelperThemePreset.Brand,
+    val themePreset: HelperThemePreset = HelperThemePreset.Neutral,
     val smartHideEnabled: Boolean = true,
-    val idlePeekSeconds: Int = 4,
+    val idlePeekSeconds: Int = 3,
     val idlePeekAlphaPercent: Int = 42,
     val bubbleX: Int = Int.MIN_VALUE,
     val bubbleY: Int = Int.MIN_VALUE,
@@ -35,7 +34,6 @@ class HelperPreferences(private val context: Context) {
     private object Keys {
         val Enabled = booleanPreferencesKey("enabled")
         val FallbackOnly = booleanPreferencesKey("fallback_only")
-        val ThemePreset = stringPreferencesKey("theme_preset")
         val SmartHideEnabled = booleanPreferencesKey("smart_hide_enabled")
         val IdlePeekSeconds = intPreferencesKey("idle_peek_seconds")
         val IdlePeekAlphaPercent = intPreferencesKey("idle_peek_alpha_percent")
@@ -66,12 +64,6 @@ class HelperPreferences(private val context: Context) {
     suspend fun setFallbackOnly(enabled: Boolean) {
         context.helperDataStore.edit { prefs ->
             prefs[Keys.FallbackOnly] = enabled
-        }
-    }
-
-    suspend fun setThemePreset(preset: HelperThemePreset) {
-        context.helperDataStore.edit { prefs ->
-            prefs[Keys.ThemePreset] = preset.wireValue
         }
     }
 
@@ -113,9 +105,9 @@ class HelperPreferences(private val context: Context) {
         return HelperSettingsState(
             enabled = prefs[Keys.Enabled] ?: false,
             fallbackOnly = prefs[Keys.FallbackOnly] ?: false,
-            themePreset = HelperThemePreset.fromWireValue(prefs[Keys.ThemePreset]),
+            themePreset = HelperThemePreset.Neutral,
             smartHideEnabled = prefs[Keys.SmartHideEnabled] ?: true,
-            idlePeekSeconds = (prefs[Keys.IdlePeekSeconds] ?: 4).coerceIn(2, 12),
+            idlePeekSeconds = (prefs[Keys.IdlePeekSeconds] ?: 3).coerceIn(2, 12),
             idlePeekAlphaPercent = (prefs[Keys.IdlePeekAlphaPercent] ?: 42).coerceIn(20, 85),
             bubbleX = prefs[Keys.BubbleX] ?: Int.MIN_VALUE,
             bubbleY = prefs[Keys.BubbleY] ?: Int.MIN_VALUE,

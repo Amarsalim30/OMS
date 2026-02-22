@@ -595,7 +595,15 @@ class OrderViewModel(private val database: AppDatabase) : ViewModel() {
             }
             existing.id
         } else {
-            customerDao.insert(CustomerEntity(name = cleanName, phone = normalizedPhone))
+            val insertedId =
+                customerDao.insertIgnore(CustomerEntity(name = cleanName, phone = normalizedPhone))
+            if (insertedId != -1L) {
+                insertedId
+            } else {
+                customerDao.getByPhone(normalizedPhone)?.id
+                    ?: customerDao.getByPhones(expandPhoneCandidates(phone))?.id
+                    ?: return null
+            }
         }
     }
 

@@ -1,5 +1,6 @@
 package com.zeynbakers.order_management_system.accounting.ui
 
+import android.database.sqlite.SQLiteConstraintException
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.zeynbakers.order_management_system.accounting.data.PaymentAllocationStatus
@@ -390,6 +391,7 @@ class PaymentIntakeViewModel(private val database: AppDatabase) : ViewModel() {
 
         var applied = 0
         var skippedNoCustomer = 0
+        var existingDuplicatesDuringApply = 0
         val now = Clock.System.now().toEpochMilliseconds()
 
         withContext(Dispatchers.IO) {
@@ -406,49 +408,55 @@ class PaymentIntakeViewModel(private val database: AppDatabase) : ViewModel() {
                     skippedNoCustomer += 1
                     return@forEach
                 }
-                val receivedAt = item.receivedAt ?: now
-                val hash =
-                    computeMpesaHash(
-                        amount = item.amount,
-                        receivedAt = receivedAt,
-                        senderPhone = item.senderPhone,
-                        transactionCode = item.transactionCode,
-                        rawText = item.rawText
+                try {
+                    val receivedAt = item.receivedAt ?: now
+                    val hash =
+                        computeMpesaHash(
+                            amount = item.amount,
+                            receivedAt = receivedAt,
+                            senderPhone = item.senderPhone,
+                            transactionCode = item.transactionCode,
+                            rawText = item.rawText
+                        )
+                    val resolvedCustomerId =
+                        when (allocation) {
+                            is ReceiptAllocation.Order ->
+                                item.selectedCustomerId ?: ordersById[allocation.orderId]?.customerId
+                            is ReceiptAllocation.OldestOrders -> allocation.customerId
+                            is ReceiptAllocation.CustomerCredit -> allocation.customerId
+                            ReceiptAllocation.Unapplied -> item.selectedCustomerId
+                        }
+                    val receipt =
+                        receiptProcessor.createReceipt(
+                            amount = item.amount,
+                            receivedAt = receivedAt,
+                            method = PaymentMethod.MPESA,
+                            transactionCode = item.transactionCode,
+                            hash = hash,
+                            senderName = item.senderName,
+                            senderPhone = item.senderPhone,
+                            rawText = item.rawText,
+                            customerId = resolvedCustomerId,
+                            note = null
+                        )
+                    receiptProcessor.createAndApplyReceipt(
+                        receipt = receipt,
+                        descriptionBase = buildDescription(item),
+                        allocation = allocation
                     )
-                val resolvedCustomerId =
-                    when (allocation) {
-                        is ReceiptAllocation.Order ->
-                            item.selectedCustomerId ?: ordersById[allocation.orderId]?.customerId
-                        is ReceiptAllocation.OldestOrders -> allocation.customerId
-                        is ReceiptAllocation.CustomerCredit -> allocation.customerId
-                        ReceiptAllocation.Unapplied -> item.selectedCustomerId
-                    }
-                val receipt =
-                    receiptProcessor.createReceipt(
-                        amount = item.amount,
-                        receivedAt = receivedAt,
-                        method = PaymentMethod.MPESA,
-                        transactionCode = item.transactionCode,
-                        hash = hash,
-                        senderName = item.senderName,
-                        senderPhone = item.senderPhone,
-                        rawText = item.rawText,
-                        customerId = resolvedCustomerId,
-                        note = null
-                    )
-                receiptProcessor.createAndApplyReceipt(
-                    receipt = receipt,
-                    descriptionBase = buildDescription(item),
-                    allocation = allocation
-                )
-                applied += 1
+                    applied += 1
+                } catch (_: SQLiteConstraintException) {
+                    existingDuplicatesDuringApply += 1
+                }
             }
         }
 
         parse(_rawText.value)
         return PaymentApplySummary(
             applied = applied,
-            existingDuplicates = current.count { it.duplicateState == DuplicateState.EXISTING },
+            existingDuplicates =
+                current.count { it.duplicateState == DuplicateState.EXISTING } +
+                    existingDuplicatesDuringApply,
             intakeDuplicates = current.count { it.duplicateState == DuplicateState.INTAKE },
             skippedNoCustomer = skippedNoCustomer
         )
@@ -472,34 +480,38 @@ class PaymentIntakeViewModel(private val database: AppDatabase) : ViewModel() {
                 rawText = item.rawText
             )
         return withContext(Dispatchers.IO) {
-            val resolvedCustomerId =
-                when (allocation) {
-                    is ReceiptAllocation.Order ->
-                        orderDao.getOrderById(allocation.orderId)?.customerId ?: item.selectedCustomerId
-                    is ReceiptAllocation.OldestOrders -> allocation.customerId
-                    is ReceiptAllocation.CustomerCredit -> allocation.customerId
-                    ReceiptAllocation.Unapplied -> item.selectedCustomerId
-                }
-            val receipt =
-                receiptProcessor.createReceipt(
-                    amount = item.amount,
-                    receivedAt = receivedAt,
-                    method = PaymentMethod.MPESA,
-                    transactionCode = item.transactionCode,
-                    hash = hash,
-                    senderName = item.senderName,
-                    senderPhone = item.senderPhone,
-                    rawText = item.rawText,
-                    customerId = resolvedCustomerId,
-                    note = null
+            try {
+                val resolvedCustomerId =
+                    when (allocation) {
+                        is ReceiptAllocation.Order ->
+                            orderDao.getOrderById(allocation.orderId)?.customerId ?: item.selectedCustomerId
+                        is ReceiptAllocation.OldestOrders -> allocation.customerId
+                        is ReceiptAllocation.CustomerCredit -> allocation.customerId
+                        ReceiptAllocation.Unapplied -> item.selectedCustomerId
+                    }
+                val receipt =
+                    receiptProcessor.createReceipt(
+                        amount = item.amount,
+                        receivedAt = receivedAt,
+                        method = PaymentMethod.MPESA,
+                        transactionCode = item.transactionCode,
+                        hash = hash,
+                        senderName = item.senderName,
+                        senderPhone = item.senderPhone,
+                        rawText = item.rawText,
+                        customerId = resolvedCustomerId,
+                        note = null
+                    )
+                receiptProcessor.createAndApplyReceipt(
+                    receipt = receipt,
+                    descriptionBase = buildDescription(item),
+                    allocation = allocation
                 )
-            receiptProcessor.createAndApplyReceipt(
-                receipt = receipt,
-                descriptionBase = buildDescription(item),
-                allocation = allocation
-            )
-            parse(_rawText.value)
-            ReceiptActionResult(true, "Payment applied")
+                parse(_rawText.value)
+                ReceiptActionResult(true, "Payment applied")
+            } catch (_: SQLiteConstraintException) {
+                ReceiptActionResult(false, "Already recorded")
+                }
         }
     }
 

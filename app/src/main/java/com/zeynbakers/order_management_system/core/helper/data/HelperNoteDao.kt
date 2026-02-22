@@ -40,4 +40,7 @@ interface HelperNoteDao {
 
     @Query("UPDATE helper_notes SET deleted = 1, updatedAt = :updatedAt WHERE id = :id")
     suspend fun softDelete(id: Long, updatedAt: Long)
+
+    @Query("SELECT COUNT(*) FROM helper_notes WHERE linkedCustomerId = :customerId")
+    suspend fun countByLinkedCustomerId(customerId: Long): Int
 }

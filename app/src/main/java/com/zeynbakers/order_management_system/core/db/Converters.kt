@@ -6,8 +6,13 @@ import androidx.room.*
 import com.zeynbakers.order_management_system.core.helper.data.HelperNoteType
 import kotlinx.datetime.LocalDate
 import java.math.BigDecimal
+import java.math.RoundingMode
 
 class Converters {
+    companion object {
+        private const val MONEY_SCALE = 2
+        private val HUNDRED = BigDecimal("100")
+    }
 
     // LocalDate <-> String
     @TypeConverter
@@ -18,10 +23,18 @@ class Converters {
 
     // BigDecimal <-> String
     @TypeConverter
-    fun fromBigDecimal(decimal: BigDecimal): String = decimal.toPlainString()
+    fun fromBigDecimal(decimal: BigDecimal): String {
+        return decimal
+            .setScale(MONEY_SCALE, RoundingMode.HALF_UP)
+            .multiply(HUNDRED)
+            .toBigIntegerExact()
+            .toString()
+    }
 
     @TypeConverter
-    fun toBigDecimal(value: String): BigDecimal = BigDecimal(value)
+    fun toBigDecimal(value: String): BigDecimal {
+        return BigDecimal(value).divide(HUNDRED).setScale(MONEY_SCALE, RoundingMode.HALF_UP)
+    }
 
     // Enums
     @TypeConverter

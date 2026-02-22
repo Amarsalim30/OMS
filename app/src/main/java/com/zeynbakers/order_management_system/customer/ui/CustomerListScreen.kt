@@ -158,7 +158,6 @@ private fun CustomersScreenM3(
     val customerArchivedMessage = stringResource(R.string.customer_archived)
     val customerDeletedMessage = stringResource(R.string.customer_deleted)
     val undoActionLabel = stringResource(R.string.action_undo)
-    val zero = BigDecimal.ZERO
     val resetFiltersAndSort: () -> Unit = {
         selectedFilter = CustomerFilter.All
         selectedSort = CustomerSort.BalanceDesc
@@ -216,7 +215,7 @@ private fun CustomersScreenM3(
         derivedStateOf {
             val base = summaries.filter { summary ->
                 val hasTransactions =
-                    summary.billed != BigDecimal.ZERO || summary.paid != BigDecimal.ZERO
+                    !isZeroAmount(summary.billed) || !isZeroAmount(summary.paid)
                 if (!showInactive && !hasTransactions) return@filter false
                 true
             }
@@ -225,14 +224,11 @@ private fun CustomersScreenM3(
                     CustomerFilter.All -> true
                     CustomerFilter.Owing -> summary.balance > BigDecimal.ZERO
                     CustomerFilter.Credit -> summary.balance < BigDecimal.ZERO
-                    CustomerFilter.Settled -> summary.balance == BigDecimal.ZERO
+                    CustomerFilter.Settled -> isZeroAmount(summary.balance)
                 }
             }.filter { summary ->
                 if (selectedFilter != CustomerFilter.All || !hideZeroBalances) return@filter true
-                val hasTransactions =
-                    summary.billed != BigDecimal.ZERO || summary.paid != BigDecimal.ZERO
-                if (!hasTransactions) return@filter true
-                summary.balance != BigDecimal.ZERO
+                !isZeroAmount(summary.balance)
             }
             when (selectedSort) {
                 CustomerSort.BalanceDesc -> filtered.sortedByDescending { it.balance }
@@ -328,7 +324,7 @@ private fun CustomersScreenM3(
 
             if (filteredCustomers.isEmpty()) {
                 val allCustomersWithoutOrders =
-                    hasAnyCustomers && summaries.all { it.billed == zero && it.paid == zero }
+                    hasAnyCustomers && summaries.all { isZeroAmount(it.billed) && isZeroAmount(it.paid) }
                 val showImportedNoOrdersState =
                     queryText.isBlank() &&
                         !hasActiveFilters &&
@@ -374,9 +370,9 @@ private fun CustomersScreenM3(
         val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
         val hasPhone = customer.phone.isNotBlank()
         val canDelete =
-            customer.billed == BigDecimal.ZERO &&
-                customer.paid == BigDecimal.ZERO &&
-                customer.balance == BigDecimal.ZERO
+            isZeroAmount(customer.billed) &&
+                isZeroAmount(customer.paid) &&
+                isZeroAmount(customer.balance)
         ModalBottomSheet(
             onDismissRequest = { longPressedCustomer = null },
             sheetState = sheetState
@@ -443,9 +439,9 @@ private fun CustomersScreenM3(
 
     pendingArchiveCustomer?.let { customer ->
         val hasTransactions =
-            customer.billed != BigDecimal.ZERO ||
-                customer.paid != BigDecimal.ZERO ||
-                customer.balance != BigDecimal.ZERO
+            !isZeroAmount(customer.billed) ||
+                !isZeroAmount(customer.paid) ||
+                !isZeroAmount(customer.balance)
         val titleRes =
             if (hasTransactions) {
                 R.string.customer_archive_title
@@ -520,6 +516,8 @@ private fun CustomersScreenM3(
         )
     }
 }
+
+private fun isZeroAmount(value: BigDecimal): Boolean = value.compareTo(BigDecimal.ZERO) == 0
 
 internal enum class CustomerFilter {
     All,

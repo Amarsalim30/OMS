@@ -63,6 +63,20 @@ object DatabaseProvider {
         "CREATE INDEX IF NOT EXISTS index_helper_notes_detectedAmountNormalized ON helper_notes(detectedAmountNormalized)"
     internal const val SQL_INDEX_HELPER_NOTES_TYPE =
         "CREATE INDEX IF NOT EXISTS index_helper_notes_type ON helper_notes(type)"
+    internal const val SQL_NORMALIZE_ORDERS_TOTAL_AMOUNT_V12 =
+        "UPDATE orders SET totalAmount = CAST(ROUND(CAST(totalAmount AS REAL) * 100.0) AS INTEGER)"
+    internal const val SQL_NORMALIZE_PAYMENTS_AMOUNT_V12 =
+        "UPDATE payments SET amount = CAST(ROUND(CAST(amount AS REAL) * 100.0) AS INTEGER)"
+    internal const val SQL_NORMALIZE_ACCOUNT_ENTRIES_AMOUNT_V12 =
+        "UPDATE account_entries SET amount = CAST(ROUND(CAST(amount AS REAL) * 100.0) AS INTEGER)"
+    internal const val SQL_NORMALIZE_PAYMENT_RECEIPTS_AMOUNT_V12 =
+        "UPDATE payment_receipts SET amount = CAST(ROUND(CAST(amount AS REAL) * 100.0) AS INTEGER)"
+    internal const val SQL_NORMALIZE_PAYMENT_ALLOCATIONS_AMOUNT_V12 =
+        "UPDATE payment_allocations SET amount = CAST(ROUND(CAST(amount AS REAL) * 100.0) AS INTEGER)"
+    internal const val SQL_INDEX_CUSTOMERS_NAME =
+        "CREATE INDEX IF NOT EXISTS index_customers_name ON customers(name)"
+    internal const val SQL_INDEX_CUSTOMERS_ARCHIVED =
+        "CREATE INDEX IF NOT EXISTS index_customers_isArchived ON customers(isArchived)"
 
     private val migration1To2 = object : Migration(1, 2) {
         override fun migrate(db: SupportSQLiteDatabase) {
@@ -313,6 +327,18 @@ object DatabaseProvider {
         }
     }
 
+    private val migration11To12 = object : Migration(11, 12) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL(SQL_NORMALIZE_ORDERS_TOTAL_AMOUNT_V12)
+            db.execSQL(SQL_NORMALIZE_PAYMENTS_AMOUNT_V12)
+            db.execSQL(SQL_NORMALIZE_ACCOUNT_ENTRIES_AMOUNT_V12)
+            db.execSQL(SQL_NORMALIZE_PAYMENT_RECEIPTS_AMOUNT_V12)
+            db.execSQL(SQL_NORMALIZE_PAYMENT_ALLOCATIONS_AMOUNT_V12)
+            db.execSQL(SQL_INDEX_CUSTOMERS_NAME)
+            db.execSQL(SQL_INDEX_CUSTOMERS_ARCHIVED)
+        }
+    }
+
     fun getDatabase(context: Context): AppDatabase {
         return instance ?: synchronized(this) {
             val db = Room.databaseBuilder(
@@ -329,7 +355,8 @@ object DatabaseProvider {
                 migration7To8,
                 migration8To9,
                 migration9To10,
-                migration10To11
+                migration10To11,
+                migration11To12
             ).build()
             instance = db
             db

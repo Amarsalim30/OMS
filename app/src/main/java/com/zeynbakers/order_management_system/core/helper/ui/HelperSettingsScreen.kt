@@ -43,7 +43,6 @@ import com.zeynbakers.order_management_system.core.helper.HelperOverlayControlle
 import com.zeynbakers.order_management_system.core.helper.HelperPermissions
 import com.zeynbakers.order_management_system.core.helper.HelperPreferences
 import com.zeynbakers.order_management_system.core.helper.HelperSettingsState
-import com.zeynbakers.order_management_system.core.helper.HelperThemePreset
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -130,36 +129,6 @@ fun HelperSettingsScreen(
                     }
                 }
             )
-
-            Text(
-                text = stringResource(R.string.helper_settings_theme_title),
-                style = MaterialTheme.typography.titleSmall
-            )
-
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                ThemeChoiceButton(
-                    label = stringResource(R.string.helper_settings_theme_brand),
-                    selected = helperState.themePreset == HelperThemePreset.Brand,
-                    onClick = {
-                        scope.launch {
-                            prefs.setThemePreset(HelperThemePreset.Brand)
-                            HelperOverlayController.refresh(context)
-                        }
-                    },
-                    modifier = Modifier.weight(1f)
-                )
-                ThemeChoiceButton(
-                    label = stringResource(R.string.helper_settings_theme_neutral),
-                    selected = helperState.themePreset == HelperThemePreset.Neutral,
-                    onClick = {
-                        scope.launch {
-                            prefs.setThemePreset(HelperThemePreset.Neutral)
-                            HelperOverlayController.refresh(context)
-                        }
-                    },
-                    modifier = Modifier.weight(1f)
-                )
-            }
 
             ToggleRow(
                 title = stringResource(R.string.helper_settings_smart_hide),

@@ -392,7 +392,7 @@ internal fun OrderEditorSheet(
                     ) {
                         OutlinedTextField(
                             value = notes,
-                            onValueChange = onNotesChange,
+                            onValueChange = { onNotesChange(sanitizeOrderNotesInput(it)) },
                             label = { Text(stringResource(R.string.order_editor_notes_required_label)) },
                             placeholder = { Text(stringResource(R.string.order_editor_notes_placeholder)) },
                             minLines = 2,

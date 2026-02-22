@@ -10,7 +10,7 @@ import com.zeynbakers.order_management_system.customer.data.CustomerDao
 import com.zeynbakers.order_management_system.customer.data.CustomerEntity
 import com.zeynbakers.order_management_system.order.data.*
 
-const val APP_DATABASE_SCHEMA_VERSION = 11
+const val APP_DATABASE_SCHEMA_VERSION = 12
 
 @Database(
         entities =

@@ -27,6 +27,9 @@ interface PaymentAllocationDao {
     @Query("SELECT * FROM payment_allocations WHERE orderId = :orderId ORDER BY createdAt DESC, id DESC")
     suspend fun getByOrderId(orderId: Long): List<PaymentAllocationEntity>
 
+    @Query("SELECT COUNT(*) FROM payment_allocations WHERE customerId = :customerId")
+    suspend fun countByCustomerId(customerId: Long): Int
+
     @Query("SELECT * FROM payment_allocations")
     suspend fun getAll(): List<PaymentAllocationEntity>
 
