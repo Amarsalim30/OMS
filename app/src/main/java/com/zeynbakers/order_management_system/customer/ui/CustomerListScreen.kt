@@ -69,6 +69,8 @@ import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
 import com.zeynbakers.order_management_system.R
 import com.zeynbakers.order_management_system.accounting.data.CustomerAccountSummary
+import com.zeynbakers.order_management_system.core.tutorial.TutorialCoachTargets
+import com.zeynbakers.order_management_system.core.tutorial.tutorialCoachTarget
 import com.zeynbakers.order_management_system.core.ui.LocalUiEventDispatcher
 import com.zeynbakers.order_management_system.core.ui.showSnackbar
 import java.math.BigDecimal
@@ -271,7 +273,8 @@ private fun CustomersScreenM3(
                 onFilterClick = { showFilterSheet = true },
                 onSortClick = { showSortSheet = true },
                 onSyncClick = onSyncContacts,
-                showSyncAction = hasAnyCustomers
+                showSyncAction = hasAnyCustomers,
+                modifier = Modifier.tutorialCoachTarget(TutorialCoachTargets.CustomersControlRow)
             )
 
             if (hasActiveControls) {

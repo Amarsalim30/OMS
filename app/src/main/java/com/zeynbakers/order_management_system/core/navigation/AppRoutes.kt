@@ -22,6 +22,7 @@ object AppRoutes {
     const val NotesHistory = "notes_history"
     const val HelperSettings = "helper_settings"
     const val Tutorial = "tutorial"
+    const val TutorialAfterCalendar = "tutorial_after_calendar"
     const val FirstRunTutorial = "first_run_tutorial"
     const val ImportContacts = "import_contacts"
 

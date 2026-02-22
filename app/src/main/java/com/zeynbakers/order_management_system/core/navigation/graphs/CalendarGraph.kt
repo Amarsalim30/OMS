@@ -10,6 +10,7 @@ import com.zeynbakers.order_management_system.AppCalendarCallbacks
 import com.zeynbakers.order_management_system.AppCalendarState
 import com.zeynbakers.order_management_system.AppFeatureNavigationActions
 import com.zeynbakers.order_management_system.AppFeatureSupportActions
+import com.zeynbakers.order_management_system.navigateTopLevel
 import com.zeynbakers.order_management_system.accounting.ui.PaymentHistoryFilter
 import com.zeynbakers.order_management_system.core.navigation.AppRoutes
 import com.zeynbakers.order_management_system.core.notifications.NotificationScheduler
@@ -104,10 +105,8 @@ internal fun NavGraphBuilder.calendarGraph(
             onQuickAddConsumed = { calendarCallbacks.onQuickAddDateChange(null) },
             showInteractiveTutorial = true,
             onInteractiveTutorialFinished = {
-                navController.navigate(AppRoutes.Calendar) {
-                    popUpTo(AppRoutes.CalendarTutorial) { inclusive = true }
-                    launchSingleTop = true
-                }
+                navigationActions.startPracticalTutorial(1)
+                navigateTopLevel(navController, AppRoutes.Calendar, resetToRoot = true)
             }
         )
     }

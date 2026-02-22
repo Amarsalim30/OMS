@@ -39,16 +39,19 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.zeynbakers.order_management_system.R
 import androidx.compose.foundation.shape.RoundedCornerShape
+import com.zeynbakers.order_management_system.core.tutorial.tutorialCoachTarget
 
 data class TopLevelDestination(
     val route: String,
     val label: String,
-    val icon: ImageVector
+    val icon: ImageVector,
+    val tutorialTargetId: String? = null
 )
 
 data class MoreAction(
     val label: String,
     val icon: ImageVector,
+    val tutorialTargetId: String? = null,
     val onClick: () -> Unit
 )
 
@@ -106,6 +109,12 @@ fun AppScaffold(
                 Spacer(modifier = Modifier.weight(1f, fill = false))
                 destinations.forEach { destination ->
                     NavigationRailItem(
+                        modifier =
+                            if (destination.tutorialTargetId != null) {
+                                Modifier.tutorialCoachTarget(destination.tutorialTargetId)
+                            } else {
+                                Modifier
+                            },
                         selected = selectedRoute == destination.route,
                         onClick = { onDestinationSelected(destination.route) },
                         icon = { Icon(destination.icon, contentDescription = destination.label) },
@@ -136,6 +145,12 @@ fun AppScaffold(
                     ) {
                         destinations.forEach { destination ->
                             NavigationBarItem(
+                                modifier =
+                                    if (destination.tutorialTargetId != null) {
+                                        Modifier.tutorialCoachTarget(destination.tutorialTargetId)
+                                    } else {
+                                        Modifier
+                                    },
                                 selected = selectedRoute == destination.route,
                                 onClick = { onDestinationSelected(destination.route) },
                                 icon = { Icon(destination.icon, contentDescription = destination.label) },
@@ -173,7 +188,16 @@ fun AppScaffold(
                 moreActions.forEach { action ->
                     ElevatedButton(
                         onClick = action.onClick,
-                        modifier = Modifier.fillMaxWidth()
+                        modifier =
+                            Modifier
+                                .fillMaxWidth()
+                                .then(
+                                    if (action.tutorialTargetId != null) {
+                                        Modifier.tutorialCoachTarget(action.tutorialTargetId)
+                                    } else {
+                                        Modifier
+                                    }
+                                )
                     ) {
                         Icon(action.icon, contentDescription = null)
                         Spacer(modifier = Modifier.width(8.dp))

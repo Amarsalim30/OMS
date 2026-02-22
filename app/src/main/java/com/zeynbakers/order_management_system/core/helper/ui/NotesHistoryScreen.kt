@@ -67,6 +67,8 @@ import androidx.compose.ui.unit.dp
 import com.zeynbakers.order_management_system.R
 import com.zeynbakers.order_management_system.core.helper.data.HelperNoteType
 import com.zeynbakers.order_management_system.core.helper.data.HelperNoteWithCustomer
+import com.zeynbakers.order_management_system.core.tutorial.TutorialCoachTargets
+import com.zeynbakers.order_management_system.core.tutorial.tutorialCoachTarget
 import com.zeynbakers.order_management_system.core.ui.LocalUiEventDispatcher
 import com.zeynbakers.order_management_system.core.ui.components.AppCard
 import com.zeynbakers.order_management_system.core.ui.components.AppEmptyState
@@ -114,7 +116,10 @@ fun NotesHistoryScreen(
                     }
                 },
                 actions = {
-                    IconButton(onClick = { showSearch = !showSearch }) {
+                    IconButton(
+                        onClick = { showSearch = !showSearch },
+                        modifier = Modifier.tutorialCoachTarget(TutorialCoachTargets.NotesHistorySearchAction)
+                    ) {
                         Icon(
                             imageVector = Icons.Filled.Search,
                             contentDescription = stringResource(R.string.action_search)

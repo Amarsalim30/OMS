@@ -57,6 +57,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.zeynbakers.order_management_system.R
 import com.zeynbakers.order_management_system.core.ui.rememberCurrentDate
+import com.zeynbakers.order_management_system.core.tutorial.TutorialCoachTargets
+import com.zeynbakers.order_management_system.core.tutorial.tutorialCoachTarget
 import com.zeynbakers.order_management_system.core.util.formatKes
 import com.zeynbakers.order_management_system.order.data.OrderEntity
 import java.math.BigDecimal
@@ -291,7 +293,8 @@ fun UnpaidOrdersScreen(
             item {
                 SummaryCard(
                         count = filteredOrders.size,
-                        totalOutstanding = totalOutstanding
+                        totalOutstanding = totalOutstanding,
+                        modifier = Modifier.tutorialCoachTarget(TutorialCoachTargets.OrdersSummaryCard)
                 )
             }
 

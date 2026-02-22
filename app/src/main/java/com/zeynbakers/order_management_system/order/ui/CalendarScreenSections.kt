@@ -74,7 +74,8 @@ internal fun CalendarTopAppBar(
     onMonthPickerClick: () -> Unit,
     onToday: () -> Unit,
     onSummaryClick: () -> Unit,
-    onMoreClick: () -> Unit
+    onMoreClick: () -> Unit,
+    moreButtonModifier: Modifier = Modifier
 ) {
     CenterAlignedTopAppBar(
         title = {
@@ -123,7 +124,10 @@ internal fun CalendarTopAppBar(
                     )
                 }
             }
-            IconButton(onClick = onMoreClick) {
+            IconButton(
+                onClick = onMoreClick,
+                modifier = moreButtonModifier
+            ) {
                 Icon(
                     imageVector = Icons.Filled.MoreVert,
                     contentDescription = stringResource(R.string.action_more)

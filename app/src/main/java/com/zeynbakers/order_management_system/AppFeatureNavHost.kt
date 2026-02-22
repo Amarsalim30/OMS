@@ -37,7 +37,8 @@ internal data class AppFeatureNavigationActions(
     val openImportContacts: () -> Unit,
     val navigateToMoneyRecord: (Long?) -> Unit,
     val navigateToCalendarQuickAdd: (LocalDate) -> Unit,
-    val navigateToPaymentHistory: (PaymentHistoryFilter, Long?) -> Unit
+    val navigateToPaymentHistory: (PaymentHistoryFilter, Long?) -> Unit,
+    val startPracticalTutorial: (Int) -> Unit
 )
 
 internal data class AppFeatureSupportActions(

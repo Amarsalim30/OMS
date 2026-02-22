@@ -94,6 +94,33 @@ Improve non-technical user efficiency by:
 - Calendar tutorial does not lose progression when opening/closing quick-add.
 - Beginner tutorial clearly explains where Notes history is and how to share M-PESA messages into Money collect.
 
+## Issue 5: Tutorial Needed Cross-Screen Coach Flow (Not Calendar-Only)
+### Problem
+- First-run flow stopped after the 6-step calendar walkthrough.
+- The broader tutorial route existed, but it was static cards and not an interactive coaching flow.
+- Users needed guided progression across major screens, similar to practical app onboarding coaches.
+
+### Implementation
+- Added a post-calendar tutorial route: `AppRoutes.TutorialAfterCalendar`.
+- Calendar interactive tutorial now routes into the cross-screen coach after completion.
+- Rebuilt `BeginnerTutorialScreen` into an interactive coach:
+  - one focused step at a time
+  - step progress indicator
+  - primary action per step to open the relevant feature screen
+  - previous / next / skip / finish controls
+  - initial step support (`initialStep`) so first-run can start from step 2 after calendar training
+- Added robust tutorial exit behavior:
+  - back/finish pops stack when possible
+  - falls back to Calendar route when tutorial is root.
+- Navigation chrome remains hidden on tutorial routes for focus.
+
+### Acceptance Criteria
+- First-run users complete calendar step coaching, then continue into cross-screen tutorial coach.
+- Tutorial coach covers Calendar, Orders, Customers, Money, Notes history, Floating helper, and Backup/Notifications.
+- Tutorial opened from More starts from step 1.
+- Tutorial opened after calendar starts from next step (not repeating calendar step as default).
+- Back/finish from coach always exits safely without dead-end routes.
+
 ## Permissions and Safety
 - No new dangerous permissions were introduced.
 - Existing microphone flow remains runtime-permission safe through `HelperCaptureActivity`.
@@ -107,6 +134,8 @@ Improve non-technical user efficiency by:
 - `app/src/main/java/com/zeynbakers/order_management_system/core/tutorial/BeginnerTutorialScreen.kt`
 - `app/src/main/java/com/zeynbakers/order_management_system/order/ui/CalendarScreen.kt`
 - `app/src/main/java/com/zeynbakers/order_management_system/order/ui/OrderEditorSheet.kt`
+- `app/src/main/java/com/zeynbakers/order_management_system/core/navigation/AppRoutes.kt`
+- `app/src/main/java/com/zeynbakers/order_management_system/core/navigation/graphs/CalendarGraph.kt`
 - `app/src/main/java/com/zeynbakers/order_management_system/core/widget/WidgetUpdater.kt`
 - `app/src/main/res/layout/widget_today_unpaid.xml`
 - `app/src/main/res/drawable/widget_background.xml`

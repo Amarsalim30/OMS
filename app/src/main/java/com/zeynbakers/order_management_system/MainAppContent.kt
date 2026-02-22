@@ -30,6 +30,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -60,6 +61,8 @@ import com.zeynbakers.order_management_system.core.navigation.AppRoutes
 import com.zeynbakers.order_management_system.core.navigation.AppShortcuts
 import com.zeynbakers.order_management_system.core.navigation.extractSharedText
 import com.zeynbakers.order_management_system.core.notifications.NotificationScheduler
+import com.zeynbakers.order_management_system.core.tutorial.LocalTutorialCoachAnchorRegistry
+import com.zeynbakers.order_management_system.core.tutorial.TutorialCoachAnchorRegistry
 import com.zeynbakers.order_management_system.core.ui.AmountFieldRegistry
 import com.zeynbakers.order_management_system.core.ui.AppScaffold
 import com.zeynbakers.order_management_system.core.ui.AppViewModelFactory
@@ -116,6 +119,7 @@ internal fun MainAppContent(
                 val voiceRouter = remember { VoiceInputRouter(onApplyTotal = amountRegistry::applyAmount) }
                 val overlaySuppressed = remember { mutableStateOf(false) }
                 val appSnackbarHostState = remember { SnackbarHostState() }
+                val tutorialAnchorRegistry = remember { TutorialCoachAnchorRegistry() }
                 val contactsPermissionMessage =
                     stringResource(R.string.contacts_permission_required_for_import)
                 val uiEventDispatcher = remember(appSnackbarHostState) {
@@ -144,6 +148,8 @@ internal fun MainAppContent(
                 var manualCustomerId by rememberSaveable { mutableStateOf<Long?>(null) }
                 var showMoreSheet by rememberSaveable { mutableStateOf(false) }
                 var selectedTopLevelRoute by rememberSaveable { mutableStateOf(AppRoutes.Calendar) }
+                var tutorialActive by rememberSaveable { mutableStateOf(false) }
+                var tutorialStepIndex by rememberSaveable { mutableIntStateOf(0) }
                 var importContacts by remember { mutableStateOf<List<ImportContact>>(emptyList()) }
                 var selectedContactPhones by remember { mutableStateOf<Set<String>>(emptySet()) }
                 var isContactsLoading by remember { mutableStateOf(false) }
@@ -392,7 +398,8 @@ internal fun MainAppContent(
                     LocalVoiceCalcAccess provides voiceCalcAccess,
                     LocalVoiceOverlaySuppressed provides overlaySuppressed,
                     LocalVoiceInputRouter provides voiceRouter,
-                    LocalUiEventDispatcher provides uiEventDispatcher
+                    LocalUiEventDispatcher provides uiEventDispatcher,
+                    LocalTutorialCoachAnchorRegistry provides tutorialAnchorRegistry
                 ) {
                     val calendarState = AppCalendarState(
                         calendarDays = calendarDays,
@@ -477,6 +484,11 @@ internal fun MainAppContent(
                         },
                         navigateToPaymentHistory = { filter, focusReceiptId ->
                             navigateToPaymentHistory(navController, filter, focusReceiptId)
+                        },
+                        startPracticalTutorial = { startStep ->
+                            tutorialStepIndex = startStep.coerceAtLeast(0)
+                            tutorialActive = true
+                            showMoreSheet = false
                         }
                     )
                     val supportActions = AppFeatureSupportActions(
@@ -503,6 +515,20 @@ internal fun MainAppContent(
                         showMoreSheet = showMoreSheet,
                         onShowMoreSheetChange = { showMoreSheet = it },
                         openImportContacts = openImportContacts,
+                        tutorialAnchorRegistry = tutorialAnchorRegistry,
+                        tutorialActive = tutorialActive,
+                        tutorialStepIndex = tutorialStepIndex,
+                        onStartTutorial = { startStep ->
+                            tutorialStepIndex = startStep.coerceAtLeast(0)
+                            tutorialActive = true
+                            showMoreSheet = false
+                        },
+                        onTutorialStepChange = { tutorialStepIndex = it.coerceAtLeast(0) },
+                        onDismissTutorial = {
+                            tutorialActive = false
+                            tutorialStepIndex = 0
+                            showMoreSheet = false
+                        },
                         calendarState = calendarState,
                         ordersState = ordersState,
                         customersState = customersState,

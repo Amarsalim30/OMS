@@ -38,6 +38,8 @@ import com.zeynbakers.order_management_system.core.ui.rememberCurrentDate
 import com.zeynbakers.order_management_system.core.ui.LocalVoiceOverlaySuppressed
 import com.zeynbakers.order_management_system.core.ui.LocalVoiceInputRouter
 import com.zeynbakers.order_management_system.core.ui.VoiceTarget
+import com.zeynbakers.order_management_system.core.tutorial.TutorialCoachTargets
+import com.zeynbakers.order_management_system.core.tutorial.tutorialCoachTarget
 import com.zeynbakers.order_management_system.core.calendar.CalendarPreferences
 import com.zeynbakers.order_management_system.customer.data.CustomerEntity
 import java.math.BigDecimal
@@ -317,7 +319,8 @@ fun CalendarScreen(
                     if (!tutorialActive) {
                         onOpenMore()
                     }
-                }
+                },
+                moreButtonModifier = Modifier.tutorialCoachTarget(TutorialCoachTargets.CalendarMoreButton)
             )
         },
         floatingActionButton = {
@@ -325,7 +328,8 @@ fun CalendarScreen(
                 modifier =
                     Modifier.onGloballyPositioned { coordinates ->
                         fabBounds = coordinates.boundsInRoot()
-                    },
+                    }
+                        .tutorialCoachTarget(TutorialCoachTargets.CalendarAddOrderFab),
                 onClick = {
                     openQuickAddSheet()
                     if (

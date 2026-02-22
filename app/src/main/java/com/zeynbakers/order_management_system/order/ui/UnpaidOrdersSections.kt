@@ -48,9 +48,15 @@ import kotlinx.datetime.toJavaLocalDate
 @Composable
 internal fun SummaryCard(
     count: Int,
-    totalOutstanding: BigDecimal
+    totalOutstanding: BigDecimal,
+    modifier: Modifier = Modifier
 ) {
-    AppCard(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
+    AppCard(
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 8.dp)
+    ) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(4.dp),
             horizontalArrangement = Arrangement.SpaceBetween,

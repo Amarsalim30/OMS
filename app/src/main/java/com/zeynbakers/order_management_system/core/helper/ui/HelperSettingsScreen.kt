@@ -43,6 +43,8 @@ import com.zeynbakers.order_management_system.core.helper.HelperOverlayControlle
 import com.zeynbakers.order_management_system.core.helper.HelperPermissions
 import com.zeynbakers.order_management_system.core.helper.HelperPreferences
 import com.zeynbakers.order_management_system.core.helper.HelperSettingsState
+import com.zeynbakers.order_management_system.core.tutorial.TutorialCoachTargets
+import com.zeynbakers.order_management_system.core.tutorial.tutorialCoachTarget
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -107,6 +109,7 @@ fun HelperSettingsScreen(
             ToggleRow(
                 title = stringResource(R.string.helper_settings_enable),
                 checked = helperState.enabled,
+                modifier = Modifier.tutorialCoachTarget(TutorialCoachTargets.HelperEnableSwitch),
                 onCheckedChange = { enabled ->
                     scope.launch {
                         prefs.setEnabled(enabled)
@@ -223,10 +226,11 @@ fun HelperSettingsScreen(
 private fun ToggleRow(
     title: String,
     checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit
+    onCheckedChange: (Boolean) -> Unit,
+    modifier: Modifier = Modifier
 ) {
     Row(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Text(
