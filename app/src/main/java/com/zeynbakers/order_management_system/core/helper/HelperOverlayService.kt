@@ -92,6 +92,7 @@ class HelperOverlayService : Service() {
     private var notePreview: HelperNoteDetection? = null
     private var errorText: String? = null
     private var recognizer: SpeechRecognizer? = null
+    private var microphoneForegroundActive: Boolean = false
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -162,7 +163,34 @@ class HelperOverlayService : Service() {
             } else {
                 startForeground(notificationId, notification)
             }
+            microphoneForegroundActive = false
         }.isSuccess
+    }
+
+    private fun promoteToMicrophoneForeground() {
+        if (microphoneForegroundActive) return
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return
+        if (!HelperPermissions.hasMicrophonePermission(this)) return
+        val typeMask =
+            ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC or ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
+        runCatching {
+            startForeground(notificationId, buildNotification(), typeMask)
+            microphoneForegroundActive = true
+        }
+    }
+
+    private fun restoreBaseForegroundType() {
+        if (!microphoneForegroundActive) return
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            runCatching {
+                startForeground(
+                    notificationId,
+                    buildNotification(),
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
+                )
+            }
+        }
+        microphoneForegroundActive = false
     }
 
     private fun buildNotification(): Notification {
@@ -175,11 +203,11 @@ class HelperOverlayService : Service() {
                 PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
             )
         val notePendingIntent =
-            capturePendingIntent(HelperOverlayController.ACTION_CAPTURE_NOTE, requestCodeVoiceNote)
+            servicePendingIntent(HelperOverlayController.ACTION_CAPTURE_NOTE, requestCodeVoiceNote)
         val calcPendingIntent =
-            capturePendingIntent(HelperOverlayController.ACTION_CAPTURE_CALCULATOR, requestCodeVoiceCalculator)
+            servicePendingIntent(HelperOverlayController.ACTION_CAPTURE_CALCULATOR, requestCodeVoiceCalculator)
         val revealPendingIntent =
-            capturePendingIntent(HelperOverlayController.ACTION_REVEAL, requestCodeReveal)
+            servicePendingIntent(HelperOverlayController.ACTION_REVEAL, requestCodeReveal)
         val stopPendingIntent =
             PendingIntent.getService(
                 this,
@@ -225,7 +253,7 @@ class HelperOverlayService : Service() {
             .build()
     }
 
-    private fun capturePendingIntent(action: String, requestCode: Int): PendingIntent {
+    private fun servicePendingIntent(action: String, requestCode: Int): PendingIntent {
         val intent = Intent(this, HelperOverlayService::class.java).setAction(action)
         return PendingIntent.getService(
             this,
@@ -417,21 +445,31 @@ class HelperOverlayService : Service() {
                 putExtra(HelperCaptureActivity.EXTRA_MODE, mode.wireValue)
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             }
-        startActivity(intent)
+        runCatching { startActivity(intent) }
+            .onFailure {
+                Toast.makeText(
+                    this,
+                    getString(R.string.helper_capture_error_start_failed),
+                    Toast.LENGTH_SHORT
+                ).show()
+            }
     }
 
     private fun handleCaptureAction(mode: HelperCaptureMode) {
         serviceScope.launch {
             settingsState = withContext(Dispatchers.IO) { helperPreferences.readState() }
             activeTheme = HelperOverlayThemes.resolve(settingsState.themePreset)
-            if (!settingsState.fallbackOnly && HelperPermissions.hasOverlayPermission(this@HelperOverlayService)) {
-                ensureBubble()
-                revealBubble(savePosition = false, schedulePeek = false)
-                removePanel()
+            val canUseOverlayCapture =
+                !settingsState.fallbackOnly && HelperPermissions.hasOverlayPermission(this@HelperOverlayService)
+            if (!canUseOverlayCapture) {
+                removeCapture()
+                openCapture(mode)
+                return@launch
             }
-            // Keep microphone capture in a user-visible Activity to satisfy while-in-use rules.
-            removeCapture()
-            openCapture(mode)
+            ensureBubble()
+            revealBubble(savePosition = false, schedulePeek = false)
+            showCapture(mode)
+            startListening()
         }
     }
 
@@ -498,6 +536,7 @@ class HelperOverlayService : Service() {
         calcResult = null
         notePreview = null
         errorText = null
+        restoreBaseForegroundType()
         applyBubbleVisualState()
         scheduleAutoPeek()
     }
@@ -727,12 +766,14 @@ class HelperOverlayService : Service() {
             captureStage = CaptureStage.NeedsPermission
             renderCapture()
             applyBubbleVisualState()
+            restoreBaseForegroundType()
             return
         }
         if (!SpeechRecognizer.isRecognitionAvailable(this)) {
             showCaptureError(getString(R.string.helper_capture_error_speech_unavailable))
             return
         }
+        promoteToMicrophoneForeground()
         val speechRecognizer = ensureRecognizer() ?: run {
             showCaptureError(getString(R.string.helper_capture_error_speech_unavailable))
             return
@@ -821,6 +862,7 @@ class HelperOverlayService : Service() {
             showCaptureError(getString(R.string.helper_capture_error_no_input))
             return
         }
+        restoreBaseForegroundType()
         when (captureMode) {
             HelperCaptureMode.VoiceCalculator -> {
                 val parsed = parseVoiceMath(cleaned)
@@ -846,6 +888,7 @@ class HelperOverlayService : Service() {
     private fun showCaptureError(text: String) {
         errorText = text
         captureStage = CaptureStage.Error
+        restoreBaseForegroundType()
         renderCapture()
         applyBubbleVisualState()
     }
