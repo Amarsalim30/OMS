@@ -3,31 +3,38 @@ package com.zeynbakers.order_management_system.core.helper
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.Color
+import android.graphics.drawable.ColorDrawable
 import android.os.Bundle
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
+import android.view.Gravity
+import android.view.WindowManager
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -55,6 +62,7 @@ import kotlinx.coroutines.withContext
 class HelperCaptureActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        configureFloatingWindow()
         val mode = HelperCaptureMode.fromWireValue(intent.getStringExtra(EXTRA_MODE))
         setContent {
             CaptureScreen(
@@ -62,6 +70,21 @@ class HelperCaptureActivity : ComponentActivity() {
                 onClose = { finish() }
             )
         }
+    }
+
+    private fun configureFloatingWindow() {
+        val density = resources.displayMetrics.density
+        val panelWidthPx = (312f * density).toInt()
+        window.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
+        window.setLayout(panelWidthPx, WindowManager.LayoutParams.WRAP_CONTENT)
+        val params = window.attributes
+        params.width = panelWidthPx
+        params.height = WindowManager.LayoutParams.WRAP_CONTENT
+        params.gravity = Gravity.TOP or Gravity.START
+        params.x = (12f * density).toInt()
+        params.y = (72f * density).toInt()
+        window.attributes = params
+        setFinishOnTouchOutside(true)
     }
 
     companion object {
@@ -244,170 +267,185 @@ private fun CaptureScreen(
             HelperCaptureMode.VoiceCalculator -> stringResource(R.string.helper_action_voice_calculator)
         }
 
-    Scaffold(
-        contentWindowInsets = WindowInsets(0),
-        topBar = {
-            TopAppBar(
-                title = { Text(title) }
-            )
-        }
-    ) { padding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .padding(horizontal = 12.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
+    Box(modifier = Modifier.widthIn(max = 312.dp)) {
+        Surface(
+            modifier = Modifier.fillMaxWidth(),
+            shape = MaterialTheme.shapes.large,
+            tonalElevation = 6.dp,
+            shadowElevation = 8.dp
         ) {
-            when (stage) {
-                CaptureStage.AwaitingPermission -> {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
                     Text(
-                        text = stringResource(R.string.helper_capture_mic_required),
-                        style = MaterialTheme.typography.bodyMedium
+                        text = title,
+                        style = MaterialTheme.typography.titleMedium,
+                        modifier = Modifier.weight(1f)
                     )
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Button(onClick = { permissionLauncher.launch(Manifest.permission.RECORD_AUDIO) }) {
-                            Text(stringResource(R.string.permission_primer_continue))
+                    IconButton(onClick = onClose) {
+                        Icon(
+                            imageVector = Icons.Filled.Close,
+                            contentDescription = stringResource(R.string.action_cancel)
+                        )
+                    }
+                }
+                when (stage) {
+                    CaptureStage.AwaitingPermission -> {
+                        Text(
+                            text = stringResource(R.string.helper_capture_mic_required),
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Button(onClick = { permissionLauncher.launch(Manifest.permission.RECORD_AUDIO) }) {
+                                Text(stringResource(R.string.permission_primer_continue))
+                            }
+                            OutlinedButton(onClick = onClose) {
+                                Text(stringResource(R.string.permission_primer_not_now))
+                            }
                         }
+                    }
+                    CaptureStage.Listening -> {
+                        Text(
+                            text = stringResource(R.string.helper_capture_listening),
+                            style = MaterialTheme.typography.titleMedium
+                        )
+                        Text(
+                            text = partialText.ifBlank { stringResource(R.string.helper_capture_speak_hint) },
+                            style = MaterialTheme.typography.bodyLarge
+                        )
                         OutlinedButton(onClick = onClose) {
-                            Text(stringResource(R.string.permission_primer_not_now))
+                            Text(stringResource(R.string.action_cancel))
                         }
                     }
-                }
-                CaptureStage.Listening -> {
-                    Text(
-                        text = stringResource(R.string.helper_capture_listening),
-                        style = MaterialTheme.typography.titleMedium
-                    )
-                    Text(
-                        text = partialText.ifBlank { stringResource(R.string.helper_capture_speak_hint) },
-                        style = MaterialTheme.typography.bodyLarge
-                    )
-                    OutlinedButton(onClick = onClose) {
-                        Text(stringResource(R.string.action_cancel))
-                    }
-                }
-                CaptureStage.Result -> {
-                    if (mode == HelperCaptureMode.VoiceCalculator) {
-                        val result = calcResult
-                        Text(
-                            text = transcript,
-                            style = MaterialTheme.typography.bodyLarge
-                        )
-                        Text(
-                            text = result?.value?.stripTrailingZeros()?.toPlainString().orEmpty(),
-                            style = MaterialTheme.typography.headlineMedium
-                        )
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Button(
-                                onClick = {
-                                    val value = result?.value?.stripTrailingZeros()?.toPlainString().orEmpty()
-                                    clipboard.setText(AnnotatedString(value))
-                                    Toast.makeText(
-                                        context,
-                                        copiedMessage,
-                                        Toast.LENGTH_SHORT
-                                    ).show()
-                                },
-                                enabled = result != null
-                            ) {
-                                Text(stringResource(R.string.helper_capture_copy_result))
-                            }
-                            Button(
-                                onClick = {
-                                    val parsed = result ?: return@Button
-                                    scope.launch {
-                                        withContext(Dispatchers.IO) {
-                                            database.helperNoteDao().insert(
-                                                HelperNoteClassifier.buildCalculatorNote(
-                                                    expression = transcript,
-                                                    result = parsed.value
-                                                )
-                                            )
-                                        }
+                    CaptureStage.Result -> {
+                        if (mode == HelperCaptureMode.VoiceCalculator) {
+                            val result = calcResult
+                            Text(
+                                text = transcript,
+                                style = MaterialTheme.typography.bodyLarge
+                            )
+                            Text(
+                                text = result?.value?.stripTrailingZeros()?.toPlainString().orEmpty(),
+                                style = MaterialTheme.typography.headlineMedium
+                            )
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Button(
+                                    onClick = {
+                                        val value = result?.value?.stripTrailingZeros()?.toPlainString().orEmpty()
+                                        clipboard.setText(AnnotatedString(value))
                                         Toast.makeText(
                                             context,
-                                            savedMessage,
+                                            copiedMessage,
                                             Toast.LENGTH_SHORT
                                         ).show()
-                                        onClose()
-                                    }
-                                },
-                                enabled = result != null
-                            ) {
-                                Text(stringResource(R.string.helper_capture_save_note))
-                            }
-                        }
-                    } else {
-                        Text(
-                            text = transcript,
-                            style = MaterialTheme.typography.bodyLarge
-                        )
-                        notePreview?.let { detection ->
-                            if (!detection.detectedAmountRaw.isNullOrBlank()) {
-                                Text(
-                                    text = stringResource(
-                                        R.string.helper_capture_detected_amount,
-                                        detection.detectedAmountRaw
-                                    ),
-                                    style = MaterialTheme.typography.bodyMedium
-                                )
-                            }
-                            if (!detection.detectedPhone.isNullOrBlank()) {
-                                Text(
-                                    text = stringResource(
-                                        R.string.helper_capture_detected_phone,
-                                        detection.detectedPhone
-                                    ),
-                                    style = MaterialTheme.typography.bodyMedium
-                                )
-                            }
-                        }
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Button(
-                                onClick = {
-                                    scope.launch {
-                                        withContext(Dispatchers.IO) {
-                                            database.helperNoteDao().insert(
-                                                HelperNoteClassifier.buildVoiceNote(transcript = transcript)
-                                            )
-                                        }
-                                        Toast.makeText(
-                                            context,
-                                            savedMessage,
-                                            Toast.LENGTH_SHORT
-                                        ).show()
-                                        onClose()
-                                    }
+                                    },
+                                    enabled = result != null
+                                ) {
+                                    Text(stringResource(R.string.helper_capture_copy_result))
                                 }
-                            ) {
-                                Text(stringResource(R.string.action_save))
+                                Button(
+                                    onClick = {
+                                        val parsed = result ?: return@Button
+                                        scope.launch {
+                                            withContext(Dispatchers.IO) {
+                                                database.helperNoteDao().insert(
+                                                    HelperNoteClassifier.buildCalculatorNote(
+                                                        expression = transcript,
+                                                        result = parsed.value
+                                                    )
+                                                )
+                                            }
+                                            Toast.makeText(
+                                                context,
+                                                savedMessage,
+                                                Toast.LENGTH_SHORT
+                                            ).show()
+                                            onClose()
+                                        }
+                                    },
+                                    enabled = result != null
+                                ) {
+                                    Text(stringResource(R.string.helper_capture_save_note))
+                                }
+                            }
+                        } else {
+                            Text(
+                                text = transcript,
+                                style = MaterialTheme.typography.bodyLarge
+                            )
+                            notePreview?.let { detection ->
+                                if (!detection.detectedAmountRaw.isNullOrBlank()) {
+                                    Text(
+                                        text = stringResource(
+                                            R.string.helper_capture_detected_amount,
+                                            detection.detectedAmountRaw
+                                        ),
+                                        style = MaterialTheme.typography.bodyMedium
+                                    )
+                                }
+                                if (!detection.detectedPhone.isNullOrBlank()) {
+                                    Text(
+                                        text = stringResource(
+                                            R.string.helper_capture_detected_phone,
+                                            detection.detectedPhone
+                                        ),
+                                        style = MaterialTheme.typography.bodyMedium
+                                    )
+                                }
+                            }
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Button(
+                                    onClick = {
+                                        scope.launch {
+                                            withContext(Dispatchers.IO) {
+                                                database.helperNoteDao().insert(
+                                                    HelperNoteClassifier.buildVoiceNote(transcript = transcript)
+                                                )
+                                            }
+                                            Toast.makeText(
+                                                context,
+                                                savedMessage,
+                                                Toast.LENGTH_SHORT
+                                            ).show()
+                                            onClose()
+                                        }
+                                    }
+                                ) {
+                                    Text(stringResource(R.string.action_save))
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedButton(onClick = { resetAndListen() }) {
+                                Text(stringResource(R.string.helper_capture_try_again))
+                            }
+                            OutlinedButton(onClick = onClose) {
+                                Text(stringResource(R.string.action_cancel))
                             }
                         }
                     }
-
-                    Spacer(modifier = Modifier.height(6.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        OutlinedButton(onClick = { resetAndListen() }) {
-                            Text(stringResource(R.string.helper_capture_try_again))
-                        }
-                        OutlinedButton(onClick = onClose) {
-                            Text(stringResource(R.string.action_cancel))
-                        }
-                    }
-                }
-                CaptureStage.Error -> {
-                    Text(
-                        text = errorText.orEmpty(),
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.error
-                    )
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Button(onClick = { resetAndListen() }) {
-                            Text(stringResource(R.string.helper_capture_try_again))
-                        }
-                        OutlinedButton(onClick = onClose) {
-                            Text(stringResource(R.string.action_cancel))
+                    CaptureStage.Error -> {
+                        Text(
+                            text = errorText.orEmpty(),
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Button(onClick = { resetAndListen() }) {
+                                Text(stringResource(R.string.helper_capture_try_again))
+                            }
+                            OutlinedButton(onClick = onClose) {
+                                Text(stringResource(R.string.action_cancel))
+                            }
                         }
                     }
                 }

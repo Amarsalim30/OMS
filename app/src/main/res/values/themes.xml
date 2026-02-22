@@ -8,4 +8,13 @@
     <style name="Theme.Order_management_system.Launch" parent="Theme.Order_management_system">
         <item name="android:windowBackground">@color/launch_background</item>
     </style>
+
+    <style name="Theme.Order_management_system.HelperCapture" parent="@android:style/Theme.Material.Light.Dialog.NoActionBar">
+        <item name="android:windowIsFloating">true</item>
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:backgroundDimEnabled">false</item>
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowCloseOnTouchOutside">true</item>
+    </style>
 </resources>

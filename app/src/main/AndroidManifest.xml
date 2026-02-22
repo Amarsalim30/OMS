@@ -46,7 +46,7 @@
         <activity
             android:name=".core.helper.HelperCaptureActivity"
             android:exported="false"
-            android:theme="@style/Theme.Order_management_system" />
+            android:theme="@style/Theme.Order_management_system.HelperCapture" />
 
         <service
             android:name=".core.helper.HelperOverlayService"
