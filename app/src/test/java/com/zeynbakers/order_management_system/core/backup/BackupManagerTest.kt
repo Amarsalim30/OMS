@@ -111,6 +111,27 @@ class BackupManagerTest {
     }
 
     @Test
+    fun `saf directory backups use rolling single-file name`() {
+        val name =
+            BackupManager.backupFileNameForTargetForTest(
+                targetType = BackupTargetType.SafDirectory,
+                timestamp = 1_737_624_000_000L
+            )
+        assertEquals("backup_latest.oms", name)
+    }
+
+    @Test
+    fun `saf file backups keep timestamped archive naming`() {
+        val name =
+            BackupManager.backupFileNameForTargetForTest(
+                targetType = BackupTargetType.SafFile,
+                timestamp = 1_737_624_000_000L
+            )
+        assertTrue(name.startsWith("oms-backup-"))
+        assertTrue(name.endsWith(".oms"))
+    }
+
+    @Test
     fun `zip reader rejects oversized single entry`() {
         val zipBytes = buildZip(mapOf("orders.json" to "x".repeat(128)))
         val error =
@@ -148,6 +169,72 @@ class BackupManagerTest {
         assertTrue(error is IllegalArgumentException)
     }
 
+    @Test
+    fun `restore preflight rejects metadata count mismatch`() {
+        val payloads = buildValidRestorePayloads()
+        payloads["metadata.json"] =
+            """
+            {
+              "exportedAt": 1,
+              "appVersionName": "test",
+              "appVersionCode": 1,
+              "dbVersion": 11,
+              "counts": {
+                "customers.json": 1,
+                "orders.json": 2,
+                "order_items.json": 1,
+                "account_entries.json": 1,
+                "payments.json": 1,
+                "payment_receipts.json": 0,
+                "payment_allocations.json": 0,
+                "helper_notes.json": 0
+              }
+            }
+            """.trimIndent()
+
+        val error =
+            runCatching {
+                BackupManager.validateRestorePayloadsForTest(
+                    payloads = payloads,
+                    currentDbVersion = 11
+                )
+            }.exceptionOrNull()
+
+        assertNotNull(error)
+    }
+
+    @Test
+    fun `restore preflight rejects missing customer references`() {
+        val payloads = buildValidRestorePayloads()
+        payloads["orders.json"] =
+            """
+            [
+              {
+                "id": 10,
+                "orderDate": "2026-02-22",
+                "createdAt": 1,
+                "updatedAt": 1,
+                "notes": "Sample order",
+                "pickupTime": null,
+                "status": "PENDING",
+                "statusOverride": null,
+                "totalAmount": "100",
+                "customerId": 999
+              }
+            ]
+            """.trimIndent()
+
+        val error =
+            runCatching {
+                BackupManager.validateRestorePayloadsForTest(
+                    payloads = payloads,
+                    currentDbVersion = 11
+                )
+            }.exceptionOrNull()
+
+        assertNotNull(error)
+    }
+
     private fun assertDecimal(raw: String, expected: String) {
         val parsed = BackupManager.parseBackupDecimal(raw)
         assertNotNull("Expected decimal parse for '$raw'", parsed)
@@ -169,6 +256,100 @@ class BackupManagerTest {
     private fun extractJsonStringValue(payload: String, key: String): String? {
         val pattern = Regex("\"$key\"\\s*:\\s*\"([^\"]*)\"")
         return pattern.find(payload)?.groupValues?.get(1)
+    }
+
+    private fun buildValidRestorePayloads(): MutableMap<String, String> {
+        return linkedMapOf(
+            "metadata.json" to
+                """
+                {
+                  "exportedAt": 1,
+                  "appVersionName": "test",
+                  "appVersionCode": 1,
+                  "dbVersion": 11,
+                  "counts": {
+                    "customers.json": 1,
+                    "orders.json": 1,
+                    "order_items.json": 1,
+                    "account_entries.json": 1,
+                    "payments.json": 1,
+                    "payment_receipts.json": 0,
+                    "payment_allocations.json": 0,
+                    "helper_notes.json": 0
+                  }
+                }
+                """.trimIndent(),
+            "customers.json" to
+                """
+                [
+                  {
+                    "id": 1,
+                    "name": "Customer One",
+                    "phone": "0700000000",
+                    "isArchived": false
+                  }
+                ]
+                """.trimIndent(),
+            "orders.json" to
+                """
+                [
+                  {
+                    "id": 10,
+                    "orderDate": "2026-02-22",
+                    "createdAt": 1,
+                    "updatedAt": 1,
+                    "notes": "Sample order",
+                    "pickupTime": null,
+                    "status": "PENDING",
+                    "statusOverride": null,
+                    "totalAmount": "100",
+                    "customerId": 1
+                  }
+                ]
+                """.trimIndent(),
+            "order_items.json" to
+                """
+                [
+                  {
+                    "id": 100,
+                    "orderId": 10,
+                    "name": "Bread",
+                    "category": "BAKED",
+                    "quantity": 1,
+                    "unitPrice": "100"
+                  }
+                ]
+                """.trimIndent(),
+            "account_entries.json" to
+                """
+                [
+                  {
+                    "id": 200,
+                    "orderId": 10,
+                    "customerId": 1,
+                    "type": "DEBIT",
+                    "amount": "100",
+                    "date": 1,
+                    "description": "Charge: Order #10"
+                  }
+                ]
+                """.trimIndent(),
+            "payments.json" to
+                """
+                [
+                  {
+                    "id": 300,
+                    "orderId": 10,
+                    "amount": "100",
+                    "method": "CASH",
+                    "paidAt": 1
+                  }
+                ]
+                """.trimIndent(),
+            "payment_receipts.json" to "[]",
+            "payment_allocations.json" to "[]",
+            "helper_notes.json" to "[]"
+        )
     }
 
 }

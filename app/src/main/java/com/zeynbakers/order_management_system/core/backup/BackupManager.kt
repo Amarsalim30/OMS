@@ -60,6 +60,7 @@ object BackupManager {
     private const val BACKUP_DIR_NAME = "backups"
     private const val BACKUP_FILE_EXTENSION = ".oms"
     private const val LEGACY_BACKUP_FILE_EXTENSION = ".zip"
+    private const val SAF_DIRECTORY_ROLLING_FILE_NAME = "backup_latest.oms"
     private const val MAX_APP_PRIVATE_BACKUPS = 7
     private const val MAX_SAF_DIRECTORY_BACKUPS = 7
     private const val DEFAULT_STAGE = "Preparing"
@@ -90,6 +91,14 @@ object BackupManager {
     private const val GOOGLE_DRIVE_DOCUMENTS_AUTHORITY_PREFIX = "com.google.android.apps.docs.storage"
     private const val DOCUMENTS_UI_PACKAGE = "com.android.documentsui"
     private const val GOOGLE_DOCUMENTS_UI_PACKAGE = "com.google.android.documentsui"
+    private const val TABLE_CUSTOMERS = "customers"
+    private const val TABLE_ORDERS = "orders"
+    private const val TABLE_ORDER_ITEMS = "order_items"
+    private const val TABLE_ACCOUNT_ENTRIES = "account_entries"
+    private const val TABLE_PAYMENTS = "payments"
+    private const val TABLE_PAYMENT_RECEIPTS = "payment_receipts"
+    private const val TABLE_PAYMENT_ALLOCATIONS = "payment_allocations"
+    private const val TABLE_HELPER_NOTES = "helper_notes"
 
     private val REQUIRED_ENTRIES =
         setOf(
@@ -121,18 +130,12 @@ object BackupManager {
     ): BackupResult {
         val prefs = BackupPreferences(context)
         val state = prefs.readState()
-        if (state.targetType == BackupTargetType.SafDirectory) {
-            val now = System.currentTimeMillis()
-            val message = "Folder backup is not supported. Choose a backup file."
-            prefs.setLastResult(BackupStatus.Failed, message, now)
-            return BackupResult(success = false, message = message)
-        }
         if (!force && !state.autoEnabled) {
             return BackupResult(success = false, message = "Automatic backup disabled")
         }
 
         val now = System.currentTimeMillis()
-        val fileName = backupFileName(now)
+        val fileName = backupFileNameForTarget(state.targetType, now)
 
         return try {
             progress?.invoke(5, DEFAULT_STAGE)
@@ -188,7 +191,7 @@ object BackupManager {
             withContext(Dispatchers.IO) {
                 when (state.targetType) {
                     BackupTargetType.AppPrivate -> pruneOldAppBackups(context)
-                    BackupTargetType.SafDirectory -> pruneOldSafBackups(context, state.targetUri)
+                    BackupTargetType.SafDirectory -> pruneSafBackupsExcept(context, state.targetUri, writeResult)
                     BackupTargetType.SafFile -> Unit
                 }
             }
@@ -495,10 +498,20 @@ object BackupManager {
     }
 
     internal fun sha256HexForTest(raw: String): String = sha256Hex(raw.toByteArray(Charsets.UTF_8))
+    internal fun backupFileNameForTargetForTest(targetType: BackupTargetType, timestamp: Long): String =
+        backupFileNameForTarget(targetType, timestamp)
 
     private fun backupFileName(timestamp: Long): String {
         val formatter = SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US)
         return "oms-backup-${formatter.format(Date(timestamp))}$BACKUP_FILE_EXTENSION"
+    }
+
+    private fun backupFileNameForTarget(targetType: BackupTargetType, timestamp: Long): String {
+        return when (targetType) {
+            BackupTargetType.SafDirectory -> SAF_DIRECTORY_ROLLING_FILE_NAME
+            BackupTargetType.AppPrivate,
+            BackupTargetType.SafFile -> backupFileName(timestamp)
+        }
     }
 
     private fun ensureAppPrivateDir(context: Context): File? {
@@ -609,6 +622,16 @@ object BackupManager {
         backups.drop(MAX_SAF_DIRECTORY_BACKUPS).forEach { it.delete() }
     }
 
+    private fun pruneSafBackupsExcept(context: Context, treeUriString: String?, keepName: String) {
+        val treeUri = treeUriString?.toUri() ?: return
+        val tree = DocumentFile.fromTreeUri(context, treeUri) ?: return
+        val keep = keepName.trim()
+        if (keep.isEmpty()) return
+        listSafBackups(tree)
+            .filterNot { file -> (file.name ?: "").trim() == keep }
+            .forEach { it.delete() }
+    }
+
     suspend fun buildRestorePreview(context: Context, uriString: String?): RestorePreview {
         val state = BackupPreferences(context).readState()
         val sourceName =
@@ -672,9 +695,13 @@ object BackupManager {
                     helperNotes = database.helperNoteDao().getAll()
                 )
             }
+        val exportCounts = snapshot.toExportCounts()
 
         val payloadEntries = linkedMapOf<String, ByteArray>()
-        payloadEntries[ENTRY_METADATA] = buildMetadata(exportedAt, currentDbVersion).toString().toByteArray(Charsets.UTF_8)
+        payloadEntries[ENTRY_METADATA] =
+            buildMetadata(exportedAt, currentDbVersion, exportCounts)
+                .toString()
+                .toByteArray(Charsets.UTF_8)
         payloadEntries[ENTRY_CUSTOMERS] = customersToJson(snapshot.customers).toString().toByteArray(Charsets.UTF_8)
         payloadEntries[ENTRY_ORDERS] = ordersToJson(snapshot.orders).toString().toByteArray(Charsets.UTF_8)
         payloadEntries[ENTRY_ORDER_ITEMS] = orderItemsToJson(snapshot.orderItems).toString().toByteArray(Charsets.UTF_8)
@@ -699,12 +726,17 @@ object BackupManager {
         return BackupArchive(bytes = zippedBytes, sha256 = sha256Hex(zippedBytes))
     }
 
-    private fun buildMetadata(exportedAt: Long, dbVersion: Int): JSONObject {
+    private fun buildMetadata(exportedAt: Long, dbVersion: Int, exportCounts: Map<String, Int>): JSONObject {
+        val countsJson = JSONObject()
+        exportCounts.forEach { (entryName, count) ->
+            countsJson.put(entryName, count)
+        }
         return JSONObject()
             .put("exportedAt", exportedAt)
             .put("appVersionName", BuildConfig.VERSION_NAME)
             .put("appVersionCode", BuildConfig.VERSION_CODE)
             .put("dbVersion", dbVersion)
+            .put("counts", countsJson)
     }
 
     private fun buildManifest(
@@ -1120,6 +1152,17 @@ object BackupManager {
             if (receipts.isNotEmpty()) receipts else legacyMpesaToReceipts(legacyMpesa)
         val resolvedAllocations =
             if (allocations.isNotEmpty()) allocations else legacyMpesaToAllocations(legacyMpesa)
+        val expectedPersistedCounts =
+            PersistedTableCounts(
+                customers = customers.size,
+                orders = orders.size,
+                orderItems = orderItems.size,
+                accountEntries = accountEntries.size,
+                payments = payments.size,
+                paymentReceipts = resolvedReceipts.size,
+                paymentAllocations = resolvedAllocations.size,
+                helperNotes = helperNotes.size
+            )
 
         progress?.invoke(70, "Restoring data")
         database.withTransaction {
@@ -1132,6 +1175,7 @@ object BackupManager {
             database.paymentReceiptDao().insertAll(resolvedReceipts)
             database.paymentAllocationDao().insertAll(resolvedAllocations)
             database.helperNoteDao().insertAll(helperNotes)
+            verifyRestoredTableCounts(database, expectedPersistedCounts)
         }
         progress?.invoke(95, "Finalizing")
     }
@@ -1179,13 +1223,138 @@ object BackupManager {
                 parseArrayStrict(textEntries.getValue(entryName), entryName)
             }
 
+        metadata.optJSONObject("counts")?.let { counts ->
+            verifyMetadataCounts(counts = counts, textEntries = textEntries)
+        }
+
         if (rawEntries.containsKey(ENTRY_MANIFEST)) {
             verifyManifest(rawEntries, textEntries.getValue(ENTRY_MANIFEST))
         } else if (manifestPolicy == RestoreManifestPolicy.Strict) {
             throw IllegalArgumentException("Backup manifest is required in strict mode")
         }
 
+        val customers = parseCustomers(textEntries[ENTRY_CUSTOMERS])
+        val orders = parseOrders(textEntries[ENTRY_ORDERS])
+        val orderItems = parseOrderItems(textEntries[ENTRY_ORDER_ITEMS])
+        val accountEntries = parseAccountEntries(textEntries[ENTRY_ACCOUNT_ENTRIES])
+        val payments = parsePayments(textEntries[ENTRY_PAYMENTS])
+        val receipts = parsePaymentReceipts(textEntries[ENTRY_PAYMENT_RECEIPTS])
+        val allocations = parsePaymentAllocations(textEntries[ENTRY_PAYMENT_ALLOCATIONS])
+        val helperNotes = parseHelperNotes(textEntries[ENTRY_HELPER_NOTES])
+        val legacyMpesa = parseLegacyMpesaTransactions(textEntries[ENTRY_LEGACY_MPESA])
+        val resolvedReceipts = if (receipts.isNotEmpty()) receipts else legacyMpesaToReceipts(legacyMpesa)
+        val resolvedAllocations =
+            if (allocations.isNotEmpty()) allocations else legacyMpesaToAllocations(legacyMpesa)
+        validateRecordGraph(
+            customers = customers,
+            orders = orders,
+            orderItems = orderItems,
+            accountEntries = accountEntries,
+            payments = payments,
+            receipts = resolvedReceipts,
+            allocations = resolvedAllocations,
+            helperNotes = helperNotes
+        )
+
         return textEntries
+    }
+
+    private fun verifyMetadataCounts(counts: JSONObject, textEntries: Map<String, String>) {
+        val keys = counts.keys()
+        while (keys.hasNext()) {
+            val entryName = keys.next().trim()
+            if (!ARRAY_ENTRIES.contains(entryName)) {
+                throw IllegalArgumentException("Backup metadata count references unsupported entry: $entryName")
+            }
+            val expectedCount = counts.optInt(entryName, -1)
+            if (expectedCount < 0) {
+                throw IllegalArgumentException("Backup metadata has invalid count for $entryName")
+            }
+            val payload =
+                textEntries[entryName]
+                    ?: throw IllegalArgumentException("Backup metadata references missing entry: $entryName")
+            val actualCount =
+                runCatching { JSONArray(payload).length() }
+                    .getOrElse { throw IllegalArgumentException("Backup payload is invalid for $entryName") }
+            if (actualCount != expectedCount) {
+                throw IllegalArgumentException(
+                    "Backup metadata count mismatch for $entryName (expected $expectedCount, found $actualCount)"
+                )
+            }
+        }
+    }
+
+    private fun validateRecordGraph(
+        customers: List<CustomerEntity>,
+        orders: List<OrderEntity>,
+        orderItems: List<OrderItemEntity>,
+        accountEntries: List<AccountEntryEntity>,
+        payments: List<PaymentEntity>,
+        receipts: List<PaymentReceiptEntity>,
+        allocations: List<PaymentAllocationEntity>,
+        helperNotes: List<HelperNoteEntity>
+    ) {
+        validatePositiveUniqueIds("customers", customers.map { it.id })
+        validatePositiveUniqueIds("orders", orders.map { it.id })
+        validatePositiveUniqueIds("order_items", orderItems.map { it.id })
+        validatePositiveUniqueIds("account_entries", accountEntries.map { it.id })
+        validatePositiveUniqueIds("payments", payments.map { it.id })
+        validatePositiveUniqueIds("payment_receipts", receipts.map { it.id })
+        validatePositiveUniqueIds("payment_allocations", allocations.map { it.id })
+        validatePositiveUniqueIds("helper_notes", helperNotes.map { it.id })
+
+        val customerIds = customers.map { it.id }.toHashSet()
+        val orderIds = orders.map { it.id }.toHashSet()
+        val accountEntryIds = accountEntries.map { it.id }.toHashSet()
+        val receiptIds = receipts.map { it.id }.toHashSet()
+
+        ensureReferencesExist("orders.customerId", orders.mapNotNull { it.customerId }, customerIds)
+        ensureReferencesExist("order_items.orderId", orderItems.map { it.orderId }, orderIds)
+        ensureReferencesExist("payments.orderId", payments.map { it.orderId }, orderIds)
+        ensureReferencesExist("account_entries.orderId", accountEntries.mapNotNull { it.orderId }, orderIds)
+        ensureReferencesExist("account_entries.customerId", accountEntries.mapNotNull { it.customerId }, customerIds)
+        ensureReferencesExist("payment_receipts.customerId", receipts.mapNotNull { it.customerId }, customerIds)
+        ensureReferencesExist("payment_allocations.receiptId", allocations.map { it.receiptId }, receiptIds)
+        ensureReferencesExist("payment_allocations.orderId", allocations.mapNotNull { it.orderId }, orderIds)
+        ensureReferencesExist("payment_allocations.customerId", allocations.mapNotNull { it.customerId }, customerIds)
+        ensureReferencesExist(
+            "payment_allocations.accountEntryId",
+            allocations.mapNotNull { it.accountEntryId },
+            accountEntryIds
+        )
+        ensureReferencesExist(
+            "payment_allocations.reversalEntryId",
+            allocations.mapNotNull { it.reversalEntryId },
+            accountEntryIds
+        )
+        ensureReferencesExist("helper_notes.linkedCustomerId", helperNotes.mapNotNull { it.linkedCustomerId }, customerIds)
+    }
+
+    private fun validatePositiveUniqueIds(label: String, ids: List<Long>) {
+        val nonPositive = ids.filter { it <= 0L }
+        if (nonPositive.isNotEmpty()) {
+            val sample = nonPositive.take(5).joinToString()
+            throw IllegalArgumentException("Backup $label contains non-positive ids (examples: $sample)")
+        }
+        val duplicates =
+            ids.groupingBy { it }
+                .eachCount()
+                .filterValues { it > 1 }
+                .keys
+                .take(5)
+        if (duplicates.isNotEmpty()) {
+            throw IllegalArgumentException(
+                "Backup $label contains duplicate ids: ${duplicates.joinToString()}"
+            )
+        }
+    }
+
+    private fun ensureReferencesExist(label: String, refs: List<Long>, targets: Set<Long>) {
+        if (refs.isEmpty()) return
+        val missing = refs.filterNot { targets.contains(it) }.distinct().take(5)
+        if (missing.isNotEmpty()) {
+            throw IllegalArgumentException("Backup $label references missing ids: ${missing.joinToString()}")
+        }
     }
 
     private fun verifyManifest(rawEntries: Map<String, ByteArray>, manifestPayload: String) {
@@ -1239,6 +1408,32 @@ object BackupManager {
     private fun parseArrayStrict(payload: String, entryName: String) {
         runCatching { JSONArray(payload) }
             .getOrElse { throw IllegalArgumentException("Backup payload is invalid for $entryName") }
+    }
+
+    private fun verifyRestoredTableCounts(database: AppDatabase, expected: PersistedTableCounts) {
+        verifyTableCount(database, TABLE_CUSTOMERS, expected.customers)
+        verifyTableCount(database, TABLE_ORDERS, expected.orders)
+        verifyTableCount(database, TABLE_ORDER_ITEMS, expected.orderItems)
+        verifyTableCount(database, TABLE_ACCOUNT_ENTRIES, expected.accountEntries)
+        verifyTableCount(database, TABLE_PAYMENTS, expected.payments)
+        verifyTableCount(database, TABLE_PAYMENT_RECEIPTS, expected.paymentReceipts)
+        verifyTableCount(database, TABLE_PAYMENT_ALLOCATIONS, expected.paymentAllocations)
+        verifyTableCount(database, TABLE_HELPER_NOTES, expected.helperNotes)
+    }
+
+    private fun verifyTableCount(database: AppDatabase, tableName: String, expected: Int) {
+        val query = "SELECT COUNT(*) FROM $tableName"
+        val actual =
+            database.openHelper.writableDatabase
+                .query(query)
+                .use { cursor ->
+                    if (cursor.moveToFirst()) cursor.getInt(0) else 0
+                }
+        if (actual != expected) {
+            throw IllegalStateException(
+                "Restore verification failed for $tableName (expected $expected rows, found $actual)"
+            )
+        }
     }
 
     private fun readZipEntries(
@@ -1871,7 +2066,20 @@ object BackupManager {
         val paymentReceipts: List<PaymentReceiptEntity>,
         val paymentAllocations: List<PaymentAllocationEntity>,
         val helperNotes: List<HelperNoteEntity>
-    )
+    ) {
+        fun toExportCounts(): Map<String, Int> {
+            return linkedMapOf(
+                ENTRY_CUSTOMERS to customers.size,
+                ENTRY_ORDERS to orders.size,
+                ENTRY_ORDER_ITEMS to orderItems.size,
+                ENTRY_ACCOUNT_ENTRIES to accountEntries.size,
+                ENTRY_PAYMENTS to payments.size,
+                ENTRY_PAYMENT_RECEIPTS to paymentReceipts.size,
+                ENTRY_PAYMENT_ALLOCATIONS to paymentAllocations.size,
+                ENTRY_HELPER_NOTES to helperNotes.size
+            )
+        }
+    }
 
     private data class BackupArchive(
         val bytes: ByteArray,
@@ -1903,5 +2111,16 @@ object BackupManager {
         val customerId: Long?,
         val orderId: Long?,
         val accountEntryId: Long?
+    )
+
+    private data class PersistedTableCounts(
+        val customers: Int,
+        val orders: Int,
+        val orderItems: Int,
+        val accountEntries: Int,
+        val payments: Int,
+        val paymentReceipts: Int,
+        val paymentAllocations: Int,
+        val helperNotes: Int
     )
 }

@@ -107,23 +107,14 @@ fun BackupSettingsScreen(onBack: () -> Unit) {
     val suggestedBackupFileName = "backup_latest.oms"
 
     val refreshState: suspend () -> Unit = {
-        val base = prefs.readState()
-        val normalized =
-            if (base.targetType == BackupTargetType.SafDirectory) {
-                prefs.setAutoEnabled(false)
-                prefs.setTargetType(BackupTargetType.SafFile)
-                prefs.clearSafTargetSelection()
-                prefs.readState()
-            } else {
-                base
-            }
-        state = normalized.copy(targetHealth = BackupManager.evaluateTargetHealth(context, normalized))
+        val latestState = prefs.readState()
+        state = latestState.copy(targetHealth = BackupManager.evaluateTargetHealth(context, latestState))
         latestBackupName =
             withContext(Dispatchers.IO) {
                 BackupManager.findLatestBackupName(
                     context = context,
-                    targetType = normalized.targetType,
-                    targetUri = normalized.targetUri
+                    targetType = latestState.targetType,
+                    targetUri = latestState.targetUri
                 )
             }
     }
@@ -292,17 +283,21 @@ fun BackupSettingsScreen(onBack: () -> Unit) {
             BackupTargetHealth.Unavailable -> unavailableHint
         }
 
-    val fileReady =
-        state.targetType == BackupTargetType.SafFile &&
-            !state.targetUri.isNullOrBlank() &&
-            state.targetHealth == BackupTargetHealth.Healthy
+    val targetReady =
+        when (state.targetType) {
+            BackupTargetType.AppPrivate -> true
+            BackupTargetType.SafFile,
+            BackupTargetType.SafDirectory ->
+                !state.targetUri.isNullOrBlank() &&
+                    state.targetHealth == BackupTargetHealth.Healthy
+        }
     val lastBackupTime = state.lastBackupTime
     val lastBackupLabel =
         lastBackupTime?.let { formatTimestamp(it) } ?: stringResource(R.string.backup_status_never)
     val nextBackupLabel =
         when {
             !state.autoEnabled -> stringResource(R.string.backup_next_scheduled_off)
-            !fileReady -> stringResource(R.string.backup_next_scheduled_waiting)
+            !targetReady -> stringResource(R.string.backup_next_scheduled_waiting)
             lastBackupTime != null ->
                 formatTimestamp(
                     lastBackupTime + TimeUnit.HOURS.toMillis(BackupScheduler.DAILY_INTERVAL_HOURS)
@@ -395,7 +390,7 @@ fun BackupSettingsScreen(onBack: () -> Unit) {
                     ) {
                         Text(
                             text =
-                                if (fileReady) {
+                                if (state.targetType == BackupTargetType.SafFile && targetReady) {
                                     stringResource(R.string.backup_change_file)
                                 } else {
                                     stringResource(R.string.backup_choose_file)
@@ -404,7 +399,10 @@ fun BackupSettingsScreen(onBack: () -> Unit) {
                     }
                     OutlinedButton(
                         onClick = {
-                            if (state.targetType != BackupTargetType.SafFile || state.targetUri.isNullOrBlank()) {
+                            val canProbe =
+                                (state.targetType == BackupTargetType.SafFile || state.targetType == BackupTargetType.SafDirectory) &&
+                                    !state.targetUri.isNullOrBlank()
+                            if (!canProbe) {
                                 scope.launch { uiEvents.showSnackbar(pickFileFirstMessage) }
                                 return@OutlinedButton
                             }
@@ -471,7 +469,7 @@ fun BackupSettingsScreen(onBack: () -> Unit) {
                         Switch(
                             checked = state.autoEnabled,
                             onCheckedChange = { enabled ->
-                                if (enabled && !fileReady) {
+                                if (enabled && !targetReady) {
                                     pendingSaveAction = SaveActionAfterPick.EnableAuto
                                     scope.launch { uiEvents.showSnackbar(pickFileFirstMessage) }
                                     saveFilePicker.launch(suggestedBackupFileName)
@@ -498,7 +496,7 @@ fun BackupSettingsScreen(onBack: () -> Unit) {
                     }
                     Button(
                         onClick = {
-                            if (!fileReady) {
+                            if (!targetReady) {
                                 pendingSaveAction = SaveActionAfterPick.RunBackupNow
                                 scope.launch { uiEvents.showSnackbar(pickFileFirstMessage) }
                                 saveFilePicker.launch(suggestedBackupFileName)
@@ -513,7 +511,7 @@ fun BackupSettingsScreen(onBack: () -> Unit) {
                     ) {
                         Text(
                             text =
-                                if (fileReady) {
+                                if (targetReady) {
                                     stringResource(R.string.backup_run_now)
                                 } else {
                                     stringResource(R.string.backup_run_choose_then_run)

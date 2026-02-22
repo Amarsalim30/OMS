@@ -523,7 +523,7 @@
     <string name="backup_value_no">No</string>
     <string name="backup_value_unknown">Unknown</string>
     <string name="backup_storage_section_title">Storage location</string>
-    <string name="backup_storage_section_subtitle">Save backup file to Drive using the system file picker.</string>
+    <string name="backup_storage_section_subtitle">Save backup to Drive; each run updates the same selected backup file.</string>
     <string name="backup_storage_file_label">Backup file</string>
     <string name="backup_storage_folder_label">Folder</string>
     <string name="backup_storage_provider_label">Provider</string>
