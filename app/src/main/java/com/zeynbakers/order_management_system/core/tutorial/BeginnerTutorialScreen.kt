@@ -11,7 +11,9 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ListAlt
+import androidx.compose.material.icons.automirrored.filled.Notes
 import androidx.compose.material.icons.filled.CalendarToday
+import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.Settings
@@ -43,6 +45,8 @@ fun BeginnerTutorialScreen(
     onOpenOrders: () -> Unit,
     onOpenCustomers: () -> Unit,
     onOpenMoney: () -> Unit,
+    onOpenNotesHistory: () -> Unit,
+    onOpenHelperSettings: () -> Unit,
     onOpenBackup: () -> Unit,
     onOpenNotifications: () -> Unit
 ) {
@@ -118,14 +122,32 @@ fun BeginnerTutorialScreen(
                 onActionClick = onOpenMoney
             )
 
+            TutorialStepCard(
+                step = 5,
+                title = stringResource(R.string.tutorial_step5_title),
+                body = stringResource(R.string.tutorial_step5_body),
+                actionLabel = stringResource(R.string.tutorial_action_open_notes_history),
+                actionIcon = Icons.AutoMirrored.Filled.Notes,
+                onActionClick = onOpenNotesHistory
+            )
+
+            TutorialStepCard(
+                step = 6,
+                title = stringResource(R.string.tutorial_step6_title),
+                body = stringResource(R.string.tutorial_step6_body),
+                actionLabel = stringResource(R.string.tutorial_action_open_helper_settings),
+                actionIcon = Icons.Filled.Mic,
+                onActionClick = onOpenHelperSettings
+            )
+
             AppCard {
                 Text(
-                    text = stringResource(R.string.tutorial_step5_title),
+                    text = stringResource(R.string.tutorial_step7_title),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.SemiBold
                 )
                 Text(
-                    text = stringResource(R.string.tutorial_step5_body),
+                    text = stringResource(R.string.tutorial_step7_body),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

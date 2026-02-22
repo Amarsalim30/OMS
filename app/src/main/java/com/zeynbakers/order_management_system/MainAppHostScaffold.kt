@@ -79,7 +79,8 @@ internal fun MainAppHostScaffold(
                 currentRoute != AppRoutes.MicrophonePermissionPrimer &&
                 currentRoute != AppRoutes.OverlayPermissionPrimer &&
                 currentRoute != AppRoutes.FirstRunTutorial &&
-                currentRoute != AppRoutes.CalendarTutorial
+                currentRoute != AppRoutes.CalendarTutorial &&
+                currentRoute != AppRoutes.Tutorial
         val windowSizeClass = calculateWindowSizeClass(activity)
         val topLevelDestinations = listOf(
             TopLevelDestination(
@@ -127,7 +128,9 @@ internal fun MainAppHostScaffold(
             },
             MoreAction(stringResource(R.string.more_tutorial), Icons.Filled.School) {
                 onShowMoreSheetChange(false)
-                navigateTopLevel(navController, AppRoutes.CalendarTutorial, resetToRoot = true)
+                navController.navigate(AppRoutes.Tutorial) {
+                    launchSingleTop = true
+                }
             }
         )
 

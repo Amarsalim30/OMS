@@ -50,6 +50,8 @@ import com.zeynbakers.order_management_system.accounting.ui.PaymentIntakeViewMod
 import com.zeynbakers.order_management_system.accounting.ui.PaymentHistoryFilter
 import com.zeynbakers.order_management_system.core.backup.BackupScheduler
 import com.zeynbakers.order_management_system.core.db.DatabaseProvider
+import com.zeynbakers.order_management_system.core.helper.HelperCaptureActivity
+import com.zeynbakers.order_management_system.core.helper.HelperCaptureMode
 import com.zeynbakers.order_management_system.core.helper.HelperOverlayController
 import com.zeynbakers.order_management_system.core.helper.HelperPreferences
 import com.zeynbakers.order_management_system.core.helper.HelperSettingsState
@@ -340,6 +342,30 @@ internal fun MainAppContent(
                             navController.navigate(AppRoutes.Backup) {
                                 launchSingleTop = true
                             }
+                        }
+                        AppIntents.ACTION_SHOW_NOTES_HISTORY -> {
+                            navController.navigate(AppRoutes.NotesHistory) {
+                                launchSingleTop = true
+                            }
+                        }
+                        AppIntents.ACTION_CAPTURE_VOICE_NOTE -> {
+                            val captureIntent =
+                                Intent(context, HelperCaptureActivity::class.java).apply {
+                                    putExtra(HelperCaptureActivity.EXTRA_MODE, HelperCaptureMode.VoiceNote.wireValue)
+                                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                }
+                            context.startActivity(captureIntent)
+                        }
+                        AppIntents.ACTION_CAPTURE_VOICE_CALCULATOR -> {
+                            val captureIntent =
+                                Intent(context, HelperCaptureActivity::class.java).apply {
+                                    putExtra(
+                                        HelperCaptureActivity.EXTRA_MODE,
+                                        HelperCaptureMode.VoiceCalculator.wireValue
+                                    )
+                                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                }
+                            context.startActivity(captureIntent)
                         }
                         Intent.ACTION_SEND,
                         Intent.ACTION_SEND_MULTIPLE -> {

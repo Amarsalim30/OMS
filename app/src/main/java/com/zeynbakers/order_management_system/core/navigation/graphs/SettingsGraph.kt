@@ -71,6 +71,16 @@ internal fun NavGraphBuilder.settingsGraph(
             onOpenMoney = {
                 navigateTopLevel(navController, AppRoutes.Money, resetToRoot = true)
             },
+            onOpenNotesHistory = {
+                navController.navigate(AppRoutes.NotesHistory) {
+                    launchSingleTop = true
+                }
+            },
+            onOpenHelperSettings = {
+                navController.navigate(AppRoutes.HelperSettings) {
+                    launchSingleTop = true
+                }
+            },
             onOpenBackup = {
                 navController.navigate(AppRoutes.Backup)
             },
