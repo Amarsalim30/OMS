@@ -19,20 +19,23 @@ internal fun launchCustomerMessage(context: Context, phone: String) {
                 Intent(Intent.ACTION_VIEW, waUri).setPackage("com.whatsapp.w4b"),
                 Intent(Intent.ACTION_VIEW, waUri)
             )
-        waCandidates.firstOrNull { context.canHandle(it) }?.let { intent ->
-            context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-            return
+        waCandidates.forEach { intent ->
+            if (context.tryStart(intent)) {
+                return
+            }
         }
     }
 
-    val encoded = Uri.encode(targetNumber)
     val smsCandidates =
         listOf(
-            Intent(Intent.ACTION_SENDTO, "smsto:$encoded".toUri()),
-            Intent(Intent.ACTION_SENDTO, "sms:$encoded".toUri())
+            Intent(Intent.ACTION_SENDTO, Uri.fromParts("smsto", targetNumber, null)),
+            Intent(Intent.ACTION_SENDTO, Uri.fromParts("sms", targetNumber, null)),
+            Intent(Intent.ACTION_VIEW, Uri.fromParts("sms", targetNumber, null))
         )
-    smsCandidates.firstOrNull { context.canHandle(it) }?.let { intent ->
-        context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+    smsCandidates.forEach { intent ->
+        if (context.tryStart(intent)) {
+            return
+        }
     }
 }
 
@@ -45,6 +48,10 @@ internal fun resolveMessagingNumber(rawPhone: String): String? {
 
 internal fun whatsappDigits(number: String): String = number.filter { it.isDigit() }
 
-private fun Context.canHandle(intent: Intent): Boolean {
-    return intent.resolveActivity(packageManager) != null
+private fun Context.tryStart(intent: Intent): Boolean {
+    return runCatching {
+            startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            true
+        }
+        .getOrElse { false }
 }
