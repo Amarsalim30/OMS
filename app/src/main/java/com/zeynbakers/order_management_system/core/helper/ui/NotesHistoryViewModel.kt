@@ -98,4 +98,12 @@ class NotesHistoryViewModel(private val database: AppDatabase) : ViewModel() {
             )
         }
     }
+
+    fun edit(noteId: Long, text: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val existing = database.helperNoteDao().getById(noteId) ?: return@launch
+            val updated = buildEditedHelperNote(existing, text) ?: return@launch
+            database.helperNoteDao().update(updated)
+        }
+    }
 }

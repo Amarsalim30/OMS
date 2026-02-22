@@ -64,11 +64,25 @@ This issue covers one focused feature set:
 ### Floating helper panel
 - Collapsed draggable bubble.
 - Tap opens compact panel with 2 actions only.
+- Choosing an action opens a small inline capture card near the bubble (not a full-screen screen).
+- Full-screen capture activity is fallback-only when overlay is unavailable or fallback-only mode is enabled.
+- Bubble supports theme presets (`Brand`, `Neutral`) with clear state colors:
+  - idle
+  - listening
+  - result
+  - error
+- Intelligent hide behavior:
+  - snap to nearest edge after drag
+  - auto-peek after idle delay
+  - keep a visible edge handle (never fully hidden)
+  - do not auto-hide while listening or showing result
 - No extra quick actions in MVP.
 
 ### UX behavior standards for non-technical users (research-informed)
 - Keep one primary action visible at a time:
   - helper panel only shows `Voice Calculator` and `Voice Note`.
+- Keep helper visible but unobtrusive:
+  - edge-peek should expose enough handle to re-open quickly.
 - Ask permissions in context (when user taps helper setup or tries first capture), not at app launch.
 - Never block the whole app when permission is denied:
   - show clear feature-level fallback state and let user continue normal OMS workflows.
@@ -122,12 +136,12 @@ This issue covers one focused feature set:
 - `Voice Note` happy path:
   1. Tap helper -> `Voice Note`
   2. Speak
-  3. Preview text + detected phone/amount
+  3. Preview text + detected phone/amount in the compact floating card
   4. `Save` (default) or `Try again`
 - `Voice Calculator` happy path:
   1. Tap helper -> `Voice Calculator`
   2. Speak expression
-  3. Show expression + result
+  3. Show expression + result in the compact floating card
   4. Primary CTA: `Copy result`; secondary CTA: `Save to Notes`
 - Error behavior:
   - show short plain-language error and one retry action.
@@ -285,13 +299,14 @@ Recommended indexes:
 Required declarations for targetSdk 36:
 - `android.permission.SYSTEM_ALERT_WINDOW` (special app access flow).
 - `android.permission.FOREGROUND_SERVICE`.
-- `android.permission.FOREGROUND_SERVICE_MICROPHONE` (Android 14+ foreground service type permission).
-- Service declaration includes `android:foregroundServiceType="microphone"` for helper capture service.
+- `android.permission.FOREGROUND_SERVICE_DATA_SYNC`.
+- Service declaration includes `android:foregroundServiceType="dataSync"` for helper runtime service.
+- Keep `android.permission.RECORD_AUDIO` for explicit voice capture actions.
 
 Platform constraints to reflect in UX:
 - Special permission grant is done in Settings (not normal runtime dialog).
 - On Android 14+ foreground service types are mandatory and enforced.
-- Microphone foreground service is tied to while-in-use microphone constraints; do not auto-start from background without user action.
+- Voice capture should only start from explicit user action (bubble/panel tap), with graceful fallback when mic capture is blocked.
 - On Android 13+, `POST_NOTIFICATIONS` is not required to start FGS, but helper should still guide users if they want persistent notification visibility.
 
 ## Permission and onboarding integration plan
@@ -337,6 +352,9 @@ Add persisted keys in `OnboardingPreferences` for helper setup completion.
 ### Settings follow-up after onboarding
 - Add helper settings section under `More` path with:
   - enable/disable helper
+  - theme preset selection (`Brand`, `Neutral`)
+  - smart hide toggle and idle delay controls
+  - reset bubble position
   - permission status chips (mic, overlay)
   - retry/open settings actions
   - fallback mode toggles

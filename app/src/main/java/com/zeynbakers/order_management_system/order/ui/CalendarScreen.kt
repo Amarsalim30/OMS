@@ -35,7 +35,6 @@ import com.zeynbakers.order_management_system.core.util.formatKes
 import com.zeynbakers.order_management_system.core.util.normalizePickupTime
 import com.zeynbakers.order_management_system.core.ui.LocalAmountFieldRegistry
 import com.zeynbakers.order_management_system.core.ui.rememberCurrentDate
-import com.zeynbakers.order_management_system.core.ui.LocalVoiceCalcAccess
 import com.zeynbakers.order_management_system.core.ui.LocalVoiceOverlaySuppressed
 import com.zeynbakers.order_management_system.core.ui.LocalVoiceInputRouter
 import com.zeynbakers.order_management_system.core.ui.VoiceTarget
@@ -93,7 +92,6 @@ fun CalendarScreen(
     val calendarPrefs = remember { CalendarPreferences(context) }
     var weekStartPreference by remember { mutableStateOf(calendarPrefs.readWeekStart()) }
     val overlaySuppressed = LocalVoiceOverlaySuppressed.current
-    val voiceCalcAccess = LocalVoiceCalcAccess.current
     val voiceRouter = LocalVoiceInputRouter.current
     val scope = rememberCoroutineScope()
     var tutorialStep by remember(showInteractiveTutorial) {
@@ -632,9 +630,7 @@ fun CalendarScreen(
             saveButtonModifier =
                 Modifier.onGloballyPositioned { coordinates ->
                     saveButtonBounds = coordinates.boundsInRoot()
-                },
-            voiceHasPermission = voiceCalcAccess.hasPermission,
-            onRequestVoicePermission = voiceCalcAccess.onRequestPermission
+                }
         )
     }
 

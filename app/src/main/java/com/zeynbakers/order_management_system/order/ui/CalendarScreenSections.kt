@@ -119,7 +119,7 @@ internal fun CalendarTopAppBar(
                         textAlign = TextAlign.Center,
                         modifier = Modifier
                             .fillMaxSize()
-                            .padding(top = 5.dp)
+                            .padding(top = 7.dp)
                     )
                 }
             }

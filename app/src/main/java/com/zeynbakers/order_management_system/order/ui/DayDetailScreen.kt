@@ -52,7 +52,6 @@ import androidx.compose.ui.unit.dp
 import com.zeynbakers.order_management_system.R
 import com.zeynbakers.order_management_system.accounting.domain.ReceiptAllocation
 import com.zeynbakers.order_management_system.core.ui.LocalAmountFieldRegistry
-import com.zeynbakers.order_management_system.core.ui.LocalVoiceCalcAccess
 import com.zeynbakers.order_management_system.core.ui.LocalVoiceInputRouter
 import com.zeynbakers.order_management_system.core.ui.LocalVoiceOverlaySuppressed
 import com.zeynbakers.order_management_system.core.ui.components.AppFilterRow
@@ -115,7 +114,6 @@ fun DayDetailScreen(
     var deleteSelectedOrderId by remember { mutableStateOf<Long?>(null) }
     var deleteMoveFullReceipts by remember { mutableStateOf(true) }
     val amountRegistry = LocalAmountFieldRegistry.current
-    val voiceCalcAccess = LocalVoiceCalcAccess.current
     val overlaySuppressed = LocalVoiceOverlaySuppressed.current
     val voiceRouter = LocalVoiceInputRouter.current
     var orderFilter by rememberSaveable { mutableStateOf(DayOrderFilter.All) }
@@ -220,7 +218,7 @@ fun DayDetailScreen(
             remember(orders, orderFilter, orderPaidAmounts, searchQuery, customerNames) {
                 derivedStateOf {
                     val normalizedQuery = searchQuery.trim().lowercase()
-                    orders.filter { order ->
+                    val filtered = orders.filter { order ->
                         val paidAmount = orderPaidAmounts[order.id] ?: BigDecimal.ZERO
                         val matchesStatus =
                                 when (orderFilter) {
@@ -245,6 +243,7 @@ fun DayDetailScreen(
                         order.notes.lowercase().contains(normalizedQuery) ||
                                 customerLabel.contains(normalizedQuery)
                     }
+                    sortOrdersForPlanner(filtered)
                 }
             }
     val onBackClick = {
@@ -327,7 +326,7 @@ fun DayDetailScreen(
             }
     ) { padding ->
         LazyColumn(modifier = Modifier.padding(padding)) {
-            item { DaySummaryCard(date = date, dayTotal = dayTotal, stats = dayStats) }
+            item { DaySummaryCard(dayTotal = dayTotal, stats = dayStats) }
             if (orders.isNotEmpty()) {
                 item {
                     Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
@@ -524,7 +523,6 @@ fun DayDetailScreen(
             customerError = customerError,
             formatter = formatter,
             amountRegistry = amountRegistry,
-            voiceCalcAccess = voiceCalcAccess,
             voiceRouter = voiceRouter,
             onSaveOrder = onSaveOrder,
             onDraftChange = onDraftChange,

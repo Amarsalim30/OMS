@@ -30,7 +30,6 @@ import androidx.compose.ui.unit.dp
 import com.zeynbakers.order_management_system.R
 import com.zeynbakers.order_management_system.accounting.domain.ReceiptAllocation
 import com.zeynbakers.order_management_system.core.ui.AmountFieldRegistry
-import com.zeynbakers.order_management_system.core.ui.VoiceCalcAccess
 import com.zeynbakers.order_management_system.core.ui.VoiceInputRouter
 import com.zeynbakers.order_management_system.core.ui.VoiceTarget
 import com.zeynbakers.order_management_system.core.util.formatDateTime
@@ -61,7 +60,6 @@ internal fun DayOrderEditorDialog(
     customerError: String?,
     formatter: NumberFormat,
     amountRegistry: AmountFieldRegistry,
-    voiceCalcAccess: VoiceCalcAccess,
     voiceRouter: VoiceInputRouter,
     onSaveOrder: (String, BigDecimal, String, String, String?, Long?) -> Unit,
     onDraftChange: (OrderDraft?) -> Unit,
@@ -233,9 +231,7 @@ internal fun DayOrderEditorDialog(
         onTotalFocused = { setter ->
             amountRegistry.update(setter)
             voiceRouter.onFocusTarget(VoiceTarget.Total)
-        },
-        voiceHasPermission = voiceCalcAccess.hasPermission,
-        onRequestVoicePermission = voiceCalcAccess.onRequestPermission
+        }
     )
 }
 

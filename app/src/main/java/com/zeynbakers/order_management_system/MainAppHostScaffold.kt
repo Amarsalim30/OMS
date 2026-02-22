@@ -20,7 +20,6 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.windowsizeclass.ExperimentalMaterial3WindowSizeClassApi
 import androidx.compose.material3.windowsizeclass.calculateWindowSizeClass
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.MutableState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -32,7 +31,6 @@ import com.zeynbakers.order_management_system.core.navigation.AppRoutes
 import com.zeynbakers.order_management_system.core.ui.AppScaffold
 import com.zeynbakers.order_management_system.core.ui.MoreAction
 import com.zeynbakers.order_management_system.core.ui.TopLevelDestination
-import com.zeynbakers.order_management_system.core.ui.VoiceCalculatorOverlay
 import com.zeynbakers.order_management_system.customer.ui.CustomerAccountsViewModel
 import com.zeynbakers.order_management_system.order.ui.OrderCreditPrompt
 import com.zeynbakers.order_management_system.order.ui.OrderViewModel
@@ -63,9 +61,6 @@ internal fun MainAppHostScaffold(
     paymentIntakeViewModel: PaymentIntakeViewModel,
     paymentHistoryViewModel: PaymentIntakeHistoryViewModel,
     appSnackbarHostState: SnackbarHostState,
-    hasRecordPermission: Boolean,
-    onRequestRecordPermission: () -> Unit,
-    overlaySuppressed: MutableState<Boolean>,
     pendingCreditPrompt: OrderCreditPrompt?,
     onDismissCreditPrompt: () -> Unit,
     onApplyCreditPrompt: (OrderCreditPrompt) -> Unit,
@@ -110,29 +105,29 @@ internal fun MainAppHostScaffold(
         )
 
         val moreActions = listOf(
-            MoreAction(stringResource(R.string.more_tutorial), Icons.Filled.School) {
+            MoreAction(stringResource(R.string.more_floating_helper), Icons.Filled.Mic) {
                 onShowMoreSheetChange(false)
-                navigateTopLevel(navController, AppRoutes.CalendarTutorial, resetToRoot = true)
-            },
-            MoreAction(stringResource(R.string.more_backup_restore), Icons.Filled.Settings) {
-                onShowMoreSheetChange(false)
-                navController.navigate(AppRoutes.Backup)
-            },
-            MoreAction(stringResource(R.string.more_notifications), Icons.Filled.Notifications) {
-                onShowMoreSheetChange(false)
-                navController.navigate(AppRoutes.Notifications)
+                navController.navigate(AppRoutes.HelperSettings)
             },
             MoreAction(stringResource(R.string.more_notes_history), Icons.AutoMirrored.Filled.Notes) {
                 onShowMoreSheetChange(false)
                 navController.navigate(AppRoutes.NotesHistory)
             },
-            MoreAction(stringResource(R.string.more_floating_helper), Icons.Filled.Mic) {
+            MoreAction(stringResource(R.string.more_notifications), Icons.Filled.Notifications) {
                 onShowMoreSheetChange(false)
-                navController.navigate(AppRoutes.HelperSettings)
+                navController.navigate(AppRoutes.Notifications)
             },
             MoreAction(stringResource(R.string.more_import_contacts), Icons.Filled.PersonAdd) {
                 onShowMoreSheetChange(false)
                 openImportContacts()
+            },
+            MoreAction(stringResource(R.string.more_backup_restore), Icons.Filled.Settings) {
+                onShowMoreSheetChange(false)
+                navController.navigate(AppRoutes.Backup)
+            },
+            MoreAction(stringResource(R.string.more_tutorial), Icons.Filled.School) {
+                onShowMoreSheetChange(false)
+                navigateTopLevel(navController, AppRoutes.CalendarTutorial, resetToRoot = true)
             }
         )
 
@@ -174,13 +169,6 @@ internal fun MainAppHostScaffold(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .padding(horizontal = 12.dp, vertical = 10.dp)
-        )
-
-        VoiceCalculatorOverlay(
-            hasPermission = hasRecordPermission,
-            onRequestPermission = onRequestRecordPermission,
-            isSuppressed = overlaySuppressed.value,
-            defaultIdleYDp = 72.dp
         )
 
         pendingCreditPrompt?.let { prompt ->

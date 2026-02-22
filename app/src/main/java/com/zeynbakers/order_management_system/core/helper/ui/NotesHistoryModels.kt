@@ -1,8 +1,10 @@
 package com.zeynbakers.order_management_system.core.helper.ui
 
 import com.zeynbakers.order_management_system.core.helper.data.HelperNoteClassifier
+import com.zeynbakers.order_management_system.core.helper.data.HelperNoteEntity
 import com.zeynbakers.order_management_system.core.helper.data.HelperNoteType
 import com.zeynbakers.order_management_system.core.helper.data.HelperNoteWithCustomer
+import com.zeynbakers.order_management_system.core.util.parseVoiceMath
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -116,4 +118,46 @@ private fun parseDateOrNull(raw: String): LocalDate? {
     val value = raw.trim()
     if (value.isBlank()) return null
     return runCatching { LocalDate.parse(value) }.getOrNull()
+}
+
+internal fun buildEditedHelperNote(
+    existing: HelperNoteEntity,
+    editedText: String,
+    nowMillis: Long = System.currentTimeMillis()
+): HelperNoteEntity? {
+    val trimmed = editedText.trim()
+    if (trimmed.isBlank()) return null
+
+    if (existing.type == HelperNoteType.CALCULATOR) {
+        val parsed = parseVoiceMath(trimmed)
+        if (parsed != null) {
+            val resultText = parsed.value.stripTrailingZeros().toPlainString()
+            return existing.copy(
+                updatedAt = nowMillis,
+                type = HelperNoteType.CALCULATOR,
+                rawTranscript = trimmed,
+                displayText = trimmed,
+                calculatorExpression = trimmed,
+                calculatorResult = resultText,
+                detectedPhone = null,
+                detectedPhoneDigits = null,
+                detectedAmountRaw = resultText,
+                detectedAmountNormalized = HelperNoteClassifier.normalizeAmountForSearch(resultText)
+            )
+        }
+    }
+
+    val detection = HelperNoteClassifier.classifyVoiceTranscript(trimmed)
+    return existing.copy(
+        updatedAt = nowMillis,
+        type = detection.type,
+        rawTranscript = trimmed,
+        displayText = detection.displayText,
+        calculatorExpression = null,
+        calculatorResult = null,
+        detectedPhone = detection.detectedPhone,
+        detectedPhoneDigits = detection.detectedPhoneDigits,
+        detectedAmountRaw = detection.detectedAmountRaw,
+        detectedAmountNormalized = detection.detectedAmountNormalized
+    )
 }

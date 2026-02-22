@@ -42,6 +42,8 @@ import com.zeynbakers.order_management_system.R
 import com.zeynbakers.order_management_system.core.helper.HelperOverlayController
 import com.zeynbakers.order_management_system.core.helper.HelperPermissions
 import com.zeynbakers.order_management_system.core.helper.HelperPreferences
+import com.zeynbakers.order_management_system.core.helper.HelperSettingsState
+import com.zeynbakers.order_management_system.core.helper.HelperThemePreset
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -54,7 +56,7 @@ fun HelperSettingsScreen(
     val lifecycleOwner = LocalLifecycleOwner.current
     val prefs = remember { HelperPreferences(context) }
     val scope = rememberCoroutineScope()
-    val helperState by prefs.state.collectAsState(initial = com.zeynbakers.order_management_system.core.helper.HelperSettingsState())
+    val helperState by prefs.state.collectAsState(initial = HelperSettingsState())
     var hasOverlayPermission by remember { mutableStateOf(HelperPermissions.hasOverlayPermission(context)) }
     var hasMicPermission by remember { mutableStateOf(HelperPermissions.hasMicrophonePermission(context)) }
 
@@ -130,6 +132,80 @@ fun HelperSettingsScreen(
             )
 
             Text(
+                text = stringResource(R.string.helper_settings_theme_title),
+                style = MaterialTheme.typography.titleSmall
+            )
+
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                ThemeChoiceButton(
+                    label = stringResource(R.string.helper_settings_theme_brand),
+                    selected = helperState.themePreset == HelperThemePreset.Brand,
+                    onClick = {
+                        scope.launch {
+                            prefs.setThemePreset(HelperThemePreset.Brand)
+                            HelperOverlayController.refresh(context)
+                        }
+                    },
+                    modifier = Modifier.weight(1f)
+                )
+                ThemeChoiceButton(
+                    label = stringResource(R.string.helper_settings_theme_neutral),
+                    selected = helperState.themePreset == HelperThemePreset.Neutral,
+                    onClick = {
+                        scope.launch {
+                            prefs.setThemePreset(HelperThemePreset.Neutral)
+                            HelperOverlayController.refresh(context)
+                        }
+                    },
+                    modifier = Modifier.weight(1f)
+                )
+            }
+
+            ToggleRow(
+                title = stringResource(R.string.helper_settings_smart_hide),
+                checked = helperState.smartHideEnabled,
+                onCheckedChange = { enabled ->
+                    scope.launch {
+                        prefs.setSmartHideEnabled(enabled)
+                        HelperOverlayController.refresh(context)
+                    }
+                }
+            )
+
+            Text(
+                text = stringResource(R.string.helper_settings_peek_delay_value, helperState.idlePeekSeconds),
+                style = MaterialTheme.typography.bodySmall
+            )
+
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                listOf(3, 4, 6).forEach { seconds ->
+                    ThemeChoiceButton(
+                        label = stringResource(R.string.helper_settings_peek_delay_choice, seconds),
+                        selected = helperState.idlePeekSeconds == seconds,
+                        onClick = {
+                            scope.launch {
+                                prefs.setIdlePeekSeconds(seconds)
+                                HelperOverlayController.refresh(context)
+                            }
+                        },
+                        modifier = Modifier.weight(1f)
+                    )
+                }
+            }
+
+            OutlinedButton(
+                onClick = {
+                    scope.launch {
+                        prefs.clearBubblePosition()
+                        HelperOverlayController.refresh(context)
+                    }
+                },
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(stringResource(R.string.helper_settings_reset_position))
+            }
+
+            Text(
                 text =
                     if (hasMicPermission) {
                         stringResource(R.string.helper_settings_mic_granted)
@@ -190,5 +266,23 @@ private fun ToggleRow(
             modifier = Modifier.weight(1f)
         )
         Switch(checked = checked, onCheckedChange = onCheckedChange)
+    }
+}
+
+@Composable
+private fun ThemeChoiceButton(
+    label: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    if (selected) {
+        Button(onClick = onClick, modifier = modifier) {
+            Text(label)
+        }
+    } else {
+        OutlinedButton(onClick = onClick, modifier = modifier) {
+            Text(label)
+        }
     }
 }

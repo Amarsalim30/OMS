@@ -1,5 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 
-    <style name="Theme.Order_management_system" parent="android:Theme.Material.Light.NoActionBar" />
+    <style name="Theme.Order_management_system" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/launch_background</item>
+    </style>
+
+    <style name="Theme.Order_management_system.Launch" parent="Theme.Order_management_system">
+        <item name="android:windowBackground">@color/launch_background</item>
+    </style>
 </resources>

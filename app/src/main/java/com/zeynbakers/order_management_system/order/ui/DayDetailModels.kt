@@ -5,9 +5,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import com.zeynbakers.order_management_system.R
+import com.zeynbakers.order_management_system.core.util.parsePickupTime
 import com.zeynbakers.order_management_system.core.ui.components.AppFilterOption
 import com.zeynbakers.order_management_system.order.data.OrderEntity
 import java.math.BigDecimal
+import java.util.Locale
 
 internal fun resolvePaymentState(total: BigDecimal, paidAmount: BigDecimal): PaymentState {
     if (paidAmount.compareTo(BigDecimal.ZERO) <= 0) {
@@ -72,6 +74,29 @@ internal fun computeDayStats(
         totalPaid = totalPaid,
         balance = dayTotal.subtract(totalPaid)
     )
+}
+
+internal fun sortOrdersForPlanner(orders: List<OrderEntity>): List<OrderEntity> {
+    return orders.sortedWith(
+        compareBy<OrderEntity>(
+            { plannerPickupMinute(it.pickupTime) == null },
+            { plannerPickupMinute(it.pickupTime) ?: Int.MAX_VALUE }
+        ).thenByDescending { it.createdAt }
+            .thenByDescending { it.id }
+    )
+}
+
+internal fun plannerPickupDisplay(pickupTime: String?): String? {
+    val parsed = parsePickupTime(pickupTime)
+    if (parsed != null) {
+        return String.format(Locale.getDefault(), "%02d:%02d", parsed.hour, parsed.minute)
+    }
+    return pickupTime?.trim()?.takeIf { it.isNotBlank() }
+}
+
+private fun plannerPickupMinute(pickupTime: String?): Int? {
+    val parsed = parsePickupTime(pickupTime) ?: return null
+    return (parsed.hour * 60) + parsed.minute
 }
 
 internal fun titleCase(value: String): String {

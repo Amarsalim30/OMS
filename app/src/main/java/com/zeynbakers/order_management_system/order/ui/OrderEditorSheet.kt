@@ -64,7 +64,6 @@ import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.zeynbakers.order_management_system.R
-import com.zeynbakers.order_management_system.core.ui.VoiceCalculatorOverlay
 import com.zeynbakers.order_management_system.customer.data.CustomerEntity
 import java.math.BigDecimal
 import java.text.NumberFormat
@@ -103,9 +102,7 @@ internal fun OrderEditorSheet(
     customerFieldModifier: Modifier = Modifier,
     notesFieldModifier: Modifier = Modifier,
     totalFieldModifier: Modifier = Modifier,
-    saveButtonModifier: Modifier = Modifier,
-    voiceHasPermission: Boolean,
-    onRequestVoicePermission: () -> Unit
+    saveButtonModifier: Modifier = Modifier
 ) {
     val focusManager = LocalFocusManager.current
     val keyboardController = LocalSoftwareKeyboardController.current
@@ -615,14 +612,6 @@ internal fun OrderEditorSheet(
                 )
             }
 
-            VoiceCalculatorOverlay(
-                hasPermission = voiceHasPermission,
-                onRequestPermission = onRequestVoicePermission,
-                lockToRightOnIdle = true,
-                lockToTopOnIdle = true,
-                peekWidthDp = 18.dp,
-                allowDrag = true
-            )
         }
     }
 }

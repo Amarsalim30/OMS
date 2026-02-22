@@ -72,7 +72,6 @@ import com.zeynbakers.order_management_system.core.ui.TopLevelDestination
 import com.zeynbakers.order_management_system.core.ui.UiEvent
 import com.zeynbakers.order_management_system.core.ui.UiEventDispatcher
 import com.zeynbakers.order_management_system.core.ui.VoiceCalcAccess
-import com.zeynbakers.order_management_system.core.ui.VoiceCalculatorOverlay
 import com.zeynbakers.order_management_system.core.ui.VoiceInputRouter
 import com.zeynbakers.order_management_system.core.ui.showSnackbar
 import com.zeynbakers.order_management_system.core.ui.theme.Order_management_systemTheme
@@ -84,6 +83,7 @@ import com.zeynbakers.order_management_system.order.ui.OrderCreditPrompt
 import com.zeynbakers.order_management_system.order.ui.OrderDraft
 import com.zeynbakers.order_management_system.order.ui.OrderViewModel
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.datetime.Clock
@@ -152,7 +152,9 @@ internal fun MainAppContent(
                 val updatePrefs = remember { UpdatePreferences(context) }
                 val helperPrefs = remember { HelperPreferences(context) }
                 var showUpdateDialog by remember { mutableStateOf(false) }
-                val helperState by helperPrefs.state.collectAsState(initial = HelperSettingsState())
+                val helperState by helperPrefs.state
+                    .map { it as HelperSettingsState? }
+                    .collectAsState(initial = null)
                 val navController = rememberNavController()
                 val navBackStackEntry by navController.currentBackStackEntryAsState()
                 val currentRoute = navBackStackEntry?.destination?.route
@@ -238,11 +240,11 @@ internal fun MainAppContent(
                         baseYear = now.year
                     }
                 }
-                LaunchedEffect(helperState.enabled) {
-                    if (helperState.enabled) {
-                        HelperOverlayController.start(context.applicationContext)
-                    } else {
-                        HelperOverlayController.stop(context.applicationContext)
+                LaunchedEffect(helperState?.enabled) {
+                    when (helperState?.enabled) {
+                        true -> HelperOverlayController.start(context.applicationContext)
+                        false -> HelperOverlayController.stop(context.applicationContext)
+                        null -> Unit
                     }
                 }
                 LaunchedEffect(currentRoute, activeTopLevelRoute) {
@@ -485,11 +487,6 @@ internal fun MainAppContent(
                         paymentIntakeViewModel = paymentIntakeViewModel,
                         paymentHistoryViewModel = paymentHistoryViewModel,
                         appSnackbarHostState = appSnackbarHostState,
-                        hasRecordPermission = hasRecordPermission,
-                        onRequestRecordPermission = {
-                            recordPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
-                        },
-                        overlaySuppressed = overlaySuppressed,
                         pendingCreditPrompt = pendingCreditPrompt,
                         onDismissCreditPrompt = {
                             pendingCreditPrompt = null

@@ -7,6 +7,7 @@ import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Intent
 import android.content.pm.ServiceInfo
+import android.content.res.ColorStateList
 import android.graphics.PixelFormat
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
@@ -41,20 +42,30 @@ import com.zeynbakers.order_management_system.core.util.VoiceMathParseResult
 import com.zeynbakers.order_management_system.core.util.parseVoiceMath
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.math.abs
 import kotlin.math.max
-import kotlin.math.min
 
 class HelperOverlayService : Service() {
+    private val bubbleSizeDp = 52
+    private val captureCardWidthDp = 248
+    private val bubbleDefaultXdp = 20
+    private val bubbleDefaultYdp = 120
+    private val edgeInsetDp = 8
+    private val peekVisibleDp = 10 //24
+    private val panelOffsetDp = 58
+
     private val notificationId = 4102
     private val requestCodeOpenApp = 9001
     private val requestCodeVoiceNote = 9002
     private val requestCodeVoiceCalculator = 9003
-    private val requestCodeStop = 9004
+    private val requestCodeReveal = 9004
+    private val requestCodeStop = 9005
 
     private var windowManager: WindowManager? = null
     private var bubbleView: View? = null
@@ -63,9 +74,15 @@ class HelperOverlayService : Service() {
     private var bubbleParams: WindowManager.LayoutParams? = null
     private var panelParams: WindowManager.LayoutParams? = null
     private var captureParams: WindowManager.LayoutParams? = null
+    private var bubbleBackground: GradientDrawable? = null
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val helperPreferences by lazy { HelperPreferences(applicationContext) }
     private val database by lazy { DatabaseProvider.getDatabase(applicationContext) }
+    private var settingsState = HelperSettingsState()
+    private var activeTheme = HelperOverlayThemes.resolve(settingsState.themePreset)
+    private var autoPeekJob: Job? = null
+    private var bubbleDockLeft = false
+    private var bubblePeeked = false
 
     private var captureMode: HelperCaptureMode? = null
     private var captureStage: CaptureStage = CaptureStage.Idle
@@ -75,7 +92,6 @@ class HelperOverlayService : Service() {
     private var notePreview: HelperNoteDetection? = null
     private var errorText: String? = null
     private var recognizer: SpeechRecognizer? = null
-    private var recognizerListening: Boolean = false
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -94,7 +110,7 @@ class HelperOverlayService : Service() {
         when (intent?.action) {
             HelperOverlayController.ACTION_STOP -> {
                 serviceScope.launch(Dispatchers.IO) {
-                    HelperPreferences(applicationContext).setEnabled(false)
+                    helperPreferences.setEnabled(false)
                 }
                 stopSelf()
                 return START_NOT_STICKY
@@ -105,6 +121,10 @@ class HelperOverlayService : Service() {
             }
             HelperOverlayController.ACTION_CAPTURE_CALCULATOR -> {
                 handleCaptureAction(HelperCaptureMode.VoiceCalculator)
+                return START_STICKY
+            }
+            HelperOverlayController.ACTION_REVEAL -> {
+                handleRevealAction()
                 return START_STICKY
             }
             HelperOverlayController.ACTION_START,
@@ -121,6 +141,7 @@ class HelperOverlayService : Service() {
     }
 
     override fun onDestroy() {
+        cancelAutoPeek()
         removeCapture()
         removePanel()
         removeBubble()
@@ -157,6 +178,8 @@ class HelperOverlayService : Service() {
             capturePendingIntent(HelperOverlayController.ACTION_CAPTURE_NOTE, requestCodeVoiceNote)
         val calcPendingIntent =
             capturePendingIntent(HelperOverlayController.ACTION_CAPTURE_CALCULATOR, requestCodeVoiceCalculator)
+        val revealPendingIntent =
+            capturePendingIntent(HelperOverlayController.ACTION_REVEAL, requestCodeReveal)
         val stopPendingIntent =
             PendingIntent.getService(
                 this,
@@ -166,7 +189,7 @@ class HelperOverlayService : Service() {
             )
 
         val bodyRes =
-            if (HelperPermissions.hasOverlayPermission(this)) {
+            if (HelperPermissions.hasOverlayPermission(this) && !settingsState.fallbackOnly) {
                 R.string.helper_notification_body
             } else {
                 R.string.helper_notification_body_fallback
@@ -191,6 +214,11 @@ class HelperOverlayService : Service() {
             )
             .addAction(
                 R.drawable.ic_notification,
+                getString(R.string.helper_action_show),
+                revealPendingIntent
+            )
+            .addAction(
+                R.drawable.ic_notification,
                 getString(R.string.helper_action_turn_off),
                 stopPendingIntent
             )
@@ -209,23 +237,40 @@ class HelperOverlayService : Service() {
 
     private fun refreshOverlay() {
         serviceScope.launch {
-            val settings = withContext(Dispatchers.IO) { helperPreferences.readState() }
+            settingsState = withContext(Dispatchers.IO) { helperPreferences.readState() }
+            activeTheme = HelperOverlayThemes.resolve(settingsState.themePreset)
             val shouldShowOverlay =
-                !settings.fallbackOnly && HelperPermissions.hasOverlayPermission(this@HelperOverlayService)
+                !settingsState.fallbackOnly && HelperPermissions.hasOverlayPermission(this@HelperOverlayService)
             if (!shouldShowOverlay) {
+                cancelAutoPeek()
                 removeCapture()
                 removePanel()
                 removeBubble()
                 return@launch
             }
             ensureBubble()
+            applyBubblePositionFromSettings()
+            applyThemeToVisibleViews()
+            scheduleAutoPeek()
+        }
+    }
+
+    private fun handleRevealAction() {
+        serviceScope.launch {
+            settingsState = withContext(Dispatchers.IO) { helperPreferences.readState() }
+            activeTheme = HelperOverlayThemes.resolve(settingsState.themePreset)
+            val canOverlay =
+                !settingsState.fallbackOnly && HelperPermissions.hasOverlayPermission(this@HelperOverlayService)
+            if (!canOverlay) return@launch
+            ensureBubble()
+            revealBubble(savePosition = false)
         }
     }
 
     private fun ensureBubble() {
         if (bubbleView != null) return
         val manager = windowManager ?: return
-        val size = dpToPx(56)
+        val size = bubbleSizePx()
         val params =
             WindowManager.LayoutParams(
                 size,
@@ -236,21 +281,29 @@ class HelperOverlayService : Service() {
                 PixelFormat.TRANSLUCENT
             ).apply {
                 gravity = Gravity.TOP or Gravity.START
-                x = dpToPx(20)
-                y = dpToPx(120)
+                x = resolveInitialBubbleX()
+                y = resolveInitialBubbleY()
             }
+        bubbleDockLeft =
+            if (settingsState.hasSavedBubblePosition) {
+                settingsState.dockLeft
+            } else {
+                params.x + (size / 2) < (screenWidthPx() / 2)
+            }
+        bubblePeeked = false
         val icon =
             ImageView(this).apply {
                 setImageResource(android.R.drawable.ic_btn_speak_now)
                 setColorFilter(ContextCompat.getColor(this@HelperOverlayService, android.R.color.white))
             }
+        val backgroundDrawable =
+            GradientDrawable().apply {
+                shape = GradientDrawable.OVAL
+                setColor(activeTheme.bubbleColorFor(HelperBubbleVisualState.Idle))
+            }
         val bubble =
             FrameLayout(this).apply {
-                background =
-                    GradientDrawable().apply {
-                        shape = GradientDrawable.OVAL
-                        setColor(ContextCompat.getColor(this@HelperOverlayService, android.R.color.holo_green_dark))
-                    }
+                background = backgroundDrawable
                 addView(
                     icon,
                     FrameLayout.LayoutParams(
@@ -265,6 +318,8 @@ class HelperOverlayService : Service() {
             manager.addView(bubble, params)
             bubbleView = bubble
             bubbleParams = params
+            bubbleBackground = backgroundDrawable
+            applyBubbleVisualState()
         }
     }
 
@@ -274,10 +329,14 @@ class HelperOverlayService : Service() {
         runCatching { manager.removeView(bubble) }
         bubbleView = null
         bubbleParams = null
+        bubbleBackground = null
+        bubblePeeked = false
     }
 
     private fun showPanel() {
         if (panelView != null) return
+        cancelAutoPeek()
+        revealBubble(savePosition = false, schedulePeek = false)
         removeCapture()
         val manager = windowManager ?: return
         val bubbleLayout = bubbleParams ?: return
@@ -286,11 +345,7 @@ class HelperOverlayService : Service() {
                 orientation = LinearLayout.VERTICAL
                 val pad = dpToPx(8)
                 setPadding(pad, pad, pad, pad)
-                background =
-                    GradientDrawable().apply {
-                        cornerRadius = dpToPx(14).toFloat()
-                        setColor(ContextCompat.getColor(this@HelperOverlayService, android.R.color.white))
-                    }
+                background = createCardBackground()
                 addView(
                     actionButton(
                         text = getString(R.string.helper_action_voice_note),
@@ -315,7 +370,7 @@ class HelperOverlayService : Service() {
             ).apply {
                 gravity = Gravity.TOP or Gravity.START
                 x = bubbleLayout.x
-                y = bubbleLayout.y + dpToPx(62)
+                y = bubbleLayout.y + dpToPx(panelOffsetDp)
             }
         runCatching {
             manager.addView(layout, params)
@@ -330,6 +385,7 @@ class HelperOverlayService : Service() {
         runCatching { manager.removeView(panel) }
         panelView = null
         panelParams = null
+        scheduleAutoPeek()
     }
 
     private fun actionButton(text: String, onClick: () -> Unit): Button {
@@ -337,6 +393,7 @@ class HelperOverlayService : Service() {
             this.text = text
             setAllCaps(false)
             minimumHeight = dpToPx(48)
+            stylePrimaryButton(this)
             setOnClickListener {
                 onClick()
                 removePanel()
@@ -355,20 +412,23 @@ class HelperOverlayService : Service() {
 
     private fun handleCaptureAction(mode: HelperCaptureMode) {
         serviceScope.launch {
-            val settings = withContext(Dispatchers.IO) { helperPreferences.readState() }
+            settingsState = withContext(Dispatchers.IO) { helperPreferences.readState() }
+            activeTheme = HelperOverlayThemes.resolve(settingsState.themePreset)
             val canUseOverlayCapture =
-                !settings.fallbackOnly && HelperPermissions.hasOverlayPermission(this@HelperOverlayService)
+                !settingsState.fallbackOnly && HelperPermissions.hasOverlayPermission(this@HelperOverlayService)
             if (!canUseOverlayCapture) {
                 openCapture(mode)
                 return@launch
             }
             ensureBubble()
+            revealBubble(savePosition = false, schedulePeek = false)
             showCapture(mode)
             startListening()
         }
     }
 
     private fun showCapture(mode: HelperCaptureMode) {
+        cancelAutoPeek()
         captureMode = mode
         captureStage = CaptureStage.Idle
         transcript = ""
@@ -380,6 +440,7 @@ class HelperOverlayService : Service() {
         ensureCaptureView()
         updateFloatingPanelPositions()
         renderCapture()
+        applyBubbleVisualState()
     }
 
     private fun ensureCaptureView() {
@@ -390,15 +451,11 @@ class HelperOverlayService : Service() {
                 orientation = LinearLayout.VERTICAL
                 val padding = dpToPx(10)
                 setPadding(padding, padding, padding, padding)
-                background =
-                    GradientDrawable().apply {
-                        cornerRadius = dpToPx(16).toFloat()
-                        setColor(ContextCompat.getColor(this@HelperOverlayService, android.R.color.white))
-                    }
+                background = createCardBackground()
             }
         val params =
             WindowManager.LayoutParams(
-                dpToPx(286),
+                dpToPx(captureCardWidthDp),
                 WindowManager.LayoutParams.WRAP_CONTENT,
                 overlayWindowType(),
                 WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
@@ -407,8 +464,8 @@ class HelperOverlayService : Service() {
                 PixelFormat.TRANSLUCENT
             ).apply {
                 gravity = Gravity.TOP or Gravity.START
-                x = dpToPx(18)
-                y = dpToPx(184)
+                x = clampBubbleXVisible(dpToPx(bubbleDefaultXdp))
+                y = clampBubbleY(dpToPx(bubbleDefaultYdp + 64))
             }
         runCatching {
             manager.addView(card, params)
@@ -418,11 +475,12 @@ class HelperOverlayService : Service() {
     }
 
     private fun removeCapture() {
-        recognizerListening = false
         runCatching { recognizer?.cancel() }
-        val manager = windowManager ?: return
-        val panel = captureView ?: return
-        runCatching { manager.removeView(panel) }
+        val manager = windowManager
+        val panel = captureView
+        if (manager != null && panel != null) {
+            runCatching { manager.removeView(panel) }
+        }
         captureView = null
         captureParams = null
         captureMode = null
@@ -432,12 +490,15 @@ class HelperOverlayService : Service() {
         calcResult = null
         notePreview = null
         errorText = null
+        applyBubbleVisualState()
+        scheduleAutoPeek()
     }
 
     private fun renderCapture() {
         val container = captureView as? LinearLayout ?: return
         val mode = captureMode ?: return
         container.removeAllViews()
+        container.background = createCardBackground()
         container.addView(captureHeader(mode))
         when (captureStage) {
             CaptureStage.Idle -> {
@@ -523,7 +584,7 @@ class HelperOverlayService : Service() {
                 container.addView(
                     bodyText(
                         text = errorText.orEmpty(),
-                        textColor = android.R.color.holo_red_dark
+                        textColor = activeTheme.bubbleErrorColor
                     )
                 )
                 container.addView(
@@ -553,6 +614,7 @@ class HelperOverlayService : Service() {
                     text = getString(titleRes)
                     setTypeface(typeface, Typeface.BOLD)
                     textSize = 17f
+                    setTextColor(activeTheme.titleColor)
                     layoutParams =
                         LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
                 }
@@ -562,6 +624,7 @@ class HelperOverlayService : Service() {
                     setImageResource(android.R.drawable.ic_menu_close_clear_cancel)
                     background = null
                     contentDescription = getString(R.string.action_cancel)
+                    setColorFilter(activeTheme.titleColor)
                     setOnClickListener { removeCapture() }
                 }
             )
@@ -571,13 +634,13 @@ class HelperOverlayService : Service() {
     private fun bodyText(
         text: String,
         isImportant: Boolean = false,
-        textColor: Int = android.R.color.black,
+        textColor: Int = activeTheme.bodyColor,
         textSizeSp: Float = if (isImportant) 19f else 14f
     ): TextView {
         return TextView(this).apply {
             this.text = text
             textSize = textSizeSp
-            setTextColor(ContextCompat.getColor(this@HelperOverlayService, textColor))
+            setTextColor(textColor)
             if (isImportant) {
                 setTypeface(typeface, Typeface.BOLD)
             }
@@ -600,6 +663,7 @@ class HelperOverlayService : Service() {
                     text = primaryText
                     setAllCaps(false)
                     minimumHeight = dpToPx(48)
+                    stylePrimaryButton(this)
                     setOnClickListener { primaryClick() }
                     layoutParams =
                         LinearLayout.LayoutParams(
@@ -611,14 +675,15 @@ class HelperOverlayService : Service() {
             )
             if (secondaryText != null && secondaryClick != null) {
                 addView(
-                    Button(this@HelperOverlayService).apply {
-                        text = secondaryText
-                        setAllCaps(false)
-                        minimumHeight = dpToPx(48)
-                        setOnClickListener { secondaryClick() }
-                        layoutParams =
-                            LinearLayout.LayoutParams(
-                                0,
+                Button(this@HelperOverlayService).apply {
+                    text = secondaryText
+                    setAllCaps(false)
+                    minimumHeight = dpToPx(48)
+                    styleSecondaryButton(this)
+                    setOnClickListener { secondaryClick() }
+                    layoutParams =
+                        LinearLayout.LayoutParams(
+                            0,
                                 LinearLayout.LayoutParams.WRAP_CONTENT,
                                 1f
                             ).apply {
@@ -630,10 +695,30 @@ class HelperOverlayService : Service() {
         }
     }
 
+    private fun stylePrimaryButton(button: Button) {
+        button.backgroundTintList = ColorStateList.valueOf(activeTheme.primaryButtonColor)
+        button.setTextColor(activeTheme.primaryButtonTextColor)
+    }
+
+    private fun styleSecondaryButton(button: Button) {
+        button.backgroundTintList = ColorStateList.valueOf(activeTheme.secondaryButtonColor)
+        button.setTextColor(activeTheme.secondaryButtonTextColor)
+    }
+
+    private fun createCardBackground(): GradientDrawable {
+        return GradientDrawable().apply {
+            cornerRadius = dpToPx(16).toFloat()
+            setColor(activeTheme.cardBackgroundColor)
+            setStroke(dpToPx(1), activeTheme.cardBorderColor)
+        }
+    }
+
     private fun startListening() {
+        cancelAutoPeek()
         if (!HelperPermissions.hasMicrophonePermission(this)) {
             captureStage = CaptureStage.NeedsPermission
             renderCapture()
+            applyBubbleVisualState()
             return
         }
         if (!SpeechRecognizer.isRecognitionAvailable(this)) {
@@ -651,6 +736,7 @@ class HelperOverlayService : Service() {
         errorText = null
         captureStage = CaptureStage.Listening
         renderCapture()
+        applyBubbleVisualState()
         val recognizeIntent =
             Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
@@ -658,11 +744,9 @@ class HelperOverlayService : Service() {
                 putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
             }
         runCatching {
-            recognizerListening = true
             speechRecognizer.cancel()
             speechRecognizer.startListening(recognizeIntent)
         }.onFailure {
-            recognizerListening = false
             showCaptureError(getString(R.string.helper_capture_error_start_failed))
         }
     }
@@ -693,7 +777,6 @@ class HelperOverlayService : Service() {
                 }
 
                 override fun onResults(results: Bundle?) {
-                    recognizerListening = false
                     if (captureStage != CaptureStage.Listening) return
                     val finalText =
                         results
@@ -704,7 +787,6 @@ class HelperOverlayService : Service() {
                 }
 
                 override fun onError(error: Int) {
-                    recognizerListening = false
                     if (captureStage != CaptureStage.Listening) return
                     if (partialText.isNotBlank()) {
                         processTranscript(partialText)
@@ -713,6 +795,7 @@ class HelperOverlayService : Service() {
                     if (error == SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS) {
                         captureStage = CaptureStage.NeedsPermission
                         renderCapture()
+                        applyBubbleVisualState()
                     } else {
                         showCaptureError(getString(R.string.helper_capture_error_retry))
                     }
@@ -739,12 +822,14 @@ class HelperOverlayService : Service() {
                     calcResult = parsed
                     captureStage = CaptureStage.Result
                     renderCapture()
+                    applyBubbleVisualState()
                 }
             }
             HelperCaptureMode.VoiceNote -> {
                 notePreview = HelperNoteClassifier.classifyVoiceTranscript(cleaned)
                 captureStage = CaptureStage.Result
                 renderCapture()
+                applyBubbleVisualState()
             }
             null -> Unit
         }
@@ -754,6 +839,7 @@ class HelperOverlayService : Service() {
         errorText = text
         captureStage = CaptureStage.Error
         renderCapture()
+        applyBubbleVisualState()
     }
 
     private fun saveCaptureAndClose() {
@@ -814,12 +900,58 @@ class HelperOverlayService : Service() {
     }
 
     private fun destroyRecognizer() {
-        recognizerListening = false
         runCatching {
             recognizer?.cancel()
             recognizer?.destroy()
         }
         recognizer = null
+    }
+
+    private fun applyThemeToVisibleViews() {
+        applyBubbleVisualState()
+        (panelView as? LinearLayout)?.let { panel ->
+            panel.background = createCardBackground()
+            repeat(panel.childCount) { index ->
+                (panel.getChildAt(index) as? Button)?.let { button ->
+                    stylePrimaryButton(button)
+                }
+            }
+        }
+        if (captureView != null) {
+            renderCapture()
+        }
+    }
+
+    private fun applyBubbleVisualState() {
+        val state =
+            when (captureStage) {
+                CaptureStage.Listening -> HelperBubbleVisualState.Listening
+                CaptureStage.Result -> HelperBubbleVisualState.Result
+                CaptureStage.Error -> HelperBubbleVisualState.Error
+                CaptureStage.Idle,
+                CaptureStage.NeedsPermission -> HelperBubbleVisualState.Idle
+            }
+        bubbleBackground?.setColor(activeTheme.bubbleColorFor(state))
+        bubbleView?.alpha = if (bubblePeeked) settingsState.idlePeekAlphaPercent / 100f else 1f
+    }
+
+    private fun applyBubblePositionFromSettings() {
+        val manager = windowManager ?: return
+        val bubble = bubbleView ?: return
+        val params = bubbleParams ?: return
+        if (settingsState.hasSavedBubblePosition) {
+            params.x = clampBubbleXVisible(settingsState.bubbleX)
+            params.y = clampBubbleY(settingsState.bubbleY)
+            bubbleDockLeft = settingsState.dockLeft
+        } else {
+            params.x = clampBubbleXVisible(dpToPx(bubbleDefaultXdp))
+            params.y = clampBubbleY(dpToPx(bubbleDefaultYdp))
+            bubbleDockLeft = params.x + (bubbleSizePx() / 2) < (screenWidthPx() / 2)
+        }
+        bubblePeeked = false
+        bubble.alpha = 1f
+        runCatching { manager.updateViewLayout(bubble, params) }
+        updateFloatingPanelPositions()
     }
 
     private fun updateFloatingPanelPositions() {
@@ -828,21 +960,140 @@ class HelperOverlayService : Service() {
         val panel = panelView
         val panelLayoutParams = panelParams
         if (panel != null && panelLayoutParams != null) {
-            panelLayoutParams.x = bubble.x
-            panelLayoutParams.y = bubble.y + dpToPx(62)
+            panelLayoutParams.x = clampPanelX(bubble.x)
+            panelLayoutParams.y = clampPanelY(bubble.y + dpToPx(panelOffsetDp))
             runCatching { manager.updateViewLayout(panel, panelLayoutParams) }
         }
         val capture = captureView
         val captureLayoutParams = captureParams
         if (capture != null && captureLayoutParams != null) {
-            val inset = dpToPx(8)
-            val screenWidth = resources.displayMetrics.widthPixels
-            val cardWidth = dpToPx(286)
-            val maxX = max(inset, screenWidth - cardWidth - inset)
-            captureLayoutParams.x = min(max(bubble.x, inset), maxX)
-            captureLayoutParams.y = max(inset, bubble.y + dpToPx(62))
+            captureLayoutParams.x = clampPanelX(bubble.x)
+            captureLayoutParams.y = clampPanelY(bubble.y + dpToPx(panelOffsetDp))
             runCatching { manager.updateViewLayout(capture, captureLayoutParams) }
         }
+    }
+
+    private fun scheduleAutoPeek() {
+        cancelAutoPeek()
+        if (!settingsState.smartHideEnabled) return
+        if (bubbleView == null) return
+        if (panelView != null || captureView != null) return
+        if (captureStage == CaptureStage.Listening || captureStage == CaptureStage.Result) return
+        autoPeekJob =
+            serviceScope.launch {
+                delay(settingsState.idlePeekSeconds.coerceIn(2, 12) * 1000L)
+                peekBubble()
+            }
+    }
+
+    private fun cancelAutoPeek() {
+        autoPeekJob?.cancel()
+        autoPeekJob = null
+    }
+
+    private fun peekBubble() {
+        if (!settingsState.smartHideEnabled) return
+        val manager = windowManager ?: return
+        val bubble = bubbleView ?: return
+        val params = bubbleParams ?: return
+        if (panelView != null || captureView != null) return
+        val peekVisiblePx = dpToPx(peekVisibleDp)
+        params.x =
+            if (bubbleDockLeft) {
+                -bubbleSizePx() + peekVisiblePx
+            } else {
+                screenWidthPx() - peekVisiblePx
+            }
+        params.y = clampBubbleY(params.y)
+        bubblePeeked = true
+        bubble.alpha = settingsState.idlePeekAlphaPercent / 100f
+        runCatching { manager.updateViewLayout(bubble, params) }
+    }
+
+    private fun revealBubble(
+        savePosition: Boolean,
+        schedulePeek: Boolean = true
+    ) {
+        val manager = windowManager ?: return
+        val bubble = bubbleView ?: return
+        val params = bubbleParams ?: return
+        val edge = dpToPx(edgeInsetDp)
+        params.x =
+            if (bubbleDockLeft) {
+                edge
+            } else {
+                max(edge, screenWidthPx() - bubbleSizePx() - edge)
+            }
+        params.y = clampBubbleY(params.y)
+        bubblePeeked = false
+        bubble.alpha = 1f
+        runCatching { manager.updateViewLayout(bubble, params) }
+        updateFloatingPanelPositions()
+        if (savePosition) {
+            persistBubblePosition()
+        }
+        if (schedulePeek) {
+            scheduleAutoPeek()
+        }
+    }
+
+    private fun snapBubbleToEdge(savePosition: Boolean) {
+        val params = bubbleParams ?: return
+        bubbleDockLeft = params.x + (bubbleSizePx() / 2) < (screenWidthPx() / 2)
+        revealBubble(savePosition = savePosition)
+    }
+
+    private fun persistBubblePosition() {
+        val params = bubbleParams ?: return
+        serviceScope.launch(Dispatchers.IO) {
+            helperPreferences.saveBubblePosition(params.x, params.y, bubbleDockLeft)
+        }
+    }
+
+    private fun bubbleSizePx(): Int = dpToPx(bubbleSizeDp)
+
+    private fun screenWidthPx(): Int = resources.displayMetrics.widthPixels
+
+    private fun screenHeightPx(): Int = resources.displayMetrics.heightPixels
+
+    private fun resolveInitialBubbleX(): Int {
+        return if (settingsState.hasSavedBubblePosition) {
+            clampBubbleXVisible(settingsState.bubbleX)
+        } else {
+            clampBubbleXVisible(dpToPx(bubbleDefaultXdp))
+        }
+    }
+
+    private fun resolveInitialBubbleY(): Int {
+        return if (settingsState.hasSavedBubblePosition) {
+            clampBubbleY(settingsState.bubbleY)
+        } else {
+            clampBubbleY(dpToPx(bubbleDefaultYdp))
+        }
+    }
+
+    private fun clampBubbleY(y: Int): Int {
+        val top = dpToPx(40)
+        val bottom = max(top, screenHeightPx() - bubbleSizePx() - dpToPx(100))
+        return y.coerceIn(top, bottom)
+    }
+
+    private fun clampBubbleXVisible(x: Int): Int {
+        val edge = dpToPx(edgeInsetDp)
+        val maxX = max(edge, screenWidthPx() - bubbleSizePx() - edge)
+        return x.coerceIn(edge, maxX)
+    }
+
+    private fun clampPanelX(x: Int): Int {
+        val inset = dpToPx(edgeInsetDp)
+        val maxX = max(inset, screenWidthPx() - dpToPx(captureCardWidthDp) - inset)
+        return x.coerceIn(inset, maxX)
+    }
+
+    private fun clampPanelY(y: Int): Int {
+        val inset = dpToPx(24)
+        val maxY = max(inset, screenHeightPx() - dpToPx(220))
+        return y.coerceIn(inset, maxY)
     }
 
     private fun overlayWindowType(): Int {
@@ -872,6 +1123,10 @@ class HelperOverlayService : Service() {
             val manager = windowManager ?: return false
             return when (event.actionMasked) {
                 MotionEvent.ACTION_DOWN -> {
+                    cancelAutoPeek()
+                    if (bubblePeeked) {
+                        revealBubble(savePosition = false, schedulePeek = false)
+                    }
                     startX = params.x
                     startY = params.y
                     touchStartX = event.rawX
@@ -882,8 +1137,9 @@ class HelperOverlayService : Service() {
                 MotionEvent.ACTION_MOVE -> {
                     val deltaX = (event.rawX - touchStartX).toInt()
                     val deltaY = (event.rawY - touchStartY).toInt()
-                    params.x = startX + deltaX
-                    params.y = startY + deltaY
+                    params.x = clampBubbleXVisible(startX + deltaX)
+                    params.y = clampBubbleY(startY + deltaY)
+                    bubblePeeked = false
                     runCatching { manager.updateViewLayout(v, params) }
                     updateFloatingPanelPositions()
                     true
@@ -892,13 +1148,17 @@ class HelperOverlayService : Service() {
                     val duration = System.currentTimeMillis() - downAt
                     val deltaX = abs(event.rawX - touchStartX)
                     val deltaY = abs(event.rawY - touchStartY)
-                    if (duration < 250 && deltaX < dpToPx(8) && deltaY < dpToPx(8)) {
+                    val moved = deltaX >= dpToPx(8) || deltaY >= dpToPx(8)
+                    if (moved) {
+                        snapBubbleToEdge(savePosition = true)
+                    } else if (duration < 300) {
                         when {
                             captureView != null -> removeCapture()
                             panelView == null -> showPanel()
                             else -> removePanel()
                         }
                     }
+                    scheduleAutoPeek()
                     true
                 }
                 else -> false

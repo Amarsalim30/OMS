@@ -5,6 +5,8 @@ import android.net.Uri
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -22,16 +24,16 @@ import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.Calculate
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.MoreVert
-import androidx.compose.material.icons.filled.Notes
 import androidx.compose.material.icons.filled.Payments
 import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Share
-import androidx.compose.material3.Checkbox
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -70,8 +72,6 @@ import com.zeynbakers.order_management_system.core.ui.LocalUiEventDispatcher
 import com.zeynbakers.order_management_system.core.ui.components.AppCard
 import com.zeynbakers.order_management_system.core.ui.components.AppEmptyState
 import com.zeynbakers.order_management_system.core.ui.showSnackbar
-import com.zeynbakers.order_management_system.core.util.formatKes
-import java.math.BigDecimal
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -93,6 +93,7 @@ fun NotesHistoryScreen(
     var showFilterSheet by remember { mutableStateOf(false) }
     val todayHeader = stringResource(R.string.notes_history_day_today)
     val yesterdayHeader = stringResource(R.string.notes_history_day_yesterday)
+    var editTarget by remember { mutableStateOf<HelperNoteWithCustomer?>(null) }
 
     Scaffold(
         contentWindowInsets = WindowInsets(0),
@@ -194,6 +195,9 @@ fun NotesHistoryScreen(
                                     viewModel.delete(noteId)
                                     scope.launch { uiEvents.showSnackbar(context.getString(R.string.notes_history_deleted)) }
                                 },
+                                onEdit = { row ->
+                                    editTarget = row
+                                },
                                 onCall = { phoneDigits ->
                                     val intent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:$phoneDigits"))
                                     context.startActivity(intent)
@@ -221,6 +225,18 @@ fun NotesHistoryScreen(
             onClear = viewModel::clearFilters
         )
     }
+
+    editTarget?.let { target ->
+        NoteEditDialog(
+            row = target,
+            onDismiss = { editTarget = null },
+            onSave = { noteId, updatedText ->
+                viewModel.edit(noteId, updatedText)
+                editTarget = null
+                scope.launch { uiEvents.showSnackbar(context.getString(R.string.notes_history_updated)) }
+            }
+        )
+    }
 }
 
 @Composable
@@ -230,6 +246,7 @@ private fun NoteHistoryRow(
     onShare: (String) -> Unit,
     onTogglePin: (Long, Boolean) -> Unit,
     onDelete: (Long) -> Unit,
+    onEdit: (HelperNoteWithCustomer) -> Unit,
     onCall: (String) -> Unit
 ) {
     var menuExpanded by remember { mutableStateOf(false) }
@@ -246,17 +263,14 @@ private fun NoteHistoryRow(
     val phoneLabel = note.detectedPhone ?: note.detectedPhoneDigits
     val metadata = buildString {
         if (!amountLabel.isNullOrBlank()) {
-            append(
-                runCatching { formatKes(BigDecimal(amountLabel)) }
-                    .getOrElse { amountLabel }
-            )
+            append(amountLabel)
         }
         if (!phoneLabel.isNullOrBlank()) {
-            if (isNotBlank()) append(" • ")
+            if (isNotBlank()) append(" | ")
             append(phoneLabel)
         }
         if (!row.customerName.isNullOrBlank()) {
-            if (isNotBlank()) append(" • ")
+            if (isNotBlank()) append(" | ")
             append(row.customerName)
         }
     }
@@ -293,11 +307,29 @@ private fun NoteHistoryRow(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-                Text(
-                    text = formatHistoryTimestamp(note.createdAt),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Text(
+                        text = formatHistoryTimestamp(note.createdAt),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    if (note.pinned) {
+                        Icon(
+                            imageVector = Icons.Filled.PushPin,
+                            contentDescription = null,
+                            modifier = Modifier.size(12.dp),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            text = stringResource(R.string.notes_history_pinned_label),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
             }
             IconButton(onClick = { menuExpanded = true }) {
                 Icon(
@@ -331,6 +363,14 @@ private fun NoteHistoryRow(
                         leadingIcon = { Icon(Icons.Filled.Calculate, contentDescription = null) }
                     )
                 }
+                DropdownMenuItem(
+                    text = { Text(stringResource(R.string.notes_history_action_edit)) },
+                    onClick = {
+                        menuExpanded = false
+                        onEdit(row)
+                    },
+                    leadingIcon = { Icon(Icons.Filled.Edit, contentDescription = null) }
+                )
                 DropdownMenuItem(
                     text = { Text(stringResource(R.string.notes_history_action_share)) },
                     onClick = {
@@ -379,7 +419,45 @@ private fun NoteHistoryRow(
     }
 }
 
-@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun NoteEditDialog(
+    row: HelperNoteWithCustomer,
+    onDismiss: () -> Unit,
+    onSave: (Long, String) -> Unit
+) {
+    var text by remember(row.note.id) {
+        mutableStateOf(row.note.displayText.ifBlank { row.note.rawTranscript })
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.notes_history_edit_title)) },
+        text = {
+            OutlinedTextField(
+                value = text,
+                onValueChange = { text = it },
+                label = { Text(stringResource(R.string.notes_history_edit_label)) },
+                maxLines = 4,
+                modifier = Modifier.fillMaxWidth()
+            )
+        },
+        confirmButton = {
+            TextButton(
+                onClick = { onSave(row.note.id, text) },
+                enabled = text.trim().isNotEmpty()
+            ) {
+                Text(stringResource(R.string.action_save))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.action_cancel))
+            }
+        }
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 private fun NotesFilterSheet(
     filter: NotesFilterState,
@@ -409,9 +487,10 @@ private fun NotesFilterSheet(
                 text = stringResource(R.string.notes_history_filter_type),
                 style = MaterialTheme.typography.labelLarge
             )
-            Row(
+            FlowRow(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 FilterChip(
                     selected = filter.types.isEmpty(),
@@ -431,9 +510,10 @@ private fun NotesFilterSheet(
                 text = stringResource(R.string.notes_history_filter_time),
                 style = MaterialTheme.typography.labelLarge
             )
-            Row(
+            FlowRow(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 TimeChip(filter.timeRange, NotesTimeRange.ALL, R.string.notes_history_time_all, onTimeRangeChange)
                 TimeChip(filter.timeRange, NotesTimeRange.TODAY, R.string.action_today, onTimeRangeChange)
@@ -500,14 +580,16 @@ private fun FilterSwitchRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { onCheckedChange(!checked) },
+            .clickable { onCheckedChange(!checked) }
+            .padding(vertical = 2.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Checkbox(checked = checked, onCheckedChange = onCheckedChange)
         Text(
             text = title,
-            style = MaterialTheme.typography.bodyMedium
+            style = MaterialTheme.typography.bodyMedium,
+            modifier = Modifier.weight(1f)
         )
+        Switch(checked = checked, onCheckedChange = onCheckedChange)
     }
 }
 
@@ -566,3 +648,4 @@ private fun formatHistoryTimestamp(epochMillis: Long): String {
         .atZone(zone)
         .format(DateTimeFormatter.ofPattern("dd MMM, HH:mm"))
 }
+
