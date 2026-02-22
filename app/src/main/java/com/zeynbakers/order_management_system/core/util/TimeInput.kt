@@ -15,6 +15,27 @@ fun parsePickupTime(input: String?): LocalTime? {
     return LocalTime(parts.first, parts.second)
 }
 
+fun formatHourMinuteAmPm(hour24: Int, minute: Int): String {
+    val safeHour = hour24.coerceIn(0, 23)
+    val safeMinute = minute.coerceIn(0, 59)
+    val amPm = if (safeHour < 12) "AM" else "PM"
+    val hour12 =
+        when {
+            safeHour == 0 -> 12
+            safeHour > 12 -> safeHour - 12
+            else -> safeHour
+        }
+    return "$hour12:${safeMinute.toString().padStart(2, '0')} $amPm"
+}
+
+fun formatPickupTimeForDisplay(input: String?): String? {
+    val parsed = parsePickupTime(input)
+    if (parsed != null) {
+        return formatHourMinuteAmPm(parsed.hour, parsed.minute)
+    }
+    return input?.trim()?.takeIf { it.isNotBlank() }
+}
+
 private fun parseTimeParts(raw: String): Pair<Int, Int>? {
     val trimmed = raw.trim()
     if (trimmed.isEmpty()) return null

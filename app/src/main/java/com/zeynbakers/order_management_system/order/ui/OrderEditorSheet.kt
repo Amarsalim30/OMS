@@ -70,6 +70,17 @@ import java.text.NumberFormat
 import java.util.Calendar
 import java.util.Locale
 
+internal data class OrderEditorTutorialHint(
+    val stepText: String,
+    val title: String,
+    val body: String,
+    val continueLabel: String,
+    val skipLabel: String,
+    val showContinue: Boolean,
+    val onContinue: () -> Unit,
+    val onSkip: () -> Unit
+)
+
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 internal fun OrderEditorSheet(
@@ -104,7 +115,8 @@ internal fun OrderEditorSheet(
     customerFieldModifier: Modifier = Modifier,
     notesFieldModifier: Modifier = Modifier,
     totalFieldModifier: Modifier = Modifier,
-    saveButtonModifier: Modifier = Modifier
+    saveButtonModifier: Modifier = Modifier,
+    tutorialHint: OrderEditorTutorialHint? = null
 ) {
     val focusManager = LocalFocusManager.current
     val keyboardController = LocalSoftwareKeyboardController.current
@@ -140,6 +152,7 @@ internal fun OrderEditorSheet(
     val (initialHour, initialMinute) = remember(pickupTimeText) { parseTimeForPicker(pickupTimeText) }
     var showClearConfirm by remember { mutableStateOf(false) }
     var showTimePicker by remember { mutableStateOf(false) }
+    val sheetHeightFraction = if (tutorialHint != null) 0.96f else 0.94f
 
     LaunchedEffect(focusNotesInitially) {
         if (focusNotesInitially) {
@@ -173,7 +186,7 @@ internal fun OrderEditorSheet(
         Box(
             modifier = modifier
                 .fillMaxWidth()
-                .fillMaxHeight(0.9f)
+                .fillMaxHeight(sheetHeightFraction)
         ) {
             Column(
                 modifier = Modifier
@@ -210,6 +223,10 @@ internal fun OrderEditorSheet(
                         .padding(horizontal = 12.dp, vertical = 10.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
+                    tutorialHint?.let { hint ->
+                        OrderEditorTutorialPanel(hint = hint)
+                    }
+
                     EditorSectionCard(
                         title = stringResource(R.string.order_editor_customer_schedule_section)
                     ) {
@@ -614,6 +631,51 @@ internal fun OrderEditorSheet(
                 )
             }
 
+        }
+    }
+}
+
+@Composable
+private fun OrderEditorTutorialPanel(hint: OrderEditorTutorialHint) {
+    Surface(
+        shape = RoundedCornerShape(14.dp),
+        color = MaterialTheme.colorScheme.primaryContainer
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(
+                text = hint.stepText,
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onPrimaryContainer
+            )
+            Text(
+                text = hint.title,
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onPrimaryContainer
+            )
+            Text(
+                text = hint.body,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onPrimaryContainer
+            )
+            if (hint.showContinue) {
+                Button(
+                    onClick = hint.onContinue,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(hint.continueLabel)
+                }
+            }
+            TextButton(
+                onClick = hint.onSkip,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(hint.skipLabel)
+            }
         }
     }
 }

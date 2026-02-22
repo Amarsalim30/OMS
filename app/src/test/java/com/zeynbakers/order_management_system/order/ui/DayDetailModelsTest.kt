@@ -42,7 +42,7 @@ class DayDetailModelsTest {
 
     @Test
     fun `plannerPickupDisplay normalizes valid time`() {
-        assertEquals("09:30", plannerPickupDisplay("930"))
+        assertEquals("9:30 AM", plannerPickupDisplay("930"))
     }
 
     private fun testOrder(

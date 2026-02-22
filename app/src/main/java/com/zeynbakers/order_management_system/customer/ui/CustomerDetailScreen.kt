@@ -47,7 +47,7 @@ fun CustomerDetailScreen(
     onUpdateOrderStatusOverride: (Long, OrderStatusOverride?) -> Unit,
     onWriteOffOrder: (Long) -> Unit
 ) {
-    var orderFilter by remember { mutableStateOf(OrderFilter.All) }
+    var orderFilter by remember { mutableStateOf(OrderFilter.Owes) }
 
     val filteredOrders by remember(orders, orderFilter) {
         derivedStateOf { filterOrders(orders, orderFilter) }

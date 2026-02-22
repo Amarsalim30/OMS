@@ -555,6 +555,78 @@ fun CalendarScreen(
             }
         }
 
+        val inSheetTutorialStep =
+            tutorialStep == CalendarTutorialStep.Customer ||
+                tutorialStep == CalendarTutorialStep.Notes ||
+                tutorialStep == CalendarTutorialStep.Total ||
+                tutorialStep == CalendarTutorialStep.Save
+        val tutorialStepIndexInSheet =
+            when (tutorialStep) {
+                CalendarTutorialStep.TapDate -> 1
+                CalendarTutorialStep.AddButton -> 2
+                CalendarTutorialStep.Customer -> 3
+                CalendarTutorialStep.Notes -> 4
+                CalendarTutorialStep.Total -> 5
+                CalendarTutorialStep.Save -> 6
+                CalendarTutorialStep.None -> 0
+            }
+        val tutorialTitleResInSheet =
+            when (tutorialStep) {
+                CalendarTutorialStep.TapDate -> R.string.calendar_tutorial_tap_date_title
+                CalendarTutorialStep.AddButton -> R.string.calendar_tutorial_add_button_title
+                CalendarTutorialStep.Customer -> R.string.calendar_tutorial_customer_title
+                CalendarTutorialStep.Notes -> R.string.calendar_tutorial_notes_title
+                CalendarTutorialStep.Total -> R.string.calendar_tutorial_total_title
+                CalendarTutorialStep.Save -> R.string.calendar_tutorial_save_title
+                CalendarTutorialStep.None -> null
+            }
+        val tutorialBodyResInSheet =
+            when (tutorialStep) {
+                CalendarTutorialStep.TapDate -> R.string.calendar_tutorial_tap_date_body
+                CalendarTutorialStep.AddButton -> R.string.calendar_tutorial_add_button_body
+                CalendarTutorialStep.Customer -> R.string.calendar_tutorial_customer_body
+                CalendarTutorialStep.Notes -> R.string.calendar_tutorial_notes_body
+                CalendarTutorialStep.Total -> R.string.calendar_tutorial_total_body
+                CalendarTutorialStep.Save -> R.string.calendar_tutorial_save_body
+                CalendarTutorialStep.None -> null
+            }
+        val sheetTutorialHint =
+            if (
+                tutorialActive &&
+                inSheetTutorialStep &&
+                tutorialTitleResInSheet != null &&
+                tutorialBodyResInSheet != null
+            ) {
+                OrderEditorTutorialHint(
+                    stepText = stringResource(
+                        R.string.calendar_tutorial_step_progress,
+                        tutorialStepIndexInSheet,
+                        CALENDAR_TUTORIAL_STEP_COUNT
+                    ),
+                    title = stringResource(tutorialTitleResInSheet),
+                    body = stringResource(tutorialBodyResInSheet),
+                    continueLabel = stringResource(R.string.calendar_tutorial_continue),
+                    skipLabel = stringResource(R.string.calendar_tutorial_skip),
+                    showContinue =
+                        tutorialStep == CalendarTutorialStep.Customer ||
+                            tutorialStep == CalendarTutorialStep.Notes,
+                    onContinue = {
+                        when (tutorialStep) {
+                            CalendarTutorialStep.Customer -> tutorialStep = CalendarTutorialStep.Notes
+                            CalendarTutorialStep.Notes -> tutorialStep = CalendarTutorialStep.Total
+                            CalendarTutorialStep.Total -> tutorialStep = CalendarTutorialStep.Save
+                            CalendarTutorialStep.Save -> Unit
+                            CalendarTutorialStep.TapDate -> tutorialStep = CalendarTutorialStep.AddButton
+                            CalendarTutorialStep.AddButton -> tutorialStep = CalendarTutorialStep.Customer
+                            CalendarTutorialStep.None -> Unit
+                        }
+                    },
+                    onSkip = ::finishTutorial
+                )
+            } else {
+                null
+            }
+
         OrderEditorSheet(
             title = stringResource(R.string.calendar_order_add_title, addOrderDateLabel),
             notes = notes,
@@ -630,7 +702,8 @@ fun CalendarScreen(
             saveButtonModifier =
                 Modifier.onGloballyPositioned { coordinates ->
                     saveButtonBounds = coordinates.boundsInRoot()
-                }
+                },
+            tutorialHint = sheetTutorialHint
         )
     }
 
@@ -674,12 +747,15 @@ fun CalendarScreen(
             CalendarTutorialStep.Save -> saveButtonBounds
             CalendarTutorialStep.None -> null
         }
+    val tutorialUsesInlineSheetPanel =
+        tutorialStep == CalendarTutorialStep.Customer ||
+            tutorialStep == CalendarTutorialStep.Notes ||
+            tutorialStep == CalendarTutorialStep.Total ||
+            tutorialStep == CalendarTutorialStep.Save
     val tutorialShowContinue =
         tutorialStep == CalendarTutorialStep.TapDate ||
-            tutorialStep == CalendarTutorialStep.AddButton ||
-            tutorialStep == CalendarTutorialStep.Customer ||
-            tutorialStep == CalendarTutorialStep.Notes
-    if (tutorialActive && tutorialTitleRes != null && tutorialBodyRes != null) {
+            tutorialStep == CalendarTutorialStep.AddButton
+    if (tutorialActive && !tutorialUsesInlineSheetPanel && tutorialTitleRes != null && tutorialBodyRes != null) {
         CalendarTutorialOverlay(
             targetBounds = tutorialTargetBounds,
             stepText =

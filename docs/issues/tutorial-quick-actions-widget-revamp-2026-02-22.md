@@ -72,6 +72,28 @@ Improve non-technical user efficiency by:
 - `Voice note`, `Unpaid`, and `New` widget actions navigate/launch correctly.
 - Widget updates continue to run through `WidgetUpdater` without crashes.
 
+## Issue 4: Interactive Tutorial Hidden Behind Modal Sheet
+### Problem
+- During calendar interactive tutorial, once quick-add `ModalBottomSheet` opened, the spotlight/tutorial could be visually hidden by the sheet.
+- The quick-add sheet height also felt too constrained on smaller screens during guided steps.
+- Tutorial copy needed clearer practical guidance for:
+  - where `Notes history` lives
+  - how to share M-PESA SMS directly into `Money > Collect`
+
+### Implementation
+- Kept spotlight overlay only for pre-sheet steps (calendar date and `+` action).
+- Added in-sheet tutorial panel for sheet-focused steps (`Customer`, `Notes`, `Total`, `Save`) so guidance remains visible while editing.
+- Increased quick-add sheet usable height (`0.90f -> 0.94f`, and `0.96f` while tutorial panel is present).
+- Refined beginner tutorial copy:
+  - Added a "Quick map" card covering tabs + More destinations.
+  - Explicitly documented `More -> Notes history`.
+  - Explicitly documented M-PESA share path from Messages to OrderBook.
+
+### Acceptance Criteria
+- Interactive tutorial guidance remains visible during quick-add modal steps.
+- Calendar tutorial does not lose progression when opening/closing quick-add.
+- Beginner tutorial clearly explains where Notes history is and how to share M-PESA messages into Money collect.
+
 ## Permissions and Safety
 - No new dangerous permissions were introduced.
 - Existing microphone flow remains runtime-permission safe through `HelperCaptureActivity`.
@@ -83,6 +105,8 @@ Improve non-technical user efficiency by:
 - `app/src/main/java/com/zeynbakers/order_management_system/core/navigation/AppShortcuts.kt`
 - `app/src/main/java/com/zeynbakers/order_management_system/core/navigation/graphs/SettingsGraph.kt`
 - `app/src/main/java/com/zeynbakers/order_management_system/core/tutorial/BeginnerTutorialScreen.kt`
+- `app/src/main/java/com/zeynbakers/order_management_system/order/ui/CalendarScreen.kt`
+- `app/src/main/java/com/zeynbakers/order_management_system/order/ui/OrderEditorSheet.kt`
 - `app/src/main/java/com/zeynbakers/order_management_system/core/widget/WidgetUpdater.kt`
 - `app/src/main/res/layout/widget_today_unpaid.xml`
 - `app/src/main/res/drawable/widget_background.xml`

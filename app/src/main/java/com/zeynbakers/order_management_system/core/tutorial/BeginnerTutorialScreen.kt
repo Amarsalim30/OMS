@@ -86,6 +86,29 @@ fun BeginnerTutorialScreen(
                 )
             }
 
+            AppCard {
+                Text(
+                    text = stringResource(R.string.tutorial_where_to_find_title),
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold
+                )
+                Text(
+                    text = stringResource(R.string.tutorial_where_to_find_tabs),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    text = stringResource(R.string.tutorial_where_to_find_more),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    text = stringResource(R.string.tutorial_where_to_find_mpesa_share),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
             TutorialStepCard(
                 step = 1,
                 title = stringResource(R.string.tutorial_step1_title),

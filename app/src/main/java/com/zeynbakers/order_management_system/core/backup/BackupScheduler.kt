@@ -25,7 +25,7 @@ object BackupScheduler {
     fun ensureScheduled(context: Context) {
         val prefs = BackupPreferences(context)
         val state = prefs.readState()
-        if (state.autoEnabled) {
+        if (state.autoEnabled && (!state.encryptionEnabled || state.encryptionConfigured)) {
             val health = BackupManager.evaluateTargetHealth(context, state)
             if (health == BackupTargetHealth.Healthy) {
                 scheduleDaily(context)

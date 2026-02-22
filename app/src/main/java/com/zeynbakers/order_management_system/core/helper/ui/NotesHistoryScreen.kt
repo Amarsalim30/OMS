@@ -71,6 +71,7 @@ import com.zeynbakers.order_management_system.core.ui.LocalUiEventDispatcher
 import com.zeynbakers.order_management_system.core.ui.components.AppCard
 import com.zeynbakers.order_management_system.core.ui.components.AppEmptyState
 import com.zeynbakers.order_management_system.core.ui.showSnackbar
+import com.zeynbakers.order_management_system.core.util.formatDateTime
 import androidx.core.net.toUri
 import java.time.Instant
 import java.time.LocalDate
@@ -647,9 +648,6 @@ private fun dayBucketLabel(
 }
 
 private fun formatHistoryTimestamp(epochMillis: Long): String {
-    val zone = ZoneId.systemDefault()
-    return Instant.ofEpochMilli(epochMillis)
-        .atZone(zone)
-        .format(DateTimeFormatter.ofPattern("dd MMM, HH:mm"))
+    return formatDateTime(epochMillis)
 }
 

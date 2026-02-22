@@ -13,6 +13,7 @@ import androidx.work.WorkerParameters
 import com.zeynbakers.order_management_system.MainActivity
 import com.zeynbakers.order_management_system.R
 import com.zeynbakers.order_management_system.core.db.DatabaseProvider
+import com.zeynbakers.order_management_system.core.util.formatHourMinuteAmPm
 import com.zeynbakers.order_management_system.core.navigation.PendingIntentFactory
 import com.zeynbakers.order_management_system.core.navigation.AppIntents
 import com.zeynbakers.order_management_system.core.util.parsePickupTime
@@ -223,9 +224,7 @@ class ReminderWorker(
 
     private fun formatDueTime(epochMillis: Long, timeZone: TimeZone): String {
         val time = Instant.fromEpochMilliseconds(epochMillis).toLocalDateTime(timeZone).time
-        val hour = time.hour.toString().padStart(2, '0')
-        val minute = time.minute.toString().padStart(2, '0')
-        return "$hour:$minute"
+        return formatHourMinuteAmPm(time.hour, time.minute)
     }
 
     private fun shouldSendSummary(

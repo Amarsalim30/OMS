@@ -3,6 +3,7 @@ package com.zeynbakers.order_management_system.core.backup
 import android.content.Context
 import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
+import com.zeynbakers.order_management_system.R
 
 class DailyBackupWorker(
     appContext: Context,
@@ -13,6 +14,16 @@ class DailyBackupWorker(
         val force = inputData.getBoolean(BackupScheduler.KEY_FORCE, false)
         val state = prefs.readState()
         if (!force && !state.autoEnabled) {
+            return Result.success()
+        }
+        if (!force && state.encryptionEnabled && !state.encryptionConfigured) {
+            val count = prefs.incrementAutoFailure()
+            if (count >= BACKUP_ATTENTION_THRESHOLD) {
+                BackupAttentionNotifier.notifyNeedsAttention(
+                    context = applicationContext,
+                    message = applicationContext.getString(R.string.backup_encryption_missing_passphrase)
+                )
+            }
             return Result.success()
         }
         if (!force) {

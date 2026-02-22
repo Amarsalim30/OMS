@@ -56,7 +56,9 @@ import androidx.work.WorkManager
 import com.zeynbakers.order_management_system.R
 import com.zeynbakers.order_management_system.core.ui.LocalUiEventDispatcher
 import com.zeynbakers.order_management_system.core.ui.showSnackbar
+import com.zeynbakers.order_management_system.core.util.formatHourMinuteAmPm
 import java.text.SimpleDateFormat
+import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 import java.util.concurrent.TimeUnit
@@ -1112,8 +1114,10 @@ private class OpenBackupDirectoryContract : ActivityResultContract<Unit, PickerR
 }
 
 private fun formatTimestamp(timestamp: Long): String {
-    val formatter = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
-    return formatter.format(Date(timestamp))
+    val datePart = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date(timestamp))
+    val calendar = Calendar.getInstance().apply { timeInMillis = timestamp }
+    val timePart = formatHourMinuteAmPm(calendar.get(Calendar.HOUR_OF_DAY), calendar.get(Calendar.MINUTE))
+    return "$datePart, $timePart"
 }
 
 private fun pickRelevantWorkInfo(items: List<WorkInfo>): WorkInfo? {

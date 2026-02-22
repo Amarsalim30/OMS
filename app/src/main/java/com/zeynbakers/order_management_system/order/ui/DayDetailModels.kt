@@ -5,11 +5,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import com.zeynbakers.order_management_system.R
+import com.zeynbakers.order_management_system.core.util.formatPickupTimeForDisplay
 import com.zeynbakers.order_management_system.core.util.parsePickupTime
 import com.zeynbakers.order_management_system.core.ui.components.AppFilterOption
 import com.zeynbakers.order_management_system.order.data.OrderEntity
 import java.math.BigDecimal
-import java.util.Locale
 
 internal fun resolvePaymentState(total: BigDecimal, paidAmount: BigDecimal): PaymentState {
     if (paidAmount.compareTo(BigDecimal.ZERO) <= 0) {
@@ -87,11 +87,7 @@ internal fun sortOrdersForPlanner(orders: List<OrderEntity>): List<OrderEntity> 
 }
 
 internal fun plannerPickupDisplay(pickupTime: String?): String? {
-    val parsed = parsePickupTime(pickupTime)
-    if (parsed != null) {
-        return String.format(Locale.getDefault(), "%02d:%02d", parsed.hour, parsed.minute)
-    }
-    return pickupTime?.trim()?.takeIf { it.isNotBlank() }
+    return formatPickupTimeForDisplay(pickupTime)
 }
 
 private fun plannerPickupMinute(pickupTime: String?): Int? {
