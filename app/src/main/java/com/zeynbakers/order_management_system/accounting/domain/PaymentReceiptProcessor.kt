@@ -13,8 +13,6 @@ import com.zeynbakers.order_management_system.accounting.data.PaymentReceiptEnti
 import com.zeynbakers.order_management_system.accounting.data.PaymentReceiptStatus
 import com.zeynbakers.order_management_system.core.db.AppDatabase
 import com.zeynbakers.order_management_system.order.data.OrderEntity
-import com.zeynbakers.order_management_system.order.data.OrderStatus
-import com.zeynbakers.order_management_system.order.data.OrderStatusOverride
 import java.math.BigDecimal
 import kotlinx.datetime.Clock
 
@@ -403,36 +401,40 @@ class PaymentReceiptProcessor(private val database: AppDatabase) {
         var remainingPayment = receipt.amount
         val now = receipt.receivedAt
         val description = buildReceiptDescription(receipt.id, descriptionBase)
-        val orders =
-            orderDao.getOrdersByCustomer(customerId)
-                .filter {
-                    it.status != OrderStatus.CANCELLED &&
-                        it.statusOverride != OrderStatusOverride.CLOSED
-                }
-                .sortedWith(
-                    compareBy<OrderEntity> { it.orderDate }
-                        .thenBy { it.createdAt }
-                        .thenBy { it.id }
+
+        var offset = 0
+        while (remainingPayment > BigDecimal.ZERO) {
+            val orders =
+                orderDao.getOpenOrdersByCustomerPaged(
+                    customerId = customerId,
+                    limit = OLDEST_ORDERS_PAGE_SIZE,
+                    offset = offset
                 )
+            if (orders.isEmpty()) break
 
-        for (order in orders) {
-            if (remainingPayment <= BigDecimal.ZERO) break
-            val paidSoFar = accountingDao.getPaidForOrder(order.id)
-            val remaining = order.totalAmount - paidSoFar
-            if (remaining <= BigDecimal.ZERO) continue
+            for (order in orders) {
+                if (remainingPayment <= BigDecimal.ZERO) break
+                val paidSoFar = accountingDao.getPaidForOrder(order.id)
+                val remaining = order.totalAmount - paidSoFar
+                if (remaining <= BigDecimal.ZERO) continue
 
-            val applied = if (remainingPayment > remaining) remaining else remainingPayment
-            val entryId = insertCreditEntry(order.id, customerId, applied, description, now)
-            insertAllocation(
-                receiptId = receipt.id,
-                orderId = order.id,
-                customerId = customerId,
-                amount = applied,
-                type = PaymentAllocationType.ORDER,
-                accountEntryId = entryId,
-                createdAt = now
-            )
-            remainingPayment -= applied
+                val applied = if (remainingPayment > remaining) remaining else remainingPayment
+                val entryId = insertCreditEntry(order.id, customerId, applied, description, now)
+                insertAllocation(
+                    receiptId = receipt.id,
+                    orderId = order.id,
+                    customerId = customerId,
+                    amount = applied,
+                    type = PaymentAllocationType.ORDER,
+                    accountEntryId = entryId,
+                    createdAt = now
+                )
+                remainingPayment -= applied
+            }
+            if (orders.size < OLDEST_ORDERS_PAGE_SIZE) {
+                break
+            }
+            offset += OLDEST_ORDERS_PAGE_SIZE
         }
 
         if (remainingPayment > BigDecimal.ZERO) {
@@ -504,36 +506,40 @@ class PaymentReceiptProcessor(private val database: AppDatabase) {
         var remainingPayment = amount
         val now = receipt.receivedAt
         val description = buildReceiptDescription(receipt.id, descriptionBase)
-        val orders =
-            orderDao.getOrdersByCustomer(customerId)
-                .filter {
-                    it.status != OrderStatus.CANCELLED &&
-                        it.statusOverride != OrderStatusOverride.CLOSED
-                }
-                .sortedWith(
-                    compareBy<OrderEntity> { it.orderDate }
-                        .thenBy { it.createdAt }
-                        .thenBy { it.id }
+
+        var offset = 0
+        while (remainingPayment > BigDecimal.ZERO) {
+            val orders =
+                orderDao.getOpenOrdersByCustomerPaged(
+                    customerId = customerId,
+                    limit = OLDEST_ORDERS_PAGE_SIZE,
+                    offset = offset
                 )
+            if (orders.isEmpty()) break
 
-        for (order in orders) {
-            if (remainingPayment <= BigDecimal.ZERO) break
-            val paidSoFar = accountingDao.getPaidForOrder(order.id)
-            val remaining = order.totalAmount - paidSoFar
-            if (remaining <= BigDecimal.ZERO) continue
+            for (order in orders) {
+                if (remainingPayment <= BigDecimal.ZERO) break
+                val paidSoFar = accountingDao.getPaidForOrder(order.id)
+                val remaining = order.totalAmount - paidSoFar
+                if (remaining <= BigDecimal.ZERO) continue
 
-            val applied = if (remainingPayment > remaining) remaining else remainingPayment
-            val entryId = insertCreditEntry(order.id, customerId, applied, description, now)
-            insertAllocation(
-                receiptId = receipt.id,
-                orderId = order.id,
-                customerId = customerId,
-                amount = applied,
-                type = PaymentAllocationType.ORDER,
-                accountEntryId = entryId,
-                createdAt = now
-            )
-            remainingPayment -= applied
+                val applied = if (remainingPayment > remaining) remaining else remainingPayment
+                val entryId = insertCreditEntry(order.id, customerId, applied, description, now)
+                insertAllocation(
+                    receiptId = receipt.id,
+                    orderId = order.id,
+                    customerId = customerId,
+                    amount = applied,
+                    type = PaymentAllocationType.ORDER,
+                    accountEntryId = entryId,
+                    createdAt = now
+                )
+                remainingPayment -= applied
+            }
+            if (orders.size < OLDEST_ORDERS_PAGE_SIZE) {
+                break
+            }
+            offset += OLDEST_ORDERS_PAGE_SIZE
         }
 
         if (remainingPayment > BigDecimal.ZERO) {
@@ -673,5 +679,9 @@ class PaymentReceiptProcessor(private val database: AppDatabase) {
 
     private fun buildReallocateDescription(receiptId: Long): String {
         return "Reallocated receipt #$receiptId"
+    }
+
+    companion object {
+        private const val OLDEST_ORDERS_PAGE_SIZE = 250
     }
 }

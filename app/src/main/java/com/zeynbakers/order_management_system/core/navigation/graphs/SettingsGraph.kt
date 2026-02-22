@@ -37,7 +37,7 @@ internal fun NavGraphBuilder.settingsGraph(
     composable(AppRoutes.NotesHistory) {
         val context = LocalContext.current
         val database = remember { DatabaseProvider.getDatabase(context.applicationContext) }
-        val factory = remember(database) { AppViewModelFactory(database) }
+        val factory = remember(database) { AppViewModelFactory(database, context.applicationContext) }
         val viewModel: NotesHistoryViewModel = viewModel(factory = factory)
         NotesHistoryScreen(
             viewModel = viewModel,

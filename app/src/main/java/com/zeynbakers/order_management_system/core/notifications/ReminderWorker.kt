@@ -131,22 +131,22 @@ class ReminderWorker(
         val count = orders.size
         val title =
             if (leadTimeMinutes >= NotificationPreferences.LEAD_TIME_1_DAY) {
-                "Orders due soon"
+                appContext.getString(R.string.reminder_due_title_day)
             } else {
-                "Orders due within 1 hour"
+                appContext.getString(R.string.reminder_due_title_hour)
             }
         val lines =
             orders.take(5).map { (order, dueAtMillis) ->
                 val name = order.customerId?.let { customerNames[it] }?.takeIf { it.isNotBlank() }
                 val label = name ?: order.notes.take(40)
                 val dueTime = formatDueTime(dueAtMillis, timeZone)
-                "$label - $dueTime"
+                appContext.getString(R.string.reminder_due_line_item, label, dueTime)
             }
         val detailText =
             if (count == 1) {
-                lines.firstOrNull() ?: "1 order due"
+                lines.firstOrNull() ?: appContext.getString(R.string.reminder_due_single_fallback)
             } else {
-                "$count orders due"
+                appContext.getString(R.string.reminder_due_multiple_fallback, count)
             }
         val bigText = lines.joinToString("\n")
         val targetDate = orders.first().first.orderDate
@@ -182,8 +182,8 @@ class ReminderWorker(
     }
 
     private fun sendDailySummary(date: LocalDate, totalOrders: Int, unpaidCount: Int) {
-        val title = "Daily summary"
-        val text = "Today: $totalOrders orders, $unpaidCount unpaid"
+        val title = appContext.getString(R.string.reminder_daily_title)
+        val text = appContext.getString(R.string.reminder_daily_text, totalOrders, unpaidCount)
         val intent =
             Intent(appContext, MainActivity::class.java).apply {
                 action = AppIntents.ACTION_SHOW_SUMMARY

@@ -112,7 +112,7 @@ class AccountingLogicTest {
     fun recordPayment_splitsOverpaymentToCustomerCredit() = runBlocking {
         val orderDao = db.orderDao()
         val accountingDao = db.accountingDao()
-        val viewModel = CustomerAccountsViewModel(db)
+        val viewModel = CustomerAccountsViewModel(db, ApplicationProvider.getApplicationContext())
 
         val orderId = orderDao.insert(
             OrderEntity(
@@ -154,7 +154,7 @@ class AccountingLogicTest {
     fun recordPayment_autoAllocatesAcrossOldestOrders() = runBlocking {
         val orderDao = db.orderDao()
         val accountingDao = db.accountingDao()
-        val viewModel = CustomerAccountsViewModel(db)
+        val viewModel = CustomerAccountsViewModel(db, ApplicationProvider.getApplicationContext())
 
         val firstOrderId = orderDao.insert(
             OrderEntity(
@@ -195,7 +195,7 @@ class AccountingLogicTest {
     fun markBadDebt_allocatesToOldestOpenOrders_beforeCustomerLevel() = runBlocking {
         val orderDao = db.orderDao()
         val accountingDao = db.accountingDao()
-        val viewModel = CustomerAccountsViewModel(db)
+        val viewModel = CustomerAccountsViewModel(db, ApplicationProvider.getApplicationContext())
 
         val firstOrderDate = LocalDate(2026, 5, 1)
         val secondOrderDate = LocalDate(2026, 5, 2)

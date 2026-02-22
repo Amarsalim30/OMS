@@ -40,6 +40,7 @@ import com.zeynbakers.order_management_system.order.ui.OrderViewModel
 internal fun MainAppHostScaffold(
     activity: ComponentActivity,
     navController: NavHostController,
+    startDestination: String,
     currentRoute: String?,
     activeTopLevelRoute: String,
     selectedTopLevelRoute: String,
@@ -150,6 +151,7 @@ internal fun MainAppHostScaffold(
         ) { padding ->
             AppFeatureNavHost(
                 navController = navController,
+                startDestination = startDestination,
                 modifier = Modifier.fillMaxSize().padding(padding),
                 orderViewModel = orderViewModel,
                 customerViewModel = customerViewModel,

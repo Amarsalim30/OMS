@@ -4,6 +4,8 @@ import android.Manifest
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.os.Build
+import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
@@ -15,6 +17,7 @@ import com.zeynbakers.order_management_system.core.notifications.NotificationCha
 
 object BackupAttentionNotifier {
     private const val BACKUP_ATTENTION_NOTIFICATION_ID = 42021
+    private const val TAG = "BackupAttentionNotifier"
 
     fun notifyNeedsAttention(context: Context, message: String?) {
         NotificationChannels.ensureCreated(context)
@@ -48,15 +51,27 @@ object BackupAttentionNotifier {
                 )
                 .build()
 
-        NotificationManagerCompat.from(context).notify(BACKUP_ATTENTION_NOTIFICATION_ID, notification)
+        try {
+            NotificationManagerCompat.from(context).notify(BACKUP_ATTENTION_NOTIFICATION_ID, notification)
+        } catch (securityError: SecurityException) {
+            Log.w(TAG, "Skipping backup attention notification; permission unavailable", securityError)
+        }
     }
 
     fun cancel(context: Context) {
-        NotificationManagerCompat.from(context).cancel(BACKUP_ATTENTION_NOTIFICATION_ID)
+        try {
+            NotificationManagerCompat.from(context).cancel(BACKUP_ATTENTION_NOTIFICATION_ID)
+        } catch (securityError: SecurityException) {
+            Log.w(TAG, "Skipping backup attention cancel; permission unavailable", securityError)
+        }
     }
 
     private fun canNotify(context: Context): Boolean {
-        return ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) ==
-            PackageManager.PERMISSION_GRANTED
+        if (!NotificationManagerCompat.from(context).areNotificationsEnabled()) return false
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return true
+        return ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.POST_NOTIFICATIONS
+        ) == PackageManager.PERMISSION_GRANTED
     }
 }

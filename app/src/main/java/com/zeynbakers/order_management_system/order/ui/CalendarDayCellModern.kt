@@ -45,8 +45,8 @@ internal fun DayCell(
     onSelectDate: (LocalDate) -> Unit,
     onOpenDay: (LocalDate) -> Unit,
     onQuickAdd: (LocalDate) -> Unit,
-    onBoundsChanged: ((Rect) -> Unit)? = null,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onBoundsChanged: ((Rect) -> Unit)? = null
 ) {
     val hasOrders = day.orderCount > 0
     val markerStates = remember(day.orderStates, day.orderCount, day.paymentState) {

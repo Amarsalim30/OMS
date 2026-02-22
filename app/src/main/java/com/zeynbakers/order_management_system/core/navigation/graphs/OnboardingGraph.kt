@@ -39,6 +39,7 @@ import com.zeynbakers.order_management_system.R
 import com.zeynbakers.order_management_system.core.backup.BackupPreferences
 import com.zeynbakers.order_management_system.core.backup.BackupScheduler
 import com.zeynbakers.order_management_system.core.backup.BackupTargetType
+import com.zeynbakers.order_management_system.core.backup.persistSafUriPermission
 import com.zeynbakers.order_management_system.core.helper.HelperOverlayController
 import com.zeynbakers.order_management_system.core.helper.HelperPermissions
 import com.zeynbakers.order_management_system.core.helper.HelperPreferences
@@ -49,7 +50,6 @@ import com.zeynbakers.order_management_system.core.onboarding.OnboardingState
 import com.zeynbakers.order_management_system.core.onboarding.OnboardingPreferences
 import com.zeynbakers.order_management_system.core.onboarding.PermissionPrimerScreen
 import com.zeynbakers.order_management_system.core.onboarding.SetupChecklistScreen
-import com.zeynbakers.order_management_system.core.onboarding.SplashScreen
 import com.zeynbakers.order_management_system.core.notifications.NotificationPreferences
 import com.zeynbakers.order_management_system.core.notifications.NotificationScheduler
 import kotlinx.coroutines.launch
@@ -58,25 +58,6 @@ import kotlinx.datetime.TimeZone
 internal fun NavGraphBuilder.onboardingGraph(
     navController: NavHostController
 ) {
-    composable(AppRoutes.Splash) {
-        val prefs = remember { OnboardingPreferences(navController.context) }
-        SplashScreen(
-            onShouldEnterHome = { prefs.readState().onboardingCompleted },
-            onOpenHome = {
-                navController.navigate(AppRoutes.Calendar) {
-                    popUpTo(AppRoutes.Splash) { inclusive = true }
-                    launchSingleTop = true
-                }
-            },
-            onOpenIntro = {
-                navController.navigate(AppRoutes.Intro) {
-                    popUpTo(AppRoutes.Splash) { inclusive = true }
-                    launchSingleTop = true
-                }
-            }
-        )
-    }
-
     composable(AppRoutes.Intro) {
         val prefs = remember { OnboardingPreferences(navController.context) }
         val scope = rememberCoroutineScope()
@@ -166,10 +147,12 @@ internal fun NavGraphBuilder.onboardingGraph(
                 val persistFlags =
                     Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
                 val persisted =
-                    runCatching {
-                        context.contentResolver.takePersistableUriPermission(uri, persistFlags)
-                        true
-                    }.getOrDefault(false)
+                    persistSafUriPermission(
+                        context = context,
+                        uri = uri,
+                        resultFlags = 0,
+                        requiredFlags = persistFlags
+                    )
                 if (!persisted) return@rememberLauncherForActivityResult
 
                 val displayName =

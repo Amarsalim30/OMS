@@ -1,7 +1,6 @@
 package com.zeynbakers.order_management_system.core.helper.ui
 
 import android.content.Intent
-import android.net.Uri
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -72,6 +71,7 @@ import com.zeynbakers.order_management_system.core.ui.LocalUiEventDispatcher
 import com.zeynbakers.order_management_system.core.ui.components.AppCard
 import com.zeynbakers.order_management_system.core.ui.components.AppEmptyState
 import com.zeynbakers.order_management_system.core.ui.showSnackbar
+import androidx.core.net.toUri
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
@@ -93,6 +93,10 @@ fun NotesHistoryScreen(
     var showFilterSheet by remember { mutableStateOf(false) }
     val todayHeader = stringResource(R.string.notes_history_day_today)
     val yesterdayHeader = stringResource(R.string.notes_history_day_yesterday)
+    val copiedMessage = stringResource(R.string.notes_history_copied)
+    val shareTitle = stringResource(R.string.notes_history_share_title)
+    val deletedMessage = stringResource(R.string.notes_history_deleted)
+    val updatedMessage = stringResource(R.string.notes_history_updated)
     var editTarget by remember { mutableStateOf<HelperNoteWithCustomer?>(null) }
 
     Scaffold(
@@ -173,7 +177,7 @@ fun NotesHistoryScreen(
                                 row = row,
                                 onCopy = { text ->
                                     clipboard.setText(AnnotatedString(text))
-                                    scope.launch { uiEvents.showSnackbar(context.getString(R.string.notes_history_copied)) }
+                                    scope.launch { uiEvents.showSnackbar(copiedMessage) }
                                 },
                                 onShare = { text ->
                                     val shareIntent =
@@ -184,7 +188,7 @@ fun NotesHistoryScreen(
                                     context.startActivity(
                                         Intent.createChooser(
                                             shareIntent,
-                                            context.getString(R.string.notes_history_share_title)
+                                            shareTitle
                                         )
                                     )
                                 },
@@ -193,13 +197,13 @@ fun NotesHistoryScreen(
                                 },
                                 onDelete = { noteId ->
                                     viewModel.delete(noteId)
-                                    scope.launch { uiEvents.showSnackbar(context.getString(R.string.notes_history_deleted)) }
+                                    scope.launch { uiEvents.showSnackbar(deletedMessage) }
                                 },
                                 onEdit = { row ->
                                     editTarget = row
                                 },
                                 onCall = { phoneDigits ->
-                                    val intent = Intent(Intent.ACTION_DIAL, Uri.parse("tel:$phoneDigits"))
+                                    val intent = Intent(Intent.ACTION_DIAL, "tel:$phoneDigits".toUri())
                                     context.startActivity(intent)
                                 }
                             )
@@ -233,7 +237,7 @@ fun NotesHistoryScreen(
             onSave = { noteId, updatedText ->
                 viewModel.edit(noteId, updatedText)
                 editTarget = null
-                scope.launch { uiEvents.showSnackbar(context.getString(R.string.notes_history_updated)) }
+                scope.launch { uiEvents.showSnackbar(updatedMessage) }
             }
         )
     }

@@ -26,9 +26,13 @@ class BackupPreferences(context: Context) {
         val lastMessage = prefs.getString(KEY_LAST_MESSAGE, null)
         val consecutiveAutoFailures = prefs.getInt(KEY_AUTO_FAILURE_COUNT, 0).coerceAtLeast(0)
         val manifestPolicy =
-            prefs.getString(KEY_MANIFEST_POLICY, RestoreManifestPolicy.LegacyCompatible.name)
+            prefs.getString(KEY_MANIFEST_POLICY, RestoreManifestPolicy.Strict.name)
                 ?.let { runCatching { RestoreManifestPolicy.valueOf(it) }.getOrNull() }
-                ?: RestoreManifestPolicy.LegacyCompatible
+                ?: RestoreManifestPolicy.Strict
+        val encryptionEnabled = prefs.getBoolean(KEY_ENCRYPTION_ENABLED, false)
+        val encryptionPassphrase =
+            prefs.getString(KEY_ENCRYPTION_PASSPHRASE, null)
+                ?.takeIf { it.isNotBlank() }
         return BackupState(
             autoEnabled = enabled,
             targetType = targetType,
@@ -40,7 +44,9 @@ class BackupPreferences(context: Context) {
             lastStatus = status,
             lastMessage = lastMessage,
             consecutiveAutoFailures = consecutiveAutoFailures,
-            manifestPolicy = manifestPolicy
+            manifestPolicy = manifestPolicy,
+            encryptionEnabled = encryptionEnabled,
+            encryptionConfigured = !encryptionPassphrase.isNullOrBlank()
         )
     }
 
@@ -104,6 +110,26 @@ class BackupPreferences(context: Context) {
         prefs.edit { putString(KEY_MANIFEST_POLICY, policy.name) }
     }
 
+    fun setEncryptionEnabled(enabled: Boolean) {
+        prefs.edit { putBoolean(KEY_ENCRYPTION_ENABLED, enabled) }
+    }
+
+    fun setEncryptionPassphrase(passphrase: String?) {
+        val normalized = passphrase?.trim()?.takeIf { it.isNotEmpty() }
+        prefs.edit { putString(KEY_ENCRYPTION_PASSPHRASE, normalized) }
+    }
+
+    fun getEncryptionPassphrase(): String? {
+        return prefs.getString(KEY_ENCRYPTION_PASSPHRASE, null)?.takeIf { it.isNotBlank() }
+    }
+
+    fun clearEncryptionConfiguration() {
+        prefs.edit {
+            putBoolean(KEY_ENCRYPTION_ENABLED, false)
+            putString(KEY_ENCRYPTION_PASSPHRASE, null)
+        }
+    }
+
     private fun resolveTargetHealth(
         targetType: BackupTargetType,
         targetUri: String?
@@ -131,5 +157,7 @@ class BackupPreferences(context: Context) {
         private const val KEY_LAST_MESSAGE = "last_message"
         private const val KEY_AUTO_FAILURE_COUNT = "auto_failure_count"
         private const val KEY_MANIFEST_POLICY = "manifest_policy"
+        private const val KEY_ENCRYPTION_ENABLED = "encryption_enabled"
+        private const val KEY_ENCRYPTION_PASSPHRASE = "encryption_passphrase"
     }
 }

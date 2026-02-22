@@ -105,6 +105,13 @@ private fun CaptureScreen(
     var errorText by remember { mutableStateOf<String?>(null) }
     var partialText by remember { mutableStateOf("") }
     var notePreview by remember { mutableStateOf<com.zeynbakers.order_management_system.core.helper.data.HelperNoteDetection?>(null) }
+    val speechUnavailableError = stringResource(R.string.helper_capture_error_speech_unavailable)
+    val startFailedError = stringResource(R.string.helper_capture_error_start_failed)
+    val noInputError = stringResource(R.string.helper_capture_error_no_input)
+    val parseFailedError = stringResource(R.string.helper_capture_error_parse_failed)
+    val retryError = stringResource(R.string.helper_capture_error_retry)
+    val copiedMessage = stringResource(R.string.notes_history_copied)
+    val savedMessage = stringResource(R.string.helper_capture_saved)
 
     val permissionLauncher =
         rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
@@ -122,7 +129,7 @@ private fun CaptureScreen(
             return
         }
         if (recognizer == null || !SpeechRecognizer.isRecognitionAvailable(context)) {
-            errorText = context.getString(R.string.helper_capture_error_speech_unavailable)
+            errorText = speechUnavailableError
             stage = CaptureStage.Error
             return
         }
@@ -142,7 +149,7 @@ private fun CaptureScreen(
             recognizer.cancel()
             recognizer.startListening(recognizeIntent)
         }.onFailure {
-            errorText = context.getString(R.string.helper_capture_error_start_failed)
+            errorText = startFailedError
             stage = CaptureStage.Error
         }
     }
@@ -151,7 +158,7 @@ private fun CaptureScreen(
         val cleaned = text.trim()
         transcript = cleaned
         if (cleaned.isBlank()) {
-            errorText = context.getString(R.string.helper_capture_error_no_input)
+            errorText = noInputError
             stage = CaptureStage.Error
             return
         }
@@ -159,7 +166,7 @@ private fun CaptureScreen(
             HelperCaptureMode.VoiceCalculator -> {
                 val parsed = parseVoiceMath(cleaned)
                 if (parsed == null) {
-                    errorText = context.getString(R.string.helper_capture_error_parse_failed)
+                    errorText = parseFailedError
                     stage = CaptureStage.Error
                 } else {
                     calcResult = parsed
@@ -208,7 +215,7 @@ private fun CaptureScreen(
                         if (partialText.isNotBlank()) {
                             processTranscript(partialText)
                         } else {
-                            errorText = context.getString(R.string.helper_capture_error_retry)
+                            errorText = retryError
                             stage = CaptureStage.Error
                         }
                     }
@@ -298,7 +305,7 @@ private fun CaptureScreen(
                                     clipboard.setText(AnnotatedString(value))
                                     Toast.makeText(
                                         context,
-                                        context.getString(R.string.notes_history_copied),
+                                        copiedMessage,
                                         Toast.LENGTH_SHORT
                                     ).show()
                                 },
@@ -320,7 +327,7 @@ private fun CaptureScreen(
                                         }
                                         Toast.makeText(
                                             context,
-                                            context.getString(R.string.helper_capture_saved),
+                                            savedMessage,
                                             Toast.LENGTH_SHORT
                                         ).show()
                                         onClose()
@@ -367,7 +374,7 @@ private fun CaptureScreen(
                                         }
                                         Toast.makeText(
                                             context,
-                                            context.getString(R.string.helper_capture_saved),
+                                            savedMessage,
                                             Toast.LENGTH_SHORT
                                         ).show()
                                         onClose()

@@ -121,6 +121,7 @@ internal data class AppAccountsCallbacks(
 @Composable
 internal fun AppFeatureNavHost(
     navController: NavHostController,
+    startDestination: String,
     modifier: Modifier,
     orderViewModel: OrderViewModel,
     customerViewModel: CustomerAccountsViewModel,
@@ -138,7 +139,7 @@ internal fun AppFeatureNavHost(
 ) {
     NavHost(
         navController = navController,
-        startDestination = AppRoutes.Splash,
+        startDestination = startDestination,
         modifier = modifier
     ) {
         onboardingGraph(navController = navController)

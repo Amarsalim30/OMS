@@ -629,14 +629,11 @@ class PaymentIntakeViewModel(private val database: AppDatabase) : ViewModel() {
         val customer = forcedCustomer ?: findCustomerByPhone(transaction.senderPhone)
         val candidateOrders =
             if (customer != null) {
-                orderDao.getOrdersByCustomer(customer.id)
+                orderDao.getOpenOrdersByCustomerLimited(customer.id, ORDER_SUGGESTION_MAX_ORDERS)
             } else {
-                orderDao.getActiveOrders()
+                orderDao.getOpenOrdersLimited(ORDER_SUGGESTION_MAX_ORDERS)
             }
-        val activeOrders =
-            candidateOrders.filter {
-                it.status != OrderStatus.CANCELLED && it.statusOverride != OrderStatusOverride.CLOSED
-            }
+        val activeOrders = candidateOrders
         val orderIds = activeOrders.map { it.id }.filter { it != 0L }
         val paidByOrder =
             if (orderIds.isEmpty()) {
@@ -784,6 +781,10 @@ class PaymentIntakeViewModel(private val database: AppDatabase) : ViewModel() {
         val orderById: Map<Long, MpesaOrderSuggestion>,
         val selectedOrderId: Long?
     )
+
+    companion object {
+        private const val ORDER_SUGGESTION_MAX_ORDERS = 1_000
+    }
 }
 
 private fun MpesaTransactionUi.toParsedTransaction(): MpesaParsedTransaction {

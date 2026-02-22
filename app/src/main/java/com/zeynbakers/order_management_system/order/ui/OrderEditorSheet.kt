@@ -68,6 +68,7 @@ import com.zeynbakers.order_management_system.customer.data.CustomerEntity
 import java.math.BigDecimal
 import java.text.NumberFormat
 import java.util.Calendar
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -99,6 +100,7 @@ internal fun OrderEditorSheet(
     onCancel: () -> Unit,
     onNotesFocused: () -> Unit,
     onTotalFocused: ((String) -> Unit) -> Unit,
+    modifier: Modifier = Modifier,
     customerFieldModifier: Modifier = Modifier,
     notesFieldModifier: Modifier = Modifier,
     totalFieldModifier: Modifier = Modifier,
@@ -169,7 +171,7 @@ internal fun OrderEditorSheet(
     ) {
         BackHandler(onBack = handleBackPress)
         Box(
-            modifier = Modifier
+            modifier = modifier
                 .fillMaxWidth()
                 .fillMaxHeight(0.9f)
         ) {
@@ -621,7 +623,7 @@ private fun parseTimeForPicker(value: String): Pair<Int, Int> {
 }
 
 private fun formatPickerTime(hour: Int, minute: Int): String {
-    return String.format("%02d:%02d", hour, minute)
+    return String.format(Locale.US, "%02d:%02d", hour, minute)
 }
 
 private fun parseTimePartsOrNull(value: String): Pair<Int, Int>? {
@@ -661,7 +663,7 @@ private fun formatDisplayPickupTime(value: String): String {
         hour24 > 12 -> hour24 - 12
         else -> hour24
     }
-    return String.format("%d:%02d %s", hour12, minute, amPm)
+    return String.format(Locale.getDefault(), "%d:%02d %s", hour12, minute, amPm)
 }
 
 private fun isSamePickupTime(left: String, right: String): Boolean {

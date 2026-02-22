@@ -337,6 +337,38 @@ interface AccountingDao {
     @Query(
         """
         SELECT
+            c.id as customerId,
+            c.name as name,
+            c.phone as phone,
+            IFNULL(SUM(CASE WHEN a.type = 'DEBIT' THEN a.amount ELSE 0 END), 0) as billed,
+            IFNULL(SUM(CASE
+                WHEN a.type IN ('CREDIT', 'WRITE_OFF') THEN a.amount
+                WHEN a.type = 'REVERSAL' THEN -a.amount
+                ELSE 0
+            END), 0) as paid,
+            IFNULL(SUM(CASE WHEN a.type = 'DEBIT' THEN a.amount ELSE 0 END), 0) -
+            IFNULL(SUM(CASE
+                WHEN a.type IN ('CREDIT', 'WRITE_OFF') THEN a.amount
+                WHEN a.type = 'REVERSAL' THEN -a.amount
+                ELSE 0
+            END), 0) as balance
+        FROM customers c
+        LEFT JOIN account_entries a ON a.customerId = c.id
+        WHERE c.isArchived = 0 AND (c.name LIKE :query OR c.phone LIKE :query)
+        GROUP BY c.id
+        ORDER BY c.name
+        LIMIT :limit OFFSET :offset
+        """
+    )
+    suspend fun getCustomerAccountSummariesPaged(
+        query: String,
+        limit: Int,
+        offset: Int
+    ): List<CustomerAccountSummary>
+
+    @Query(
+        """
+        SELECT
             orderId as orderId,
             IFNULL(SUM(CASE
                 WHEN type IN ('CREDIT', 'WRITE_OFF') THEN amount

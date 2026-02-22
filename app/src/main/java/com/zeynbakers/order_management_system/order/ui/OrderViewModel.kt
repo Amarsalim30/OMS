@@ -371,9 +371,9 @@ class OrderViewModel(private val database: AppDatabase) : ViewModel() {
     ): List<OrderMoveOption> {
         val orders =
             if (customerId == null) {
-                orderDao.getActiveOrders()
+                orderDao.getOpenOrdersLimited(MOVE_TARGET_MAX_ORDERS)
             } else {
-                orderDao.getOrdersByCustomer(customerId)
+                orderDao.getOpenOrdersByCustomerLimited(customerId, MOVE_TARGET_MAX_ORDERS)
             }
         val customerIds = orders.mapNotNull { it.customerId }.distinct()
         val customerNames =
@@ -381,7 +381,6 @@ class OrderViewModel(private val database: AppDatabase) : ViewModel() {
             else customerDao.getByIds(customerIds).associate { it.id to it.name }
         return orders
             .filter { it.id != excludeOrderId }
-            .filter { it.status != OrderStatus.CANCELLED && it.statusOverride != OrderStatusOverride.CLOSED }
             .sortedWith(
                 compareBy<OrderEntity> { it.orderDate }
                     .thenBy { it.createdAt }
@@ -616,8 +615,7 @@ class OrderViewModel(private val database: AppDatabase) : ViewModel() {
     fun loadUnpaidOrders() {
         viewModelScope.launch {
             val orders =
-                orderDao.getActiveOrders()
-                    .filter { it.statusOverride != OrderStatusOverride.CLOSED }
+                orderDao.getOpenOrdersLimited(UNPAID_SCREEN_MAX_ORDERS)
             val orderIds = orders.map { it.id }.filter { it != 0L }
             val paidByOrder =
                 if (orderIds.isEmpty()) {
@@ -643,6 +641,11 @@ class OrderViewModel(private val database: AppDatabase) : ViewModel() {
                     compareByDescending<OrderEntity> { it.orderDate }.thenByDescending { it.createdAt }
                 )
         }
+    }
+
+    companion object {
+        private const val MOVE_TARGET_MAX_ORDERS = 1_500
+        private const val UNPAID_SCREEN_MAX_ORDERS = 2_000
     }
 
     private fun isLeapYear(year: Int): Boolean {

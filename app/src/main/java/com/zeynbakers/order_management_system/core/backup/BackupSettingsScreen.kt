@@ -30,6 +30,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -46,6 +47,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
 import androidx.documentfile.provider.DocumentFile
@@ -78,7 +80,7 @@ fun BackupSettingsScreen(onBack: () -> Unit) {
     val restoreFailedMessage = stringResource(R.string.restore_failed)
     val backupStartedMessage = stringResource(R.string.backup_started)
     val restoreStartedMessage = stringResource(R.string.restore_started)
-    val pickFileFirstMessage = stringResource(R.string.backup_pick_file_first)
+    val pickTargetFirstMessage = stringResource(R.string.backup_pick_target_first)
     val filePermissionFailedMessage = stringResource(R.string.backup_file_permission_failed)
     val transientPermissionWarning = stringResource(R.string.backup_permission_transient_warning)
     val testWritePassedMessage = stringResource(R.string.backup_test_write_passed)
@@ -89,6 +91,11 @@ fun BackupSettingsScreen(onBack: () -> Unit) {
     val restorePreparingMessage = stringResource(R.string.backup_restore_preparing)
     val needsRelinkHint = stringResource(R.string.backup_health_needs_relink_hint)
     val unavailableHint = stringResource(R.string.backup_health_unavailable_hint)
+    val encryptionPassphraseTooShort = stringResource(R.string.backup_encryption_passphrase_too_short)
+    val encryptionPassphraseMismatch = stringResource(R.string.backup_encryption_passphrase_mismatch)
+    val encryptionEnabledMessage = stringResource(R.string.backup_encryption_enabled)
+    val encryptionDisabledMessage = stringResource(R.string.backup_encryption_disabled)
+    val encryptionPassphraseUpdated = stringResource(R.string.backup_encryption_passphrase_updated)
 
     var state by remember { mutableStateOf(prefs.readState()) }
     var latestBackupName by remember { mutableStateOf<String?>(null) }
@@ -104,6 +111,8 @@ fun BackupSettingsScreen(onBack: () -> Unit) {
     var inlineRestoreProgress by remember { mutableStateOf(0) }
     var inlineRestoreStage by remember { mutableStateOf(restoreStageDefault) }
     var pendingSaveAction by remember { mutableStateOf(SaveActionAfterPick.None) }
+    var encryptionPassphraseInput by remember { mutableStateOf("") }
+    var encryptionPassphraseConfirmInput by remember { mutableStateOf("") }
     val suggestedBackupFileName = "backup_latest.oms"
 
     val refreshState: suspend () -> Unit = {
@@ -125,7 +134,7 @@ fun BackupSettingsScreen(onBack: () -> Unit) {
             val requiredFlags = Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
             scope.launch {
                 val actionAfterPick = pendingSaveAction
-                val persisted = persistUriPermission(context, uri, result.flags, requiredFlags)
+                val persisted = persistSafUriPermission(context, uri, result.flags, requiredFlags)
                 if (!persisted) {
                     pendingSaveAction = SaveActionAfterPick.None
                     uiEvents.showSnackbar(filePermissionFailedMessage)
@@ -169,12 +178,60 @@ fun BackupSettingsScreen(onBack: () -> Unit) {
             }
         }
 
+    val directoryPicker =
+        rememberLauncherForActivityResult(OpenBackupDirectoryContract()) { result ->
+            val uri = result.uri ?: return@rememberLauncherForActivityResult
+            val requiredFlags = Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+            scope.launch {
+                val actionAfterPick = pendingSaveAction
+                val persisted = persistSafUriPermission(context, uri, result.flags, requiredFlags)
+                if (!persisted) {
+                    pendingSaveAction = SaveActionAfterPick.None
+                    uiEvents.showSnackbar(filePermissionFailedMessage)
+                    return@launch
+                }
+                val displayName =
+                    runCatching { DocumentFile.fromTreeUri(context, uri)?.name?.takeIf { it.isNotBlank() } }
+                        .getOrNull()
+                prefs.setTargetSelection(
+                    uri = uri.toString(),
+                    displayName = displayName,
+                    authority = uri.authority
+                )
+                val probe = BackupManager.runStorageProbe(context)
+                val probeMessage =
+                    probe.message ?: if (probe.success) testWritePassedMessage else testWriteFailedMessage
+                probeStatus =
+                    ProbeStatus(
+                        success = probe.success,
+                        message = probeMessage,
+                        checkedAt = System.currentTimeMillis()
+                    )
+                if (!probe.success) {
+                    pendingSaveAction = SaveActionAfterPick.None
+                    uiEvents.showSnackbar(probeMessage)
+                    refreshState.invoke()
+                    return@launch
+                }
+                if (actionAfterPick == SaveActionAfterPick.EnableAuto) {
+                    prefs.setAutoEnabled(true)
+                }
+                BackupScheduler.ensureScheduled(context)
+                refreshState.invoke()
+                if (actionAfterPick == SaveActionAfterPick.RunBackupNow) {
+                    BackupScheduler.enqueueManualBackup(context)
+                    uiEvents.showSnackbar(backupStartedMessage)
+                }
+                pendingSaveAction = SaveActionAfterPick.None
+            }
+        }
+
     val restorePicker =
         rememberLauncherForActivityResult(OpenBackupDocumentContract()) { result ->
             val uri = result.uri ?: return@rememberLauncherForActivityResult
             scope.launch {
                 val persisted =
-                    persistUriPermission(
+                    persistSafUriPermission(
                         context = context,
                         uri = uri,
                         resultFlags = result.flags,
@@ -274,6 +331,23 @@ fun BackupSettingsScreen(onBack: () -> Unit) {
                     .getOrNull()
             }
             ?: stringResource(R.string.backup_target_file_not_selected)
+    val targetModeLabel =
+        when (state.targetType) {
+            BackupTargetType.AppPrivate -> stringResource(R.string.backup_target_mode_app_private)
+            BackupTargetType.SafDirectory -> stringResource(R.string.backup_target_mode_directory)
+            BackupTargetType.SafFile -> stringResource(R.string.backup_target_mode_file)
+        }
+    val manifestPolicyLabel =
+        when (state.manifestPolicy) {
+            RestoreManifestPolicy.Strict -> stringResource(R.string.backup_manifest_policy_strict)
+            RestoreManifestPolicy.LegacyCompatible -> stringResource(R.string.backup_manifest_policy_legacy)
+        }
+    val encryptionModeLabel =
+        if (state.encryptionEnabled) {
+            stringResource(R.string.backup_encryption_mode_encrypted)
+        } else {
+            stringResource(R.string.backup_encryption_mode_plain)
+        }
     val providerLabel = state.targetAuthority ?: stringResource(R.string.backup_provider_unknown)
     val healthLabel = healthLabelFor(context, state.targetHealth)
     val healthHint =
@@ -282,14 +356,16 @@ fun BackupSettingsScreen(onBack: () -> Unit) {
             BackupTargetHealth.NeedsRelink -> needsRelinkHint
             BackupTargetHealth.Unavailable -> unavailableHint
         }
+    val encryptionReady = !state.encryptionEnabled || state.encryptionConfigured
 
     val targetReady =
         when (state.targetType) {
-            BackupTargetType.AppPrivate -> true
+            BackupTargetType.AppPrivate -> encryptionReady
             BackupTargetType.SafFile,
             BackupTargetType.SafDirectory ->
                 !state.targetUri.isNullOrBlank() &&
-                    state.targetHealth == BackupTargetHealth.Healthy
+                    state.targetHealth == BackupTargetHealth.Healthy &&
+                    encryptionReady
         }
     val lastBackupTime = state.lastBackupTime
     val lastBackupLabel =
@@ -355,6 +431,10 @@ fun BackupSettingsScreen(onBack: () -> Unit) {
                         value = backupFileName
                     )
                     LabeledValue(
+                        label = stringResource(R.string.backup_storage_mode_label),
+                        value = targetModeLabel
+                    )
+                    LabeledValue(
                         label = stringResource(R.string.backup_storage_provider_label),
                         value = providerLabel
                     )
@@ -387,13 +467,30 @@ fun BackupSettingsScreen(onBack: () -> Unit) {
                         },
                         modifier = Modifier.fillMaxWidth(),
                         enabled = !isBusy
-                    ) {
-                        Text(
-                            text =
-                                if (state.targetType == BackupTargetType.SafFile && targetReady) {
+                        ) {
+                            Text(
+                                text =
+                                    if (state.targetType == BackupTargetType.SafFile && targetReady) {
                                     stringResource(R.string.backup_change_file)
                                 } else {
                                     stringResource(R.string.backup_choose_file)
+                                    }
+                        )
+                    }
+                    OutlinedButton(
+                        onClick = {
+                            pendingSaveAction = SaveActionAfterPick.None
+                            directoryPicker.launch(Unit)
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = !isBusy
+                    ) {
+                        Text(
+                            text =
+                                if (state.targetType == BackupTargetType.SafDirectory && targetReady) {
+                                    stringResource(R.string.backup_change_folder)
+                                } else {
+                                    stringResource(R.string.backup_choose_folder)
                                 }
                         )
                     }
@@ -403,7 +500,7 @@ fun BackupSettingsScreen(onBack: () -> Unit) {
                                 (state.targetType == BackupTargetType.SafFile || state.targetType == BackupTargetType.SafDirectory) &&
                                     !state.targetUri.isNullOrBlank()
                             if (!canProbe) {
-                                scope.launch { uiEvents.showSnackbar(pickFileFirstMessage) }
+                                scope.launch { uiEvents.showSnackbar(pickTargetFirstMessage) }
                                 return@OutlinedButton
                             }
                             scope.launch {
@@ -428,6 +525,186 @@ fun BackupSettingsScreen(onBack: () -> Unit) {
                         enabled = !isBusy && !isCheckingProbe
                     ) {
                         Text(text = stringResource(R.string.backup_test_write))
+                    }
+                }
+            }
+
+            Card(
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
+            ) {
+                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        text = stringResource(R.string.backup_manifest_policy_title),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Text(
+                        text = stringResource(R.string.backup_manifest_policy_subtitle),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    LabeledValue(
+                        label = stringResource(R.string.backup_manifest_policy_current),
+                        value = manifestPolicyLabel
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                        if (state.manifestPolicy == RestoreManifestPolicy.Strict) {
+                            Button(
+                                onClick = {},
+                                enabled = false,
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text(stringResource(R.string.backup_manifest_policy_strict))
+                            }
+                            OutlinedButton(
+                                onClick = {
+                                    prefs.setManifestPolicy(RestoreManifestPolicy.LegacyCompatible)
+                                    scope.launch { refreshState.invoke() }
+                                },
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text(stringResource(R.string.backup_manifest_policy_legacy))
+                            }
+                        } else {
+                            Button(
+                                onClick = {
+                                    prefs.setManifestPolicy(RestoreManifestPolicy.Strict)
+                                    scope.launch { refreshState.invoke() }
+                                },
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text(stringResource(R.string.backup_manifest_policy_strict))
+                            }
+                            OutlinedButton(
+                                onClick = {},
+                                enabled = false,
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text(stringResource(R.string.backup_manifest_policy_legacy))
+                            }
+                        }
+                    }
+                    Text(
+                        text = stringResource(R.string.backup_manifest_policy_hint),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
+            Card(
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)
+            ) {
+                Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        text = stringResource(R.string.backup_encryption_title),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    Text(
+                        text = stringResource(R.string.backup_encryption_subtitle),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    LabeledValue(
+                        label = stringResource(R.string.backup_encryption_current),
+                        value = encryptionModeLabel
+                    )
+                    if (state.encryptionEnabled && !state.encryptionConfigured) {
+                        Text(
+                            text = stringResource(R.string.backup_encryption_missing_passphrase),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error
+                        )
+                    } else if (state.encryptionEnabled) {
+                        Text(
+                            text = stringResource(R.string.backup_encryption_enabled_hint),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    } else {
+                        Text(
+                            text = stringResource(R.string.backup_encryption_plain_hint),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                    OutlinedTextField(
+                        value = encryptionPassphraseInput,
+                        onValueChange = { encryptionPassphraseInput = it },
+                        label = { Text(stringResource(R.string.backup_encryption_passphrase_label)) },
+                        placeholder = { Text(stringResource(R.string.backup_encryption_passphrase_placeholder)) },
+                        visualTransformation = PasswordVisualTransformation(),
+                        singleLine = true,
+                        enabled = !isBusy,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
+                        value = encryptionPassphraseConfirmInput,
+                        onValueChange = { encryptionPassphraseConfirmInput = it },
+                        label = { Text(stringResource(R.string.backup_encryption_passphrase_confirm_label)) },
+                        placeholder = { Text(stringResource(R.string.backup_encryption_passphrase_placeholder)) },
+                        visualTransformation = PasswordVisualTransformation(),
+                        singleLine = true,
+                        enabled = !isBusy,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    val primaryEncryptionActionLabel =
+                        if (state.encryptionEnabled) {
+                            stringResource(R.string.backup_encryption_update_passphrase)
+                        } else {
+                            stringResource(R.string.backup_encryption_enable_action)
+                        }
+                    Button(
+                        onClick = {
+                            val passphrase = encryptionPassphraseInput.trim()
+                            val confirm = encryptionPassphraseConfirmInput.trim()
+                            if (passphrase.length < 8) {
+                                scope.launch { uiEvents.showSnackbar(encryptionPassphraseTooShort) }
+                                return@Button
+                            }
+                            if (passphrase != confirm) {
+                                scope.launch { uiEvents.showSnackbar(encryptionPassphraseMismatch) }
+                                return@Button
+                            }
+                            prefs.setEncryptionPassphrase(passphrase)
+                            if (!state.encryptionEnabled) {
+                                prefs.setEncryptionEnabled(true)
+                            }
+                            encryptionPassphraseInput = ""
+                            encryptionPassphraseConfirmInput = ""
+                            scope.launch {
+                                refreshState.invoke()
+                                val message =
+                                    if (state.encryptionEnabled) {
+                                        encryptionPassphraseUpdated
+                                    } else {
+                                        encryptionEnabledMessage
+                                    }
+                                uiEvents.showSnackbar(message)
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = !isBusy
+                    ) {
+                        Text(text = primaryEncryptionActionLabel)
+                    }
+                    if (state.encryptionEnabled) {
+                        OutlinedButton(
+                            onClick = {
+                                prefs.clearEncryptionConfiguration()
+                                encryptionPassphraseInput = ""
+                                encryptionPassphraseConfirmInput = ""
+                                scope.launch {
+                                    refreshState.invoke()
+                                    uiEvents.showSnackbar(encryptionDisabledMessage)
+                                }
+                            },
+                            modifier = Modifier.fillMaxWidth(),
+                            enabled = !isBusy
+                        ) {
+                            Text(text = stringResource(R.string.backup_encryption_disable_action))
+                        }
                     }
                 }
             }
@@ -471,8 +748,12 @@ fun BackupSettingsScreen(onBack: () -> Unit) {
                             onCheckedChange = { enabled ->
                                 if (enabled && !targetReady) {
                                     pendingSaveAction = SaveActionAfterPick.EnableAuto
-                                    scope.launch { uiEvents.showSnackbar(pickFileFirstMessage) }
-                                    saveFilePicker.launch(suggestedBackupFileName)
+                                    scope.launch { uiEvents.showSnackbar(pickTargetFirstMessage) }
+                                    if (state.targetType == BackupTargetType.SafDirectory) {
+                                        directoryPicker.launch(Unit)
+                                    } else {
+                                        saveFilePicker.launch(suggestedBackupFileName)
+                                    }
                                     return@Switch
                                 }
                                 pendingSaveAction = SaveActionAfterPick.None
@@ -498,8 +779,12 @@ fun BackupSettingsScreen(onBack: () -> Unit) {
                         onClick = {
                             if (!targetReady) {
                                 pendingSaveAction = SaveActionAfterPick.RunBackupNow
-                                scope.launch { uiEvents.showSnackbar(pickFileFirstMessage) }
-                                saveFilePicker.launch(suggestedBackupFileName)
+                                scope.launch { uiEvents.showSnackbar(pickTargetFirstMessage) }
+                                if (state.targetType == BackupTargetType.SafDirectory) {
+                                    directoryPicker.launch(Unit)
+                                } else {
+                                    saveFilePicker.launch(suggestedBackupFileName)
+                                }
                                 return@Button
                             }
                             pendingSaveAction = SaveActionAfterPick.None
@@ -808,31 +1093,22 @@ private class OpenBackupDocumentContract : ActivityResultContract<Unit, PickerRe
     }
 }
 
-private fun persistUriPermission(
-    context: Context,
-    uri: Uri,
-    resultFlags: Int,
-    requiredFlags: Int
-): Boolean {
-    val rwMask = Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
-    val required = requiredFlags and rwMask
-    val granted = resultFlags and rwMask
-    if (required != 0 && (granted and required) == required) {
-        val grantedResult =
-            runCatching {
-                context.contentResolver.takePersistableUriPermission(uri, granted)
-                true
-            }.getOrDefault(false)
-        if (grantedResult) {
-            return true
+private class OpenBackupDirectoryContract : ActivityResultContract<Unit, PickerResult>() {
+    override fun createIntent(context: Context, input: Unit): Intent {
+        return Intent(Intent.ACTION_OPEN_DOCUMENT_TREE).apply {
+            addFlags(
+                Intent.FLAG_GRANT_READ_URI_PERMISSION or
+                    Intent.FLAG_GRANT_WRITE_URI_PERMISSION or
+                    Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION
+            )
+            putExtra(DocumentsContract.EXTRA_PROMPT, context.getString(R.string.backup_choose_folder))
         }
     }
 
-    if (required == 0) return false
-    return runCatching {
-        context.contentResolver.takePersistableUriPermission(uri, required)
-        true
-    }.getOrDefault(false)
+    override fun parseResult(resultCode: Int, intent: Intent?): PickerResult {
+        if (resultCode != Activity.RESULT_OK) return PickerResult(null, 0)
+        return PickerResult(uri = intent?.data, flags = intent?.flags ?: 0)
+    }
 }
 
 private fun formatTimestamp(timestamp: Long): String {

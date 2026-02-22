@@ -19,3 +19,18 @@
 local.properties
 *.zip
 index.html
+*.apk
+*.log
+*.patch
+
+# Root-level design/media artifacts
+/*.jpeg
+/*.jpg
+/*.jfif
+/*.png
+
+# Local tooling caches and temp dirs
+.android_home/
+.kotlin/
+.kotlin_localapp/
+.codex/

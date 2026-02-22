@@ -45,6 +45,41 @@ interface OrderDao {
     @Query("SELECT * FROM orders WHERE status != 'CANCELLED' ORDER BY orderDate DESC, createdAt DESC")
     suspend fun getActiveOrders(): List<OrderEntity>
 
+    @Query(
+        """
+        SELECT * FROM orders
+        WHERE status != 'CANCELLED'
+          AND (statusOverride IS NULL OR statusOverride != 'CLOSED')
+        ORDER BY orderDate DESC, createdAt DESC, id DESC
+        LIMIT :limit
+        """
+    )
+    suspend fun getOpenOrdersLimited(limit: Int): List<OrderEntity>
+
+    @Query(
+        """
+        SELECT * FROM orders
+        WHERE customerId = :customerId
+          AND status != 'CANCELLED'
+          AND (statusOverride IS NULL OR statusOverride != 'CLOSED')
+        ORDER BY orderDate DESC, createdAt DESC, id DESC
+        LIMIT :limit
+        """
+    )
+    suspend fun getOpenOrdersByCustomerLimited(customerId: Long, limit: Int): List<OrderEntity>
+
+    @Query(
+        """
+        SELECT * FROM orders
+        WHERE customerId = :customerId
+          AND status != 'CANCELLED'
+          AND (statusOverride IS NULL OR statusOverride != 'CLOSED')
+        ORDER BY orderDate ASC, createdAt ASC, id ASC
+        LIMIT :limit OFFSET :offset
+        """
+    )
+    suspend fun getOpenOrdersByCustomerPaged(customerId: Long, limit: Int, offset: Int): List<OrderEntity>
+
     @Query("SELECT * FROM orders WHERE id = :orderId")
     suspend fun getOrderById(orderId: Long): OrderEntity?
 

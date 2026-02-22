@@ -132,6 +132,30 @@ class BackupManagerTest {
     }
 
     @Test
+    fun `encrypted archive roundtrip restores original bytes`() {
+        val source = "orders payload 123".toByteArray(Charsets.UTF_8)
+        val encrypted = BackupManager.encryptArchiveForTest(source, "StrongPass#2026")
+        val decoded = BackupManager.decryptArchiveForTest(encrypted, "StrongPass#2026")
+
+        assertTrue(encrypted.size > source.size)
+        assertEquals(source.toList(), decoded.toList())
+    }
+
+    @Test
+    fun `encrypted archive rejects wrong passphrase`() {
+        val source = "customer payload 456".toByteArray(Charsets.UTF_8)
+        val encrypted = BackupManager.encryptArchiveForTest(source, "StrongPass#2026")
+
+        val error =
+            runCatching {
+                BackupManager.decryptArchiveForTest(encrypted, "WrongPass#2026")
+            }.exceptionOrNull()
+
+        assertNotNull(error)
+        assertTrue(error is IllegalArgumentException)
+    }
+
+    @Test
     fun `zip reader rejects oversized single entry`() {
         val zipBytes = buildZip(mapOf("orders.json" to "x".repeat(128)))
         val error =

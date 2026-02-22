@@ -4,18 +4,13 @@ import android.Manifest
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.net.Uri
-import android.os.Build
 import android.provider.Settings
 import androidx.core.content.ContextCompat
+import androidx.core.net.toUri
 
 object HelperPermissions {
     fun hasOverlayPermission(context: Context): Boolean {
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            Settings.canDrawOverlays(context)
-        } else {
-            true
-        }
+        return Settings.canDrawOverlays(context)
     }
 
     fun hasMicrophonePermission(context: Context): Boolean {
@@ -28,7 +23,7 @@ object HelperPermissions {
     fun overlaySettingsIntent(context: Context): Intent {
         return Intent(
             Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-            Uri.parse("package:${context.packageName}")
+            "package:${context.packageName}".toUri()
         ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
     }
 }

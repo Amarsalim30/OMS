@@ -11,7 +11,6 @@ import android.content.res.ColorStateList
 import android.graphics.PixelFormat
 import android.graphics.Typeface
 import android.graphics.drawable.GradientDrawable
-import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.IBinder
@@ -32,6 +31,7 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
+import androidx.core.net.toUri
 import com.zeynbakers.order_management_system.MainActivity
 import com.zeynbakers.order_management_system.R
 import com.zeynbakers.order_management_system.core.db.DatabaseProvider
@@ -304,6 +304,9 @@ class HelperOverlayService : Service() {
         val bubble =
             FrameLayout(this).apply {
                 background = backgroundDrawable
+                contentDescription = getString(R.string.helper_notification_title)
+                isClickable = true
+                isFocusable = true
                 addView(
                     icon,
                     FrameLayout.LayoutParams(
@@ -312,6 +315,13 @@ class HelperOverlayService : Service() {
                         Gravity.CENTER
                     )
                 )
+                setOnClickListener {
+                    when {
+                        captureView != null -> removeCapture()
+                        panelView == null -> showPanel()
+                        else -> removePanel()
+                    }
+                }
                 setOnTouchListener(BubbleTouchListener(params))
             }
         runCatching {
@@ -414,16 +424,14 @@ class HelperOverlayService : Service() {
         serviceScope.launch {
             settingsState = withContext(Dispatchers.IO) { helperPreferences.readState() }
             activeTheme = HelperOverlayThemes.resolve(settingsState.themePreset)
-            val canUseOverlayCapture =
-                !settingsState.fallbackOnly && HelperPermissions.hasOverlayPermission(this@HelperOverlayService)
-            if (!canUseOverlayCapture) {
-                openCapture(mode)
-                return@launch
+            if (!settingsState.fallbackOnly && HelperPermissions.hasOverlayPermission(this@HelperOverlayService)) {
+                ensureBubble()
+                revealBubble(savePosition = false, schedulePeek = false)
+                removePanel()
             }
-            ensureBubble()
-            revealBubble(savePosition = false, schedulePeek = false)
-            showCapture(mode)
-            startListening()
+            // Keep microphone capture in a user-visible Activity to satisfy while-in-use rules.
+            removeCapture()
+            openCapture(mode)
         }
     }
 
@@ -894,7 +902,7 @@ class HelperOverlayService : Service() {
         val intent =
             Intent(
                 Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
-                Uri.parse("package:$packageName")
+                "package:$packageName".toUri()
             ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         startActivity(intent)
     }
@@ -1152,11 +1160,7 @@ class HelperOverlayService : Service() {
                     if (moved) {
                         snapBubbleToEdge(savePosition = true)
                     } else if (duration < 300) {
-                        when {
-                            captureView != null -> removeCapture()
-                            panelView == null -> showPanel()
-                            else -> removePanel()
-                        }
+                        v.performClick()
                     }
                     scheduleAutoPeek()
                     true

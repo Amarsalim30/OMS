@@ -32,6 +32,18 @@ interface HelperNoteDao {
     )
     fun observeActive(): Flow<List<HelperNoteWithCustomer>>
 
+    @Query(
+        """
+        SELECT n.*, c.name AS customerName
+        FROM helper_notes n
+        LEFT JOIN customers c ON c.id = n.linkedCustomerId
+        WHERE n.deleted = 0
+        ORDER BY n.createdAt DESC, n.id DESC
+        LIMIT :limit
+        """
+    )
+    fun observeActiveLimited(limit: Int): Flow<List<HelperNoteWithCustomer>>
+
     @Query("SELECT * FROM helper_notes WHERE id = :id LIMIT 1")
     suspend fun getById(id: Long): HelperNoteEntity?
 

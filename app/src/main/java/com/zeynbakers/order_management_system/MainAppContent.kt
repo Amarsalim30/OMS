@@ -85,7 +85,6 @@ import com.zeynbakers.order_management_system.order.ui.OrderCreditPrompt
 import com.zeynbakers.order_management_system.order.ui.OrderDraft
 import com.zeynbakers.order_management_system.order.ui.OrderViewModel
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.datetime.Clock
@@ -97,12 +96,18 @@ import androidx.compose.runtime.State
 @Composable
 internal fun MainAppContent(
     activity: ComponentActivity,
-    launchIntentState: State<Intent?>
+    launchIntentState: State<Intent?>,
+    startDestination: String
 ) {
             Order_management_systemTheme {
                 val context = LocalContext.current
                 val database = remember { DatabaseProvider.getDatabase(activity.applicationContext) }
-                val viewModelFactory = remember { AppViewModelFactory(database) }
+                val viewModelFactory = remember {
+                    AppViewModelFactory(
+                        database = database,
+                        appContext = context.applicationContext
+                    )
+                }
                 val orderViewModel: OrderViewModel = viewModel(factory = viewModelFactory)
                 val customerViewModel: CustomerAccountsViewModel = viewModel(factory = viewModelFactory)
                 val paymentIntakeViewModel: PaymentIntakeViewModel = viewModel(factory = viewModelFactory)
@@ -154,9 +159,7 @@ internal fun MainAppContent(
                 val updatePrefs = remember { UpdatePreferences(context) }
                 val helperPrefs = remember { HelperPreferences(context) }
                 var showUpdateDialog by remember { mutableStateOf(false) }
-                val helperState by helperPrefs.state
-                    .map { it as HelperSettingsState? }
-                    .collectAsState(initial = null)
+                val helperState by helperPrefs.state.collectAsState(initial = HelperSettingsState())
                 val navController = rememberNavController()
                 val navBackStackEntry by navController.currentBackStackEntryAsState()
                 val currentRoute = navBackStackEntry?.destination?.route
@@ -242,11 +245,11 @@ internal fun MainAppContent(
                         baseYear = now.year
                     }
                 }
-                LaunchedEffect(helperState?.enabled) {
-                    when (helperState?.enabled) {
-                        true -> HelperOverlayController.start(context.applicationContext)
-                        false -> HelperOverlayController.stop(context.applicationContext)
-                        null -> Unit
+                LaunchedEffect(helperState.enabled) {
+                    if (helperState.enabled) {
+                        HelperOverlayController.start(context.applicationContext)
+                    } else {
+                        HelperOverlayController.stop(context.applicationContext)
                     }
                 }
                 LaunchedEffect(currentRoute, activeTopLevelRoute) {
@@ -492,6 +495,7 @@ internal fun MainAppContent(
                     MainAppHostScaffold(
                         activity = activity,
                         navController = navController,
+                        startDestination = startDestination,
                         currentRoute = currentRoute,
                         activeTopLevelRoute = activeTopLevelRoute,
                         selectedTopLevelRoute = selectedTopLevelRoute,

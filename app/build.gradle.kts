@@ -22,7 +22,8 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -41,9 +42,20 @@ android {
         compose = true
         buildConfig = true
     }
+    sourceSets {
+        getByName("androidTest") {
+            assets.srcDir("$projectDir/schemas")
+        }
+    }
     composeOptions {
         kotlinCompilerExtensionVersion = "1.5.4"
     }
+}
+
+ksp {
+    arg("room.schemaLocation", "$projectDir/schemas")
+    arg("room.incremental", "true")
+    arg("room.generateKotlin", "true")
 }
 
 dependencies {
@@ -57,6 +69,7 @@ dependencies {
 
     // AndroidX Core
     implementation(libs.androidx.core.ktx)
+    implementation(libs.androidx.core.splashscreen)
 
     // Lifecycle & ViewModel
     implementation(libs.androidx.lifecycle.viewmodel.ktx)
@@ -71,7 +84,7 @@ dependencies {
     // WorkManager
     implementation(libs.androidx.work.runtime.ktx)
     implementation(libs.androidx.documentfile)
-    implementation("androidx.datastore:datastore-preferences:1.1.1")
+    implementation(libs.androidx.datastore.preferences)
 
     // Compose
     implementation(libs.androidx.activity.compose)
@@ -95,6 +108,7 @@ dependencies {
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.ui.test.junit4)
     androidTestImplementation(libs.androidx.test.core)
+    androidTestImplementation(libs.androidx.room.testing)
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)
     coreLibraryDesugaring(libs.desugar.jdk.libs)

@@ -12,7 +12,6 @@ import com.zeynbakers.order_management_system.core.navigation.AppIntents
 import com.zeynbakers.order_management_system.core.navigation.PendingIntentFactory
 import com.zeynbakers.order_management_system.core.util.formatKes
 import com.zeynbakers.order_management_system.order.data.OrderStatus
-import com.zeynbakers.order_management_system.order.data.OrderStatusOverride
 import java.math.BigDecimal
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -50,7 +49,7 @@ object WidgetUpdater {
                 .sortedByDescending { it.createdAt }
         val todayTotal = todayOrders.fold(BigDecimal.ZERO) { acc, order -> acc + order.totalAmount }
         val allOrders =
-            orderDao.getActiveOrders().filter { it.statusOverride != OrderStatusOverride.CLOSED }
+            orderDao.getOpenOrdersLimited(WIDGET_OPEN_ORDERS_LIMIT)
 
         val allOrderIds = allOrders.map { it.id }.filter { it != 0L }
         val paidByOrder =
@@ -165,4 +164,6 @@ object WidgetUpdater {
             views.setTextViewText(viewId, text)
         }
     }
+
+    private const val WIDGET_OPEN_ORDERS_LIMIT = 2_000
 }

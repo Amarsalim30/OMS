@@ -18,7 +18,7 @@ class NotesHistoryViewModel(private val database: AppDatabase) : ViewModel() {
 
     val uiState: StateFlow<NotesHistoryUiState> =
         combine(
-            database.helperNoteDao().observeActive(),
+            database.helperNoteDao().observeActiveLimited(NOTES_HISTORY_MAX_ITEMS),
             query,
             filter
         ) { notes, queryText, currentFilter ->
@@ -105,5 +105,9 @@ class NotesHistoryViewModel(private val database: AppDatabase) : ViewModel() {
             val updated = buildEditedHelperNote(existing, text) ?: return@launch
             database.helperNoteDao().update(updated)
         }
+    }
+
+    companion object {
+        private const val NOTES_HISTORY_MAX_ITEMS = 1_000
     }
 }

@@ -489,8 +489,8 @@ internal fun MonthGrid(
     onSelectDate: (LocalDate) -> Unit,
     onOpenDay: (LocalDate) -> Unit,
     onQuickAdd: (LocalDate) -> Unit,
-    onDayBoundsChanged: ((LocalDate, Rect) -> Unit)? = null,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onDayBoundsChanged: ((LocalDate, Rect) -> Unit)? = null
 ) {
     val verticalPadding = 4.dp
     val horizontalPadding = 10.dp

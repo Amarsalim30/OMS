@@ -99,4 +99,24 @@ class DatabaseProviderMigrationTest {
         assertTrue(DatabaseProvider.SQL_INDEX_CUSTOMERS_NAME.contains("index_customers_name"))
         assertTrue(DatabaseProvider.SQL_INDEX_CUSTOMERS_ARCHIVED.contains("index_customers_isArchived"))
     }
+
+    @Test
+    fun `migration 12 to 13 recreates linked tables with foreign keys`() {
+        assertTrue(DatabaseProvider.SQL_CREATE_ORDERS_V13.contains("FOREIGN KEY(customerId)", ignoreCase = true))
+        assertTrue(DatabaseProvider.SQL_CREATE_ACCOUNT_ENTRIES_V13.contains("FOREIGN KEY(orderId)", ignoreCase = true))
+        assertTrue(DatabaseProvider.SQL_CREATE_ACCOUNT_ENTRIES_V13.contains("FOREIGN KEY(customerId)", ignoreCase = true))
+        assertTrue(DatabaseProvider.SQL_CREATE_PAYMENT_RECEIPTS_V13.contains("FOREIGN KEY(customerId)", ignoreCase = true))
+        assertTrue(DatabaseProvider.SQL_CREATE_PAYMENT_ALLOCATIONS_V13.contains("FOREIGN KEY(receiptId)", ignoreCase = true))
+        assertTrue(DatabaseProvider.SQL_CREATE_PAYMENT_ALLOCATIONS_V13.contains("FOREIGN KEY(orderId)", ignoreCase = true))
+        assertTrue(DatabaseProvider.SQL_CREATE_PAYMENT_ALLOCATIONS_V13.contains("FOREIGN KEY(accountEntryId)", ignoreCase = true))
+    }
+
+    @Test
+    fun `migration 12 to 13 copies invalid links as null and recreates indexes`() {
+        assertTrue(DatabaseProvider.SQL_COPY_ORDERS_TO_V13.contains("ELSE NULL", ignoreCase = true))
+        assertTrue(DatabaseProvider.SQL_COPY_ACCOUNT_ENTRIES_TO_V13.contains("ELSE NULL", ignoreCase = true))
+        assertTrue(DatabaseProvider.SQL_COPY_PAYMENT_RECEIPTS_TO_V13.contains("ELSE NULL", ignoreCase = true))
+        assertTrue(DatabaseProvider.SQL_COPY_PAYMENT_ALLOCATIONS_TO_V13.contains("ELSE NULL", ignoreCase = true))
+        assertTrue(DatabaseProvider.SQL_INDEX_PAYMENT_ALLOCATIONS_REVERSAL_ENTRY_ID.contains("reversalEntryId"))
+    }
 }

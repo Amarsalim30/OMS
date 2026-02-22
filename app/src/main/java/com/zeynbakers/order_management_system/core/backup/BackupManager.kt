@@ -40,13 +40,23 @@ import java.io.IOException
 import java.io.InputStream
 import java.io.OutputStream
 import java.math.BigDecimal
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
+import java.security.GeneralSecurityException
 import java.security.MessageDigest
+import java.security.SecureRandom
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.zip.ZipEntry
 import java.util.zip.ZipInputStream
 import java.util.zip.ZipOutputStream
+import javax.crypto.AEADBadTagException
+import javax.crypto.Cipher
+import javax.crypto.SecretKeyFactory
+import javax.crypto.spec.GCMParameterSpec
+import javax.crypto.spec.PBEKeySpec
+import javax.crypto.spec.SecretKeySpec
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -73,6 +83,14 @@ object BackupManager {
     private const val MAX_ZIP_ENTRY_BYTES = 64L * 1024L * 1024L
     private const val MAX_ZIP_TOTAL_BYTES = 256L * 1024L * 1024L
     private const val MAX_SAFE_ROLLBACK_BYTES = MAX_ZIP_TOTAL_BYTES
+    private const val MAX_ARCHIVE_BYTES = 320L * 1024L * 1024L
+    private const val PBKDF2_ITERATIONS = 120_000
+    private const val PBKDF2_KEY_SIZE_BITS = 256
+    private const val ENCRYPTION_VERSION: Byte = 1
+    private const val ENCRYPTION_SALT_BYTES = 16
+    private const val ENCRYPTION_IV_BYTES = 12
+    private const val ENCRYPTION_TAG_BITS = 128
+    private val ENCRYPTION_MAGIC = byteArrayOf('O'.code.toByte(), 'M'.code.toByte(), 'S'.code.toByte(), 'E'.code.toByte(), 'N'.code.toByte(), 'C'.code.toByte(), '1'.code.toByte())
     // Legacy-only backup field. Keep for backward-compatible import until schema retirement is complete.
     private const val LEGACY_AMOUNT_PAID_FIELD = "amountPaid"
 
@@ -130,8 +148,20 @@ object BackupManager {
     ): BackupResult {
         val prefs = BackupPreferences(context)
         val state = prefs.readState()
+        val encryptionPassphrase =
+            if (state.encryptionEnabled) {
+                prefs.getEncryptionPassphrase()?.takeIf { it.isNotBlank() }
+            } else {
+                null
+            }
         if (!force && !state.autoEnabled) {
             return BackupResult(success = false, message = "Automatic backup disabled")
+        }
+        if (state.encryptionEnabled && encryptionPassphrase.isNullOrBlank()) {
+            return BackupResult(
+                success = false,
+                message = "Backup encryption passphrase is missing"
+            )
         }
 
         val now = System.currentTimeMillis()
@@ -147,33 +177,72 @@ object BackupManager {
                         progress = progress
                     )
                 }
+            val outputBytes =
+                if (state.encryptionEnabled) {
+                    encryptArchiveBytes(
+                        plainArchive = archive.bytes,
+                        passphrase = encryptionPassphrase.orEmpty()
+                    )
+                } else {
+                    archive.bytes
+                }
+            val outputHash = sha256Hex(outputBytes)
 
             val writeResult =
                 withContext(Dispatchers.IO) {
                     when (state.targetType) {
                         BackupTargetType.AppPrivate -> {
-                            val file = writeAppPrivateBackup(context, fileName, archive.bytes) ?: return@withContext null
+                            val file =
+                                writeAppPrivateBackup(
+                                    context = context,
+                                    fileName = fileName,
+                                    archiveBytes = outputBytes,
+                                    decryptionPassphrase = encryptionPassphrase
+                                ) ?: return@withContext null
                             updateAppPrivateLatestPointer(
                                 context = context,
-                                pointer = LatestPointer(fileName = file.name, sha256 = archive.sha256, updatedAt = now)
+                                pointer =
+                                    LatestPointer(
+                                        fileName = file.name,
+                                        sha256 = outputHash,
+                                        updatedAt = now
+                                    )
                             )
                             file.name
                         }
 
                         BackupTargetType.SafDirectory -> {
                             val treeUri = state.targetUri
-                            val writtenName = writeSafBackup(context, treeUri, fileName, archive.bytes) ?: return@withContext null
+                            val writtenName =
+                                writeSafBackup(
+                                    context = context,
+                                    treeUriString = treeUri,
+                                    fileName = fileName,
+                                    archiveBytes = outputBytes,
+                                    decryptionPassphrase = encryptionPassphrase
+                                ) ?: return@withContext null
                             updateSafLatestPointer(
                                 context = context,
                                 treeUriString = treeUri,
-                                pointer = LatestPointer(fileName = writtenName, sha256 = archive.sha256, updatedAt = now)
+                                pointer =
+                                    LatestPointer(
+                                        fileName = writtenName,
+                                        sha256 = outputHash,
+                                        updatedAt = now
+                                    )
                             )
                             writtenName
                         }
 
                         BackupTargetType.SafFile -> {
                             val fileUri = state.targetUri
-                            val writtenName = writeSafFileBackup(context, fileUri, archive.bytes) ?: return@withContext null
+                            val writtenName =
+                                writeSafFileBackup(
+                                    context = context,
+                                    fileUriString = fileUri,
+                                    archiveBytes = outputBytes,
+                                    decryptionPassphrase = encryptionPassphrase
+                                ) ?: return@withContext null
                             writtenName
                         }
                     }
@@ -225,7 +294,14 @@ object BackupManager {
         progress: ProgressCallback? = null
     ): BackupResult {
         progress?.invoke(5, "Opening backup")
-        val state = BackupPreferences(context).readState()
+        val prefs = BackupPreferences(context)
+        val state = prefs.readState()
+        val encryptionPassphrase =
+            if (state.encryptionEnabled) {
+                prefs.getEncryptionPassphrase()?.takeIf { it.isNotBlank() }
+            } else {
+                null
+            }
         val input =
             if (uriString.isNullOrBlank()) {
                 openLatestInput(context, state)
@@ -243,7 +319,8 @@ object BackupManager {
                         database = DatabaseProvider.getDatabase(context),
                         inputStream = stream,
                         progress = progress,
-                        manifestPolicy = state.manifestPolicy
+                        manifestPolicy = state.manifestPolicy,
+                        passphrase = encryptionPassphrase
                     )
                 }
             }
@@ -278,10 +355,7 @@ object BackupManager {
                     BackupTargetType.SafDirectory -> probeSafDirectoryInternal(context, state.targetUri)
 
                     BackupTargetType.SafFile -> {
-                        val fileUri = state.targetUri ?: return@withContext BackupResult(false, "Backup file unavailable")
-                        val canWrite = isSafFileWritable(context, fileUri)
-                        if (canWrite) BackupResult(true, "Write test passed")
-                        else BackupResult(false, "Backup file unavailable")
+                        probeSafFileInternal(context, state.targetUri)
                     }
                 }
             } catch (t: Exception) {
@@ -399,12 +473,15 @@ object BackupManager {
 
     private fun isSafFileWritable(context: Context, uriString: String?): Boolean {
         val uri = uriString?.toUri() ?: return false
-        val viaDescriptor =
+        val viaReadWriteDescriptor =
             runCatching {
                 context.contentResolver.openFileDescriptor(uri, "rw")?.use { true } ?: false
             }.getOrDefault(false)
-        if (viaDescriptor) return true
-        return hasPersistedReadWritePermission(context, uriString)
+        if (viaReadWriteDescriptor) return true
+        if (!hasPersistedReadWritePermission(context, uriString)) return false
+        return runCatching {
+            context.contentResolver.openInputStream(uri)?.use { true } ?: false
+        }.getOrDefault(false)
     }
 
     fun buildDriveTroubleshootReport(context: Context, state: BackupState): DriveTroubleshootReport {
@@ -426,7 +503,7 @@ object BackupManager {
         val selectedAuthority = state.targetAuthority ?: state.targetUri?.let { runCatching { it.toUri().authority }.getOrNull() }
         val persistedPermissionValid = hasPersistedReadWritePermission(context, state.targetUri)
         val managedProfile =
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                 context.getSystemService(UserManager::class.java)?.isManagedProfile == true
             } else {
                 false
@@ -500,6 +577,10 @@ object BackupManager {
     internal fun sha256HexForTest(raw: String): String = sha256Hex(raw.toByteArray(Charsets.UTF_8))
     internal fun backupFileNameForTargetForTest(targetType: BackupTargetType, timestamp: Long): String =
         backupFileNameForTarget(targetType, timestamp)
+    internal fun encryptArchiveForTest(rawBytes: ByteArray, passphrase: String): ByteArray =
+        encryptArchiveBytes(rawBytes, passphrase)
+    internal fun decryptArchiveForTest(rawBytes: ByteArray, passphrase: String?): ByteArray =
+        decryptArchiveBytesIfNeeded(rawBytes, passphrase)
 
     private fun backupFileName(timestamp: Long): String {
         val formatter = SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US)
@@ -605,6 +686,46 @@ object BackupManager {
         }
     }
 
+    private fun probeSafFileInternal(context: Context, fileUriString: String?): BackupResult {
+        val uri = fileUriString?.toUri() ?: return BackupResult(false, "Backup file unavailable")
+        return try {
+            val originalBytes =
+                context.contentResolver.openInputStream(uri)?.use { input ->
+                    input.readBytes()
+                } ?: return BackupResult(false, "Backup file unavailable")
+            if (originalBytes.size.toLong() > MAX_SAFE_ROLLBACK_BYTES) {
+                return BackupResult(false, "Backup file too large for probe")
+            }
+            val probeBytes = "probe_${System.currentTimeMillis()}".toByteArray(Charsets.UTF_8)
+            if (!writeSafFileBytes(context, uri, probeBytes)) {
+                return BackupResult(false, "Backup file unavailable")
+            }
+            verifySafFileWrite(
+                context = context,
+                uri = uri,
+                expectedBytes = probeBytes.size.toLong(),
+                expectedHash = sha256Hex(probeBytes)
+            )
+
+            if (!writeSafFileBytes(context, uri, originalBytes)) {
+                return BackupResult(false, "Write verification failed")
+            }
+            verifySafFileWrite(
+                context = context,
+                uri = uri,
+                expectedBytes = originalBytes.size.toLong(),
+                expectedHash = sha256Hex(originalBytes)
+            )
+            BackupResult(true, "Write test passed")
+        } catch (t: Exception) {
+            BackupResult(
+                success = false,
+                message = t.message ?: "Write verification failed",
+                shouldRetry = isRetryableBackupException(t)
+            )
+        }
+    }
+
     private fun pruneOldAppBackups(context: Context) {
         val dir = File(context.filesDir, BACKUP_DIR_NAME)
         if (!dir.exists() || !dir.isDirectory) return
@@ -633,7 +754,14 @@ object BackupManager {
     }
 
     suspend fun buildRestorePreview(context: Context, uriString: String?): RestorePreview {
-        val state = BackupPreferences(context).readState()
+        val prefs = BackupPreferences(context)
+        val state = prefs.readState()
+        val encryptionPassphrase =
+            if (state.encryptionEnabled) {
+                prefs.getEncryptionPassphrase()?.takeIf { it.isNotBlank() }
+            } else {
+                null
+            }
         val sourceName =
             if (uriString.isNullOrBlank()) {
                 findLatestBackupName(context, state.targetType, state.targetUri) ?: "Latest backup"
@@ -649,7 +777,10 @@ object BackupManager {
 
         return withContext(Dispatchers.IO) {
             input.use { stream ->
-                val rawPayloads = readZipEntries(stream)
+                val rawPayloads =
+                    readZipEntries(
+                        inputStream = prepareArchiveInputStream(stream, encryptionPassphrase)
+                    )
                 val payloads =
                     validateRestoreEntries(
                         rawEntries = rawPayloads,
@@ -776,7 +907,12 @@ object BackupManager {
         return output.toByteArray()
     }
 
-    private fun writeAppPrivateBackup(context: Context, fileName: String, archiveBytes: ByteArray): File? {
+    private fun writeAppPrivateBackup(
+        context: Context,
+        fileName: String,
+        archiveBytes: ByteArray,
+        decryptionPassphrase: String?
+    ): File? {
         val dir = ensureAppPrivateDir(context) ?: return null
         val finalFile = File(dir, fileName)
         val partialFile = File(dir, "$fileName.partial")
@@ -786,7 +922,13 @@ object BackupManager {
             out.flush()
         }
 
-        partialFile.inputStream().use { verifyArchiveStream(it, currentDatabaseVersion(context = context)) }
+        partialFile.inputStream().use {
+            verifyArchiveStream(
+                inputStream = it,
+                currentDbVersion = currentDatabaseVersion(context = context),
+                passphrase = decryptionPassphrase
+            )
+        }
 
         if (finalFile.exists() && !finalFile.delete()) {
             throw IOException("Unable to replace existing backup")
@@ -809,7 +951,8 @@ object BackupManager {
         context: Context,
         treeUriString: String?,
         fileName: String,
-        archiveBytes: ByteArray
+        archiveBytes: ByteArray,
+        decryptionPassphrase: String?
     ): String? {
         val treeUri = treeUriString?.toUri() ?: return null
         val tree = DocumentFile.fromTreeUri(context, treeUri) ?: return null
@@ -823,13 +966,25 @@ object BackupManager {
             out.flush()
         } ?: return null
 
-        context.contentResolver.openInputStream(partial.uri)?.use { verifyArchiveStream(it, currentDatabaseVersion(context = context)) }
+        context.contentResolver.openInputStream(partial.uri)?.use {
+            verifyArchiveStream(
+                inputStream = it,
+                currentDbVersion = currentDatabaseVersion(context = context),
+                passphrase = decryptionPassphrase
+            )
+        }
             ?: return null
 
         val renamed = partial.renameTo(fileName)
         if (renamed) {
             val finalized = tree.findFile(fileName) ?: return fileName
-            context.contentResolver.openInputStream(finalized.uri)?.use { verifyArchiveStream(it, currentDatabaseVersion(context = context)) }
+            context.contentResolver.openInputStream(finalized.uri)?.use {
+                verifyArchiveStream(
+                    inputStream = it,
+                    currentDbVersion = currentDatabaseVersion(context = context),
+                    passphrase = decryptionPassphrase
+                )
+            }
                 ?: return null
             return finalized.name ?: fileName
         }
@@ -843,7 +998,13 @@ object BackupManager {
             }
         } ?: return null
         partial.delete()
-        context.contentResolver.openInputStream(finalFile.uri)?.use { verifyArchiveStream(it, currentDatabaseVersion(context = context)) }
+        context.contentResolver.openInputStream(finalFile.uri)?.use {
+            verifyArchiveStream(
+                inputStream = it,
+                currentDbVersion = currentDatabaseVersion(context = context),
+                passphrase = decryptionPassphrase
+            )
+        }
             ?: return null
         return finalFile.name ?: fileName
     }
@@ -851,7 +1012,8 @@ object BackupManager {
     private fun writeSafFileBackup(
         context: Context,
         fileUriString: String?,
-        archiveBytes: ByteArray
+        archiveBytes: ByteArray,
+        decryptionPassphrase: String?
     ): String? {
         val fileUri = fileUriString?.toUri() ?: return null
         val expectedHash = sha256Hex(archiveBytes)
@@ -877,6 +1039,13 @@ object BackupManager {
                 expectedBytes = archiveBytes.size.toLong(),
                 expectedHash = expectedHash
             )
+            context.contentResolver.openInputStream(fileUri)?.use {
+                verifyArchiveStream(
+                    inputStream = it,
+                    currentDbVersion = currentDatabaseVersion(context = context),
+                    passphrase = decryptionPassphrase
+                )
+            } ?: throw IOException("Backup file unavailable")
 
             resolveDisplayNameForUri(context, fileUriString) ?: "selected_backup.oms"
         } catch (error: Exception) {
@@ -996,9 +1165,21 @@ object BackupManager {
         context: Context,
         uri: android.net.Uri
     ): OutputStream? {
-        return context.contentResolver.openOutputStream(uri, "wt")
-            ?: context.contentResolver.openOutputStream(uri, "w")
-            ?: context.contentResolver.openOutputStream(uri)
+        val attempts: Array<String?> = arrayOf("wt", "w", null)
+        attempts.forEach { mode ->
+            val stream =
+                runCatching {
+                    if (mode == null) {
+                        context.contentResolver.openOutputStream(uri)
+                    } else {
+                        context.contentResolver.openOutputStream(uri, mode)
+                    }
+                }.getOrNull()
+            if (stream != null) {
+                return stream
+            }
+        }
+        return null
     }
 
     private fun isSafFileSizePlausible(
@@ -1114,8 +1295,12 @@ object BackupManager {
         }
     }
 
-    private fun verifyArchiveStream(inputStream: InputStream, currentDbVersion: Int) {
-        val entries = readZipEntries(inputStream)
+    private fun verifyArchiveStream(
+        inputStream: InputStream,
+        currentDbVersion: Int,
+        passphrase: String?
+    ) {
+        val entries = readZipEntries(prepareArchiveInputStream(inputStream, passphrase))
         validateRestoreEntries(
             rawEntries = entries,
             currentDbVersion = currentDbVersion,
@@ -1123,15 +1308,159 @@ object BackupManager {
         )
     }
 
+    private fun prepareArchiveInputStream(inputStream: InputStream, passphrase: String?): InputStream {
+        val rawBytes = readInputBytesLimited(inputStream, MAX_ARCHIVE_BYTES)
+        val archiveBytes = decryptArchiveBytesIfNeeded(rawBytes, passphrase)
+        return ByteArrayInputStream(archiveBytes)
+    }
+
+    private fun readInputBytesLimited(inputStream: InputStream, maxBytes: Long): ByteArray {
+        if (maxBytes <= 0L) {
+            throw IllegalArgumentException("Unsupported backup size limit")
+        }
+        val buffer = ByteArray(8_192)
+        val output = ByteArrayOutputStream()
+        var total = 0L
+        var read = inputStream.read(buffer)
+        while (read >= 0) {
+            if (read > 0) {
+                total += read.toLong()
+                if (total > maxBytes) {
+                    throw IllegalArgumentException("Backup archive exceeds supported size")
+                }
+                output.write(buffer, 0, read)
+            }
+            read = inputStream.read(buffer)
+        }
+        return output.toByteArray()
+    }
+
+    private fun encryptArchiveBytes(plainArchive: ByteArray, passphrase: String): ByteArray {
+        if (passphrase.isBlank()) {
+            throw IllegalArgumentException("Backup encryption passphrase is missing")
+        }
+        val salt = ByteArray(ENCRYPTION_SALT_BYTES).also { SecureRandom().nextBytes(it) }
+        val iv = ByteArray(ENCRYPTION_IV_BYTES).also { SecureRandom().nextBytes(it) }
+        val key = deriveEncryptionKey(passphrase, salt)
+        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+        cipher.init(Cipher.ENCRYPT_MODE, key, GCMParameterSpec(ENCRYPTION_TAG_BITS, iv))
+        val cipherText = cipher.doFinal(plainArchive)
+        val header =
+            ByteBuffer
+                .allocate(
+                    ENCRYPTION_MAGIC.size +
+                        1 +
+                        1 +
+                        1 +
+                        4 +
+                        4
+                )
+                .order(ByteOrder.BIG_ENDIAN)
+                .put(ENCRYPTION_MAGIC)
+                .put(ENCRYPTION_VERSION)
+                .put(salt.size.toByte())
+                .put(iv.size.toByte())
+                .putInt(PBKDF2_ITERATIONS)
+                .putInt(cipherText.size)
+                .array()
+        return ByteArrayOutputStream().use { output ->
+            output.write(header)
+            output.write(salt)
+            output.write(iv)
+            output.write(cipherText)
+            output.toByteArray()
+        }
+    }
+
+    private fun decryptArchiveBytesIfNeeded(rawBytes: ByteArray, passphrase: String?): ByteArray {
+        if (!isEncryptedArchive(rawBytes)) return rawBytes
+        if (passphrase.isNullOrBlank()) {
+            throw IllegalArgumentException("Encrypted backup requires passphrase")
+        }
+        val header =
+            ByteBuffer.wrap(rawBytes)
+                .order(ByteOrder.BIG_ENDIAN)
+        val magic = ByteArray(ENCRYPTION_MAGIC.size)
+        header.get(magic)
+        val version = header.get()
+        if (version != ENCRYPTION_VERSION) {
+            throw IllegalArgumentException("Unsupported encrypted backup version")
+        }
+        val saltLength = header.get().toInt() and 0xFF
+        val ivLength = header.get().toInt() and 0xFF
+        val iterations = header.int
+        val cipherLength = header.int
+        if (saltLength <= 0 || ivLength <= 0 || iterations <= 0 || cipherLength <= 0) {
+            throw IllegalArgumentException("Encrypted backup header is invalid")
+        }
+        val expectedTotal =
+            ENCRYPTION_MAGIC.size +
+                1 +
+                1 +
+                1 +
+                4 +
+                4 +
+                saltLength +
+                ivLength +
+                cipherLength
+        if (rawBytes.size != expectedTotal) {
+            throw IllegalArgumentException("Encrypted backup payload is invalid")
+        }
+        val salt = ByteArray(saltLength)
+        val iv = ByteArray(ivLength)
+        val cipherText = ByteArray(cipherLength)
+        header.get(salt)
+        header.get(iv)
+        header.get(cipherText)
+
+        return try {
+            val key = deriveEncryptionKey(passphrase, salt, iterations)
+            val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+            cipher.init(Cipher.DECRYPT_MODE, key, GCMParameterSpec(ENCRYPTION_TAG_BITS, iv))
+            cipher.doFinal(cipherText)
+        } catch (badTag: AEADBadTagException) {
+            throw IllegalArgumentException("Incorrect backup passphrase")
+        } catch (security: GeneralSecurityException) {
+            throw IllegalArgumentException("Unable to decrypt backup archive")
+        }
+    }
+
+    private fun isEncryptedArchive(rawBytes: ByteArray): Boolean {
+        if (rawBytes.size < ENCRYPTION_MAGIC.size + 3) return false
+        return ENCRYPTION_MAGIC.indices.all { index ->
+            rawBytes[index] == ENCRYPTION_MAGIC[index]
+        }
+    }
+
+    private fun deriveEncryptionKey(
+        passphrase: String,
+        salt: ByteArray,
+        iterations: Int = PBKDF2_ITERATIONS
+    ): SecretKeySpec {
+        val spec = PBEKeySpec(passphrase.toCharArray(), salt, iterations, PBKDF2_KEY_SIZE_BITS)
+        val rawKey =
+            runCatching {
+                SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256")
+                    .generateSecret(spec)
+                    .encoded
+            }.getOrElse {
+                SecretKeyFactory.getInstance("PBKDF2WithHmacSHA1")
+                    .generateSecret(spec)
+                    .encoded
+            }
+        return SecretKeySpec(rawKey, "AES")
+    }
+
     private suspend fun importDatabase(
         database: AppDatabase,
         inputStream: InputStream,
         progress: ProgressCallback?,
-        manifestPolicy: RestoreManifestPolicy
+        manifestPolicy: RestoreManifestPolicy,
+        passphrase: String?
     ) {
         progress?.invoke(15, "Reading backup")
         val currentDbVersion = currentDatabaseVersion(database = database)
-        val rawPayloads = readZipEntries(inputStream)
+        val rawPayloads = readZipEntries(prepareArchiveInputStream(inputStream, passphrase))
         val payloads =
             validateRestoreEntries(
                 rawEntries = rawPayloads,

@@ -10,7 +10,7 @@ import com.zeynbakers.order_management_system.customer.data.CustomerDao
 import com.zeynbakers.order_management_system.customer.data.CustomerEntity
 import com.zeynbakers.order_management_system.order.data.*
 
-const val APP_DATABASE_SCHEMA_VERSION = 12
+const val APP_DATABASE_SCHEMA_VERSION = 13
 
 @Database(
         entities =
@@ -24,7 +24,7 @@ const val APP_DATABASE_SCHEMA_VERSION = 12
                         PaymentAllocationEntity::class,
                         HelperNoteEntity::class],
         version = APP_DATABASE_SCHEMA_VERSION,
-        exportSchema = false
+        exportSchema = true
 )
 @TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {

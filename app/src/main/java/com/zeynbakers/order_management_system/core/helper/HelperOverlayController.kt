@@ -14,7 +14,11 @@ object HelperOverlayController {
 
     fun start(context: Context) {
         val intent = Intent(context, HelperOverlayService::class.java).setAction(ACTION_START)
-        ContextCompat.startForegroundService(context, intent)
+        runCatching {
+            ContextCompat.startForegroundService(context, intent)
+        }.onFailure {
+            runCatching { context.startService(intent) }
+        }
     }
 
     fun stop(context: Context) {
