@@ -5,6 +5,7 @@ import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.zeynbakers.order_management_system.accounting.data.EntryType
 import com.zeynbakers.order_management_system.core.db.AppDatabase
+import com.zeynbakers.order_management_system.customer.data.CustomerEntity
 import com.zeynbakers.order_management_system.customer.ui.CustomerAccountsViewModel
 import com.zeynbakers.order_management_system.order.data.OrderEntity
 import com.zeynbakers.order_management_system.order.domain.OrderProcessor
@@ -15,6 +16,7 @@ import kotlinx.datetime.TimeZone
 import kotlinx.datetime.atStartOfDayIn
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -106,6 +108,67 @@ class AccountingLogicTest {
 
         val entries = accountingDao.getEntriesForOrder(orderId).filter { it.type == EntryType.DEBIT }
         assertEquals(0, entries.size)
+    }
+
+    @Test
+    fun searchCustomers_loadsAllSummaryPages() = runBlocking {
+        val customerDao = db.customerDao()
+        val viewModel = CustomerAccountsViewModel(db, ApplicationProvider.getApplicationContext())
+        val totalCustomers = 1_805
+        val customers =
+            (1..totalCustomers).map { index ->
+                CustomerEntity(
+                    name = "Imported Customer ${index.toString().padStart(4, '0')}",
+                    phone = "+2547${index.toString().padStart(8, '0')}"
+                )
+            }
+        customerDao.insertAll(customers)
+
+        viewModel.searchCustomers("")
+
+        var loadedAll = false
+        repeat(40) {
+            if (viewModel.summaries.value.size == totalCustomers) {
+                loadedAll = true
+                return@repeat
+            }
+            delay(50)
+        }
+
+        assertTrue(loadedAll)
+        assertEquals(totalCustomers, viewModel.summaries.value.size)
+    }
+
+    @Test
+    fun customerSummary_marksHasOrders_whenLedgerTotalsAreZero() = runBlocking {
+        val customerDao = db.customerDao()
+        val orderDao = db.orderDao()
+        val accountingDao = db.accountingDao()
+
+        val customerId =
+            customerDao.insert(
+                CustomerEntity(
+                    name = "Has Order",
+                    phone = "+254700000001"
+                )
+            )
+
+        orderDao.insert(
+            OrderEntity(
+                orderDate = LocalDate(2026, 2, 1),
+                notes = "No ledger yet",
+                totalAmount = BigDecimal("100.00"),
+                customerId = customerId
+            )
+        )
+
+        val summaries = accountingDao.getCustomerAccountSummaries("%")
+        val summary = summaries.firstOrNull { it.customerId == customerId }
+        assertTrue(summary != null)
+        assertTrue(summary!!.hasOrders)
+        assertEquals(0, summary.billed.compareTo(BigDecimal.ZERO))
+        assertEquals(0, summary.paid.compareTo(BigDecimal.ZERO))
+        assertEquals(0, summary.balance.compareTo(BigDecimal.ZERO))
     }
 
     @Test

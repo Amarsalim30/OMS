@@ -216,9 +216,11 @@ private fun CustomersScreenM3(
     ) {
         derivedStateOf {
             val base = summaries.filter { summary ->
-                val hasTransactions =
-                    !isZeroAmount(summary.billed) || !isZeroAmount(summary.paid)
-                if (!showInactive && !hasTransactions) return@filter false
+                val hasActivity =
+                    summary.hasOrders ||
+                        !isZeroAmount(summary.billed) ||
+                        !isZeroAmount(summary.paid)
+                if (!showInactive && !hasActivity) return@filter false
                 true
             }
             val filtered = base.filter { summary ->
@@ -230,7 +232,11 @@ private fun CustomersScreenM3(
                 }
             }.filter { summary ->
                 if (selectedFilter != CustomerFilter.All || !hideZeroBalances) return@filter true
-                !isZeroAmount(summary.balance)
+                val hasActivity =
+                    summary.hasOrders ||
+                        !isZeroAmount(summary.billed) ||
+                        !isZeroAmount(summary.paid)
+                !isZeroAmount(summary.balance) || hasActivity
             }
             when (selectedSort) {
                 CustomerSort.BalanceDesc -> filtered.sortedByDescending { it.balance }
@@ -327,7 +333,12 @@ private fun CustomersScreenM3(
 
             if (filteredCustomers.isEmpty()) {
                 val allCustomersWithoutOrders =
-                    hasAnyCustomers && summaries.all { isZeroAmount(it.billed) && isZeroAmount(it.paid) }
+                    hasAnyCustomers &&
+                        summaries.all {
+                            !it.hasOrders &&
+                                isZeroAmount(it.billed) &&
+                                isZeroAmount(it.paid)
+                        }
                 val showImportedNoOrdersState =
                     queryText.isBlank() &&
                         !hasActiveFilters &&
@@ -373,6 +384,7 @@ private fun CustomersScreenM3(
         val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
         val hasPhone = customer.phone.isNotBlank()
         val canDelete =
+            !customer.hasOrders &&
             isZeroAmount(customer.billed) &&
                 isZeroAmount(customer.paid) &&
                 isZeroAmount(customer.balance)
@@ -442,7 +454,8 @@ private fun CustomersScreenM3(
 
     pendingArchiveCustomer?.let { customer ->
         val hasTransactions =
-            !isZeroAmount(customer.billed) ||
+            customer.hasOrders ||
+                !isZeroAmount(customer.billed) ||
                 !isZeroAmount(customer.paid) ||
                 !isZeroAmount(customer.balance)
         val titleRes =

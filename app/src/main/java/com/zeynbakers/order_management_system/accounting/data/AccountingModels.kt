@@ -8,7 +8,8 @@ data class CustomerAccountSummary(
     val phone: String,
     val billed: BigDecimal,
     val paid: BigDecimal,
-    val balance: BigDecimal
+    val balance: BigDecimal,
+    val hasOrders: Boolean = false
 )
 
 data class OrderPaymentSummary(

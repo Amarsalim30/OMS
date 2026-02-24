@@ -813,12 +813,27 @@ class CustomerAccountsViewModel(
 
     private suspend fun refreshSummaries() {
         val pattern = "%${lastQuery.trim()}%"
-        _summaries.value =
-            accountingDao.getCustomerAccountSummariesPaged(
-                query = pattern,
-                limit = CUSTOMER_SUMMARIES_PAGE_SIZE,
-                offset = 0
-            )
+        _summaries.value = loadCustomerSummaries(query = pattern)
+    }
+
+    private suspend fun loadCustomerSummaries(query: String): List<CustomerAccountSummary> {
+        val summaries = mutableListOf<CustomerAccountSummary>()
+        var offset = 0
+
+        while (true) {
+            val page =
+                accountingDao.getCustomerAccountSummariesPaged(
+                    query = query,
+                    limit = CUSTOMER_SUMMARIES_PAGE_SIZE,
+                    offset = offset
+                )
+            if (page.isEmpty()) break
+            summaries += page
+            if (page.size < CUSTOMER_SUMMARIES_PAGE_SIZE) break
+            offset += CUSTOMER_SUMMARIES_PAGE_SIZE
+        }
+
+        return summaries
     }
 
     companion object {

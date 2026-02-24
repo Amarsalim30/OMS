@@ -324,7 +324,13 @@ interface AccountingDao {
                 WHEN a.type IN ('CREDIT', 'WRITE_OFF') THEN a.amount
                 WHEN a.type = 'REVERSAL' THEN -a.amount
                 ELSE 0
-            END), 0) as balance
+            END), 0) as balance,
+            EXISTS(
+                SELECT 1
+                FROM orders o
+                WHERE o.customerId = c.id
+                AND o.status != 'CANCELLED'
+            ) as hasOrders
         FROM customers c
         LEFT JOIN account_entries a ON a.customerId = c.id
         WHERE c.isArchived = 0 AND (c.name LIKE :query OR c.phone LIKE :query)
@@ -351,7 +357,13 @@ interface AccountingDao {
                 WHEN a.type IN ('CREDIT', 'WRITE_OFF') THEN a.amount
                 WHEN a.type = 'REVERSAL' THEN -a.amount
                 ELSE 0
-            END), 0) as balance
+            END), 0) as balance,
+            EXISTS(
+                SELECT 1
+                FROM orders o
+                WHERE o.customerId = c.id
+                AND o.status != 'CANCELLED'
+            ) as hasOrders
         FROM customers c
         LEFT JOIN account_entries a ON a.customerId = c.id
         WHERE c.isArchived = 0 AND (c.name LIKE :query OR c.phone LIKE :query)
