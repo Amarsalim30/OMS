@@ -1,0 +1,6 @@
+model = "gpt-5.3-codex"
+model_reasoning_effort = "high"
+developer_instructions = """
+Audit permissions, exported components, logging of PII, backup rules, cleartext traffic.
+Provide concrete reproduction steps for any issue flagged.
+"""
