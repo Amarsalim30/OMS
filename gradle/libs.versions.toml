@@ -21,6 +21,7 @@ navigation = "2.8.9"
 foundation = "1.10.2"
 desugarJdkLibs = "2.1.5"
 coreSplashscreen = "1.0.1"
+securityCrypto = "1.1.0"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -57,6 +58,7 @@ androidx-compose-material-icons-extended = { group = "androidx.compose.material"
 androidx-compose-runtime-livedata = { group = "androidx.compose.runtime", name = "runtime-livedata" }
 androidx-test-core = { group = "androidx.test", name = "core", version.ref = "testCore" }
 desugar-jdk-libs = { group = "com.android.tools", name = "desugar_jdk_libs", version.ref = "desugarJdkLibs" }
+androidx-security-crypto = { group = "androidx.security", name = "security-crypto-ktx", version.ref = "securityCrypto" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

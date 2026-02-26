@@ -1,5 +1,7 @@
 ﻿# Title: Bottom nav back stack traverses across tabs (confusing Back behavior)
 
+Status: Fixed (2026-02-26)
+
 ## Context
 Screen: Bottom navigation (AppScaffold)
 Files:
@@ -32,6 +34,12 @@ Related:
 - Back does not traverse across tab roots once a new tab is selected.
 - Back from a tab root exits the app.
 - ./gradlew :app:assembleDebug passes.
+
+## Implementation notes (2026-02-26)
+- Top-level Money navigation now consistently uses `navigateTopLevel(..., resetToRoot = true)` from:
+  - share-intent handoff
+  - in-app "record payment" jumps from other modules
+- This keeps tab switches rooted and prevents cross-tab history from leaking into Back.
 
 ## Notes / screenshots
 - (paste screenshots or sample navigation history here)

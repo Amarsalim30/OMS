@@ -1,1 +1,27 @@
 approval_policy = "never"
+
+[features]
+multi_agent = true
+
+[agents]
+max_threads = 5
+
+[agents.ux]
+description = "Simplify flows and reduce steps. Produce UX specs and acceptance criteria; minimal code changes."
+config_file = "agents/ux.toml"
+
+[agents.ui]
+description = "Compose UI polish, typography, spacing, accessibility, font scaling robustness."
+config_file = "agents/ui.toml"
+
+[agents.reliability]
+description = "Crash-proofing, lifecycle, tests, data integrity and migrations."
+config_file = "agents/reliability.toml"
+
+[agents.performance]
+description = "Room queries/indexes, recomposition/perf hotspots, startup and list performance."
+config_file = "agents/performance.toml"
+
+[agents.security]
+description = "Permissions, PII logging, backup/export rules, secure defaults."
+config_file = "agents/security.toml"

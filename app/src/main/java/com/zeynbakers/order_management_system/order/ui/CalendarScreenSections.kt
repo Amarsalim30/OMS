@@ -194,7 +194,7 @@ internal fun MonthPickerSheet(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                items(monthList) { month ->
+                items(monthList, key = { it.ordinal }) { month ->
                     val monthNumber = month.ordinal + 1
                     val isSelected = pickerYear == initialYear && monthNumber == initialMonth
                     val label = monthLabels.getOrNull(monthNumber - 1)?.takeIf { it.isNotBlank() }

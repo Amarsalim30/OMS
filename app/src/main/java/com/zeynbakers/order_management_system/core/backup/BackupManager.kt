@@ -157,6 +157,12 @@ object BackupManager {
         if (!force && !state.autoEnabled) {
             return BackupResult(success = false, message = "Automatic backup disabled")
         }
+        if (!state.encryptionEnabled && !state.insecureOverrideEnabled) {
+            return BackupResult(
+                success = false,
+                message = "Encrypted backups are required unless insecure override is enabled"
+            )
+        }
         if (state.encryptionEnabled && encryptionPassphrase.isNullOrBlank()) {
             return BackupResult(
                 success = false,
@@ -302,6 +308,12 @@ object BackupManager {
             } else {
                 null
             }
+        if (state.encryptionEnabled && encryptionPassphrase.isNullOrBlank()) {
+            return BackupResult(
+                success = false,
+                message = "Backup encryption passphrase is missing"
+            )
+        }
         val input =
             if (uriString.isNullOrBlank()) {
                 openLatestInput(context, state)

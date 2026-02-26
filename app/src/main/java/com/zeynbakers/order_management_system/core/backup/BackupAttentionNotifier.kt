@@ -34,6 +34,13 @@ object BackupAttentionNotifier {
             } else {
                 context.getString(R.string.backup_attention_body_with_reason, message)
             }
+        val publicVersion =
+            NotificationCompat.Builder(context, NotificationChannels.BACKUP_ATTENTION_CHANNEL)
+                .setSmallIcon(R.drawable.ic_notification)
+                .setContentTitle(context.getString(R.string.notification_private_title))
+                .setContentText(context.getString(R.string.notification_private_text))
+                .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+                .build()
 
         val notification =
             NotificationCompat.Builder(context, NotificationChannels.BACKUP_ATTENTION_CHANNEL)
@@ -44,6 +51,8 @@ object BackupAttentionNotifier {
                 .setContentIntent(pendingIntent)
                 .setOngoing(true)
                 .setAutoCancel(false)
+                .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
+                .setPublicVersion(publicVersion)
                 .addAction(
                     0,
                     context.getString(R.string.backup_attention_action_open),

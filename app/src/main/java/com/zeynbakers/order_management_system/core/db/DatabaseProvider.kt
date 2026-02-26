@@ -305,6 +305,16 @@ object DatabaseProvider {
         "CREATE INDEX IF NOT EXISTS index_payment_allocations_accountEntryId ON payment_allocations(accountEntryId)"
     internal const val SQL_INDEX_PAYMENT_ALLOCATIONS_REVERSAL_ENTRY_ID =
         "CREATE INDEX IF NOT EXISTS index_payment_allocations_reversalEntryId ON payment_allocations(reversalEntryId)"
+    internal const val SQL_INDEX_ORDERS_DATE_CREATED_ID =
+        "CREATE INDEX IF NOT EXISTS index_orders_orderDate_createdAt_id ON orders(orderDate, createdAt, id)"
+    internal const val SQL_INDEX_ORDERS_CUSTOMER_DATE_CREATED_ID =
+        "CREATE INDEX IF NOT EXISTS index_orders_customerId_orderDate_createdAt_id ON orders(customerId, orderDate, createdAt, id)"
+    internal const val SQL_INDEX_ACCOUNT_ENTRIES_ORDER_TYPE_DATE_ID =
+        "CREATE INDEX IF NOT EXISTS index_account_entries_orderId_type_date_id ON account_entries(orderId, type, date, id)"
+    internal const val SQL_INDEX_ACCOUNT_ENTRIES_CUSTOMER_DATE_ID =
+        "CREATE INDEX IF NOT EXISTS index_account_entries_customerId_date_id ON account_entries(customerId, date, id)"
+    internal const val SQL_INDEX_ACCOUNT_ENTRIES_CUSTOMER_ORDER_TYPE_DATE_ID =
+        "CREATE INDEX IF NOT EXISTS index_account_entries_customerId_orderId_type_date_id ON account_entries(customerId, orderId, type, date, id)"
 
     private val migration1To2 = object : Migration(1, 2) {
         override fun migrate(db: SupportSQLiteDatabase) {
@@ -605,6 +615,16 @@ object DatabaseProvider {
         }
     }
 
+    internal val migration13To14 = object : Migration(13, 14) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL(SQL_INDEX_ORDERS_DATE_CREATED_ID)
+            db.execSQL(SQL_INDEX_ORDERS_CUSTOMER_DATE_CREATED_ID)
+            db.execSQL(SQL_INDEX_ACCOUNT_ENTRIES_ORDER_TYPE_DATE_ID)
+            db.execSQL(SQL_INDEX_ACCOUNT_ENTRIES_CUSTOMER_DATE_ID)
+            db.execSQL(SQL_INDEX_ACCOUNT_ENTRIES_CUSTOMER_ORDER_TYPE_DATE_ID)
+        }
+    }
+
     internal val ALL_MIGRATIONS = arrayOf(
         migration1To2,
         migration2To3,
@@ -617,7 +637,8 @@ object DatabaseProvider {
         migration9To10,
         migration10To11,
         migration11To12,
-        migration12To13
+        migration12To13,
+        migration13To14
     )
 
     fun getDatabase(context: Context): AppDatabase {

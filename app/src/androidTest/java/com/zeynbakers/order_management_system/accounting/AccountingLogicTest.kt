@@ -4,6 +4,11 @@ import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.zeynbakers.order_management_system.accounting.data.EntryType
+import com.zeynbakers.order_management_system.accounting.data.PaymentAllocationStatus
+import com.zeynbakers.order_management_system.accounting.data.PaymentMethod
+import com.zeynbakers.order_management_system.accounting.data.PaymentReceiptStatus
+import com.zeynbakers.order_management_system.accounting.domain.PaymentReceiptProcessor
+import com.zeynbakers.order_management_system.accounting.domain.ReceiptAllocation
 import com.zeynbakers.order_management_system.core.db.AppDatabase
 import com.zeynbakers.order_management_system.customer.data.CustomerEntity
 import com.zeynbakers.order_management_system.customer.ui.CustomerAccountsViewModel
@@ -331,5 +336,165 @@ class AccountingLogicTest {
         assertEquals(BigDecimal("200.00"), secondPaid)
         assertEquals(BigDecimal("1300.00"), balance)
         assertEquals(0, customerLevelWriteOffs.size)
+    }
+
+    @Test
+    fun moveAllocations_fullReceiptMove_retargetsEntireReceipts() = runBlocking {
+        val customerDao = db.customerDao()
+        val orderDao = db.orderDao()
+        val allocationDao = db.paymentAllocationDao()
+        val receiptDao = db.paymentReceiptDao()
+        val processor = PaymentReceiptProcessor(db)
+
+        val customerId =
+            customerDao.insert(
+                CustomerEntity(
+                    name = "Move Test",
+                    phone = "+254700111222"
+                )
+            )
+        val sourceOrderId =
+            orderDao.insert(
+                OrderEntity(
+                    orderDate = LocalDate(2026, 6, 1),
+                    notes = "Source",
+                    totalAmount = BigDecimal("500.00"),
+                    customerId = customerId
+                )
+            )
+        val targetOrderId =
+            orderDao.insert(
+                OrderEntity(
+                    orderDate = LocalDate(2026, 6, 2),
+                    notes = "Target",
+                    totalAmount = BigDecimal("500.00"),
+                    customerId = customerId
+                )
+            )
+
+        val receipt1 =
+            processor.createReceipt(
+                amount = BigDecimal("100.00"),
+                receivedAt = 10L,
+                method = PaymentMethod.MPESA,
+                transactionCode = "MOVE001",
+                hash = "hash-move-1",
+                senderName = "Sender 1",
+                senderPhone = "+254700111222",
+                rawText = "move 1",
+                customerId = customerId,
+                note = null
+            )
+        processor.createAndApplyReceipt(
+            receipt = receipt1,
+            descriptionBase = "Move test 1",
+            allocation = ReceiptAllocation.Order(sourceOrderId)
+        )
+
+        val receipt2 =
+            processor.createReceipt(
+                amount = BigDecimal("150.00"),
+                receivedAt = 20L,
+                method = PaymentMethod.MPESA,
+                transactionCode = "MOVE002",
+                hash = "hash-move-2",
+                senderName = "Sender 2",
+                senderPhone = "+254700111222",
+                rawText = "move 2",
+                customerId = customerId,
+                note = null
+            )
+        processor.createAndApplyReceipt(
+            receipt = receipt2,
+            descriptionBase = "Move test 2",
+            allocation = ReceiptAllocation.Order(sourceOrderId)
+        )
+
+        val selectedAllocationIds =
+            allocationDao.getByOrderId(sourceOrderId)
+                .filter { it.status == PaymentAllocationStatus.APPLIED }
+                .map { it.id }
+
+        val summary =
+            processor.moveAllocations(
+                allocationIds = selectedAllocationIds,
+                target = ReceiptAllocation.Order(targetOrderId),
+                descriptionBase = "bulk move",
+                moveFullReceipts = true
+            )
+
+        assertEquals(2, summary.movedAllocations)
+        assertEquals(2, summary.affectedReceipts)
+        assertEquals(
+            0,
+            allocationDao.getByOrderId(sourceOrderId)
+                .count { it.status == PaymentAllocationStatus.APPLIED }
+        )
+        assertEquals(
+            2,
+            allocationDao.getByOrderId(targetOrderId)
+                .count { it.status == PaymentAllocationStatus.APPLIED }
+        )
+        val movedReceipts = receiptDao.getByIds(listOf(receipt1.id, receipt2.id))
+        assertTrue(movedReceipts.all { it.status == PaymentReceiptStatus.APPLIED })
+    }
+
+    @Test
+    fun voidAllocations_setsReceiptUnapplied_whenAllAppliedAllocationsVoided() = runBlocking {
+        val customerDao = db.customerDao()
+        val orderDao = db.orderDao()
+        val allocationDao = db.paymentAllocationDao()
+        val receiptDao = db.paymentReceiptDao()
+        val processor = PaymentReceiptProcessor(db)
+
+        val customerId =
+            customerDao.insert(
+                CustomerEntity(
+                    name = "Void Test",
+                    phone = "+254700333444"
+                )
+            )
+        val orderId =
+            orderDao.insert(
+                OrderEntity(
+                    orderDate = LocalDate(2026, 7, 1),
+                    notes = "Void source",
+                    totalAmount = BigDecimal("300.00"),
+                    customerId = customerId
+                )
+            )
+
+        val receipt =
+            processor.createReceipt(
+                amount = BigDecimal("120.00"),
+                receivedAt = 30L,
+                method = PaymentMethod.MPESA,
+                transactionCode = "VOID001",
+                hash = "hash-void-1",
+                senderName = "Sender 3",
+                senderPhone = "+254700333444",
+                rawText = "void 1",
+                customerId = customerId,
+                note = null
+            )
+        processor.createAndApplyReceipt(
+            receipt = receipt,
+            descriptionBase = "Void test",
+            allocation = ReceiptAllocation.Order(orderId)
+        )
+
+        val allocationId =
+            allocationDao.getByOrderId(orderId)
+                .first { it.status == PaymentAllocationStatus.APPLIED }
+                .id
+
+        val summary = processor.voidAllocations(listOf(allocationId), reason = "Regression test")
+
+        assertEquals(1, summary.movedAllocations)
+        assertEquals(1, summary.affectedReceipts)
+        val allocation = allocationDao.getByIds(listOf(allocationId)).first()
+        assertEquals(PaymentAllocationStatus.VOIDED, allocation.status)
+        val updatedReceipt = receiptDao.getById(receipt.id)
+        assertEquals(PaymentReceiptStatus.UNAPPLIED, updatedReceipt?.status)
     }
 }

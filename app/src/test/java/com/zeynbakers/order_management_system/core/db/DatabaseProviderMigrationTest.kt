@@ -119,4 +119,29 @@ class DatabaseProviderMigrationTest {
         assertTrue(DatabaseProvider.SQL_COPY_PAYMENT_ALLOCATIONS_TO_V13.contains("ELSE NULL", ignoreCase = true))
         assertTrue(DatabaseProvider.SQL_INDEX_PAYMENT_ALLOCATIONS_REVERSAL_ENTRY_ID.contains("reversalEntryId"))
     }
+
+    @Test
+    fun `migration 13 to 14 creates composite query indexes`() {
+        assertTrue(DatabaseProvider.SQL_INDEX_ORDERS_DATE_CREATED_ID.contains("index_orders_orderDate_createdAt_id"))
+        assertTrue(
+            DatabaseProvider.SQL_INDEX_ORDERS_CUSTOMER_DATE_CREATED_ID.contains(
+                "index_orders_customerId_orderDate_createdAt_id"
+            )
+        )
+        assertTrue(
+            DatabaseProvider.SQL_INDEX_ACCOUNT_ENTRIES_ORDER_TYPE_DATE_ID.contains(
+                "index_account_entries_orderId_type_date_id"
+            )
+        )
+        assertTrue(
+            DatabaseProvider.SQL_INDEX_ACCOUNT_ENTRIES_CUSTOMER_DATE_ID.contains(
+                "index_account_entries_customerId_date_id"
+            )
+        )
+        assertTrue(
+            DatabaseProvider.SQL_INDEX_ACCOUNT_ENTRIES_CUSTOMER_ORDER_TYPE_DATE_ID.contains(
+                "index_account_entries_customerId_orderId_type_date_id"
+            )
+        )
+    }
 }

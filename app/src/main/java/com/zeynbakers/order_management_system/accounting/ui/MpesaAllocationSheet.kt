@@ -1,4 +1,4 @@
-package com.zeynbakers.order_management_system.accounting.ui
+﻿package com.zeynbakers.order_management_system.accounting.ui
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
@@ -81,7 +82,7 @@ fun MpesaAllocationSheet(
                 val codeLabel = item.transactionCode?.let { stringResource(R.string.money_code_value, it) }
                     ?: stringResource(R.string.money_no_code)
                 val timeLabel = item.receivedAt?.let { formatDateTime(it) }
-                val meta = listOfNotNull(codeLabel, timeLabel).joinToString(" � ")
+                val meta = listOfNotNull(codeLabel, timeLabel).joinToString(" • ")
                 Text(
                     text = meta,
                     style = MaterialTheme.typography.bodySmall,
@@ -142,13 +143,15 @@ fun MpesaAllocationSheet(
                         selected = item.allocationMode == AllocationMode.OLDEST_ORDERS,
                         onClick = { onSelectAllocationMode(AllocationMode.OLDEST_ORDERS) },
                         label = { Text(stringResource(R.string.money_oldest_orders)) },
-                        enabled = item.selectedCustomerId != null
+                        enabled = item.selectedCustomerId != null,
+                        modifier = Modifier.sizeIn(minHeight = 48.dp)
                     )
                     FilterChip(
                         selected = item.allocationMode == AllocationMode.CUSTOMER_CREDIT,
                         onClick = { onSelectAllocationMode(AllocationMode.CUSTOMER_CREDIT) },
                         label = { Text(stringResource(R.string.money_customer_credit)) },
-                        enabled = item.selectedCustomerId != null
+                        enabled = item.selectedCustomerId != null,
+                        modifier = Modifier.sizeIn(minHeight = 48.dp)
                     )
                 }
 
@@ -223,3 +226,4 @@ fun MpesaAllocationSheet(
         }
     }
 }
+

@@ -26,7 +26,15 @@ import java.math.BigDecimal
                                 childColumns = ["customerId"],
                                 onDelete = ForeignKey.SET_NULL
                         )],
-        indices = [Index("orderId"), Index("customerId"), Index("date")]
+        indices =
+                [
+                        Index("orderId"),
+                        Index("customerId"),
+                        Index("date"),
+                        Index(value = ["orderId", "type", "date", "id"]),
+                        Index(value = ["customerId", "date", "id"]),
+                        Index(value = ["customerId", "orderId", "type", "date", "id"])
+                ]
 )
 data class AccountEntryEntity(
         @PrimaryKey(autoGenerate = true) val id: Long = 0,

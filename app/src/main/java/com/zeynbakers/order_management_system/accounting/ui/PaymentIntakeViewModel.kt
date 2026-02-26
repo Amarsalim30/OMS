@@ -1,6 +1,7 @@
 package com.zeynbakers.order_management_system.accounting.ui
 
 import android.database.sqlite.SQLiteConstraintException
+import androidx.room.withTransaction
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.zeynbakers.order_management_system.accounting.data.PaymentAllocationStatus
@@ -126,6 +127,7 @@ class PaymentIntakeViewModel(private val database: AppDatabase) : ViewModel() {
     private val _transactions = MutableStateFlow<List<MpesaTransactionUi>>(emptyList())
     val transactions = _transactions.asStateFlow()
     private var parseJob: Job? = null
+    private var parseRequestId: Long = 0L
 
     fun setRawText(text: String) {
         _rawText.value = text
@@ -402,51 +404,53 @@ class PaymentIntakeViewModel(private val database: AppDatabase) : ViewModel() {
                 } else {
                     orderDao.getOrdersByIds(orderIds).associateBy { it.id }
                 }
-            toApply.forEach { item ->
-                val allocation = buildAllocation(item)
-                if (allocation == null) {
-                    skippedNoCustomer += 1
-                    return@forEach
-                }
-                try {
-                    val receivedAt = item.receivedAt ?: now
-                    val hash =
-                        computeMpesaHash(
-                            amount = item.amount,
-                            receivedAt = receivedAt,
-                            senderPhone = item.senderPhone,
-                            transactionCode = item.transactionCode,
-                            rawText = item.rawText
+            database.withTransaction {
+                toApply.forEach { item ->
+                    val allocation = buildAllocation(item)
+                    if (allocation == null) {
+                        skippedNoCustomer += 1
+                        return@forEach
+                    }
+                    try {
+                        val receivedAt = item.receivedAt ?: now
+                        val hash =
+                            intakeHash(
+                                amount = item.amount,
+                                receivedAt = item.receivedAt,
+                                senderPhone = item.senderPhone,
+                                transactionCode = item.transactionCode,
+                                rawText = item.rawText
+                            )
+                        val resolvedCustomerId =
+                            when (allocation) {
+                                is ReceiptAllocation.Order ->
+                                    item.selectedCustomerId ?: ordersById[allocation.orderId]?.customerId
+                                is ReceiptAllocation.OldestOrders -> allocation.customerId
+                                is ReceiptAllocation.CustomerCredit -> allocation.customerId
+                                ReceiptAllocation.Unapplied -> item.selectedCustomerId
+                            }
+                        val receipt =
+                            receiptProcessor.createReceipt(
+                                amount = item.amount,
+                                receivedAt = receivedAt,
+                                method = PaymentMethod.MPESA,
+                                transactionCode = item.transactionCode,
+                                hash = hash,
+                                senderName = item.senderName,
+                                senderPhone = item.senderPhone,
+                                rawText = item.rawText,
+                                customerId = resolvedCustomerId,
+                                note = null
+                            )
+                        receiptProcessor.createAndApplyReceipt(
+                            receipt = receipt,
+                            descriptionBase = buildDescription(item),
+                            allocation = allocation
                         )
-                    val resolvedCustomerId =
-                        when (allocation) {
-                            is ReceiptAllocation.Order ->
-                                item.selectedCustomerId ?: ordersById[allocation.orderId]?.customerId
-                            is ReceiptAllocation.OldestOrders -> allocation.customerId
-                            is ReceiptAllocation.CustomerCredit -> allocation.customerId
-                            ReceiptAllocation.Unapplied -> item.selectedCustomerId
-                        }
-                    val receipt =
-                        receiptProcessor.createReceipt(
-                            amount = item.amount,
-                            receivedAt = receivedAt,
-                            method = PaymentMethod.MPESA,
-                            transactionCode = item.transactionCode,
-                            hash = hash,
-                            senderName = item.senderName,
-                            senderPhone = item.senderPhone,
-                            rawText = item.rawText,
-                            customerId = resolvedCustomerId,
-                            note = null
-                        )
-                    receiptProcessor.createAndApplyReceipt(
-                        receipt = receipt,
-                        descriptionBase = buildDescription(item),
-                        allocation = allocation
-                    )
-                    applied += 1
-                } catch (_: SQLiteConstraintException) {
-                    existingDuplicatesDuringApply += 1
+                        applied += 1
+                    } catch (_: SQLiteConstraintException) {
+                        existingDuplicatesDuringApply += 1
+                    }
                 }
             }
         }
@@ -472,9 +476,9 @@ class PaymentIntakeViewModel(private val database: AppDatabase) : ViewModel() {
         val now = Clock.System.now().toEpochMilliseconds()
         val receivedAt = item.receivedAt ?: now
         val hash =
-            computeMpesaHash(
+            intakeHash(
                 amount = item.amount,
-                receivedAt = receivedAt,
+                receivedAt = item.receivedAt,
                 senderPhone = item.senderPhone,
                 transactionCode = item.transactionCode,
                 rawText = item.rawText
@@ -516,25 +520,26 @@ class PaymentIntakeViewModel(private val database: AppDatabase) : ViewModel() {
     }
 
     private fun parse(rawText: String) {
+        val requestId = ++parseRequestId
         parseJob?.cancel()
         parseJob =
             viewModelScope.launch(Dispatchers.IO) {
             val parsed = MpesaParser.parse(rawText)
             val ui = buildUi(parsed)
-            _transactions.value = ui
+            if (requestId == parseRequestId) {
+                _transactions.value = ui
+            }
             }
     }
 
     private suspend fun buildUi(parsed: List<MpesaParsedTransaction>): List<MpesaTransactionUi> {
         if (parsed.isEmpty()) return emptyList()
-        val now = Clock.System.now().toEpochMilliseconds()
-        val codes = parsed.mapNotNull { it.transactionCode }.distinct()
+        val codes = parsed.mapNotNull { tx -> tx.transactionCode?.trim()?.takeIf { it.isNotBlank() } }.distinct()
         val hashes =
             parsed.map { tx ->
-                val receivedAt = tx.receivedAt ?: now
-                computeMpesaHash(
+                intakeHash(
                     amount = tx.amount,
-                    receivedAt = receivedAt,
+                    receivedAt = tx.receivedAt,
                     senderPhone = tx.senderPhone,
                     transactionCode = tx.transactionCode,
                     rawText = tx.rawText
@@ -552,22 +557,21 @@ class PaymentIntakeViewModel(private val database: AppDatabase) : ViewModel() {
         val seenKeys = mutableSetOf<String>()
         val keyOccurrences = mutableMapOf<String, Int>()
         return parsed.map { tx ->
-            val receivedAt = tx.receivedAt ?: now
             val hash =
-                computeMpesaHash(
+                intakeHash(
                     amount = tx.amount,
-                    receivedAt = receivedAt,
+                    receivedAt = tx.receivedAt,
                     senderPhone = tx.senderPhone,
                     transactionCode = tx.transactionCode,
                     rawText = tx.rawText
                 )
             val existingReceipt =
-                if (tx.transactionCode != null) {
-                    existingByCode[tx.transactionCode]
+                if (!tx.transactionCode.isNullOrBlank()) {
+                    existingByCode[tx.transactionCode?.trim()]
                 } else {
                     existingByHash[hash]
                 }
-            val dedupeKey = tx.transactionCode ?: hash
+            val dedupeKey = tx.transactionCode?.trim()?.takeIf { it.isNotBlank() } ?: hash
             val intakeDuplicate = !seenKeys.add(dedupeKey)
             val duplicateState =
                 when {
@@ -772,6 +776,22 @@ class PaymentIntakeViewModel(private val database: AppDatabase) : ViewModel() {
         }
     }
 
+    private fun intakeHash(
+        amount: BigDecimal,
+        receivedAt: Long?,
+        senderPhone: String?,
+        transactionCode: String?,
+        rawText: String
+    ): String {
+        return computeMpesaHash(
+            amount = amount,
+            receivedAt = receivedAt ?: MISSING_RECEIVED_AT_HASH_FALLBACK,
+            senderPhone = senderPhone,
+            transactionCode = transactionCode,
+            rawText = rawText
+        )
+    }
+
     private data class UnpaidOrder(val order: OrderEntity, val outstanding: BigDecimal)
 
     private data class SuggestionResult(
@@ -784,6 +804,7 @@ class PaymentIntakeViewModel(private val database: AppDatabase) : ViewModel() {
 
     companion object {
         private const val ORDER_SUGGESTION_MAX_ORDERS = 1_000
+        private const val MISSING_RECEIVED_AT_HASH_FALLBACK = 0L
     }
 }
 

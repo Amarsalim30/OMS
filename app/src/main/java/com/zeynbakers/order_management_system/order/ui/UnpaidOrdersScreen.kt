@@ -159,8 +159,21 @@ fun UnpaidOrdersScreen(
                 }
             }
 
-    // Group by LocalDate
-    val grouped = remember(filteredOrders) { filteredOrders.groupBy { it.orderDate } }
+    // Group by LocalDate once, then reuse for section rendering.
+    val groupedByDate =
+            remember(filteredOrders, today) {
+                filteredOrders
+                        .groupBy { it.orderDate }
+                        .toSortedMap(
+                                compareByDescending<LocalDate> { date ->
+                                    when {
+                                        date == today -> 2
+                                        date > today -> 1
+                                        else -> 0
+                                    }
+                                }.thenByDescending { it }
+                        )
+            }
     val totalOutstanding =
             remember(filteredOrders, paidAmounts) {
                 filteredOrders.fold(BigDecimal.ZERO) { acc, order ->
@@ -182,24 +195,6 @@ fun UnpaidOrdersScreen(
                                 stringResource(selectedFilter.labelRes)
                         )
                 else -> null
-            }
-
-    // Headers
-    val dates =
-            remember(filteredOrders, today) {
-                filteredOrders
-                        .map { it.orderDate }
-                        .distinct()
-                        .sortedWith(
-                                compareByDescending<LocalDate> { date ->
-                                    when {
-                                        date == today -> 2
-                                        date > today -> 1
-                                        else -> 0
-                                    }
-                                }
-                                        .thenByDescending { it }
-                        )
             }
 
     Scaffold(
@@ -357,10 +352,10 @@ fun UnpaidOrdersScreen(
                     UnpaidEmptyState(text = emptyText)
                 }
             } else {
-                dates.forEach { date ->
+                groupedByDate.forEach { (date, dateOrders) ->
                     // Lazy item keys on Android must be Bundle-saveable types.
                     stickyHeader(key = date.toString()) { StickyDateHeader(date = date, today = today) }
-                    items(grouped[date].orEmpty(), key = { it.id }) { order ->
+                    items(dateOrders, key = { it.id }) { order ->
                         val paid = paidAmounts[order.id] ?: BigDecimal.ZERO
                         val balance = order.totalAmount - paid
                         val customerLabel =

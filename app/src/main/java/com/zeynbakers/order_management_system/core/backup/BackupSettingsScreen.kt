@@ -95,9 +95,11 @@ fun BackupSettingsScreen(onBack: () -> Unit) {
     val unavailableHint = stringResource(R.string.backup_health_unavailable_hint)
     val encryptionPassphraseTooShort = stringResource(R.string.backup_encryption_passphrase_too_short)
     val encryptionPassphraseMismatch = stringResource(R.string.backup_encryption_passphrase_mismatch)
+    val encryptionMissingPassphraseMessage = stringResource(R.string.backup_encryption_missing_passphrase)
     val encryptionEnabledMessage = stringResource(R.string.backup_encryption_enabled)
     val encryptionDisabledMessage = stringResource(R.string.backup_encryption_disabled)
     val encryptionPassphraseUpdated = stringResource(R.string.backup_encryption_passphrase_updated)
+    val insecureOverrideRequiredMessage = stringResource(R.string.backup_insecure_override_required)
 
     var state by remember { mutableStateOf(prefs.readState()) }
     var latestBackupName by remember { mutableStateOf<String?>(null) }
@@ -115,6 +117,7 @@ fun BackupSettingsScreen(onBack: () -> Unit) {
     var pendingSaveAction by remember { mutableStateOf(SaveActionAfterPick.None) }
     var encryptionPassphraseInput by remember { mutableStateOf("") }
     var encryptionPassphraseConfirmInput by remember { mutableStateOf("") }
+    var showDisableEncryptionConfirm by remember { mutableStateOf(false) }
     val suggestedBackupFileName = "backup_latest.oms"
 
     val refreshState: suspend () -> Unit = {
@@ -358,7 +361,9 @@ fun BackupSettingsScreen(onBack: () -> Unit) {
             BackupTargetHealth.NeedsRelink -> needsRelinkHint
             BackupTargetHealth.Unavailable -> unavailableHint
         }
-    val encryptionReady = !state.encryptionEnabled || state.encryptionConfigured
+    val encryptionReady =
+        (state.encryptionEnabled && state.encryptionConfigured) ||
+            (!state.encryptionEnabled && state.insecureOverrideEnabled)
 
     val targetReady =
         when (state.targetType) {
@@ -368,6 +373,13 @@ fun BackupSettingsScreen(onBack: () -> Unit) {
                 !state.targetUri.isNullOrBlank() &&
                     state.targetHealth == BackupTargetHealth.Healthy &&
                     encryptionReady
+        }
+    val needsTargetSelection =
+        when (state.targetType) {
+            BackupTargetType.AppPrivate -> false
+            BackupTargetType.SafFile,
+            BackupTargetType.SafDirectory ->
+                state.targetUri.isNullOrBlank() || state.targetHealth != BackupTargetHealth.Healthy
         }
     val lastBackupTime = state.lastBackupTime
     val lastBackupLabel =
@@ -624,6 +636,12 @@ fun BackupSettingsScreen(onBack: () -> Unit) {
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
+                    } else if (!state.insecureOverrideEnabled) {
+                        Text(
+                            text = insecureOverrideRequiredMessage,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error
+                        )
                     } else {
                         Text(
                             text = stringResource(R.string.backup_encryption_plain_hint),
@@ -672,10 +690,12 @@ fun BackupSettingsScreen(onBack: () -> Unit) {
                             prefs.setEncryptionPassphrase(passphrase)
                             if (!state.encryptionEnabled) {
                                 prefs.setEncryptionEnabled(true)
+                                prefs.setInsecureOverrideEnabled(false)
                             }
                             encryptionPassphraseInput = ""
                             encryptionPassphraseConfirmInput = ""
                             scope.launch {
+                                BackupScheduler.ensureScheduled(context)
                                 refreshState.invoke()
                                 val message =
                                     if (state.encryptionEnabled) {
@@ -693,15 +713,7 @@ fun BackupSettingsScreen(onBack: () -> Unit) {
                     }
                     if (state.encryptionEnabled) {
                         OutlinedButton(
-                            onClick = {
-                                prefs.clearEncryptionConfiguration()
-                                encryptionPassphraseInput = ""
-                                encryptionPassphraseConfirmInput = ""
-                                scope.launch {
-                                    refreshState.invoke()
-                                    uiEvents.showSnackbar(encryptionDisabledMessage)
-                                }
-                            },
+                            onClick = { showDisableEncryptionConfirm = true },
                             modifier = Modifier.fillMaxWidth(),
                             enabled = !isBusy
                         ) {
@@ -749,12 +761,22 @@ fun BackupSettingsScreen(onBack: () -> Unit) {
                             checked = state.autoEnabled,
                             onCheckedChange = { enabled ->
                                 if (enabled && !targetReady) {
-                                    pendingSaveAction = SaveActionAfterPick.EnableAuto
-                                    scope.launch { uiEvents.showSnackbar(pickTargetFirstMessage) }
-                                    if (state.targetType == BackupTargetType.SafDirectory) {
-                                        directoryPicker.launch(Unit)
-                                    } else {
-                                        saveFilePicker.launch(suggestedBackupFileName)
+                                    if (!encryptionReady) {
+                                        val message =
+                                            if (state.encryptionEnabled) {
+                                                encryptionMissingPassphraseMessage
+                                            } else {
+                                                insecureOverrideRequiredMessage
+                                            }
+                                        scope.launch { uiEvents.showSnackbar(message) }
+                                    } else if (needsTargetSelection) {
+                                        pendingSaveAction = SaveActionAfterPick.EnableAuto
+                                        scope.launch { uiEvents.showSnackbar(pickTargetFirstMessage) }
+                                        if (state.targetType == BackupTargetType.SafDirectory) {
+                                            directoryPicker.launch(Unit)
+                                        } else {
+                                            saveFilePicker.launch(suggestedBackupFileName)
+                                        }
                                     }
                                     return@Switch
                                 }
@@ -780,12 +802,22 @@ fun BackupSettingsScreen(onBack: () -> Unit) {
                     Button(
                         onClick = {
                             if (!targetReady) {
-                                pendingSaveAction = SaveActionAfterPick.RunBackupNow
-                                scope.launch { uiEvents.showSnackbar(pickTargetFirstMessage) }
-                                if (state.targetType == BackupTargetType.SafDirectory) {
-                                    directoryPicker.launch(Unit)
-                                } else {
-                                    saveFilePicker.launch(suggestedBackupFileName)
+                                if (!encryptionReady) {
+                                    val message =
+                                        if (state.encryptionEnabled) {
+                                            encryptionMissingPassphraseMessage
+                                        } else {
+                                            insecureOverrideRequiredMessage
+                                        }
+                                    scope.launch { uiEvents.showSnackbar(message) }
+                                } else if (needsTargetSelection) {
+                                    pendingSaveAction = SaveActionAfterPick.RunBackupNow
+                                    scope.launch { uiEvents.showSnackbar(pickTargetFirstMessage) }
+                                    if (state.targetType == BackupTargetType.SafDirectory) {
+                                        directoryPicker.launch(Unit)
+                                    } else {
+                                        saveFilePicker.launch(suggestedBackupFileName)
+                                    }
                                 }
                                 return@Button
                             }
@@ -895,6 +927,35 @@ fun BackupSettingsScreen(onBack: () -> Unit) {
                 }
             }
         }
+    }
+
+    if (showDisableEncryptionConfirm) {
+        AlertDialog(
+            onDismissRequest = { showDisableEncryptionConfirm = false },
+            title = { Text(text = stringResource(R.string.backup_disable_encryption_confirm_title)) },
+            text = { Text(text = stringResource(R.string.backup_disable_encryption_confirm_body)) },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showDisableEncryptionConfirm = false
+                        prefs.setEncryptionEnabled(false)
+                        prefs.setInsecureOverrideEnabled(true)
+                        scope.launch {
+                            BackupScheduler.ensureScheduled(context)
+                            refreshState.invoke()
+                            uiEvents.showSnackbar(encryptionDisabledMessage)
+                        }
+                    }
+                ) {
+                    Text(text = stringResource(R.string.backup_disable_encryption_confirm_action))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDisableEncryptionConfirm = false }) {
+                    Text(text = stringResource(R.string.action_cancel))
+                }
+            }
+        )
     }
 
     val restoreRequest = pendingRestore

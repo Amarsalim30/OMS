@@ -10,6 +10,7 @@ import com.zeynbakers.order_management_system.AppCalendarCallbacks
 import com.zeynbakers.order_management_system.AppCalendarState
 import com.zeynbakers.order_management_system.AppFeatureNavigationActions
 import com.zeynbakers.order_management_system.AppFeatureSupportActions
+import com.zeynbakers.order_management_system.MoneyRecordContext
 import com.zeynbakers.order_management_system.navigateTopLevel
 import com.zeynbakers.order_management_system.accounting.ui.PaymentHistoryFilter
 import com.zeynbakers.order_management_system.core.navigation.AppRoutes
@@ -19,6 +20,7 @@ import com.zeynbakers.order_management_system.order.ui.CalendarScreen
 import com.zeynbakers.order_management_system.order.ui.DayDetailScreen
 import com.zeynbakers.order_management_system.order.ui.OrderViewModel
 import com.zeynbakers.order_management_system.order.ui.SummaryScreen
+import java.math.BigDecimal
 import kotlinx.datetime.LocalDate
 
 internal fun NavGraphBuilder.calendarGraph(
@@ -174,7 +176,15 @@ internal fun NavGraphBuilder.calendarGraph(
                 navigationActions.navigateToPaymentHistory(PaymentHistoryFilter.Order(orderId), null)
             },
             onReceivePayment = { order ->
-                navigationActions.navigateToMoneyRecord(order.customerId)
+                val paid = calendarState.orderPaidAmounts[order.id] ?: BigDecimal.ZERO
+                val outstanding = (order.totalAmount - paid).max(BigDecimal.ZERO)
+                navigationActions.navigateToMoneyRecord(
+                    MoneyRecordContext(
+                        customerId = order.customerId,
+                        orderId = order.id,
+                        outstandingAmount = outstanding
+                    )
+                )
             },
             loadCustomerById = { id -> orderViewModel.getCustomerById(id) },
             searchCustomers = { query -> orderViewModel.searchCustomers(query) },

@@ -153,68 +153,80 @@ class PaymentReceiptProcessor(private val database: AppDatabase) {
         descriptionBase: String
     ): Boolean {
         return database.withTransaction {
-            val receipt = receiptDao.getById(receiptId) ?: return@withTransaction false
-            val now = Clock.System.now().toEpochMilliseconds()
-            val existingAllocations = allocationDao.getByReceiptId(receiptId)
-            existingAllocations.filter { it.status != PaymentAllocationStatus.VOIDED }.forEach { allocationRow ->
-                val entryId =
-                    allocationRow.accountEntryId?.let {
-                        accountingDao.insertAccountEntry(
-                            AccountEntryEntity(
-                                orderId = allocationRow.orderId,
-                                customerId = allocationRow.customerId,
-                                type = EntryType.REVERSAL,
-                                amount = allocationRow.amount,
-                                date = now,
-                                description = buildReallocateDescription(receiptId)
-                            )
-                        )
-                    }
-                allocationDao.markVoided(
-                    id = allocationRow.id,
-                    status = PaymentAllocationStatus.VOIDED,
-                    reversalEntryId = entryId,
-                    voidedAt = now,
-                    voidReason = "Reallocated"
-                )
-            }
-
-            val resolvedCustomerId =
-                when (allocation) {
-                    is ReceiptAllocation.Order -> orderDao.getOrderById(allocation.orderId)?.customerId
-                    is ReceiptAllocation.OldestOrders -> allocation.customerId
-                    is ReceiptAllocation.CustomerCredit -> allocation.customerId
-                    ReceiptAllocation.Unapplied -> receipt.customerId
-                }
-            val resetReceipt =
-                receipt.copy(
-                    status = PaymentReceiptStatus.UNAPPLIED,
-                    customerId = resolvedCustomerId ?: receipt.customerId
-                )
-            receiptDao.update(resetReceipt)
-
-            val totalApplied =
-                when (allocation) {
-                    is ReceiptAllocation.Order ->
-                        applyToOrder(resetReceipt, allocation.orderId, descriptionBase)
-                    is ReceiptAllocation.OldestOrders ->
-                        applyToOldestOrders(resetReceipt, allocation.customerId, descriptionBase)
-                    is ReceiptAllocation.CustomerCredit ->
-                        applyToCustomerCredit(resetReceipt, allocation.customerId, descriptionBase, resetReceipt.amount)
-                    ReceiptAllocation.Unapplied -> BigDecimal.ZERO
-                }
-            val status =
-                when {
-                    allocation == ReceiptAllocation.Unapplied -> PaymentReceiptStatus.UNAPPLIED
-                    totalApplied <= BigDecimal.ZERO -> PaymentReceiptStatus.UNAPPLIED
-                    totalApplied < resetReceipt.amount -> PaymentReceiptStatus.PARTIAL
-                    else -> PaymentReceiptStatus.APPLIED
-                }
-            if (resetReceipt.status != status) {
-                receiptDao.update(resetReceipt.copy(status = status))
-            }
-            true
+            reallocateReceiptInTransaction(
+                receiptId = receiptId,
+                allocation = allocation,
+                descriptionBase = descriptionBase
+            )
         }
+    }
+
+    private suspend fun reallocateReceiptInTransaction(
+        receiptId: Long,
+        allocation: ReceiptAllocation,
+        descriptionBase: String
+    ): Boolean {
+        val receipt = receiptDao.getById(receiptId) ?: return false
+        val now = Clock.System.now().toEpochMilliseconds()
+        val existingAllocations = allocationDao.getByReceiptId(receiptId)
+        existingAllocations.filter { it.status != PaymentAllocationStatus.VOIDED }.forEach { allocationRow ->
+            val entryId =
+                allocationRow.accountEntryId?.let {
+                    accountingDao.insertAccountEntry(
+                        AccountEntryEntity(
+                            orderId = allocationRow.orderId,
+                            customerId = allocationRow.customerId,
+                            type = EntryType.REVERSAL,
+                            amount = allocationRow.amount,
+                            date = now,
+                            description = buildReallocateDescription(receiptId)
+                        )
+                    )
+                }
+            allocationDao.markVoided(
+                id = allocationRow.id,
+                status = PaymentAllocationStatus.VOIDED,
+                reversalEntryId = entryId,
+                voidedAt = now,
+                voidReason = "Reallocated"
+            )
+        }
+
+        val resolvedCustomerId =
+            when (allocation) {
+                is ReceiptAllocation.Order -> orderDao.getOrderById(allocation.orderId)?.customerId
+                is ReceiptAllocation.OldestOrders -> allocation.customerId
+                is ReceiptAllocation.CustomerCredit -> allocation.customerId
+                ReceiptAllocation.Unapplied -> receipt.customerId
+            }
+        val resetReceipt =
+            receipt.copy(
+                status = PaymentReceiptStatus.UNAPPLIED,
+                customerId = resolvedCustomerId ?: receipt.customerId
+            )
+        receiptDao.update(resetReceipt)
+
+        val totalApplied =
+            when (allocation) {
+                is ReceiptAllocation.Order ->
+                    applyToOrder(resetReceipt, allocation.orderId, descriptionBase)
+                is ReceiptAllocation.OldestOrders ->
+                    applyToOldestOrders(resetReceipt, allocation.customerId, descriptionBase)
+                is ReceiptAllocation.CustomerCredit ->
+                    applyToCustomerCredit(resetReceipt, allocation.customerId, descriptionBase, resetReceipt.amount)
+                ReceiptAllocation.Unapplied -> BigDecimal.ZERO
+            }
+        val status =
+            when {
+                allocation == ReceiptAllocation.Unapplied -> PaymentReceiptStatus.UNAPPLIED
+                totalApplied <= BigDecimal.ZERO -> PaymentReceiptStatus.UNAPPLIED
+                totalApplied < resetReceipt.amount -> PaymentReceiptStatus.PARTIAL
+                else -> PaymentReceiptStatus.APPLIED
+            }
+        if (resetReceipt.status != status) {
+            receiptDao.update(resetReceipt.copy(status = status))
+        }
+        return true
     }
 
     suspend fun moveAllocations(
@@ -224,24 +236,23 @@ class PaymentReceiptProcessor(private val database: AppDatabase) {
         moveFullReceipts: Boolean
     ): AllocationMoveSummary {
         if (allocationIds.isEmpty()) return AllocationMoveSummary(0, 0)
-        val allocations =
-            allocationDao.getByIds(allocationIds)
-                .filter { it.status == PaymentAllocationStatus.APPLIED }
-        if (allocations.isEmpty()) return AllocationMoveSummary(0, 0)
-
-        val receiptIds = allocations.map { it.receiptId }.distinct()
-        if (moveFullReceipts) {
-            receiptIds.forEach { receiptId ->
-                reallocateReceipt(
-                    receiptId = receiptId,
-                    allocation = target,
-                    descriptionBase = descriptionBase
-                )
-            }
-            return AllocationMoveSummary(allocations.size, receiptIds.size)
-        }
-
         return database.withTransaction {
+            val allocations =
+                allocationDao.getByIds(allocationIds)
+                    .filter { it.status == PaymentAllocationStatus.APPLIED }
+            if (allocations.isEmpty()) return@withTransaction AllocationMoveSummary(0, 0)
+
+            val receiptIds = allocations.map { it.receiptId }.distinct()
+            if (moveFullReceipts) {
+                receiptIds.forEach { receiptId ->
+                    reallocateReceiptInTransaction(
+                        receiptId = receiptId,
+                        allocation = target,
+                        descriptionBase = descriptionBase
+                    )
+                }
+                return@withTransaction AllocationMoveSummary(allocations.size, receiptIds.size)
+            }
             val receiptsById = receiptDao.getByIds(receiptIds).associateBy { it.id }
             val allocationsByReceipt = allocations.groupBy { it.receiptId }
             val now = Clock.System.now().toEpochMilliseconds()

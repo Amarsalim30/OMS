@@ -35,7 +35,7 @@ import kotlinx.datetime.LocalDate
 internal data class AppFeatureNavigationActions(
     val onOpenMore: () -> Unit,
     val openImportContacts: () -> Unit,
-    val navigateToMoneyRecord: (Long?) -> Unit,
+    val navigateToMoneyRecord: (MoneyRecordContext) -> Unit,
     val navigateToCalendarQuickAdd: (LocalDate) -> Unit,
     val navigateToPaymentHistory: (PaymentHistoryFilter, Long?) -> Unit,
     val startPracticalTutorial: (Int) -> Unit
@@ -96,7 +96,13 @@ internal data class AppCustomersState(
 internal data class AppAccountsState(
     val moneyTab: MoneyTab,
     val paymentIntakeText: String?,
-    val manualCustomerId: Long?
+    val moneyRecordContext: MoneyRecordContext?
+)
+
+internal data class MoneyRecordContext(
+    val customerId: Long?,
+    val orderId: Long? = null,
+    val outstandingAmount: BigDecimal? = null
 )
 
 internal data class AppCalendarCallbacks(
@@ -116,7 +122,7 @@ internal data class AppCustomersCallbacks(
 internal data class AppAccountsCallbacks(
     val onMoneyTabChange: (MoneyTab) -> Unit,
     val onPaymentIntakeTextChange: (String?) -> Unit,
-    val onManualCustomerIdChange: (Long?) -> Unit
+    val onMoneyRecordContextChange: (MoneyRecordContext?) -> Unit
 )
 
 @Composable

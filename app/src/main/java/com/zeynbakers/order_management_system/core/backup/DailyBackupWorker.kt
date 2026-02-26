@@ -26,6 +26,16 @@ class DailyBackupWorker(
             }
             return Result.success()
         }
+        if (!force && !state.encryptionEnabled && !state.insecureOverrideEnabled) {
+            val count = prefs.incrementAutoFailure()
+            if (count >= BACKUP_ATTENTION_THRESHOLD) {
+                BackupAttentionNotifier.notifyNeedsAttention(
+                    context = applicationContext,
+                    message = applicationContext.getString(R.string.backup_insecure_override_required)
+                )
+            }
+            return Result.success()
+        }
         if (!force) {
             val health = BackupManager.evaluateTargetHealth(applicationContext, state)
             if (health != BackupTargetHealth.Healthy) {

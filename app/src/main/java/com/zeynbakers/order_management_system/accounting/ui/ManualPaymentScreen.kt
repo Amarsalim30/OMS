@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.calculateEndPadding
@@ -65,6 +66,8 @@ import kotlinx.coroutines.launch
 fun ManualPaymentScreen(
     customerViewModel: CustomerAccountsViewModel,
     initialCustomerId: Long?,
+    initialOrderId: Long?,
+    initialAmount: BigDecimal?,
     onContextConsumed: () -> Unit,
     onPaymentRecorded: () -> Unit,
     showTopBar: Boolean = true,
@@ -90,9 +93,11 @@ fun ManualPaymentScreen(
     var showOrderSheet by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
-    LaunchedEffect(initialCustomerId) {
+    LaunchedEffect(initialCustomerId, initialOrderId, initialAmount) {
         if (initialCustomerId != null) {
             selectedCustomerId = initialCustomerId
+            selectedOrderId = initialOrderId
+            amountText = initialAmount?.toPlainString().orEmpty()
             customerQuery = ""
             onContextConsumed()
         }
@@ -100,7 +105,6 @@ fun ManualPaymentScreen(
 
     LaunchedEffect(selectedCustomerId) {
         val customerId = selectedCustomerId ?: return@LaunchedEffect
-        selectedOrderId = null
         customerViewModel.loadCustomer(customerId)
     }
 
@@ -220,6 +224,7 @@ fun ManualPaymentScreen(
                                     TextButton(
                                         onClick = {
                                             selectedCustomerId = summary.customerId
+                                            selectedOrderId = null
                                             customerQuery = ""
                                         }
                                     ) {
@@ -288,6 +293,7 @@ fun ManualPaymentScreen(
                                     onClick = {
                                         selectedCustomerId = null
                                         selectedOrderId = null
+                                        amountText = ""
                                         customerQuery = ""
                                     }
                                 ) {
@@ -423,6 +429,7 @@ fun ManualPaymentScreen(
                             TextButton(
                                 onClick = {
                                     selectedOrderId = order.order.id
+                                    amountText = outstanding.max(BigDecimal.ZERO).toPlainString()
                                     showOrderSheet = false
                                 }
                             ) {
@@ -453,6 +460,7 @@ private fun MethodChip(
         selected = selected,
         onClick = onClick,
         label = { Text(label) },
-        enabled = enabled
+        enabled = enabled,
+        modifier = Modifier.sizeIn(minHeight = 48.dp)
     )
 }

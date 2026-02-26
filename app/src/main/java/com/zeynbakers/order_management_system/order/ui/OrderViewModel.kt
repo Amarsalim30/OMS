@@ -408,6 +408,13 @@ class OrderViewModel(private val database: AppDatabase) : ViewModel() {
         moveFullReceipts: Boolean
     ): Boolean {
         database.withTransaction {
+            val validAllocationIds =
+                if (allocationIds.isEmpty()) {
+                    emptyList()
+                } else {
+                    val orderAllocationIds = allocationDao.getByOrderId(orderId).map { it.id }.toSet()
+                    allocationIds.filter { it in orderAllocationIds }
+                }
             val order = orderDao.getOrderById(orderId)
             val orderLabel =
                 order?.let {
@@ -423,9 +430,9 @@ class OrderViewModel(private val database: AppDatabase) : ViewModel() {
             val description = "$orderLabel deleted"
             when (action) {
                 OrderPaymentAction.MOVE -> {
-                    if (allocationIds.isNotEmpty() && target != null) {
+                    if (validAllocationIds.isNotEmpty() && target != null) {
                         receiptProcessor.moveAllocations(
-                            allocationIds = allocationIds,
+                            allocationIds = validAllocationIds,
                             target = target,
                             descriptionBase = description,
                             moveFullReceipts = moveFullReceipts
@@ -433,9 +440,9 @@ class OrderViewModel(private val database: AppDatabase) : ViewModel() {
                     }
                 }
                 OrderPaymentAction.VOID -> {
-                    if (allocationIds.isNotEmpty()) {
+                    if (validAllocationIds.isNotEmpty()) {
                         receiptProcessor.voidAllocations(
-                            allocationIds = allocationIds,
+                            allocationIds = validAllocationIds,
                             reason = "Order deleted"
                         )
                     }

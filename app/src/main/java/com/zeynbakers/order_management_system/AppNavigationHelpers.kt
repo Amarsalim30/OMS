@@ -115,3 +115,21 @@ internal fun monthLabel(year: Int, month: Int): String {
     }
     return "$monthName $year"
 }
+
+internal fun shouldAppendSharedPaymentText(
+    currentRoute: String?,
+    isMoneyCollectTab: Boolean
+): Boolean {
+    return currentRoute == AppRoutes.Money && isMoneyCollectTab
+}
+
+internal fun sharedPaymentTextPreview(
+    text: String,
+    maxChars: Int = 160
+): String {
+    val normalized = text.trim().replace("\r\n", "\n")
+    if (normalized.length <= maxChars) {
+        return normalized
+    }
+    return normalized.take(maxChars).trimEnd() + "..."
+}

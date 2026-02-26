@@ -126,36 +126,64 @@ internal fun MainAppHostScaffold(
             )
         )
 
+        val moreDailyWorkGroup = stringResource(R.string.more_group_daily_work)
+        val moreSystemGroup = stringResource(R.string.more_group_system_setup)
+        val moreLearningGroup = stringResource(R.string.more_group_learning)
+
         val moreActions = listOf(
             MoreAction(
+                label = stringResource(R.string.more_notes_history),
+                groupLabel = moreDailyWorkGroup,
+                icon = Icons.AutoMirrored.Filled.Notes,
+                supportingText = stringResource(R.string.more_notes_history_support),
+                tutorialTargetId = TutorialCoachTargets.MoreNotesHistoryAction
+            ) {
+                onShowMoreSheetChange(false)
+                navController.navigate(AppRoutes.NotesHistory)
+            },
+            MoreAction(
+                label = stringResource(R.string.more_import_contacts),
+                groupLabel = moreDailyWorkGroup,
+                icon = Icons.Filled.PersonAdd,
+                supportingText = stringResource(R.string.more_import_contacts_support)
+            ) {
+                onShowMoreSheetChange(false)
+                openImportContacts()
+            },
+            MoreAction(
                 label = stringResource(R.string.more_floating_helper),
+                groupLabel = moreSystemGroup,
                 icon = Icons.Filled.Mic,
+                supportingText = stringResource(R.string.more_floating_helper_support),
                 tutorialTargetId = TutorialCoachTargets.MoreHelperAction
             ) {
                 onShowMoreSheetChange(false)
                 navController.navigate(AppRoutes.HelperSettings)
             },
             MoreAction(
-                label = stringResource(R.string.more_notes_history),
-                icon = Icons.AutoMirrored.Filled.Notes,
-                tutorialTargetId = TutorialCoachTargets.MoreNotesHistoryAction
+                label = stringResource(R.string.more_notifications),
+                groupLabel = moreSystemGroup,
+                icon = Icons.Filled.Notifications,
+                supportingText = stringResource(R.string.more_notifications_support)
             ) {
-                onShowMoreSheetChange(false)
-                navController.navigate(AppRoutes.NotesHistory)
-            },
-            MoreAction(stringResource(R.string.more_notifications), Icons.Filled.Notifications) {
                 onShowMoreSheetChange(false)
                 navController.navigate(AppRoutes.Notifications)
             },
-            MoreAction(stringResource(R.string.more_import_contacts), Icons.Filled.PersonAdd) {
-                onShowMoreSheetChange(false)
-                openImportContacts()
-            },
-            MoreAction(stringResource(R.string.more_backup_restore), Icons.Filled.Settings) {
+            MoreAction(
+                label = stringResource(R.string.more_backup_restore),
+                groupLabel = moreSystemGroup,
+                icon = Icons.Filled.Settings,
+                supportingText = stringResource(R.string.more_backup_restore_support)
+            ) {
                 onShowMoreSheetChange(false)
                 navController.navigate(AppRoutes.Backup)
             },
-            MoreAction(stringResource(R.string.more_tutorial), Icons.Filled.School) {
+            MoreAction(
+                label = stringResource(R.string.more_tutorial),
+                groupLabel = moreLearningGroup,
+                icon = Icons.Filled.School,
+                supportingText = stringResource(R.string.more_tutorial_support)
+            ) {
                 onShowMoreSheetChange(false)
                 onStartTutorial(0)
             }

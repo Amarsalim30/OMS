@@ -144,8 +144,11 @@ internal fun MainAppContent(
                 var quickAddDate by remember { mutableStateOf<LocalDate?>(null) }
                 var customerQuery by rememberSaveable { mutableStateOf("") }
                 var paymentIntakeText by rememberSaveable { mutableStateOf<String?>(null) }
+                var pendingSharedPaymentText by rememberSaveable { mutableStateOf<String?>(null) }
                 var moneyTabName by rememberSaveable { mutableStateOf(MoneyTab.Collect.name) }
-                var manualCustomerId by rememberSaveable { mutableStateOf<Long?>(null) }
+                var moneyRecordCustomerId by rememberSaveable { mutableStateOf<Long?>(null) }
+                var moneyRecordOrderId by rememberSaveable { mutableStateOf<Long?>(null) }
+                var moneyRecordOutstandingAmountText by rememberSaveable { mutableStateOf<String?>(null) }
                 var showMoreSheet by rememberSaveable { mutableStateOf(false) }
                 var selectedTopLevelRoute by rememberSaveable { mutableStateOf(AppRoutes.Calendar) }
                 var tutorialActive by rememberSaveable { mutableStateOf(false) }
@@ -171,6 +174,26 @@ internal fun MainAppContent(
                 val currentRoute = navBackStackEntry?.destination?.route
                 val activeTopLevelRoute = topLevelRouteFor(currentRoute) ?: selectedTopLevelRoute
                 val moneyTab = runCatching { MoneyTab.valueOf(moneyTabName) }.getOrDefault(MoneyTab.Collect)
+                val moneyRecordContext =
+                    remember(
+                        moneyRecordCustomerId,
+                        moneyRecordOrderId,
+                        moneyRecordOutstandingAmountText
+                    ) {
+                        val hasContext =
+                            moneyRecordCustomerId != null ||
+                                moneyRecordOrderId != null ||
+                                !moneyRecordOutstandingAmountText.isNullOrBlank()
+                        if (!hasContext) {
+                            null
+                        } else {
+                            MoneyRecordContext(
+                                customerId = moneyRecordCustomerId,
+                                orderId = moneyRecordOrderId,
+                                outstandingAmount = moneyRecordOutstandingAmountText?.toBigDecimalOrNull()
+                            )
+                        }
+                    }
                 val updateNotes = remember {
                     listOf(
                         "Share M-PESA messages from Messages directly into the app.",
@@ -379,16 +402,7 @@ internal fun MainAppContent(
                         Intent.ACTION_SEND,
                         Intent.ACTION_SEND_MULTIPLE -> {
                             val sharedText = extractSharedText(intent) ?: return@LaunchedEffect
-                            if (currentRoute == AppRoutes.Money && moneyTab == MoneyTab.Collect) {
-                                paymentIntakeViewModel.appendRawText(sharedText)
-                            } else {
-                                paymentIntakeText = sharedText
-                                moneyTabName = MoneyTab.Collect.name
-                                selectedTopLevelRoute = AppRoutes.Money
-                                navController.navigate(AppRoutes.Money) {
-                                    launchSingleTop = true
-                                }
-                            }
+                            pendingSharedPaymentText = sharedText
                         }
                     }
 
@@ -445,7 +459,7 @@ internal fun MainAppContent(
                     val accountsState = AppAccountsState(
                         moneyTab = moneyTab,
                         paymentIntakeText = paymentIntakeText,
-                        manualCustomerId = manualCustomerId
+                        moneyRecordContext = moneyRecordContext
                     )
                     val calendarCallbacks = AppCalendarCallbacks(
                         onSelectedDateChange = { selectedDate = it },
@@ -465,16 +479,22 @@ internal fun MainAppContent(
                     val accountsCallbacks = AppAccountsCallbacks(
                         onMoneyTabChange = { moneyTabName = it.name },
                         onPaymentIntakeTextChange = { paymentIntakeText = it },
-                        onManualCustomerIdChange = { manualCustomerId = it }
+                        onMoneyRecordContextChange = { context ->
+                            moneyRecordCustomerId = context?.customerId
+                            moneyRecordOrderId = context?.orderId
+                            moneyRecordOutstandingAmountText = context?.outstandingAmount?.toPlainString()
+                        }
                     )
                     val navigationActions = AppFeatureNavigationActions(
                         onOpenMore = { showMoreSheet = true },
                         openImportContacts = openImportContacts,
-                        navigateToMoneyRecord = { customerId ->
-                            manualCustomerId = customerId
+                        navigateToMoneyRecord = { recordContext ->
+                            moneyRecordCustomerId = recordContext.customerId
+                            moneyRecordOrderId = recordContext.orderId
+                            moneyRecordOutstandingAmountText = recordContext.outstandingAmount?.toPlainString()
                             moneyTabName = MoneyTab.Record.name
                             selectedTopLevelRoute = AppRoutes.Money
-                            navController.navigate(AppRoutes.Money) { launchSingleTop = true }
+                            navigateTopLevel(navController, AppRoutes.Money, resetToRoot = true)
                         },
                         navigateToCalendarQuickAdd = { targetDate ->
                             selectedDate = targetDate
@@ -563,6 +583,28 @@ internal fun MainAppContent(
                             updatePrefs.markVersionSeen(BuildConfig.VERSION_NAME)
                         }
                     )
+
+                    pendingSharedPaymentText?.let { sharedText ->
+                        SharedPaymentTrustDialog(
+                            previewText = sharedPaymentTextPreview(sharedText),
+                            onDismiss = { pendingSharedPaymentText = null },
+                            onConfirm = {
+                                if (shouldAppendSharedPaymentText(
+                                        currentRoute = currentRoute,
+                                        isMoneyCollectTab = moneyTab == MoneyTab.Collect
+                                    )
+                                ) {
+                                    paymentIntakeViewModel.appendRawText(sharedText)
+                                } else {
+                                    paymentIntakeText = sharedText
+                                    moneyTabName = MoneyTab.Collect.name
+                                    selectedTopLevelRoute = AppRoutes.Money
+                                    navigateTopLevel(navController, AppRoutes.Money, resetToRoot = true)
+                                }
+                                pendingSharedPaymentText = null
+                            }
+                        )
+                    }
                 }
             }
 }

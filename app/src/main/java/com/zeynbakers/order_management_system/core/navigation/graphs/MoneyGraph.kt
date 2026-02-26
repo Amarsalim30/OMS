@@ -34,9 +34,9 @@ internal fun NavGraphBuilder.accountsGraph(
             paymentIntakeViewModel = paymentIntakeViewModel,
             customerViewModel = customerViewModel,
             initialText = accountsState.paymentIntakeText,
-            manualCustomerId = accountsState.manualCustomerId,
+            moneyRecordContext = accountsState.moneyRecordContext,
             onManualContextConsumed = {
-                accountsCallbacks.onManualCustomerIdChange(null)
+                accountsCallbacks.onMoneyRecordContextChange(null)
             },
             onManualSaved = { supportActions.refreshAfterPayments() },
             onApplied = {

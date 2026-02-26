@@ -21,7 +21,12 @@ import java.math.BigDecimal
             onDelete = ForeignKey.SET_NULL
         )
     ],
-    indices = [Index("orderDate"), Index("customerId")]
+    indices = [
+        Index("orderDate"),
+        Index("customerId"),
+        Index(value = ["orderDate", "createdAt", "id"]),
+        Index(value = ["customerId", "orderDate", "createdAt", "id"])
+    ]
 )
 data class OrderEntity(
     @PrimaryKey(autoGenerate = true)

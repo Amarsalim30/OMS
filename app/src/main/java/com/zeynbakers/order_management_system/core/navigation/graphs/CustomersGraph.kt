@@ -29,6 +29,7 @@ import com.zeynbakers.order_management_system.AppCustomersCallbacks
 import com.zeynbakers.order_management_system.AppCustomersState
 import com.zeynbakers.order_management_system.AppFeatureNavigationActions
 import com.zeynbakers.order_management_system.AppFeatureSupportActions
+import com.zeynbakers.order_management_system.MoneyRecordContext
 import com.zeynbakers.order_management_system.accounting.ui.PaymentHistoryFilter
 import com.zeynbakers.order_management_system.core.navigation.AppRoutes
 import com.zeynbakers.order_management_system.core.onboarding.OnboardingPreferences
@@ -65,7 +66,9 @@ internal fun NavGraphBuilder.customersGraph(
                 navigationActions.navigateToPaymentHistory(PaymentHistoryFilter.Customer(customerId), null)
             },
             onRecordPayment = { customerId ->
-                navigationActions.navigateToMoneyRecord(customerId)
+                navigationActions.navigateToMoneyRecord(
+                    MoneyRecordContext(customerId = customerId)
+                )
             },
             onAddOrder = {
                 val targetDate = supportActions.currentDate()
@@ -105,7 +108,9 @@ internal fun NavGraphBuilder.customersGraph(
                 navController.navigate(AppRoutes.customerStatement(id))
             },
             onReceivePayment = {
-                navigationActions.navigateToMoneyRecord(customerId)
+                navigationActions.navigateToMoneyRecord(
+                    MoneyRecordContext(customerId = customerId)
+                )
             },
             onOrderPaymentHistory = { orderId ->
                 navigationActions.navigateToPaymentHistory(PaymentHistoryFilter.Order(orderId), null)
@@ -140,7 +145,11 @@ internal fun NavGraphBuilder.customersGraph(
                 val targetDate = supportActions.currentDate()
                 navigationActions.navigateToCalendarQuickAdd(targetDate)
             },
-            onRecordPayment = { navigationActions.navigateToMoneyRecord(customerId) },
+            onRecordPayment = {
+                navigationActions.navigateToMoneyRecord(
+                    MoneyRecordContext(customerId = customerId)
+                )
+            },
             onMarkBadDebt = { amount, note ->
                 customerViewModel.markBadDebt(customerId, amount, note)
                 supportActions.refreshAfterPayments()

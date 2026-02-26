@@ -1,5 +1,6 @@
 package com.zeynbakers.order_management_system.core.notifications
 
+import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
@@ -22,6 +23,7 @@ object NotificationChannels {
             NotificationManager.IMPORTANCE_DEFAULT
         ).apply {
             description = context.getString(R.string.notification_channel_due_desc)
+            lockscreenVisibility = Notification.VISIBILITY_PRIVATE
         }
 
         val summaryChannel = NotificationChannel(
@@ -30,6 +32,7 @@ object NotificationChannels {
             NotificationManager.IMPORTANCE_DEFAULT
         ).apply {
             description = context.getString(R.string.notification_channel_summary_desc)
+            lockscreenVisibility = Notification.VISIBILITY_PRIVATE
         }
 
         val backupAttentionChannel = NotificationChannel(
@@ -38,6 +41,7 @@ object NotificationChannels {
             NotificationManager.IMPORTANCE_HIGH
         ).apply {
             description = context.getString(R.string.notification_channel_backup_attention_desc)
+            lockscreenVisibility = Notification.VISIBILITY_PRIVATE
         }
 
         val helperChannel = NotificationChannel(
@@ -46,6 +50,7 @@ object NotificationChannels {
             NotificationManager.IMPORTANCE_LOW
         ).apply {
             description = context.getString(R.string.notification_channel_helper_desc)
+            lockscreenVisibility = Notification.VISIBILITY_PRIVATE
         }
 
         manager.createNotificationChannel(dueChannel)

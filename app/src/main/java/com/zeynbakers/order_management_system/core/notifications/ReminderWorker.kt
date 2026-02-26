@@ -158,6 +158,13 @@ class ReminderWorker(
                 putExtra(AppIntents.EXTRA_TARGET_DATE, targetDate.toString())
             }
         val pending = PendingIntentFactory.activity(appContext, 1001, intent)
+        val publicVersion =
+            NotificationCompat.Builder(appContext, NotificationChannels.DUE_REMINDER_CHANNEL)
+                .setSmallIcon(R.drawable.ic_notification)
+                .setContentTitle(appContext.getString(R.string.notification_private_title))
+                .setContentText(appContext.getString(R.string.notification_private_text))
+                .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+                .build()
 
         val notification =
             NotificationCompat.Builder(appContext, NotificationChannels.DUE_REMINDER_CHANNEL)
@@ -167,6 +174,8 @@ class ReminderWorker(
                 .setStyle(NotificationCompat.BigTextStyle().bigText(bigText))
                 .setContentIntent(pending)
                 .setAutoCancel(true)
+                .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
+                .setPublicVersion(publicVersion)
                 .build()
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
@@ -191,6 +200,13 @@ class ReminderWorker(
                 putExtra(AppIntents.EXTRA_TARGET_DATE, date.toString())
             }
         val pending = PendingIntentFactory.activity(appContext, 1002, intent)
+        val publicVersion =
+            NotificationCompat.Builder(appContext, NotificationChannels.DAILY_SUMMARY_CHANNEL)
+                .setSmallIcon(R.drawable.ic_notification)
+                .setContentTitle(appContext.getString(R.string.notification_private_title))
+                .setContentText(appContext.getString(R.string.notification_private_text))
+                .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+                .build()
         val notification =
             NotificationCompat.Builder(appContext, NotificationChannels.DAILY_SUMMARY_CHANNEL)
                 .setSmallIcon(R.drawable.ic_notification)
@@ -198,6 +214,8 @@ class ReminderWorker(
                 .setContentText(text)
                 .setContentIntent(pending)
                 .setAutoCancel(true)
+                .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
+                .setPublicVersion(publicVersion)
                 .build()
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&

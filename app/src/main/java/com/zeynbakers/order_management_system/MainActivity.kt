@@ -7,26 +7,33 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.mutableStateOf
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import androidx.lifecycle.lifecycleScope
 import com.zeynbakers.order_management_system.core.navigation.AppRoutes
 import com.zeynbakers.order_management_system.core.onboarding.OnboardingPreferences
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     private val launchIntent = mutableStateOf<Intent?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
-        installSplashScreen()
+        var shouldKeepSplash = true
+        val splashScreen = installSplashScreen()
+        splashScreen.setKeepOnScreenCondition { shouldKeepSplash }
         super.onCreate(savedInstanceState)
-        val onboardingCompleted = runBlocking { OnboardingPreferences(this@MainActivity).readState().onboardingCompleted }
-        val startDestination = if (onboardingCompleted) AppRoutes.Calendar else AppRoutes.Intro
         enableEdgeToEdge()
         launchIntent.value = intent
-        setContent {
-            MainAppContent(
-                activity = this,
-                launchIntentState = launchIntent,
-                startDestination = startDestination
-            )
+        lifecycleScope.launch {
+            val onboardingCompleted =
+                OnboardingPreferences(this@MainActivity).readState().onboardingCompleted
+            val startDestination = if (onboardingCompleted) AppRoutes.Calendar else AppRoutes.Intro
+            shouldKeepSplash = false
+            setContent {
+                MainAppContent(
+                    activity = this@MainActivity,
+                    launchIntentState = launchIntent,
+                    startDestination = startDestination
+                )
+            }
         }
     }
 
