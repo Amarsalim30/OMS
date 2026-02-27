@@ -932,4 +932,23 @@
     <string name="widget_action_unpaid">Unpaid</string>
     <string name="widget_action_add">New</string>
     <string name="widget_action_note">Voice note</string>
+    <string name="licensing_validating">Validating access&#8230;</string>
+    <string name="auth_sign_in_title">Sign in required</string>
+    <string name="auth_sign_in_subtitle">Use your approved Google account to continue.</string>
+    <string name="auth_sign_in_google_button">Sign in with Google</string>
+    <string name="auth_access_blocked_title">Access blocked</string>
+    <string name="auth_retry_validation">Retry validation</string>
+    <string name="auth_sign_out_button">Sign out</string>
+    <string name="auth_blocked_entitlement_missing">No access profile was found for this account. Contact admin.</string>
+    <string name="auth_blocked_not_allowed">Your account is not approved yet. Contact admin.</string>
+    <string name="auth_blocked_device_limit">Device limit reached for this account.</string>
+    <string name="auth_blocked_device_revoked">This device has been revoked by admin.</string>
+    <string name="auth_blocked_expired">Your access has expired. Contact admin.</string>
+    <string name="auth_blocked_offline_grace">Offline access window expired. Connect to internet to validate.</string>
+    <string name="auth_blocked_validation_failed">Could not validate access. Try again in a moment.</string>
+    <string name="auth_error_google_no_account">No Google account credential available on this device.</string>
+    <string name="auth_error_google_cancelled">Google sign-in was cancelled.</string>
+    <string name="auth_error_google_invalid_credential">Received an invalid Google credential. Try again.</string>
+    <string name="auth_error_google_request_failed">Could not start Google sign-in. Check setup and try again.</string>
+    <string name="auth_error_google_firebase_failed">Google sign-in failed in Firebase. Try again.</string>
 </resources>

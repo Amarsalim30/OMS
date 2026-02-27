@@ -9,6 +9,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.lifecycleScope
 import com.zeynbakers.order_management_system.core.navigation.AppRoutes
+import com.zeynbakers.order_management_system.core.licensing.AuthGate
 import com.zeynbakers.order_management_system.core.onboarding.OnboardingPreferences
 import kotlinx.coroutines.launch
 
@@ -28,11 +29,13 @@ class MainActivity : ComponentActivity() {
             val startDestination = if (onboardingCompleted) AppRoutes.Calendar else AppRoutes.Intro
             shouldKeepSplash = false
             setContent {
-                MainAppContent(
-                    activity = this@MainActivity,
-                    launchIntentState = launchIntent,
-                    startDestination = startDestination
-                )
+                AuthGate {
+                    MainAppContent(
+                        activity = this@MainActivity,
+                        launchIntentState = launchIntent,
+                        startDestination = startDestination
+                    )
+                }
             }
         }
     }

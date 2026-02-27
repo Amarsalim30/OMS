@@ -47,3 +47,17 @@
 - Reliability agent: tests and correctness-only (data integrity, lifecycle safety, migration/test coverage).
 - Performance agent: performance-only changes; no behavior or product-flow changes.
 - Security agent: security audit plus minimal hardening changes.
+
+## Licensing / anti-redistribution constraints
+- Implement Firebase Auth + Firestore entitlement checks and device binding as defined in `docs/requirements/licensing.md`.
+- Use Google Sign-In via Android Credential Manager unless explicitly requested otherwise.
+- No IMEI usage. Device binding must use install UUID stored locally.
+- Do not introduce a custom backend server.
+- Firestore rules must prevent users from changing entitlements.
+- Must add a simple AuthGate at app entry:
+  - Signed out -> Login
+  - Signed in -> Validate entitlement/device
+  - Allowed -> launch existing app nav
+  - Blocked -> show reason screen
+- Must include a small set of tests or verifiable manual test checklist for each P0 acceptance test.
+- Do not refactor unrelated modules while implementing licensing.
