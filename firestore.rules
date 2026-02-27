@@ -1,0 +1,57 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isSelf(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+
+    match /users/{uid} {
+      // Users can read only their own entitlement.
+      allow read: if isSelf(uid);
+      // Entitlements are admin-managed only (console/admin SDK).
+      allow create, update, delete: if false;
+
+      match /devices/{deviceId} {
+        // Users can read only their own device docs.
+        allow read: if isSelf(uid);
+
+        // A user can register a new device, but cannot mark it revoked.
+        allow create: if isSelf(uid)
+          && request.resource.data.keys().hasOnly([
+            'revoked',
+            'registeredAt',
+            'lastSeenAt',
+            'model',
+            'sdk'
+          ])
+          && request.resource.data.revoked == false
+          && request.resource.data.registeredAt is int
+          && request.resource.data.lastSeenAt is int
+          && request.resource.data.model is string
+          && request.resource.data.sdk is int;
+
+        // A user may update heartbeat fields only.
+        // They cannot un-revoke or change entitlement controls.
+        allow update: if isSelf(uid)
+          && request.resource.data.keys().hasOnly([
+            'revoked',
+            'registeredAt',
+            'lastSeenAt',
+            'model',
+            'sdk'
+          ])
+          && request.resource.data.revoked == resource.data.revoked
+          && request.resource.data.registeredAt == resource.data.registeredAt
+          && request.resource.data.lastSeenAt is int
+          && request.resource.data.model is string
+          && request.resource.data.sdk is int;
+
+        allow delete: if false;
+      }
+    }
+  }
+}
