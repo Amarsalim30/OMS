@@ -120,10 +120,11 @@ fun CalendarScreen(
     }
 
     LaunchedEffect(Unit) {
-        snapshotFlow { customerName.trim() to customerPhone.trim() }
+        snapshotFlow { notes to customerPhone.trim() }
             .debounce(250)
             .distinctUntilChanged()
-            .collectLatest { (query, selectedPhone) ->
+            .collectLatest { (notesText, selectedPhone) ->
+                val query = extractCustomerQueryFromNotes(notesText)
                 suggestions =
                     if (query.isBlank() || selectedPhone.isNotBlank()) {
                         emptyList()
@@ -667,6 +668,7 @@ fun CalendarScreen(
             },
             suggestions = suggestions,
             onSuggestionSelected = { customer ->
+                notes = stripTrailingCustomerQueryFromNotes(notes)
                 customerName = customer.name
                 customerPhone = customer.phone
                 suggestions = emptyList()

@@ -19,8 +19,6 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.relocation.BringIntoViewRequester
-import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -28,11 +26,9 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AccessTime
 import androidx.compose.material.icons.filled.AttachMoney
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.EditNote
-import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -41,6 +37,8 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.InputChip
+import androidx.compose.material3.InputChipDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -62,6 +60,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
@@ -99,8 +98,7 @@ internal data class OrderEditorTutorialHint(
 private enum class EditingRow {
     NONE,
     NOTES,
-    TOTAL,
-    CUSTOMER
+    TOTAL
 }
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
@@ -149,8 +147,6 @@ internal fun OrderEditorSheet(
     val focusManagerState by rememberUpdatedState(focusManager)
     val notesRequester = remember { FocusRequester() }
     val totalRequester = remember { FocusRequester() }
-    val customerRequester = remember { FocusRequester() }
-    val customerBringIntoViewRequester = remember { BringIntoViewRequester() }
     val scope = rememberCoroutineScope()
     val setTotalText by rememberUpdatedState<(String) -> Unit>({ onTotalTextChange(it) })
     val formScrollState = rememberScrollState()
@@ -269,7 +265,7 @@ internal fun OrderEditorSheet(
                             ),
                             onFocused = onNotesFocused,
                             onClear = { onNotesChange("") },
-                            modifier = notesFieldModifier
+                            modifier = notesFieldModifier.then(customerFieldModifier)
                         )
                     } else {
                         ValueRow(
@@ -280,11 +276,118 @@ internal fun OrderEditorSheet(
                                 editingRow = EditingRow.NOTES
                                 scope.launch { delay(40); notesRequester.requestFocus() }
                             },
-                            modifier = notesFieldModifier
+                            modifier = notesFieldModifier.then(customerFieldModifier)
                         )
                     }
 
                     notesError?.let {
+                        Text(
+                            text = it,
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodySmall,
+                            modifier = Modifier.padding(start = 52.dp, end = 16.dp, bottom = 8.dp)
+                        )
+                    }
+
+                    if (customerPhone.isNotBlank()) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(start = 52.dp, end = 16.dp, bottom = 10.dp)
+                                .then(customerFieldModifier),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            InputChip(
+                                selected = true,
+                                onClick = {},
+                                colors =
+                                    InputChipDefaults.inputChipColors(
+                                        selectedContainerColor = Color(0xFF1E88E5),
+                                        selectedLabelColor = Color.White,
+                                        selectedTrailingIconColor = Color.White
+                                    ),
+                                label = {
+                                    val label = customerName.ifBlank { customerPhone }
+                                    Text(
+                                        text = label,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                },
+                                trailingIcon = {
+                                    IconButton(
+                                        onClick = {
+                                            onCustomerNameChange("")
+                                            onCustomerPhoneChange("")
+                                        },
+                                        modifier = Modifier.size(18.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Filled.Close,
+                                            contentDescription = stringResource(R.string.action_clear),
+                                            modifier = Modifier.size(14.dp)
+                                        )
+                                    }
+                                }
+                            )
+                        }
+                    }
+
+                    if (customerPhone.isBlank() && suggestions.isNotEmpty()) {
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            tonalElevation = 4.dp,
+                            shadowElevation = 2.dp,
+                            color = MaterialTheme.colorScheme.surfaceContainer,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(start = 52.dp, end = 16.dp, bottom = 10.dp)
+                                .then(customerFieldModifier)
+                        ) {
+                            Column(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalArrangement = Arrangement.spacedBy(2.dp)
+                            ) {
+                                suggestions.take(5).forEachIndexed { index, customer ->
+                                    Surface(
+                                        onClick = {
+                                            onSuggestionSelected(customer)
+                                            editingRow = EditingRow.NOTES
+                                            scope.launch {
+                                                delay(40)
+                                                notesRequester.requestFocus()
+                                            }
+                                        },
+                                        color = MaterialTheme.colorScheme.surfaceContainer
+                                    ) {
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(horizontal = 10.dp, vertical = 8.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Text(
+                                                text = customer.name,
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                modifier = Modifier.weight(1f)
+                                            )
+                                            if (customer.phone.isNotBlank()) {
+                                                Text(
+                                                    text = customer.phone,
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                            }
+                                        }
+                                    }
+                                    if (index < suggestions.take(5).lastIndex) {
+                                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    customerError?.let {
                         Text(
                             text = it,
                             color = MaterialTheme.colorScheme.error,
@@ -381,104 +484,6 @@ internal fun OrderEditorSheet(
                                 }
                             )
                         }
-                    }
-
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-
-                    if (editingRow == EditingRow.CUSTOMER) {
-                        InlineEditorRow(
-                            icon = Icons.Filled.Person,
-                            value = customerName,
-                            placeholder = stringResource(R.string.order_editor_customer_search_placeholder),
-                            onValueChange = {
-                                onCustomerNameChange(it)
-                                if (customerPhone.isNotBlank()) {
-                                    onCustomerPhoneChange("")
-                                }
-                            },
-                            focusRequester = customerRequester,
-                            keyboardOptions = KeyboardOptions(
-                                capitalization = KeyboardCapitalization.Words,
-                                imeAction = ImeAction.Done
-                            ),
-                            keyboardActions = KeyboardActions(onDone = {
-                                focusManager.clearFocus()
-                                editingRow = EditingRow.NONE
-                            }),
-                            onClear = {
-                                onCustomerNameChange("")
-                                onCustomerPhoneChange("")
-                            },
-                            bringIntoViewRequester = customerBringIntoViewRequester,
-                            onFocused = {
-                                scope.launch {
-                                    delay(120)
-                                    customerBringIntoViewRequester.bringIntoView()
-                                }
-                            },
-                            modifier = customerFieldModifier
-                        )
-                    } else {
-                        ValueRow(
-                            icon = Icons.Filled.Person,
-                            value = customerName,
-                            placeholder = stringResource(R.string.order_editor_customer_search_placeholder),
-                            onClick = {
-                                editingRow = EditingRow.CUSTOMER
-                                scope.launch { delay(40); customerRequester.requestFocus() }
-                            },
-                            modifier = customerFieldModifier
-                        )
-                    }
-
-                    if (suggestions.isNotEmpty()) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(start = 52.dp, end = 16.dp, bottom = 10.dp),
-                            verticalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            suggestions.take(4).forEach { customer ->
-                                Surface(
-                                    onClick = {
-                                        onSuggestionSelected(customer)
-                                        editingRow = EditingRow.NONE
-                                        focusManager.clearFocus(force = true)
-                                    },
-                                    shape = RoundedCornerShape(10.dp),
-                                    color = MaterialTheme.colorScheme.surfaceContainerLow
-                                ) {
-                                    Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(horizontal = 10.dp, vertical = 8.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Text(
-                                            text = customer.name,
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            modifier = Modifier.weight(1f)
-                                        )
-                                        if (customer.phone.isNotBlank()) {
-                                            Text(
-                                                text = customer.phone,
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    customerError?.let {
-                        Text(
-                            text = it,
-                            color = MaterialTheme.colorScheme.error,
-                            style = MaterialTheme.typography.bodySmall,
-                            modifier = Modifier.padding(start = 52.dp, end = 16.dp, bottom = 8.dp)
-                        )
                     }
 
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
@@ -656,8 +661,7 @@ private fun InlineEditorRow(
     modifier: Modifier = Modifier,
     onFocused: (() -> Unit)? = null,
     onClear: (() -> Unit)? = null,
-    leadingText: String? = null,
-    bringIntoViewRequester: BringIntoViewRequester? = null
+    leadingText: String? = null
 ) {
     val textStyle: TextStyle = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface)
     val cursorBrush = Brush.verticalGradient(listOf(MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.primary))
@@ -697,13 +701,6 @@ private fun InlineEditorRow(
             cursorBrush = cursorBrush,
             modifier = Modifier
                 .weight(1f)
-                .let { base ->
-                    if (bringIntoViewRequester != null) {
-                        base.bringIntoViewRequester(bringIntoViewRequester)
-                    } else {
-                        base
-                    }
-                }
                 .focusRequester(focusRequester)
                 .onFocusChanged {
                     if (it.isFocused) {

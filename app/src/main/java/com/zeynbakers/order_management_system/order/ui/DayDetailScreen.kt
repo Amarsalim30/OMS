@@ -185,8 +185,8 @@ fun DayDetailScreen(
     }
     LaunchedEffect(isEditorOpen) { overlaySuppressed.value = isEditorOpen }
     DisposableEffect(Unit) { onDispose { overlaySuppressed.value = false } }
-    LaunchedEffect(customerName, customerPhone) {
-        val query = customerName.trim()
+    LaunchedEffect(notes, customerPhone) {
+        val query = extractCustomerQueryFromNotes(notes)
         val selectedPhone = customerPhone.trim()
         if (query.isBlank() || selectedPhone.isNotBlank()) {
             suggestions = emptyList()
