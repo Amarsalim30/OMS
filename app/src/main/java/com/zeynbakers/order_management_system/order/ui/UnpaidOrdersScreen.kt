@@ -24,7 +24,6 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.outlined.Delete
-import androidx.compose.material.icons.outlined.Payments
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -78,7 +77,7 @@ fun UnpaidOrdersScreen(
         paidAmounts: Map<Long, BigDecimal>,
         customerNames: Map<Long, String>,
         onBack: () -> Unit,
-        onOpenDay: (LocalDate) -> Unit,
+        onOpenDay: (LocalDate, Long?) -> Unit,
         onReceivePayment: (OrderEntity) -> Unit,
         onDeleteOrder: (OrderEntity) -> Unit,
         title: String? = null,
@@ -96,12 +95,10 @@ fun UnpaidOrdersScreen(
     // Search State
     var isSearchActive by rememberSaveable { mutableStateOf(false) }
     var searchQuery by rememberSaveable { mutableStateOf("") }
-    var pendingSwipePayOrder by remember { mutableStateOf<OrderEntity?>(null) }
     var pendingSwipeDeleteOrder by remember { mutableStateOf<OrderEntity?>(null) }
 
     BackHandler(enabled = isSearchActive) {
         isSearchActive = false
-        searchQuery = ""
     }
 
     // Base Sort
@@ -137,12 +134,6 @@ fun UnpaidOrdersScreen(
                 base
             }
 
-    LaunchedEffect(pendingSwipePayOrder?.id) {
-        val pendingOrder = pendingSwipePayOrder ?: return@LaunchedEffect
-        onReceivePayment(pendingOrder)
-        pendingSwipePayOrder = null
-    }
-
     // Filter Logic
     val filteredOrders =
             remember(sortedOrders, searchQuery, customerNames) {
@@ -159,20 +150,28 @@ fun UnpaidOrdersScreen(
                 }
             }
 
-    // Group by LocalDate once, then reuse for section rendering.
+    val showDateSections = selectedFilter != OrdersFilter.LARGEST_DUE
     val groupedByDate =
-            remember(filteredOrders, today) {
-                filteredOrders
-                        .groupBy { it.orderDate }
-                        .toSortedMap(
-                                compareByDescending<LocalDate> { date ->
-                                    when {
-                                        date == today -> 2
-                                        date > today -> 1
-                                        else -> 0
-                                    }
-                                }.thenByDescending { it }
-                        )
+            remember(filteredOrders, selectedFilter, today) {
+                if (!showDateSections) {
+                    sortedMapOf<LocalDate, List<OrderEntity>>()
+                } else {
+                    val comparator =
+                            when (selectedFilter) {
+                                OrdersFilter.NEWEST ->
+                                        compareByDescending<LocalDate> { date ->
+                                            when {
+                                                date == today -> 2
+                                                date > today -> 1
+                                                else -> 0
+                                            }
+                                        }.thenByDescending { it }
+                                OrdersFilter.OLDEST,
+                                OrdersFilter.OVERDUE -> compareBy<LocalDate> { it }
+                                OrdersFilter.LARGEST_DUE -> compareByDescending<LocalDate> { it }
+                            }
+                    filteredOrders.groupBy { it.orderDate }.toSortedMap(comparator)
+                }
             }
     val totalOutstanding =
             remember(filteredOrders, paidAmounts) {
@@ -183,6 +182,11 @@ fun UnpaidOrdersScreen(
             }
     val activeContextLabel =
             when {
+                searchQuery.isNotBlank() && selectedFilter == OrdersFilter.NEWEST ->
+                        stringResource(
+                                R.string.unpaid_active_context_search_only,
+                                searchQuery.trim()
+                        )
                 searchQuery.isNotBlank() ->
                         stringResource(
                                 R.string.unpaid_active_context_filter_search,
@@ -209,11 +213,15 @@ fun UnpaidOrdersScreen(
                             color = MaterialTheme.colorScheme.surface,
                             shadowElevation = 4.dp
                     ) {
-                        TextField(
+                            TextField(
                                 value = searchQuery,
                                 onValueChange = { searchQuery = it },
                                 placeholder = {
-                                    Text(stringResource(R.string.day_search_notes_or_customer))
+                                    Text(
+                                            stringResource(
+                                                    R.string.day_search_notes_customer_amount_pickup
+                                            )
+                                    )
                                 },
                                 singleLine = true,
                                 modifier = Modifier.fillMaxWidth(),
@@ -230,7 +238,6 @@ fun UnpaidOrdersScreen(
                                     IconButton(
                                             onClick = {
                                                 isSearchActive = false
-                                                searchQuery = ""
                                             }
                                     ) {
                                         Icon(
@@ -295,14 +302,6 @@ fun UnpaidOrdersScreen(
 
             if (orders.isNotEmpty()) {
                 item {
-                    Text(
-                            text = stringResource(R.string.unpaid_swipe_hint),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(horizontal = 16.dp)
-                    )
-                }
-                item {
                     LazyRow(
                             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -352,10 +351,57 @@ fun UnpaidOrdersScreen(
                     UnpaidEmptyState(text = emptyText)
                 }
             } else {
-                groupedByDate.forEach { (date, dateOrders) ->
-                    // Lazy item keys on Android must be Bundle-saveable types.
-                    stickyHeader(key = date.toString()) { StickyDateHeader(date = date, today = today) }
-                    items(dateOrders, key = { it.id }) { order ->
+                if (showDateSections) {
+                    groupedByDate.forEach { (date, dateOrders) ->
+                        // Lazy item keys on Android must be Bundle-saveable types.
+                        stickyHeader(key = date.toString()) {
+                            StickyDateHeader(date = date, today = today)
+                        }
+                        items(dateOrders, key = { it.id }) { order ->
+                            val paid = paidAmounts[order.id] ?: BigDecimal.ZERO
+                            val balance = order.totalAmount - paid
+                            val customerLabel =
+                                    order.customerId?.let { id -> customerNames[id] }?.takeIf {
+                                        it.isNotBlank()
+                                    }
+
+                            val dismissState =
+                                    rememberSwipeToDismissBoxState(
+                                            confirmValueChange = {
+                                                when (it) {
+                                                    SwipeToDismissBoxValue.EndToStart -> {
+                                                        pendingSwipeDeleteOrder = order
+                                                        false
+                                                    }
+                                                    SwipeToDismissBoxValue.StartToEnd,
+                                                    SwipeToDismissBoxValue.Settled -> false
+                                                }
+                                            }
+                                    )
+
+                            SwipeToDismissBox(
+                                    state = dismissState,
+                                    modifier = Modifier,
+                                    enableDismissFromStartToEnd = false,
+                                    enableDismissFromEndToStart = true,
+                                    backgroundContent = { SwipeBackground(dismissState) },
+                                    content = {
+                                        UnpaidOrderRow(
+                                                order = order,
+                                                customerLabel = customerLabel,
+                                                paidAmount = paid,
+                                                balance = balance,
+                                                onOpenDay = {
+                                                    onOpenDay(order.orderDate, order.id)
+                                                },
+                                                onReceivePayment = { onReceivePayment(order) }
+                                        )
+                                    }
+                            )
+                        }
+                    }
+                } else {
+                    items(filteredOrders, key = { it.id }) { order ->
                         val paid = paidAmounts[order.id] ?: BigDecimal.ZERO
                         val balance = order.totalAmount - paid
                         val customerLabel =
@@ -367,14 +413,11 @@ fun UnpaidOrdersScreen(
                                 rememberSwipeToDismissBoxState(
                                         confirmValueChange = {
                                             when (it) {
-                                                SwipeToDismissBoxValue.StartToEnd -> {
-                                                    pendingSwipePayOrder = order
-                                                    false
-                                                }
                                                 SwipeToDismissBoxValue.EndToStart -> {
                                                     pendingSwipeDeleteOrder = order
                                                     false
                                                 }
+                                                SwipeToDismissBoxValue.StartToEnd,
                                                 SwipeToDismissBoxValue.Settled -> false
                                             }
                                         }
@@ -383,18 +426,18 @@ fun UnpaidOrdersScreen(
                         SwipeToDismissBox(
                                 state = dismissState,
                                 modifier = Modifier,
-                                enableDismissFromStartToEnd = true,
+                                enableDismissFromStartToEnd = false,
                                 enableDismissFromEndToStart = true,
                                 backgroundContent = { SwipeBackground(dismissState) },
                                 content = {
                                     UnpaidOrderRow(
                                             order = order,
                                             customerLabel = customerLabel,
-                                    paidAmount = paid,
-                                    balance = balance,
-                                    onOpenDay = { onOpenDay(order.orderDate) },
-                                    onReceivePayment = { onReceivePayment(order) }
-                            )
+                                            paidAmount = paid,
+                                            balance = balance,
+                                            onOpenDay = { onOpenDay(order.orderDate, order.id) },
+                                            onReceivePayment = { onReceivePayment(order) }
+                                    )
                                 }
                         )
                     }
@@ -444,30 +487,7 @@ fun UnpaidOrdersScreen(
 private fun SwipeBackground(dismissState: SwipeToDismissBoxState) {
     val direction = dismissState.dismissDirection
 
-    if (direction == SwipeToDismissBoxValue.StartToEnd) {
-        Box(
-                modifier =
-                        Modifier.fillMaxSize()
-                                .background(MaterialTheme.colorScheme.primaryContainer)
-                                .padding(horizontal = 20.dp),
-                contentAlignment = Alignment.CenterStart
-        ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(
-                        imageVector = Icons.Outlined.Payments,
-                        contentDescription = stringResource(R.string.unpaid_action_pay),
-                        tint = MaterialTheme.colorScheme.onPrimaryContainer
-                )
-                Spacer(Modifier.size(8.dp))
-                Text(
-                        text = stringResource(R.string.unpaid_action_pay).uppercase(),
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer,
-                        fontWeight = FontWeight.Bold
-                )
-            }
-        }
-    } else if (direction == SwipeToDismissBoxValue.EndToStart) {
+    if (direction == SwipeToDismissBoxValue.EndToStart) {
         Box(
                 modifier =
                         Modifier.fillMaxSize()

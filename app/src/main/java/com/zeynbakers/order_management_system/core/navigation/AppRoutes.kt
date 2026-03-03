@@ -26,7 +26,7 @@ object AppRoutes {
     const val FirstRunTutorial = "first_run_tutorial"
     const val ImportContacts = "import_contacts"
 
-    const val Day = "day/{date}"
+    const val Day = "day/{date}?orderId={orderId}"
     const val CustomerDetail = "customer/{customerId}"
     const val CustomerStatement = "customer/{customerId}/statement"
 
@@ -39,7 +39,13 @@ object AppRoutes {
     const val ARG_ORDER_ID = "orderId"
     const val ARG_FOCUS_RECEIPT_ID = "focusReceiptId"
 
-    fun day(date: LocalDate): String = "day/${date}"
+    fun day(date: LocalDate, orderId: Long? = null): String {
+        return if (orderId == null) {
+            "day/${date}"
+        } else {
+            "day/${date}?orderId=$orderId"
+        }
+    }
     fun customerDetail(customerId: Long): String = "customer/$customerId"
     fun customerStatement(customerId: Long): String = "customer/$customerId/statement"
     fun paymentHistoryCustomer(customerId: Long): String = "payment_history/customer/$customerId"

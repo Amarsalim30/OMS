@@ -67,6 +67,8 @@ internal fun computeDayStats(
 
     return DaySummaryStats(
         orderCount = orders.size,
+        dueCount = unpaidCount + partialCount,
+        noPaymentCount = unpaidCount,
         paidCount = paidCount,
         partialCount = partialCount,
         unpaidCount = unpaidCount,
@@ -101,6 +103,8 @@ internal fun titleCase(value: String): String {
 
 internal data class DaySummaryStats(
     val orderCount: Int,
+    val dueCount: Int,
+    val noPaymentCount: Int,
     val paidCount: Int,
     val partialCount: Int,
     val unpaidCount: Int,
@@ -120,7 +124,8 @@ data class OrderDraft(
 
 internal enum class DayOrderFilter(val labelRes: Int) {
     All(R.string.day_filter_all),
-    Unpaid(R.string.day_filter_unpaid),
+    Due(R.string.day_filter_due),
+    NoPayment(R.string.day_filter_no_payment),
     Partial(R.string.day_filter_partial),
     Paid(R.string.day_filter_paid),
     Overpaid(R.string.day_filter_overpaid)
@@ -135,7 +140,8 @@ internal fun dayOrderFilterOptions(
         val count =
             when (filter) {
                 DayOrderFilter.All -> totalOrders
-                DayOrderFilter.Unpaid -> stats.unpaidCount
+                DayOrderFilter.Due -> stats.dueCount
+                DayOrderFilter.NoPayment -> stats.noPaymentCount
                 DayOrderFilter.Partial -> stats.partialCount
                 DayOrderFilter.Paid -> stats.paidCount
                 DayOrderFilter.Overpaid -> stats.overpaidCount
@@ -172,10 +178,15 @@ internal fun dayEmptyStateRes(
                 R.string.day_empty_no_matches_title,
                 R.string.day_empty_no_matches_subtitle
             )
-        orderFilter == DayOrderFilter.Unpaid ->
+        orderFilter == DayOrderFilter.Due ->
             Pair(
-                R.string.day_empty_no_unpaid_title,
-                R.string.day_empty_no_unpaid_subtitle
+                R.string.day_empty_no_due_title,
+                R.string.day_empty_no_due_subtitle
+            )
+        orderFilter == DayOrderFilter.NoPayment ->
+            Pair(
+                R.string.day_empty_no_no_payment_title,
+                R.string.day_empty_no_no_payment_subtitle
             )
         orderFilter == DayOrderFilter.Partial ->
             Pair(

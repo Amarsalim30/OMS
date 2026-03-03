@@ -27,9 +27,9 @@ internal fun NavGraphBuilder.ordersGraph(
             paidAmounts = ordersState.unpaidPaidAmounts,
             customerNames = ordersState.unpaidCustomerNames,
             onBack = { navController.popBackStack() },
-            onOpenDay = { date ->
+            onOpenDay = { date, orderId ->
                 calendarCallbacks.onSelectedDateChange(date)
-                navController.navigate(AppRoutes.day(date))
+                navController.navigate(AppRoutes.day(date, orderId))
             },
             onReceivePayment = { order ->
                 val paid = ordersState.unpaidPaidAmounts[order.id] ?: BigDecimal.ZERO

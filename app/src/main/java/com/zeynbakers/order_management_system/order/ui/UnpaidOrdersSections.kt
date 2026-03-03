@@ -156,11 +156,12 @@ internal fun UnpaidOrderRow(
 ) {
     val haptic = LocalHapticFeedback.current
     val hasCustomer = !customerLabel.isNullOrBlank()
+    val hasNotes = order.notes.isNotBlank()
     val primaryLabel =
-        if (hasCustomer) {
-            customerLabel.orEmpty()
+        if (hasNotes) {
+            order.notes
         } else {
-            order.notes.takeIf { it.isNotBlank() }
+            customerLabel?.takeIf { it.isNotBlank() }
                 ?: stringResource(R.string.unpaid_unnamed_order)
         }
     AppCard(
@@ -204,9 +205,9 @@ internal fun UnpaidOrderRow(
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
-                            if (hasCustomer && order.notes.isNotBlank()) {
+                            if (hasCustomer && hasNotes) {
                                 Text(
-                                    text = order.notes,
+                                    text = customerLabel.orEmpty(),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     maxLines = 1,

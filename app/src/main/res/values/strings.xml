@@ -447,6 +447,7 @@
     <string name="ledger_entry_payment_reversal">Payment reversal</string>
     <string name="day_search_orders">Search orders</string>
     <string name="day_search_notes_or_customer">Notes or customer</string>
+    <string name="day_search_notes_customer_amount_pickup">Notes, customer, amount, or pickup</string>
     <string name="day_clear_search">Clear search</string>
     <string name="day_show_search">Search</string>
     <string name="day_hide_search">Hide search</string>
@@ -601,6 +602,7 @@
     <string name="unpaid_total_outstanding">Total outstanding</string>
     <string name="unpaid_active_context_filter_search">Filter %1$s - Search "%2$s"</string>
     <string name="unpaid_active_context_filter_only">Filter %1$s</string>
+    <string name="unpaid_active_context_search_only">Search "%1$s"</string>
     <plurals name="unpaid_orders_count">
         <item quantity="one">%1$d order</item>
         <item quantity="other">%1$d orders</item>
@@ -658,6 +660,8 @@
     <string name="day_no_customer">No customer</string>
     <string name="day_balance_label">Balance</string>
     <string name="day_over_label">Over</string>
+    <string name="day_outstanding_label">Outstanding</string>
+    <string name="day_credit_label">Credit</string>
     <string name="day_total_label">Total</string>
     <string name="day_paid_label">Paid</string>
     <string name="day_status_paid">Paid</string>
@@ -670,8 +674,11 @@
     <string name="day_pickup_time_value">Pickup %1$s</string>
     <string name="day_pickup_no_time">No pickup time</string>
     <string name="day_history">History</string>
+    <string name="day_order_more_actions">Order actions</string>
     <string name="day_delete_order">Delete order</string>
     <string name="day_filter_all">All</string>
+    <string name="day_filter_due">Due</string>
+    <string name="day_filter_no_payment">No payment</string>
     <string name="day_filter_unpaid">Unpaid</string>
     <string name="day_filter_partial">Partial</string>
     <string name="day_filter_paid">Paid</string>
@@ -683,6 +690,10 @@
     <string name="day_empty_no_matches_subtitle">Try a different name or note.</string>
     <string name="day_empty_no_unpaid_title">No unpaid orders</string>
     <string name="day_empty_no_unpaid_subtitle">All orders are paid or partial.</string>
+    <string name="day_empty_no_due_title">No due orders</string>
+    <string name="day_empty_no_due_subtitle">All orders are fully settled or overpaid.</string>
+    <string name="day_empty_no_no_payment_title">No orders without payment</string>
+    <string name="day_empty_no_no_payment_subtitle">Every order has at least one payment recorded.</string>
     <string name="day_empty_no_partial_title">No partial payments</string>
     <string name="day_empty_no_partial_subtitle">No orders are partially paid.</string>
     <string name="day_empty_no_paid_title">No paid orders</string>

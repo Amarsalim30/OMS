@@ -115,12 +115,21 @@ internal fun NavGraphBuilder.calendarGraph(
 
     composable(
         route = AppRoutes.Day,
-        arguments = listOf(navArgument(AppRoutes.ARG_DATE) { type = NavType.StringType })
+        arguments = listOf(
+            navArgument(AppRoutes.ARG_DATE) { type = NavType.StringType },
+            navArgument(AppRoutes.ARG_ORDER_ID) {
+                type = NavType.StringType
+                nullable = true
+                defaultValue = null
+            }
+        )
     ) { entry ->
         val dateArg = entry.arguments?.getString(AppRoutes.ARG_DATE)
         val date =
             dateArg?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
                 ?: supportActions.currentDate()
+        val focusOrderId =
+            entry.arguments?.getString(AppRoutes.ARG_ORDER_ID)?.toLongOrNull()
         LaunchedEffect(date) {
             calendarCallbacks.onSelectedDateChange(date)
             orderViewModel.loadOrdersForDate(date)
@@ -188,6 +197,7 @@ internal fun NavGraphBuilder.calendarGraph(
             },
             loadCustomerById = { id -> orderViewModel.getCustomerById(id) },
             searchCustomers = { query -> orderViewModel.searchCustomers(query) },
+            initialFocusOrderId = focusOrderId,
             draft = calendarState.dayDrafts[date],
             onDraftChange = { updated ->
                 if (updated == null) {

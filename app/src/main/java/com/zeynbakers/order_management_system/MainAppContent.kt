@@ -168,7 +168,7 @@ internal fun MainAppContent(
                 val updatePrefs = remember { UpdatePreferences(context) }
                 val helperPrefs = remember { HelperPreferences(context) }
                 var showUpdateDialog by remember { mutableStateOf(false) }
-                val helperState by helperPrefs.state.collectAsState(initial = HelperSettingsState())
+                val helperState by helperPrefs.state.collectAsState(initial = null)
                 val navController = rememberNavController()
                 val navBackStackEntry by navController.currentBackStackEntryAsState()
                 val currentRoute = navBackStackEntry?.destination?.route
@@ -274,11 +274,11 @@ internal fun MainAppContent(
                         baseYear = now.year
                     }
                 }
-                LaunchedEffect(helperState.enabled) {
-                    if (helperState.enabled) {
-                        HelperOverlayController.start(context.applicationContext)
-                    } else {
-                        HelperOverlayController.stop(context.applicationContext)
+                LaunchedEffect(helperState?.enabled) {
+                    when (helperState?.enabled) {
+                        true -> HelperOverlayController.start(context.applicationContext)
+                        false -> HelperOverlayController.stop(context.applicationContext)
+                        null -> Unit
                     }
                 }
                 LaunchedEffect(currentRoute, activeTopLevelRoute) {
