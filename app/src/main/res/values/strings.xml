@@ -716,8 +716,6 @@
     <string name="order_editor_footer_total">Total: KSh %1$s</string>
     <string name="order_editor_pick_time">Pick time</string>
     <string name="order_editor_customer_schedule_section">Customer and schedule</string>
-    <string name="order_editor_show_optional">Show optional fields</string>
-    <string name="order_editor_hide_optional">Hide optional fields</string>
     <string name="day_delete_order_title">Delete order?</string>
     <string name="day_delete_order_message">%1$s will be cancelled and removed from totals.</string>
     <string name="day_delete_no_payments_linked">No payments are linked to this order.</string>

@@ -15,7 +15,10 @@ import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
@@ -23,7 +26,11 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccessTime
+import androidx.compose.material.icons.filled.AttachMoney
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.EditNote
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -43,8 +50,8 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -55,6 +62,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
@@ -68,6 +76,8 @@ import java.math.BigDecimal
 import java.text.NumberFormat
 import java.util.Calendar
 import java.util.Locale
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 internal data class OrderEditorTutorialHint(
     val stepText: String,
@@ -128,17 +138,22 @@ internal fun OrderEditorSheet(
     val totalRequester = remember { FocusRequester() }
     val pickupRequester = remember { FocusRequester() }
     val nameRequester = remember { FocusRequester() }
+    val customerBringIntoViewRequester = remember { BringIntoViewRequester() }
+    val scope = rememberCoroutineScope()
     val setTotalText by rememberUpdatedState<(String) -> Unit>({ onTotalTextChange(it) })
     val formScrollState = rememberScrollState()
+
     val hasAnyInput =
         notes.isNotBlank() ||
             totalText.isNotBlank() ||
             pickupTimeText.isNotBlank() ||
             customerName.isNotBlank() ||
             customerPhone.isNotBlank()
+
     val quickAmountAdds = remember { listOf(100, 500, 1000) }
     val quickAmountFormatter = remember { NumberFormat.getIntegerInstance() }
     val quickPickupTimes = remember { listOf("09:00", "12:00", "15:00", "18:00") }
+    val fieldShape = remember { RoundedCornerShape(14.dp) }
     val normalizedTotal = totalText.toBigDecimalOrNull()
     val totalSummaryFormatter = remember {
         NumberFormat.getNumberInstance().apply {
@@ -147,23 +162,13 @@ internal fun OrderEditorSheet(
         }
     }
     val formattedTotalSummary = normalizedTotal?.let { totalSummaryFormatter.format(it) }
+
     val (initialHour, initialMinute) = remember(pickupTimeText) { parseTimeForPicker(pickupTimeText) }
     var showClearConfirm by remember { mutableStateOf(false) }
     var showTimePicker by remember { mutableStateOf(false) }
-    var showOptionalFields by rememberSaveable { mutableStateOf(false) }
-
-    LaunchedEffect(customerName, customerPhone, pickupTimeText) {
-        if (!showOptionalFields &&
-            (customerName.isNotBlank() || customerPhone.isNotBlank() || pickupTimeText.isNotBlank())
-        ) {
-            showOptionalFields = true
-        }
-    }
 
     LaunchedEffect(focusNotesInitially) {
-        if (focusNotesInitially) {
-            notesRequester.requestFocus()
-        }
+        if (focusNotesInitially) notesRequester.requestFocus()
     }
 
     val handleBackPress: () -> Unit = {
@@ -208,11 +213,7 @@ internal fun OrderEditorSheet(
                         modifier = Modifier.weight(1f)
                     )
                     TextButton(
-                        onClick = {
-                            if (hasAnyInput) {
-                                showClearConfirm = true
-                            }
-                        },
+                        onClick = { if (hasAnyInput) showClearConfirm = true },
                         enabled = hasAnyInput
                     ) {
                         Text(stringResource(R.string.action_clear))
@@ -226,16 +227,28 @@ internal fun OrderEditorSheet(
                         .weight(1f, fill = true)
                         .verticalScroll(formScrollState)
                         .padding(horizontal = 16.dp, vertical = 12.dp),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    tutorialHint?.let { hint ->
-                        OrderEditorTutorialPanel(hint = hint)
+                    tutorialHint?.let { OrderEditorTutorialPanel(it) }
+
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Filled.EditNote,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            text = stringResource(R.string.order_editor_title_label),
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.SemiBold
+                        )
                     }
 
                     OutlinedTextField(
                         value = notes,
                         onValueChange = { onNotesChange(sanitizeOrderNotesInput(it)) },
-                        label = { Text(stringResource(R.string.order_editor_title_label)) },
                         placeholder = { Text(stringResource(R.string.order_editor_notes_placeholder)) },
                         minLines = 1,
                         maxLines = 3,
@@ -244,61 +257,57 @@ internal fun OrderEditorSheet(
                             imeAction = ImeAction.Next
                         ),
                         keyboardActions = KeyboardActions(onNext = { totalRequester.requestFocus() }),
-                        trailingIcon =
-                            if (notes.isNotEmpty()) {
-                                {
-                                    IconButton(onClick = { onNotesChange("") }) {
-                                        Icon(
-                                            imageVector = Icons.Filled.Close,
-                                            contentDescription = stringResource(R.string.action_clear)
-                                        )
-                                    }
+                        trailingIcon = if (notes.isNotEmpty()) {
+                            {
+                                IconButton(onClick = { onNotesChange("") }) {
+                                    Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.action_clear))
                                 }
-                            } else {
-                                null
-                            },
+                            }
+                        } else null,
                         isError = notesError != null,
+                        shape = fieldShape,
                         modifier = Modifier
                             .fillMaxWidth()
                             .focusRequester(notesRequester)
-                            .onFocusChanged { state ->
-                                if (state.isFocused) {
-                                    onNotesFocused()
-                                }
-                            }
+                            .onFocusChanged { if (it.isFocused) onNotesFocused() }
                             .then(notesFieldModifier)
                     )
 
                     notesError?.let {
-                        Text(
-                            text = it,
-                            color = MaterialTheme.colorScheme.error,
-                            style = MaterialTheme.typography.bodySmall
-                        )
+                        Text(text = it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
                     }
 
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            imageVector = Icons.Filled.AttachMoney,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            text = stringResource(R.string.order_editor_total_amount_label),
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+
                     OutlinedTextField(
                         value = totalText,
                         onValueChange = onTotalTextChange,
-                        label = { Text(stringResource(R.string.order_editor_total_amount_label)) },
                         placeholder = { Text(stringResource(R.string.order_editor_total_placeholder)) },
                         leadingIcon = { Text(stringResource(R.string.order_editor_currency_prefix)) },
-                        trailingIcon =
-                            if (totalText.isNotEmpty()) {
-                                {
-                                    IconButton(onClick = { onTotalTextChange("") }) {
-                                        Icon(
-                                            imageVector = Icons.Filled.Close,
-                                            contentDescription = stringResource(R.string.action_clear)
-                                        )
-                                    }
+                        trailingIcon = if (totalText.isNotEmpty()) {
+                            {
+                                IconButton(onClick = { onTotalTextChange("") }) {
+                                    Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.action_clear))
                                 }
-                            } else {
-                                null
-                            },
+                            }
+                        } else null,
                         isError = isTotalInvalid,
+                        shape = fieldShape,
                         singleLine = true,
                         textStyle = MaterialTheme.typography.titleMedium,
                         keyboardOptions = KeyboardOptions(
@@ -308,44 +317,23 @@ internal fun OrderEditorSheet(
                         keyboardActions = KeyboardActions(
                             onDone = {
                                 focusManager.clearFocus()
-                                if (canSave) {
-                                    onSave()
-                                }
+                                if (canSave) onSave()
                             }
                         ),
-                        supportingText = {
-                            totalSupportingText?.let { Text(it) }
-                        },
+                        supportingText = { totalSupportingText?.let { Text(it) } },
                         modifier = Modifier
                             .fillMaxWidth()
                             .focusRequester(totalRequester)
-                            .onFocusChanged { state ->
-                                if (state.isFocused) {
-                                    onTotalFocused(setTotalText)
-                                }
-                            }
+                            .onFocusChanged { if (it.isFocused) onTotalFocused(setTotalText) }
                             .then(totalFieldModifier)
                     )
-
                     totalError?.let {
-                        Text(
-                            text = it,
-                            color = MaterialTheme.colorScheme.error,
-                            style = MaterialTheme.typography.bodySmall
-                        )
-                    }
-
-                    statusText?.let {
-                        Text(
-                            text = it,
-                            style = MaterialTheme.typography.labelLarge,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                        Text(text = it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
                     }
 
                     FlowRow(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         quickAmountAdds.forEach { amount ->
                             FilterChip(
@@ -371,20 +359,22 @@ internal fun OrderEditorSheet(
 
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 
-                    TextButton(
-                        onClick = { showOptionalFields = !showOptionalFields },
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Text(
-                            if (showOptionalFields) {
-                                stringResource(R.string.order_editor_hide_optional)
-                            } else {
-                                stringResource(R.string.order_editor_show_optional)
-                            }
-                        )
-                    }
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Filled.Person,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                text = stringResource(R.string.order_editor_customer_search_label),
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
 
-                    if (showOptionalFields) {
                         OutlinedTextField(
                             value = customerName,
                             onValueChange = {
@@ -393,7 +383,6 @@ internal fun OrderEditorSheet(
                                     onCustomerPhoneChange("")
                                 }
                             },
-                            label = { Text(stringResource(R.string.order_editor_customer_search_label)) },
                             placeholder = { Text(stringResource(R.string.order_editor_customer_search_placeholder)) },
                             singleLine = true,
                             keyboardOptions = KeyboardOptions(
@@ -401,27 +390,31 @@ internal fun OrderEditorSheet(
                                 imeAction = ImeAction.Next
                             ),
                             keyboardActions = KeyboardActions(onNext = { pickupRequester.requestFocus() }),
-                            trailingIcon =
-                                if (customerName.isNotEmpty()) {
-                                    {
-                                        IconButton(
-                                            onClick = {
-                                                onCustomerNameChange("")
-                                                onCustomerPhoneChange("")
-                                            }
-                                        ) {
-                                            Icon(
-                                                imageVector = Icons.Filled.Close,
-                                                contentDescription = stringResource(R.string.action_clear)
-                                            )
+                            trailingIcon = if (customerName.isNotEmpty()) {
+                                {
+                                    IconButton(
+                                        onClick = {
+                                            onCustomerNameChange("")
+                                            onCustomerPhoneChange("")
                                         }
+                                    ) {
+                                        Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.action_clear))
                                     }
-                                } else {
-                                    null
-                                },
+                                }
+                            } else null,
+                            shape = fieldShape,
                             modifier = Modifier
                                 .fillMaxWidth()
+                                .bringIntoViewRequester(customerBringIntoViewRequester)
                                 .focusRequester(nameRequester)
+                                .onFocusChanged { state ->
+                                    if (state.isFocused) {
+                                        scope.launch {
+                                            delay(120)
+                                            customerBringIntoViewRequester.bringIntoView()
+                                        }
+                                    }
+                                }
                                 .then(customerFieldModifier)
                         )
 
@@ -460,28 +453,36 @@ internal fun OrderEditorSheet(
                         }
 
                         customerError?.let {
+                            Text(text = it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall)
+                        }
+
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Filled.Schedule,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(Modifier.width(8.dp))
                             Text(
-                                text = it,
-                                color = MaterialTheme.colorScheme.error,
-                                style = MaterialTheme.typography.bodySmall
+                                text = stringResource(R.string.order_editor_pickup_short_label),
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.SemiBold
                             )
                         }
 
                         OutlinedTextField(
                             value = formatDisplayPickupTime(pickupTimeText),
                             onValueChange = onPickupTimeChange,
-                            label = { Text(stringResource(R.string.order_editor_pickup_short_label)) },
                             placeholder = { Text("--:--") },
                             readOnly = true,
                             isError = isPickupTimeInvalid,
+                            shape = fieldShape,
                             trailingIcon = {
                                 Row(verticalAlignment = Alignment.CenterVertically) {
                                     if (pickupTimeText.isNotEmpty()) {
                                         IconButton(onClick = { onPickupTimeChange("") }) {
-                                            Icon(
-                                                imageVector = Icons.Filled.Close,
-                                                contentDescription = stringResource(R.string.action_clear)
-                                            )
+                                            Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.action_clear))
                                         }
                                     }
                                     IconButton(onClick = { showTimePicker = true }) {
@@ -513,7 +514,7 @@ internal fun OrderEditorSheet(
 
                         FlowRow(
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
                             quickPickupTimes.forEach { value ->
                                 val isSelected = isSamePickupTime(pickupTimeText, value)
@@ -526,7 +527,6 @@ internal fun OrderEditorSheet(
                         }
                     }
                 }
-
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                 Row(
                     modifier = Modifier
