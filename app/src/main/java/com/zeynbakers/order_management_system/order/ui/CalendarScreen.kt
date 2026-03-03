@@ -674,7 +674,7 @@ fun CalendarScreen(
             customerError = customerError,
             canSave = canSave,
             onSave = ::submitOrder,
-            focusNotesInitially = false,
+            focusNotesInitially = true,
             onClear = {
                 notes = ""
                 totalText = ""

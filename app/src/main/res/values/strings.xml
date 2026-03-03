@@ -614,6 +614,7 @@
     <string name="unpaid_delete_message_plain">This will cancel the order and remove it from unpaid totals.</string>
     <string name="unpaid_delete_message_with_payments">This order has %1$s paid. Deleting will cancel the order and keep paid money as customer credit.</string>
     <string name="unpaid_customer_walk_in">Walk-in</string>
+    <string name="unpaid_unnamed_order">Order</string>
     <string name="unpaid_date_today">Today</string>
     <string name="unpaid_date_yesterday">Yesterday</string>
     <string name="calendar_add_order">Add order</string>
@@ -695,6 +696,7 @@
     <string name="day_editor_total_preview">Total: KSh %1$s</string>
     <string name="day_editor_status_line">Status: %1$s - Paid %2$s - Due %3$s</string>
     <string name="order_editor_notes_required_label">Notes (required)</string>
+    <string name="order_editor_title_label">Title</string>
     <string name="order_editor_notes_placeholder">Customer details, delivery time, etc.</string>
     <string name="order_editor_required_section_label">Required details</string>
     <string name="order_editor_total_amount_label">Total amount</string>
@@ -714,6 +716,8 @@
     <string name="order_editor_footer_total">Total: KSh %1$s</string>
     <string name="order_editor_pick_time">Pick time</string>
     <string name="order_editor_customer_schedule_section">Customer and schedule</string>
+    <string name="order_editor_show_optional">Show optional fields</string>
+    <string name="order_editor_hide_optional">Hide optional fields</string>
     <string name="day_delete_order_title">Delete order?</string>
     <string name="day_delete_order_message">%1$s will be cancelled and removed from totals.</string>
     <string name="day_delete_no_payments_linked">No payments are linked to this order.</string>

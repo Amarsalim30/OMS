@@ -481,8 +481,7 @@ fun DayDetailScreen(
             } else {
                 items(items = filteredOrders, key = { it.id }) { order ->
                     val customerLabel =
-                            order.customerId?.let { customerNames[it] }
-                                    ?: stringResource(R.string.day_no_customer)
+                            order.customerId?.let { customerNames[it] }?.takeIf { it.isNotBlank() }
                     val paidAmount = orderPaidAmounts[order.id] ?: BigDecimal.ZERO
                     val paymentState = resolvePaymentState(order.totalAmount, paidAmount)
                     OrderListItem(

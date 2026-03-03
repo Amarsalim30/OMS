@@ -39,7 +39,7 @@ import java.math.BigDecimal
 
 @Composable
 internal fun OrderSummaryCard(
-    customerLabel: String,
+    customerLabel: String?,
     notes: String,
     total: BigDecimal,
     onCopyNotes: () -> Unit
@@ -52,7 +52,9 @@ internal fun OrderSummaryCard(
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Column(modifier = Modifier.weight(1f)) {
-                Text(text = customerLabel, style = MaterialTheme.typography.bodyMedium)
+                customerLabel?.let {
+                    Text(text = it, style = MaterialTheme.typography.bodyMedium)
+                }
                 Text(text = formatKes(total), style = MaterialTheme.typography.bodyMedium)
             }
             TextButton(onClick = onCopyNotes) {

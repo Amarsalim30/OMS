@@ -213,7 +213,7 @@ internal fun DayOrderEditorDialog(
         customerError = customerError,
         canSave = canSave,
         onSave = ::submitOrder,
-        focusNotesInitially = editingOrderId != null,
+        focusNotesInitially = true,
         onClear = {
             onSetNotes("")
             onSetTotalText("")

@@ -331,7 +331,6 @@ fun SummaryScreen(
                         items(orders, key = { it.id }) { order ->
                             val customerLabel =
                                 order.customerId?.let { id -> customerNames[id] }?.takeIf { it.isNotBlank() }
-                                    ?: stringResource(R.string.summary_walk_in)
                             OrderSummaryCard(
                                 customerLabel = customerLabel,
                                 notes = order.notes,
@@ -354,7 +353,6 @@ fun SummaryScreen(
                             items(ordersByDate[date].orEmpty(), key = { it.id }) { order ->
                                 val customerLabel =
                                     order.customerId?.let { id -> customerNames[id] }?.takeIf { it.isNotBlank() }
-                                        ?: stringResource(R.string.summary_walk_in)
                                 OrderSummaryCard(
                                     customerLabel = customerLabel,
                                     notes = order.notes,

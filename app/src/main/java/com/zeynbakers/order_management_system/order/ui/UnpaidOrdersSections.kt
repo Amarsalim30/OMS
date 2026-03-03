@@ -155,7 +155,14 @@ internal fun UnpaidOrderRow(
     onReceivePayment: () -> Unit
 ) {
     val haptic = LocalHapticFeedback.current
-    val walkInLabel = stringResource(R.string.unpaid_customer_walk_in)
+    val hasCustomer = !customerLabel.isNullOrBlank()
+    val primaryLabel =
+        if (hasCustomer) {
+            customerLabel.orEmpty()
+        } else {
+            order.notes.takeIf { it.isNotBlank() }
+                ?: stringResource(R.string.unpaid_unnamed_order)
+        }
     AppCard(
         modifier =
             modifier
@@ -172,7 +179,7 @@ internal fun UnpaidOrderRow(
                 ) {
                     Box(contentAlignment = Alignment.Center) {
                         Text(
-                            text = getInitials(customerLabel ?: walkInLabel),
+                            text = getInitials(primaryLabel),
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onPrimaryContainer
@@ -190,14 +197,14 @@ internal fun UnpaidOrderRow(
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = customerLabel ?: walkInLabel,
+                                text = primaryLabel,
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onSurface,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
-                            if (order.notes.isNotBlank()) {
+                            if (hasCustomer && order.notes.isNotBlank()) {
                                 Text(
                                     text = order.notes,
                                     style = MaterialTheme.typography.bodySmall,

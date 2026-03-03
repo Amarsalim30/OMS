@@ -2,21 +2,19 @@ package com.zeynbakers.order_management_system.order.ui
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -34,21 +32,19 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.ModalBottomSheetProperties
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TimePicker
 import androidx.compose.material3.rememberTimePickerState
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -62,7 +58,10 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import com.zeynbakers.order_management_system.R
 import com.zeynbakers.order_management_system.customer.data.CustomerEntity
 import java.math.BigDecimal
@@ -130,7 +129,6 @@ internal fun OrderEditorSheet(
     val pickupRequester = remember { FocusRequester() }
     val nameRequester = remember { FocusRequester() }
     val setTotalText by rememberUpdatedState<(String) -> Unit>({ onTotalTextChange(it) })
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val formScrollState = rememberScrollState()
     val hasAnyInput =
         notes.isNotBlank() ||
@@ -152,20 +150,20 @@ internal fun OrderEditorSheet(
     val (initialHour, initialMinute) = remember(pickupTimeText) { parseTimeForPicker(pickupTimeText) }
     var showClearConfirm by remember { mutableStateOf(false) }
     var showTimePicker by remember { mutableStateOf(false) }
-    val sheetHeightFraction = if (tutorialHint != null) 0.96f else 0.94f
+    var showOptionalFields by rememberSaveable { mutableStateOf(false) }
+
+    LaunchedEffect(customerName, customerPhone, pickupTimeText) {
+        if (!showOptionalFields &&
+            (customerName.isNotBlank() || customerPhone.isNotBlank() || pickupTimeText.isNotBlank())
+        ) {
+            showOptionalFields = true
+        }
+    }
 
     LaunchedEffect(focusNotesInitially) {
         if (focusNotesInitially) {
             notesRequester.requestFocus()
-        } else {
-            nameRequester.requestFocus()
         }
-    }
-
-    val dismissSheet = {
-        keyboardController?.hide()
-        focusManager.clearFocus(force = true)
-        onCancel()
     }
 
     val handleBackPress: () -> Unit = {
@@ -177,60 +175,216 @@ internal fun OrderEditorSheet(
         }
     }
 
-    ModalBottomSheet(
-        onDismissRequest = dismissSheet,
-        sheetState = sheetState,
-        properties = ModalBottomSheetProperties(shouldDismissOnBackPress = false)
+    Dialog(
+        onDismissRequest = onCancel,
+        properties = DialogProperties(
+            usePlatformDefaultWidth = false,
+            dismissOnBackPress = false,
+            dismissOnClickOutside = false,
+            decorFitsSystemWindows = false
+        )
     ) {
         BackHandler(onBack = handleBackPress)
-        Box(
-            modifier = modifier
-                .fillMaxWidth()
-                .fillMaxHeight(sheetHeightFraction)
+        Surface(
+            modifier = modifier.fillMaxSize(),
+            color = MaterialTheme.colorScheme.background
         ) {
             Column(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .fillMaxHeight()
+                    .fillMaxSize()
                     .imePadding()
-                    .navigationBarsPadding()
             ) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 12.dp, vertical = 10.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
+                        .padding(horizontal = 16.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
                         text = title,
                         style = MaterialTheme.typography.titleLarge,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f)
                     )
-                    IconButton(onClick = dismissSheet) {
-                        Icon(
-                            imageVector = Icons.Filled.Close,
-                            contentDescription = stringResource(R.string.action_cancel)
-                        )
+                    TextButton(
+                        onClick = {
+                            if (hasAnyInput) {
+                                showClearConfirm = true
+                            }
+                        },
+                        enabled = hasAnyInput
+                    ) {
+                        Text(stringResource(R.string.action_clear))
                     }
                 }
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
                         .weight(1f, fill = true)
                         .verticalScroll(formScrollState)
-                        .padding(horizontal = 12.dp, vertical = 10.dp),
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     tutorialHint?.let { hint ->
                         OrderEditorTutorialPanel(hint = hint)
                     }
 
-                    EditorSectionCard(
-                        title = stringResource(R.string.order_editor_customer_schedule_section)
+                    OutlinedTextField(
+                        value = notes,
+                        onValueChange = { onNotesChange(sanitizeOrderNotesInput(it)) },
+                        label = { Text(stringResource(R.string.order_editor_title_label)) },
+                        placeholder = { Text(stringResource(R.string.order_editor_notes_placeholder)) },
+                        minLines = 1,
+                        maxLines = 3,
+                        keyboardOptions = KeyboardOptions(
+                            capitalization = KeyboardCapitalization.Sentences,
+                            imeAction = ImeAction.Next
+                        ),
+                        keyboardActions = KeyboardActions(onNext = { totalRequester.requestFocus() }),
+                        trailingIcon =
+                            if (notes.isNotEmpty()) {
+                                {
+                                    IconButton(onClick = { onNotesChange("") }) {
+                                        Icon(
+                                            imageVector = Icons.Filled.Close,
+                                            contentDescription = stringResource(R.string.action_clear)
+                                        )
+                                    }
+                                }
+                            } else {
+                                null
+                            },
+                        isError = notesError != null,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .focusRequester(notesRequester)
+                            .onFocusChanged { state ->
+                                if (state.isFocused) {
+                                    onNotesFocused()
+                                }
+                            }
+                            .then(notesFieldModifier)
+                    )
+
+                    notesError?.let {
+                        Text(
+                            text = it,
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+
+                    OutlinedTextField(
+                        value = totalText,
+                        onValueChange = onTotalTextChange,
+                        label = { Text(stringResource(R.string.order_editor_total_amount_label)) },
+                        placeholder = { Text(stringResource(R.string.order_editor_total_placeholder)) },
+                        leadingIcon = { Text(stringResource(R.string.order_editor_currency_prefix)) },
+                        trailingIcon =
+                            if (totalText.isNotEmpty()) {
+                                {
+                                    IconButton(onClick = { onTotalTextChange("") }) {
+                                        Icon(
+                                            imageVector = Icons.Filled.Close,
+                                            contentDescription = stringResource(R.string.action_clear)
+                                        )
+                                    }
+                                }
+                            } else {
+                                null
+                            },
+                        isError = isTotalInvalid,
+                        singleLine = true,
+                        textStyle = MaterialTheme.typography.titleMedium,
+                        keyboardOptions = KeyboardOptions(
+                            keyboardType = KeyboardType.Decimal,
+                            imeAction = ImeAction.Done
+                        ),
+                        keyboardActions = KeyboardActions(
+                            onDone = {
+                                focusManager.clearFocus()
+                                if (canSave) {
+                                    onSave()
+                                }
+                            }
+                        ),
+                        supportingText = {
+                            totalSupportingText?.let { Text(it) }
+                        },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .focusRequester(totalRequester)
+                            .onFocusChanged { state ->
+                                if (state.isFocused) {
+                                    onTotalFocused(setTotalText)
+                                }
+                            }
+                            .then(totalFieldModifier)
+                    )
+
+                    totalError?.let {
+                        Text(
+                            text = it,
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+
+                    statusText?.let {
+                        Text(
+                            text = it,
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+
+                    FlowRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        val hasSelectedCustomer = customerName.isNotBlank() && customerPhone.isNotBlank()
+                        quickAmountAdds.forEach { amount ->
+                            FilterChip(
+                                selected = false,
+                                onClick = {
+                                    val updated = (normalizedTotal ?: BigDecimal.ZERO)
+                                        .add(amount.toBigDecimal())
+                                        .stripTrailingZeros()
+                                        .toPlainString()
+                                    onTotalTextChange(updated)
+                                },
+                                label = {
+                                    Text(
+                                        stringResource(
+                                            R.string.order_editor_quick_amount_chip,
+                                            quickAmountFormatter.format(amount)
+                                        )
+                                    )
+                                }
+                            )
+                        }
+                    }
+
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+
+                    TextButton(
+                        onClick = { showOptionalFields = !showOptionalFields },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            if (showOptionalFields) {
+                                stringResource(R.string.order_editor_hide_optional)
+                            } else {
+                                stringResource(R.string.order_editor_show_optional)
+                            }
+                        )
+                    }
+
+                    if (showOptionalFields) {
                         OutlinedTextField(
                             value = customerName,
                             onValueChange = {
@@ -247,64 +401,31 @@ internal fun OrderEditorSheet(
                                 imeAction = ImeAction.Next
                             ),
                             keyboardActions = KeyboardActions(onNext = { pickupRequester.requestFocus() }),
-                            trailingIcon = if (customerName.isNotEmpty()) {
-                                {
-                                    IconButton(
-                                        onClick = {
-                                            onCustomerNameChange("")
-                                            onCustomerPhoneChange("")
+                            trailingIcon =
+                                if (customerName.isNotEmpty()) {
+                                    {
+                                        IconButton(
+                                            onClick = {
+                                                onCustomerNameChange("")
+                                                onCustomerPhoneChange("")
+                                            }
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Filled.Close,
+                                                contentDescription = stringResource(R.string.action_clear)
+                                            )
                                         }
-                                    ) {
-                                        Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.action_clear))
                                     }
-                                }
-                            } else null,
+                                } else {
+                                    null
+                                },
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .focusRequester(nameRequester)
                                 .then(customerFieldModifier)
                         )
 
-                        if (hasSelectedCustomer) {
-                            Surface(
-                                shape = RoundedCornerShape(12.dp),
-                                color = MaterialTheme.colorScheme.secondaryContainer
-                            ) {
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(horizontal = 10.dp, vertical = 8.dp),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text(
-                                            text = customerName.trim(),
-                                            style = MaterialTheme.typography.labelLarge,
-                                            color = MaterialTheme.colorScheme.onSecondaryContainer
-                                        )
-                                        Text(
-                                            text = customerPhone.trim(),
-                                            style = MaterialTheme.typography.bodySmall,
-                                            color = MaterialTheme.colorScheme.onSecondaryContainer
-                                        )
-                                    }
-                                    TextButton(
-                                        onClick = {
-                                            onCustomerPhoneChange("")
-                                            nameRequester.requestFocus()
-                                        }
-                                    ) {
-                                        Text(stringResource(R.string.action_change))
-                                    }
-                                }
-                            }
-                        }
-
                         if (suggestions.isNotEmpty()) {
-                            Text(
-                                text = stringResource(R.string.order_editor_suggestions_label),
-                                style = MaterialTheme.typography.labelLarge
-                            )
                             Column(
                                 modifier = Modifier.fillMaxWidth(),
                                 verticalArrangement = Arrangement.spacedBy(6.dp)
@@ -312,7 +433,7 @@ internal fun OrderEditorSheet(
                                 suggestions.take(4).forEach { customer ->
                                     Surface(
                                         onClick = { onSuggestionSelected(customer) },
-                                        shape = MaterialTheme.shapes.medium,
+                                        shape = RoundedCornerShape(10.dp),
                                         color = MaterialTheme.colorScheme.surfaceContainerLow
                                     ) {
                                         Column(
@@ -339,7 +460,11 @@ internal fun OrderEditorSheet(
                         }
 
                         customerError?.let {
-                            Text(text = it, color = MaterialTheme.colorScheme.error)
+                            Text(
+                                text = it,
+                                color = MaterialTheme.colorScheme.error,
+                                style = MaterialTheme.typography.bodySmall
+                            )
                         }
 
                         OutlinedTextField(
@@ -354,7 +479,7 @@ internal fun OrderEditorSheet(
                                     if (pickupTimeText.isNotEmpty()) {
                                         IconButton(onClick = { onPickupTimeChange("") }) {
                                             Icon(
-                                                Icons.Filled.Close,
+                                                imageVector = Icons.Filled.Close,
                                                 contentDescription = stringResource(R.string.action_clear)
                                             )
                                         }
@@ -386,11 +511,6 @@ internal fun OrderEditorSheet(
                                 }
                         )
 
-                        Text(
-                            text = stringResource(R.string.order_editor_quick_pickup_label),
-                            style = MaterialTheme.typography.labelLarge,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
                         FlowRow(
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                             verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -405,167 +525,28 @@ internal fun OrderEditorSheet(
                             }
                         }
                     }
-
-                    EditorSectionCard(
-                        title = stringResource(R.string.order_editor_required_section_label)
-                    ) {
-                        OutlinedTextField(
-                            value = notes,
-                            onValueChange = { onNotesChange(sanitizeOrderNotesInput(it)) },
-                            label = { Text(stringResource(R.string.order_editor_notes_required_label)) },
-                            placeholder = { Text(stringResource(R.string.order_editor_notes_placeholder)) },
-                            minLines = 2,
-                            maxLines = 3,
-                            keyboardOptions = KeyboardOptions(
-                                capitalization = KeyboardCapitalization.Sentences,
-                                imeAction = ImeAction.Next
-                            ),
-                            keyboardActions = KeyboardActions(onNext = { totalRequester.requestFocus() }),
-                            trailingIcon = if (notes.isNotEmpty()) {
-                                {
-                                    IconButton(onClick = { onNotesChange("") }) {
-                                        Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.action_clear))
-                                    }
-                                }
-                            } else null,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .focusRequester(notesRequester)
-                                .onFocusChanged { state ->
-                                    if (state.isFocused) {
-                                        onNotesFocused()
-                                    }
-                                }
-                                .then(notesFieldModifier)
-                        )
-                        notesError?.let {
-                            Text(text = it, color = MaterialTheme.colorScheme.error)
-                        }
-
-                        OutlinedTextField(
-                            value = totalText,
-                            onValueChange = onTotalTextChange,
-                            label = { Text(stringResource(R.string.order_editor_total_amount_label)) },
-                            placeholder = { Text(stringResource(R.string.order_editor_total_placeholder)) },
-                            leadingIcon = { Text(stringResource(R.string.order_editor_currency_prefix)) },
-                            trailingIcon = if (totalText.isNotEmpty()) {
-                                {
-                                    IconButton(onClick = { onTotalTextChange("") }) {
-                                        Icon(Icons.Filled.Close, contentDescription = stringResource(R.string.action_clear))
-                                    }
-                                }
-                            } else null,
-                            isError = isTotalInvalid,
-                            singleLine = true,
-                            textStyle = MaterialTheme.typography.titleMedium,
-                            keyboardOptions = KeyboardOptions(
-                                keyboardType = KeyboardType.Decimal,
-                                imeAction = ImeAction.Done
-                            ),
-                            keyboardActions = KeyboardActions(
-                                onDone = {
-                                    focusManager.clearFocus()
-                                    if (canSave) {
-                                        onSave()
-                                    }
-                                }
-                            ),
-                            supportingText = {
-                                totalSupportingText?.let { Text(it) }
-                            },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .focusRequester(totalRequester)
-                                .onFocusChanged { state ->
-                                    if (state.isFocused) {
-                                        onTotalFocused(setTotalText)
-                                    }
-                                }
-                                .then(totalFieldModifier)
-                        )
-
-                        totalError?.let {
-                            Text(text = it, color = MaterialTheme.colorScheme.error)
-                        }
-
-                        statusText?.let {
-                            Text(
-                                text = it,
-                                style = MaterialTheme.typography.labelLarge,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-
-                        Text(
-                            text = stringResource(R.string.order_editor_quick_amounts_label),
-                            style = MaterialTheme.typography.labelLarge,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        FlowRow(
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            quickAmountAdds.forEach { amount ->
-                                FilterChip(
-                                    selected = false,
-                                    onClick = {
-                                        val updated = (normalizedTotal ?: BigDecimal.ZERO)
-                                            .add(amount.toBigDecimal())
-                                            .stripTrailingZeros()
-                                            .toPlainString()
-                                        onTotalTextChange(updated)
-                                    },
-                                    label = {
-                                        Text(
-                                            stringResource(
-                                                R.string.order_editor_quick_amount_chip,
-                                                quickAmountFormatter.format(amount)
-                                            )
-                                        )
-                                    }
-                                )
-                            }
-                        }
-                    }
                 }
+
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 12.dp, vertical = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
+                        .navigationBarsPadding()
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Column(
-                        modifier = Modifier.weight(1f),
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        formattedTotalSummary?.let {
-                            Text(
-                                text = stringResource(R.string.order_editor_footer_total, it),
-                                style = MaterialTheme.typography.labelLarge,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                        TextButton(
-                            onClick = {
-                                if (hasAnyInput) {
-                                    showClearConfirm = true
-                                } else {
-                                    onClear()
-                                }
-                            },
-                            modifier = Modifier.padding(horizontal = 2.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Filled.Close,
-                                contentDescription = stringResource(R.string.action_clear)
-                            )
-                            Spacer(Modifier.width(6.dp))
-                            Text(stringResource(R.string.action_clear))
-                        }
+                    TextButton(onClick = onCancel) {
+                        Text(stringResource(R.string.action_cancel))
                     }
-                    Spacer(Modifier.width(8.dp))
+                    Spacer(Modifier.weight(1f))
+                    formattedTotalSummary?.let {
+                        Text(
+                            text = stringResource(R.string.order_editor_footer_total, it),
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(end = 8.dp)
+                        )
+                    }
                     Button(
                         onClick = onSave,
                         enabled = canSave,
@@ -575,6 +556,7 @@ internal fun OrderEditorSheet(
                     }
                 }
             }
+
             if (showTimePicker) {
                 val timePickerState = rememberTimePickerState(
                     initialHour = initialHour,
@@ -608,6 +590,7 @@ internal fun OrderEditorSheet(
                     }
                 )
             }
+
             if (showClearConfirm) {
                 AlertDialog(
                     onDismissRequest = { showClearConfirm = false },
@@ -630,7 +613,6 @@ internal fun OrderEditorSheet(
                     }
                 )
             }
-
         }
     }
 }
@@ -742,30 +724,4 @@ private fun defaultPickerTime(): Pair<Int, Int> {
     val finalHour = calendar.get(Calendar.HOUR_OF_DAY)
     val finalMinute = if (roundedMinute >= 60) 0 else roundedMinute
     return finalHour to finalMinute
-}
-
-@Composable
-private fun EditorSectionCard(
-    title: String,
-    content: @Composable ColumnScope.() -> Unit
-) {
-    Surface(
-        shape = RoundedCornerShape(16.dp),
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
-        tonalElevation = 1.dp
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            content()
-        }
-    }
 }

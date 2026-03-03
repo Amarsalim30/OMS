@@ -126,7 +126,7 @@ internal fun EmptyDayState(title: String, subtitle: String) {
 @Composable
 internal fun OrderListItem(
         order: OrderEntity,
-        customerLabel: String,
+        customerLabel: String?,
         paidAmount: BigDecimal,
         paymentState: PaymentState,
         onEdit: () -> Unit,
@@ -154,12 +154,7 @@ internal fun OrderListItem(
                         )
                 PaymentState.PAID -> stringResource(R.string.day_paid_in_full)
             }
-    val customerTextColor =
-            if (customerLabel == stringResource(R.string.day_no_customer)) {
-                MaterialTheme.colorScheme.onSurfaceVariant
-            } else {
-                MaterialTheme.colorScheme.onSurface
-            }
+    val customerTextColor = MaterialTheme.colorScheme.onSurface
     val pickupLabel = plannerPickupDisplay(order.pickupTime)
     val pickupText =
             if (pickupLabel != null) {
@@ -218,12 +213,14 @@ internal fun OrderListItem(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(
-                            text = customerLabel,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = customerTextColor,
-                            modifier = Modifier.weight(1f)
-                    )
+                    customerLabel?.let {
+                        Text(
+                                text = it,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = customerTextColor,
+                                modifier = Modifier.weight(1f)
+                        )
+                    }
                 }
                 Spacer(Modifier.height(4.dp))
                 Text(
