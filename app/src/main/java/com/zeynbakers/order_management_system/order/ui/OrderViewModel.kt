@@ -18,9 +18,12 @@ import com.zeynbakers.order_management_system.order.data.OrderEntity
 import com.zeynbakers.order_management_system.order.data.OrderStatus
 import com.zeynbakers.order_management_system.order.data.OrderStatusOverride
 import java.math.BigDecimal
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.datetime.Clock
 import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.LocalDate
@@ -33,6 +36,7 @@ data class MonthKey(val year: Int, val month: Int)
 
 data class MonthSnapshot(
     val days: List<CalendarDayUi>,
+    val daysByDate: Map<LocalDate, CalendarDayUi>,
     val total: BigDecimal,
     val badgeCount: Int
 )
@@ -93,6 +97,7 @@ class OrderViewModel(private val database: AppDatabase) : ViewModel() {
 
     private var lastMonth: Int? = null
     private var lastYear: Int? = null
+    private var currentMonthLoadJob: Job? = null
 
     fun saveOrder(
         date: LocalDate,
@@ -366,9 +371,9 @@ class OrderViewModel(private val database: AppDatabase) : ViewModel() {
     ): List<OrderMoveOption> {
         val orders =
             if (customerId == null) {
-                orderDao.getActiveOrders()
+                orderDao.getOpenOrdersLimited(MOVE_TARGET_MAX_ORDERS)
             } else {
-                orderDao.getOrdersByCustomer(customerId)
+                orderDao.getOpenOrdersByCustomerLimited(customerId, MOVE_TARGET_MAX_ORDERS)
             }
         val customerIds = orders.mapNotNull { it.customerId }.distinct()
         val customerNames =
@@ -376,7 +381,6 @@ class OrderViewModel(private val database: AppDatabase) : ViewModel() {
             else customerDao.getByIds(customerIds).associate { it.id to it.name }
         return orders
             .filter { it.id != excludeOrderId }
-            .filter { it.status != OrderStatus.CANCELLED && it.statusOverride != OrderStatusOverride.CLOSED }
             .sortedWith(
                 compareBy<OrderEntity> { it.orderDate }
                     .thenBy { it.createdAt }
@@ -404,6 +408,13 @@ class OrderViewModel(private val database: AppDatabase) : ViewModel() {
         moveFullReceipts: Boolean
     ): Boolean {
         database.withTransaction {
+            val validAllocationIds =
+                if (allocationIds.isEmpty()) {
+                    emptyList()
+                } else {
+                    val orderAllocationIds = allocationDao.getByOrderId(orderId).map { it.id }.toSet()
+                    allocationIds.filter { it in orderAllocationIds }
+                }
             val order = orderDao.getOrderById(orderId)
             val orderLabel =
                 order?.let {
@@ -419,9 +430,9 @@ class OrderViewModel(private val database: AppDatabase) : ViewModel() {
             val description = "$orderLabel deleted"
             when (action) {
                 OrderPaymentAction.MOVE -> {
-                    if (allocationIds.isNotEmpty() && target != null) {
+                    if (validAllocationIds.isNotEmpty() && target != null) {
                         receiptProcessor.moveAllocations(
-                            allocationIds = allocationIds,
+                            allocationIds = validAllocationIds,
                             target = target,
                             descriptionBase = description,
                             moveFullReceipts = moveFullReceipts
@@ -429,9 +440,9 @@ class OrderViewModel(private val database: AppDatabase) : ViewModel() {
                     }
                 }
                 OrderPaymentAction.VOID -> {
-                    if (allocationIds.isNotEmpty()) {
+                    if (validAllocationIds.isNotEmpty()) {
                         receiptProcessor.voidAllocations(
-                            allocationIds = allocationIds,
+                            allocationIds = validAllocationIds,
                             reason = "Order deleted"
                         )
                     }
@@ -452,25 +463,63 @@ class OrderViewModel(private val database: AppDatabase) : ViewModel() {
         accountingDao.moveOrderCreditsToCustomerLevel(orderId)
     }
 
-    fun loadMonth(month: Int, year: Int) {
-        viewModelScope.launch {
-            loadMonth(month = month, year = year, setAsCurrent = true)
-        }
+    fun loadMonth(month: Int, year: Int, forceRefresh: Boolean = false) {
+        currentMonthLoadJob?.cancel()
+        currentMonthLoadJob =
+            viewModelScope.launch {
+                loadMonth(
+                    month = month,
+                    year = year,
+                    setAsCurrent = true,
+                    forceRefresh = forceRefresh
+                )
+            }
     }
 
     fun prefetchAdjacentMonths(year: Int, month: Int) {
         viewModelScope.launch {
             val (prevYear, prevMonth) = shiftMonth(year, month, -1)
             val (nextYear, nextMonth) = shiftMonth(year, month, 1)
-            loadMonth(month = prevMonth, year = prevYear, setAsCurrent = false)
-            loadMonth(month = nextMonth, year = nextYear, setAsCurrent = false)
+            launch {
+                loadMonth(
+                    month = prevMonth,
+                    year = prevYear,
+                    setAsCurrent = false,
+                    forceRefresh = false
+                )
+            }
+            launch {
+                loadMonth(
+                    month = nextMonth,
+                    year = nextYear,
+                    setAsCurrent = false,
+                    forceRefresh = false
+                )
+            }
         }
     }
 
-    private suspend fun loadMonth(month: Int, year: Int, setAsCurrent: Boolean) {
+    private suspend fun loadMonth(
+        month: Int,
+        year: Int,
+        setAsCurrent: Boolean,
+        forceRefresh: Boolean
+    ) {
         if (setAsCurrent) {
             lastMonth = month
             lastYear = year
+        }
+        val key = MonthKey(year, month)
+        if (!forceRefresh) {
+            val cached = _monthSnapshots.value[key]
+            if (cached != null) {
+                if (setAsCurrent) {
+                    _calendarDays.value = cached.days
+                    _monthTotal.value = cached.total
+                    _monthBadgeCount.value = cached.badgeCount
+                }
+                return
+            }
         }
         val start = LocalDate(year, month, 1)
         val daysInMonth = daysInMonth(year, month)
@@ -482,12 +531,6 @@ class OrderViewModel(private val database: AppDatabase) : ViewModel() {
 
         val orders = orderDao.getOrdersBetween(gridStart.toString(), gridEndExclusive.toString())
         val activeOrders = orders.filter { it.status != OrderStatus.CANCELLED }
-        val grouped = activeOrders.groupBy { it.orderDate }
-        val totals =
-            activeOrders.groupBy { it.orderDate }
-                .mapValues { entry ->
-                    entry.value.fold(BigDecimal.ZERO) { acc, order -> acc + order.totalAmount }
-                }
         val orderIds = activeOrders.map { it.id }.filter { it != 0L }
         val paidByOrder =
             if (orderIds.isEmpty()) {
@@ -495,70 +538,32 @@ class OrderViewModel(private val database: AppDatabase) : ViewModel() {
             } else {
                 accountingDao.getPaidForOrders(orderIds).associate { it.orderId to it.paid }
             }
-        val paidTotals =
-            activeOrders.groupBy { it.orderDate }
-                .mapValues { entry ->
-                    entry.value.fold(BigDecimal.ZERO) { acc, order ->
-                        acc + (paidByOrder[order.id] ?: BigDecimal.ZERO)
-                    }
-                }
-        val unpaidCount =
-            activeOrders.count { order ->
-                if (order.orderDate.monthNumber != month || order.orderDate.year != year) {
-                    false
-                } else {
-                    val paid = paidByOrder[order.id] ?: BigDecimal.ZERO
-                    paid < order.totalAmount
-                }
-            }
-
         val today = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date
-        val calendarDays =
-            (0 until (leadingDays + daysInMonth + trailingDays)).map { offset ->
-                val date = gridStart.plus(offset, DateTimeUnit.DAY)
-                val dayOrders = grouped[date] ?: emptyList()
-                val dayTotal = totals[date] ?: BigDecimal.ZERO
-                val dayPaid = paidTotals[date] ?: BigDecimal.ZERO
-                val orderStates =
-                    dayOrders.map { order ->
-                        val paid = paidByOrder[order.id] ?: BigDecimal.ZERO
-                        resolveOrderPaymentState(order.totalAmount, paid)
-                    }
-                val paymentState =
-                    if (dayTotal <= BigDecimal.ZERO) {
-                        null
-                    } else {
-                        val balance = dayTotal - dayPaid
-                        when {
-                            dayPaid <= BigDecimal.ZERO -> PaymentState.UNPAID
-                            balance > BigDecimal.ZERO -> PaymentState.PARTIAL
-                            balance == BigDecimal.ZERO -> PaymentState.PAID
-                            else -> PaymentState.OVERPAID
-                        }
-                    }
-                CalendarDayUi(
-                    date = date,
-                    orderCount = dayOrders.size,
-                    totalAmount = dayTotal,
-                    isToday = date == today,
-                    isInCurrentMonth = date.monthNumber == month,
-                    paymentState = paymentState,
-                    orderStates = orderStates
+        val monthData =
+            withContext(Dispatchers.Default) {
+                buildMonthData(
+                    activeOrders = activeOrders,
+                    paidByOrder = paidByOrder,
+                    month = month,
+                    year = year,
+                    today = today,
+                    gridStart = gridStart,
+                    daySlots = leadingDays + daysInMonth + trailingDays
                 )
             }
-
-        val monthTotal =
-            activeOrders
-                .filter { it.orderDate >= start && it.orderDate <= endOfMonth }
-                .fold(BigDecimal.ZERO) { acc, order -> acc + order.totalAmount }
-        val badgeCount = unpaidCount
-        val key = MonthKey(year, month)
-        _monthSnapshots.value = _monthSnapshots.value + (key to MonthSnapshot(calendarDays, monthTotal, badgeCount))
+        val snapshot =
+            MonthSnapshot(
+                days = monthData.calendarDays,
+                daysByDate = monthData.calendarDaysByDate,
+                total = monthData.monthTotal,
+                badgeCount = monthData.badgeCount
+            )
+        _monthSnapshots.value = _monthSnapshots.value + (key to snapshot)
 
         if (setAsCurrent) {
-            _calendarDays.value = calendarDays
-            _monthTotal.value = monthTotal
-            _monthBadgeCount.value = badgeCount
+            _calendarDays.value = monthData.calendarDays
+            _monthTotal.value = monthData.monthTotal
+            _monthBadgeCount.value = monthData.badgeCount
         }
     }
 
@@ -596,21 +601,28 @@ class OrderViewModel(private val database: AppDatabase) : ViewModel() {
             }
             existing.id
         } else {
-            customerDao.insert(CustomerEntity(name = cleanName, phone = normalizedPhone))
+            val insertedId =
+                customerDao.insertIgnore(CustomerEntity(name = cleanName, phone = normalizedPhone))
+            if (insertedId != -1L) {
+                insertedId
+            } else {
+                customerDao.getByPhone(normalizedPhone)?.id
+                    ?: customerDao.getByPhones(expandPhoneCandidates(phone))?.id
+                    ?: return null
+            }
         }
     }
 
     private fun refreshMonthTotals() {
         val month = lastMonth ?: return
         val year = lastYear ?: return
-        loadMonth(month = month, year = year)
+        loadMonth(month = month, year = year, forceRefresh = true)
     }
 
     fun loadUnpaidOrders() {
         viewModelScope.launch {
             val orders =
-                orderDao.getActiveOrders()
-                    .filter { it.statusOverride != OrderStatusOverride.CLOSED }
+                orderDao.getOpenOrdersLimited(UNPAID_SCREEN_MAX_ORDERS)
             val orderIds = orders.map { it.id }.filter { it != 0L }
             val paidByOrder =
                 if (orderIds.isEmpty()) {
@@ -636,6 +648,11 @@ class OrderViewModel(private val database: AppDatabase) : ViewModel() {
                     compareByDescending<OrderEntity> { it.orderDate }.thenByDescending { it.createdAt }
                 )
         }
+    }
+
+    companion object {
+        private const val MOVE_TARGET_MAX_ORDERS = 1_500
+        private const val UNPAID_SCREEN_MAX_ORDERS = 2_000
     }
 
     private fun isLeapYear(year: Int): Boolean {
@@ -666,6 +683,72 @@ class OrderViewModel(private val database: AppDatabase) : ViewModel() {
             balance == BigDecimal.ZERO -> PaymentState.PAID
             else -> PaymentState.OVERPAID
         }
+    }
+
+    private fun buildMonthData(
+        activeOrders: List<OrderEntity>,
+        paidByOrder: Map<Long, BigDecimal>,
+        month: Int,
+        year: Int,
+        today: LocalDate,
+        gridStart: LocalDate,
+        daySlots: Int
+    ): MonthComputation {
+        val aggregates = HashMap<LocalDate, DayAggregate>()
+        var monthTotal = BigDecimal.ZERO
+        var badgeCount = 0
+
+        activeOrders.forEach { order ->
+            val paid = paidByOrder[order.id] ?: BigDecimal.ZERO
+            val aggregate = aggregates.getOrPut(order.orderDate) { DayAggregate() }
+            aggregate.orderCount += 1
+            aggregate.total = aggregate.total + order.totalAmount
+            aggregate.paid = aggregate.paid + paid
+            aggregate.orderStates.add(resolveOrderPaymentState(order.totalAmount, paid))
+
+            if (order.orderDate.monthNumber == month && order.orderDate.year == year) {
+                monthTotal = monthTotal + order.totalAmount
+                if (paid < order.totalAmount) {
+                    badgeCount += 1
+                }
+            }
+        }
+
+        val calendarDays =
+            (0 until daySlots).map { offset ->
+                val date = gridStart.plus(offset, DateTimeUnit.DAY)
+                val aggregate = aggregates[date]
+                val dayTotal = aggregate?.total ?: BigDecimal.ZERO
+                val dayPaid = aggregate?.paid ?: BigDecimal.ZERO
+                val paymentState =
+                    if (dayTotal <= BigDecimal.ZERO) {
+                        null
+                    } else {
+                        val balance = dayTotal - dayPaid
+                        when {
+                            dayPaid <= BigDecimal.ZERO -> PaymentState.UNPAID
+                            balance > BigDecimal.ZERO -> PaymentState.PARTIAL
+                            balance == BigDecimal.ZERO -> PaymentState.PAID
+                            else -> PaymentState.OVERPAID
+                        }
+                    }
+
+                CalendarDayUi(
+                    date = date,
+                    orderCount = aggregate?.orderCount ?: 0,
+                    totalAmount = dayTotal,
+                    isToday = date == today,
+                    isInCurrentMonth = date.monthNumber == month,
+                    paymentState = paymentState,
+                    orderStates = aggregate?.orderStates?.toList() ?: emptyList()
+                )
+            }
+        return MonthComputation(
+            calendarDays = calendarDays,
+            calendarDaysByDate = calendarDays.associateBy { it.date },
+            monthTotal = monthTotal,
+            badgeCount = badgeCount
+        )
     }
 }
 
@@ -700,6 +783,20 @@ data class OrderCreditPrompt(
 private data class SaveOrderResult(
     val date: LocalDate,
     val creditPrompt: OrderCreditPrompt?
+)
+
+private data class DayAggregate(
+    var orderCount: Int = 0,
+    var total: BigDecimal = BigDecimal.ZERO,
+    var paid: BigDecimal = BigDecimal.ZERO,
+    val orderStates: MutableList<PaymentState> = mutableListOf()
+)
+
+private data class MonthComputation(
+    val calendarDays: List<CalendarDayUi>,
+    val calendarDaysByDate: Map<LocalDate, CalendarDayUi>,
+    val monthTotal: BigDecimal,
+    val badgeCount: Int
 )
 
 internal fun shouldPromptForAvailableCredit(

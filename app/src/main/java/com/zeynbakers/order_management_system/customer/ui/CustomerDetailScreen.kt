@@ -47,7 +47,7 @@ fun CustomerDetailScreen(
     onUpdateOrderStatusOverride: (Long, OrderStatusOverride?) -> Unit,
     onWriteOffOrder: (Long) -> Unit
 ) {
-    var orderFilter by remember { mutableStateOf(OrderFilter.All) }
+    var orderFilter by remember { mutableStateOf(OrderFilter.Owes) }
 
     val filteredOrders by remember(orders, orderFilter) {
         derivedStateOf { filterOrders(orders, orderFilter) }
@@ -106,8 +106,14 @@ fun CustomerDetailScreen(
 
             if (filteredOrders.isEmpty()) {
                 item {
+                    val emptyMessageRes =
+                        if (orders.isEmpty()) {
+                            R.string.customer_detail_no_orders
+                        } else {
+                            R.string.customer_detail_no_orders_for_filter
+                        }
                     Text(
-                        text = stringResource(R.string.customer_detail_no_orders),
+                        text = stringResource(emptyMessageRes),
                         style = MaterialTheme.typography.bodyMedium
                     )
                 }

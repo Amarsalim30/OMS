@@ -3,16 +3,30 @@ package com.zeynbakers.order_management_system.core.navigation
 import kotlinx.datetime.LocalDate
 
 object AppRoutes {
+    const val Splash = "splash"
+    const val Intro = "intro"
+    const val SetupChecklist = "setup_checklist"
+    const val BusinessProfile = "business_profile"
+    const val ContactsPermissionPrimer = "contacts_permission_primer"
+    const val NotificationsPermissionPrimer = "notifications_permission_primer"
+    const val MicrophonePermissionPrimer = "microphone_permission_primer"
+    const val OverlayPermissionPrimer = "overlay_permission_primer"
     const val Calendar = "calendar"
+    const val CalendarTutorial = "calendar_tutorial"
     const val Orders = "orders"
     const val Customers = "customers"
     const val Money = "money"
     const val Summary = "summary"
     const val Backup = "backup"
     const val Notifications = "notifications"
+    const val NotesHistory = "notes_history"
+    const val HelperSettings = "helper_settings"
+    const val Tutorial = "tutorial"
+    const val TutorialAfterCalendar = "tutorial_after_calendar"
+    const val FirstRunTutorial = "first_run_tutorial"
     const val ImportContacts = "import_contacts"
 
-    const val Day = "day/{date}"
+    const val Day = "day/{date}?orderId={orderId}"
     const val CustomerDetail = "customer/{customerId}"
     const val CustomerStatement = "customer/{customerId}/statement"
 
@@ -25,7 +39,13 @@ object AppRoutes {
     const val ARG_ORDER_ID = "orderId"
     const val ARG_FOCUS_RECEIPT_ID = "focusReceiptId"
 
-    fun day(date: LocalDate): String = "day/${date}"
+    fun day(date: LocalDate, orderId: Long? = null): String {
+        return if (orderId == null) {
+            "day/${date}"
+        } else {
+            "day/${date}?orderId=$orderId"
+        }
+    }
     fun customerDetail(customerId: Long): String = "customer/$customerId"
     fun customerStatement(customerId: Long): String = "customer/$customerId/statement"
     fun paymentHistoryCustomer(customerId: Long): String = "payment_history/customer/$customerId"

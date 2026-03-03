@@ -32,6 +32,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.windowsizeclass.WindowSizeClass
 import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
@@ -39,16 +40,21 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.zeynbakers.order_management_system.R
 import androidx.compose.foundation.shape.RoundedCornerShape
+import com.zeynbakers.order_management_system.core.tutorial.tutorialCoachTarget
 
 data class TopLevelDestination(
     val route: String,
     val label: String,
-    val icon: ImageVector
+    val icon: ImageVector,
+    val tutorialTargetId: String? = null
 )
 
 data class MoreAction(
     val label: String,
+    val groupLabel: String,
     val icon: ImageVector,
+    val supportingText: String? = null,
+    val tutorialTargetId: String? = null,
     val onClick: () -> Unit
 )
 
@@ -59,6 +65,7 @@ fun AppScaffold(
     destinations: List<TopLevelDestination>,
     selectedRoute: String,
     onDestinationSelected: (String) -> Unit,
+    showNavigation: Boolean,
     showMoreSheet: Boolean,
     onOpenMore: () -> Unit,
     onDismissMore: () -> Unit,
@@ -83,7 +90,11 @@ fun AppScaffold(
             indicatorColor = MaterialTheme.colorScheme.secondaryContainer
         )
 
-    if (useRail) {
+    if (!showNavigation) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            content(PaddingValues(0.dp))
+        }
+    } else if (useRail) {
         Row(modifier = Modifier.fillMaxSize()) {
             NavigationRail(
                 containerColor = MaterialTheme.colorScheme.surface
@@ -101,6 +112,12 @@ fun AppScaffold(
                 Spacer(modifier = Modifier.weight(1f, fill = false))
                 destinations.forEach { destination ->
                     NavigationRailItem(
+                        modifier =
+                            if (destination.tutorialTargetId != null) {
+                                Modifier.tutorialCoachTarget(destination.tutorialTargetId)
+                            } else {
+                                Modifier
+                            },
                         selected = selectedRoute == destination.route,
                         onClick = { onDestinationSelected(destination.route) },
                         icon = { Icon(destination.icon, contentDescription = destination.label) },
@@ -131,6 +148,12 @@ fun AppScaffold(
                     ) {
                         destinations.forEach { destination ->
                             NavigationBarItem(
+                                modifier =
+                                    if (destination.tutorialTargetId != null) {
+                                        Modifier.tutorialCoachTarget(destination.tutorialTargetId)
+                                    } else {
+                                        Modifier
+                                    },
                                 selected = selectedRoute == destination.route,
                                 onClick = { onDestinationSelected(destination.route) },
                                 icon = { Icon(destination.icon, contentDescription = destination.label) },
@@ -147,8 +170,9 @@ fun AppScaffold(
         }
     }
 
-    if (showMoreSheet) {
+    if (showNavigation && showMoreSheet) {
         ModalBottomSheet(onDismissRequest = onDismissMore) {
+            val groupedActions = moreActions.groupBy { it.groupLabel }
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -165,14 +189,51 @@ fun AppScaffold(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                moreActions.forEach { action ->
-                    ElevatedButton(
-                        onClick = action.onClick,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        Icon(action.icon, contentDescription = null)
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(action.label)
+                groupedActions.entries.forEachIndexed { groupIndex, (groupLabel, actions) ->
+                    if (groupIndex > 0) {
+                        HorizontalDivider(
+                            modifier = Modifier.padding(top = 8.dp),
+                            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.18f)
+                        )
+                    }
+                    Text(
+                        text = groupLabel,
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(top = 8.dp)
+                    )
+                    actions.forEach { action ->
+                        ElevatedButton(
+                            onClick = action.onClick,
+                            modifier =
+                                Modifier
+                                    .fillMaxWidth()
+                                    .then(
+                                        if (action.tutorialTargetId != null) {
+                                            Modifier.tutorialCoachTarget(action.tutorialTargetId)
+                                        } else {
+                                            Modifier
+                                        }
+                                    )
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(action.icon, contentDescription = null)
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Column {
+                                    Text(action.label)
+                                    action.supportingText?.let { supportingText ->
+                                        Text(
+                                            text = supportingText,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }

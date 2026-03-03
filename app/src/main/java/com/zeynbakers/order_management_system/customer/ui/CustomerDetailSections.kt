@@ -1,12 +1,16 @@
 package com.zeynbakers.order_management_system.customer.ui
 
 import android.content.Intent
+import android.content.ClipData
+import android.content.ClipboardManager
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Message
+import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.outlined.AccountBalanceWallet
@@ -36,6 +40,7 @@ import java.util.Locale
 import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.plus
+
 @Composable
 internal fun BalanceCard(
     customer: CustomerEntity?,
@@ -47,6 +52,10 @@ internal fun BalanceCard(
     onViewPaymentHistory: () -> Unit
 ) {
     val context = LocalContext.current
+    val clipboardManager =
+        remember(context) {
+            context.getSystemService(android.content.Context.CLIPBOARD_SERVICE) as ClipboardManager
+        }
     val summary = financeSummary
     val orderTotal = summary?.orderTotal ?: BigDecimal.ZERO
     val paidToOrders = summary?.paidToOrders ?: BigDecimal.ZERO
@@ -116,26 +125,49 @@ internal fun BalanceCard(
             }
             customer?.phone?.takeIf { it.isNotBlank() }?.let { phone ->
                 Spacer(Modifier.height(6.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(
-                        imageVector = Icons.Filled.Phone,
-                        contentDescription = stringResource(R.string.customer_detail_phone),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(Modifier.width(6.dp))
-                    Text(
-                        text = phone,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-                Spacer(Modifier.height(6.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    TextButton(onClick = { launchCustomerDial(context, phone) }) {
-                        Text(stringResource(R.string.customer_detail_call))
-                    }
-                    TextButton(onClick = { launchCustomerMessage(context, phone) }) {
-                        Text(stringResource(R.string.customer_action_message))
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    color = MaterialTheme.colorScheme.surfaceContainerLow,
+                    shape = MaterialTheme.shapes.small
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                clipboardManager.setPrimaryClip(ClipData.newPlainText("customer_phone", phone))
+                            }
+                            .padding(horizontal = 8.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.Phone,
+                            contentDescription = stringResource(R.string.customer_detail_phone),
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            text = phone,
+                            style = MaterialTheme.typography.bodyLarge,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f)
+                        )
+                        IconButton(
+                            onClick = { launchCustomerDial(context, phone) }
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.Call,
+                                contentDescription = stringResource(R.string.customer_detail_call)
+                            )
+                        }
+                        IconButton(
+                            onClick = { launchCustomerMessage(context, phone) }
+                        ) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.Message,
+                            contentDescription = stringResource(R.string.customer_action_message)
+                        )
+                        }
                     }
                 }
             }

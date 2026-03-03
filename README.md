@@ -24,7 +24,7 @@ This README is intentionally detailed and mirrors the current codebase behavior 
 - Min SDK: 24
 - Target SDK: 36
 - Compile SDK: 36
-- Version: 1.0 (versionCode 5)
+- Version: 3.0 (versionCode 6)
 - Android Gradle Plugin: 8.12.3
 - Kotlin: 2.0.21
 - Compose BOM: 2024.09.00
@@ -64,12 +64,12 @@ Routes (Compose Navigation):
 - Import contacts: `import_contacts`
 
 "More" actions (from the top-level menu):
-- Order notes summary
-- Customer ledgers
-- Payment history (all)
+- Floating helper settings
+- Notes history
 - Backup and restore
 - Notifications
 - Import contacts
+- Tutorial
 
 ## Features and workflows
 
@@ -156,15 +156,17 @@ Routes (Compose Navigation):
 - Move or void receipts with reversal entries.
 
 ### Core module
-**Voice calculator overlay**
-- Floating mic with notes/total targeting.
-- Uses Android SpeechRecognizer.
-- Supports append/replace modes for notes.
+**Floating helper + voice capture**
+- Foreground helper bubble can run across apps when overlay permission is granted.
+- Capture actions open a dedicated voice capture activity for microphone-safe behavior.
+- Voice capture supports calculator parsing and quick note persistence to Notes history.
 
 **Backup and restore**
 - Manual and daily backups via WorkManager.
-- App storage keeps last 7 backups.
-- Backups export DB to ZIP with JSON and metadata.
+- Supports app-private storage, single SAF file, or SAF folder targets.
+- Backups export ZIP with JSON + manifest metadata.
+- Restore integrity policy defaults to Strict (manifest/checksum verification), with optional legacy mode.
+- Android system Auto Backup is disabled; the in-app backup module is the authoritative restore path.
 
 **Notifications**
 - Due reminders (1 hour or 1 day lead time).
@@ -180,7 +182,7 @@ Routes (Compose Navigation):
 
 ## Data model (Room)
 Entities:
-- `orders` (orderDate, status, totalAmount, amountPaid, customerId, etc.)
+- `orders` (orderDate, status, totalAmount, customerId, etc.)
 - `order_items` (orderId, name, category, quantity, unitPrice)
 - `customers` (name, phone)
 - `account_entries` (DEBIT, CREDIT, WRITE_OFF, REVERSAL)
@@ -201,13 +203,15 @@ See ADRs in `docs/adr/` for the detailed rules:
 
 ## Intents, shortcuts, and widget
 - Share intent (text/plain): appends to M-PESA intake if Money/M-PESA is open, otherwise navigates to Money/M-PESA and pre-fills.
-- App shortcuts: New order, Today, Unpaid.
+- App shortcuts: New order, Voice note, Notes history, Unpaid.
 - Widget intents: show today, show unpaid, new order.
 
 ## Permissions
 - READ_CONTACTS: importing customer contacts.
-- RECORD_AUDIO: voice input overlay.
+- RECORD_AUDIO: voice capture.
 - POST_NOTIFICATIONS: order reminders and daily summary (Android 13+).
+- SYSTEM_ALERT_WINDOW: optional cross-app floating helper.
+- FOREGROUND_SERVICE / FOREGROUND_SERVICE_DATA_SYNC: helper service lifecycle.
 
 ## Local development
 Prerequisites:

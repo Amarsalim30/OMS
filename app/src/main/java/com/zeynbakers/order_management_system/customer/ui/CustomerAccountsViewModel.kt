@@ -1,8 +1,11 @@
 package com.zeynbakers.order_management_system.customer.ui
 
+import android.content.Context
+import androidx.annotation.StringRes
 import androidx.room.withTransaction
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.zeynbakers.order_management_system.R
 import com.zeynbakers.order_management_system.accounting.data.AccountEntryEntity
 import com.zeynbakers.order_management_system.accounting.data.AccountingDao
 import com.zeynbakers.order_management_system.accounting.data.CustomerAccountSummary
@@ -19,14 +22,18 @@ import com.zeynbakers.order_management_system.core.db.AppDatabase
 import com.zeynbakers.order_management_system.core.util.formatOrderLabel
 import com.zeynbakers.order_management_system.core.util.normalizePhoneNumberE164
 import com.zeynbakers.order_management_system.core.util.expandPhoneCandidates
+import com.zeynbakers.order_management_system.customer.domain.ContactsSyncResult
+import com.zeynbakers.order_management_system.customer.domain.syncContactsIntoCustomers
 import com.zeynbakers.order_management_system.customer.data.CustomerEntity
 import com.zeynbakers.order_management_system.order.data.OrderEntity
 import com.zeynbakers.order_management_system.order.data.OrderStatus
 import com.zeynbakers.order_management_system.order.data.OrderStatusOverride
 import java.math.BigDecimal
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.atStartOfDayIn
 import kotlinx.datetime.Clock
@@ -41,10 +48,14 @@ data class CustomerFinanceSummary(
     val netBalance: BigDecimal
 )
 
-class CustomerAccountsViewModel(private val database: AppDatabase) : ViewModel() {
+class CustomerAccountsViewModel(
+    private val database: AppDatabase,
+    private val appContext: Context
+) : ViewModel() {
     private val accountingDao: AccountingDao = database.accountingDao()
     private val receiptDao = database.paymentReceiptDao()
     private val allocationDao = database.paymentAllocationDao()
+    private val helperNoteDao = database.helperNoteDao()
     private val customerDao = database.customerDao()
     private val orderDao = database.orderDao()
 
@@ -83,32 +94,26 @@ class CustomerAccountsViewModel(private val database: AppDatabase) : ViewModel()
 
     fun importCustomer(name: String, phone: String) {
         viewModelScope.launch {
-            val normalizedPhone = normalizePhoneNumberE164(phone) ?: return@launch
-            val cleanName = name.trim().ifBlank { normalizedPhone }
-
-            val exactMatch = customerDao.getByPhone(normalizedPhone)
-            val existing =
-                exactMatch ?: customerDao.getByPhones(expandPhoneCandidates(phone))
-            if (existing != null) {
-                val canUpdatePhone =
-                    existing.phone != normalizedPhone &&
-                        exactMatch == null &&
-                        customerDao.getByPhone(normalizedPhone) == null
-                val updated =
-                    existing.copy(
-                        name = if (cleanName.isNotBlank()) cleanName else existing.name,
-                        phone = if (canUpdatePhone) normalizedPhone else existing.phone,
-                        isArchived = false
+            importContactsBulk(
+                listOf(
+                    ImportContact(
+                        name = name,
+                        phone = phone
                     )
-                if (updated != existing) {
-                    customerDao.update(updated)
-                }
-            } else {
-                customerDao.insert(CustomerEntity(name = cleanName, phone = normalizedPhone))
-            }
-
-            refreshSummaries()
+                )
+            )
         }
+    }
+
+    suspend fun importContactsBulk(contacts: List<ImportContact>): ContactsSyncResult {
+        val result = withContext(Dispatchers.IO) {
+            syncContactsIntoCustomers(
+                database = database,
+                contacts = contacts
+            )
+        }
+        refreshSummaries()
+        return result
     }
 
     fun archiveCustomer(customerId: Long) {
@@ -127,8 +132,13 @@ class CustomerAccountsViewModel(private val database: AppDatabase) : ViewModel()
 
     fun deleteCustomer(customerId: Long) {
         viewModelScope.launch {
-            val hasLedgerEntries = accountingDao.getLedgerForCustomer(customerId).isNotEmpty()
-            if (hasLedgerEntries) {
+            val hasReferences =
+                accountingDao.countEntriesForCustomer(customerId) > 0 ||
+                    orderDao.countOrdersForCustomer(customerId) > 0 ||
+                    receiptDao.countByCustomerId(customerId) > 0 ||
+                    allocationDao.countByCustomerId(customerId) > 0 ||
+                    helperNoteDao.countByLinkedCustomerId(customerId) > 0
+            if (hasReferences) {
                 customerDao.archiveById(customerId)
             } else {
                 customerDao.getById(customerId)?.let { customerDao.delete(it) }
@@ -142,7 +152,8 @@ class CustomerAccountsViewModel(private val database: AppDatabase) : ViewModel()
             _isStatementLoading.value = true
             try {
                 _customer.value = customerDao.getById(customerId)
-                val ledgerEntries = accountingDao.getLedgerForCustomer(customerId)
+                val ledgerEntries =
+                    accountingDao.getLedgerForCustomerLimited(customerId, CUSTOMER_LEDGER_MAX_ROWS)
                 _ledger.value = ledgerEntries
                 _balance.value = accountingDao.getCustomerBalance(customerId)
                 val financeTotals = accountingDao.getCustomerFinanceTotals(customerId)
@@ -158,24 +169,30 @@ class CustomerAccountsViewModel(private val database: AppDatabase) : ViewModel()
                         availableCredit = availableCredit,
                         netBalance = netBalance
                     )
-                val allOrders = orderDao.getOrdersByCustomer(customerId)
+                val allOrders =
+                    orderDao.getOrdersByCustomerLimited(customerId, CUSTOMER_ORDERS_MAX_ROWS)
                 val customerName = _customer.value?.name
                 _orderLabels.value =
-                    allOrders.associate { order ->
-                        order.id to
-                            formatOrderLabel(
-                                date = order.orderDate,
-                                customerName = customerName,
-                                notes = order.notes,
-                                totalAmount = order.totalAmount
-                            )
+                    withContext(Dispatchers.Default) {
+                        allOrders.associate { order ->
+                            order.id to
+                                formatOrderLabel(
+                                    date = order.orderDate,
+                                    customerName = customerName,
+                                    notes = order.notes,
+                                    totalAmount = order.totalAmount
+                                )
+                        }
                     }
 
+                val ordersById = allOrders.associateBy { it.id }
                 _statementRows.value =
-                    buildStatementRows(
-                        entries = ledgerEntries,
-                        ordersById = allOrders.associateBy { it.id }
-                    )
+                    withContext(Dispatchers.Default) {
+                        buildStatementRows(
+                            entries = ledgerEntries,
+                            ordersById = ordersById
+                        )
+                    }
 
                 val orders = allOrders.filter { it.status != OrderStatus.CANCELLED }
                 val orderIds = orders.map { it.id }.filter { it != 0L }
@@ -192,48 +209,50 @@ class CustomerAccountsViewModel(private val database: AppDatabase) : ViewModel()
                         accountingDao.getLastPaymentDatesForOrders(orderIds)
                             .associate { it.orderId to it.lastPaymentAt }
                     }
-                val uiOrders =
-                    orders.map { order ->
-                        val paidAmount = paidByOrder[order.id] ?: BigDecimal.ZERO
-                        val paidComparison = paidAmount.compareTo(order.totalAmount)
-                        val paymentState =
-                            when {
-                                paidAmount <= BigDecimal.ZERO -> OrderPaymentState.UNPAID
-                                paidComparison < 0 -> OrderPaymentState.PARTIAL
-                                paidComparison == 0 -> OrderPaymentState.PAID
-                                else -> OrderPaymentState.OVERPAID
-                            }
-                        val effectiveStatus =
-                            when (order.statusOverride) {
-                                OrderStatusOverride.OPEN -> OrderEffectiveStatus.OPEN
-                                OrderStatusOverride.CLOSED -> OrderEffectiveStatus.CLOSED
-                                null ->
-                                    if (paidAmount >= order.totalAmount) {
-                                        OrderEffectiveStatus.CLOSED
-                                    } else {
-                                        OrderEffectiveStatus.OPEN
+                _orders.value =
+                    withContext(Dispatchers.Default) {
+                        val uiOrders =
+                            orders.map { order ->
+                                val paidAmount = paidByOrder[order.id] ?: BigDecimal.ZERO
+                                val paidComparison = paidAmount.compareTo(order.totalAmount)
+                                val paymentState =
+                                    when {
+                                        paidAmount <= BigDecimal.ZERO -> OrderPaymentState.UNPAID
+                                        paidComparison < 0 -> OrderPaymentState.PARTIAL
+                                        paidComparison == 0 -> OrderPaymentState.PAID
+                                        else -> OrderPaymentState.OVERPAID
                                     }
+                                val effectiveStatus =
+                                    when (order.statusOverride) {
+                                        OrderStatusOverride.OPEN -> OrderEffectiveStatus.OPEN
+                                        OrderStatusOverride.CLOSED -> OrderEffectiveStatus.CLOSED
+                                        null ->
+                                            if (paidAmount >= order.totalAmount) {
+                                                OrderEffectiveStatus.CLOSED
+                                            } else {
+                                                OrderEffectiveStatus.OPEN
+                                            }
+                                    }
+                                val orderDateMillis =
+                                    order.orderDate.atStartOfDayIn(TimeZone.currentSystemDefault()).toEpochMilliseconds()
+                                val lastPaymentAt = lastPaymentByOrder[order.id]
+                                val lastActivityAt =
+                                    maxOf(orderDateMillis, order.updatedAt, lastPaymentAt ?: 0L)
+                                CustomerOrderUi(
+                                    order = order,
+                                    paidAmount = paidAmount,
+                                    lastPaymentAt = lastPaymentAt,
+                                    lastActivityAt = lastActivityAt,
+                                    paymentState = paymentState,
+                                    effectiveStatus = effectiveStatus,
+                                    statusOverride = order.statusOverride
+                                )
                             }
-                        val orderDateMillis =
-                            order.orderDate.atStartOfDayIn(TimeZone.currentSystemDefault()).toEpochMilliseconds()
-                        val lastPaymentAt = lastPaymentByOrder[order.id]
-                        val lastActivityAt =
-                            maxOf(orderDateMillis, order.updatedAt, lastPaymentAt ?: 0L)
-                        CustomerOrderUi(
-                            order = order,
-                            paidAmount = paidAmount,
-                            lastPaymentAt = lastPaymentAt,
-                            lastActivityAt = lastActivityAt,
-                            paymentState = paymentState,
-                            effectiveStatus = effectiveStatus,
-                            statusOverride = order.statusOverride
+                        uiOrders.sortedWith(
+                            compareByDescending<CustomerOrderUi> { it.lastActivityAt }
+                                .thenByDescending { it.order.createdAt }
                         )
                     }
-                _orders.value =
-                    uiOrders.sortedWith(
-                        compareByDescending<CustomerOrderUi> { it.lastActivityAt }
-                            .thenByDescending { it.order.createdAt }
-                    )
             } finally {
                 _isStatementLoading.value = false
             }
@@ -241,15 +260,16 @@ class CustomerAccountsViewModel(private val database: AppDatabase) : ViewModel()
     }
 
     fun recordPayment(
-        customerId: Long,
+        customerId: Long?,
         amount: BigDecimal,
         method: PaymentMethod,
         note: String,
         orderId: Long?
     ) {
         viewModelScope.launch {
+            if (customerId == null && orderId == null) return@launch
             recordPaymentInternal(customerId, amount, method, note, orderId)
-            loadCustomer(customerId)
+            customerId?.let { loadCustomer(it) }
             refreshSummaries()
         }
     }
@@ -269,7 +289,7 @@ class CustomerAccountsViewModel(private val database: AppDatabase) : ViewModel()
                     notes = order.notes,
                     totalAmount = order.totalAmount
                 )
-            val note = "Bad debt write-off: $orderLabel"
+            val note = text(R.string.customer_accounts_bad_debt_write_off, orderLabel)
             val now = Clock.System.now().toEpochMilliseconds()
             database.withTransaction {
                 val receiptId =
@@ -332,8 +352,8 @@ class CustomerAccountsViewModel(private val database: AppDatabase) : ViewModel()
             val description =
                 note.trim()
                     .takeIf { it.isNotBlank() }
-                    ?.let { "Bad debt - $it" }
-                    ?: "Bad debt"
+                    ?.let { text(R.string.customer_accounts_bad_debt_prefix, it) }
+                    ?: text(R.string.customer_accounts_bad_debt_default)
             database.withTransaction {
                 val outstanding = accountingDao.getCustomerBalance(customerId).max(BigDecimal.ZERO)
                 if (outstanding <= BigDecimal.ZERO) return@withTransaction
@@ -449,25 +469,33 @@ class CustomerAccountsViewModel(private val database: AppDatabase) : ViewModel()
     }
 
     internal suspend fun recordPaymentInternal(
-        customerId: Long,
+        customerId: Long?,
         amount: BigDecimal,
         method: PaymentMethod,
         note: String,
         orderId: Long?
     ) {
         if (amount <= BigDecimal.ZERO) return
+        if (customerId == null && orderId == null) return
 
-        val baseDescription = buildString {
-            append("Payment (")
-            append(method.name)
-            append(")")
+        val baseDescription =
             if (note.isNotBlank()) {
-                append(": ")
-                append(note.trim())
+                text(
+                    R.string.customer_accounts_payment_description_with_note,
+                    method.name,
+                    note.trim()
+                )
+            } else {
+                text(
+                    R.string.customer_accounts_payment_description_base,
+                    method.name
+                )
             }
-        }
 
         val processor = PaymentReceiptProcessor(database)
+        val order = orderId?.let { id -> orderDao.getOrderById(id) }
+        if (orderId != null && order == null) return
+        val resolvedCustomerId = customerId ?: order?.customerId
         val now = Clock.System.now().toEpochMilliseconds()
         val receipt =
             processor.createReceipt(
@@ -479,14 +507,16 @@ class CustomerAccountsViewModel(private val database: AppDatabase) : ViewModel()
                 senderName = null,
                 senderPhone = null,
                 rawText = null,
-                customerId = customerId,
+                customerId = resolvedCustomerId,
                 note = note.takeIf { it.isNotBlank() }
             )
         val allocation =
-            if (orderId == null) {
+            if (orderId != null) {
+                ReceiptAllocation.Order(orderId)
+            } else if (customerId != null) {
                 ReceiptAllocation.OldestOrders(customerId)
             } else {
-                ReceiptAllocation.Order(orderId)
+                return
             }
         processor.createAndApplyReceipt(
             receipt = receipt,
@@ -546,10 +576,10 @@ class CustomerAccountsViewModel(private val database: AppDatabase) : ViewModel()
                     val receipt = receiptsById[receiptId]
                     val methodLabel = paymentMethodLabel(receipt?.method, entry.description)
                     val paymentTitle =
-                        if (methodLabel == "Other") {
-                            "Payment"
+                        if (methodLabel == text(R.string.customer_accounts_method_other)) {
+                            text(R.string.customer_accounts_payment_title)
                         } else {
-                            "Payment - $methodLabel"
+                            text(R.string.customer_accounts_payment_title_with_method, methodLabel)
                         }
                     val paymentNote =
                         compactNote(receipt?.note ?: extractPaymentNote(entry.description))
@@ -644,7 +674,7 @@ class CustomerAccountsViewModel(private val database: AppDatabase) : ViewModel()
                     orderId = orderId,
                     orderLabel =
                         if (order == null) {
-                            "Order"
+                            text(R.string.customer_accounts_order_title)
                         } else {
                             formatOrderLabel(
                                 date = order.orderDate,
@@ -678,19 +708,27 @@ class CustomerAccountsViewModel(private val database: AppDatabase) : ViewModel()
         return when (entry.type) {
             EntryType.DEBIT -> {
                 val note = compactNote(ordersById[entry.orderId]?.notes)
-                if (note.isBlank()) "Order" else "Order - $note"
+                if (note.isBlank()) {
+                    text(R.string.customer_accounts_order_title)
+                } else {
+                    text(R.string.customer_accounts_order_title_with_note, note)
+                }
             }
-            EntryType.CREDIT -> "Payment"
+            EntryType.CREDIT -> text(R.string.customer_accounts_payment_title)
             EntryType.WRITE_OFF -> {
                 val note = compactNote(extractBadDebtNote(entry.description))
-                if (note.isBlank()) "Bad debt" else "Bad debt - $note"
+                if (note.isBlank()) {
+                    text(R.string.customer_accounts_bad_debt_default)
+                } else {
+                    text(R.string.customer_accounts_bad_debt_title_with_note, note)
+                }
             }
             EntryType.REVERSAL -> {
                 val note = compactNote(entry.description)
                 if (note.isBlank()) {
-                    "Adjustment"
+                    text(R.string.customer_accounts_adjustment_title)
                 } else {
-                    "Adjustment - $note"
+                    text(R.string.customer_accounts_adjustment_title_with_note, note)
                 }
             }
         }
@@ -724,12 +762,12 @@ class CustomerAccountsViewModel(private val database: AppDatabase) : ViewModel()
 
     private fun paymentMethodLabel(method: PaymentMethod?, description: String): String {
         return when {
-            method == PaymentMethod.MPESA -> "M-Pesa"
-            method == PaymentMethod.CASH -> "Cash"
-            description.contains("MPESA", ignoreCase = true) -> "M-Pesa"
-            description.contains("M-PESA", ignoreCase = true) -> "M-Pesa"
-            description.contains("CASH", ignoreCase = true) -> "Cash"
-            else -> "Other"
+            method == PaymentMethod.MPESA -> text(R.string.customer_accounts_method_mpesa)
+            method == PaymentMethod.CASH -> text(R.string.customer_accounts_method_cash)
+            description.contains("MPESA", ignoreCase = true) -> text(R.string.customer_accounts_method_mpesa)
+            description.contains("M-PESA", ignoreCase = true) -> text(R.string.customer_accounts_method_mpesa)
+            description.contains("CASH", ignoreCase = true) -> text(R.string.customer_accounts_method_cash)
+            else -> text(R.string.customer_accounts_method_other)
         }
     }
 
@@ -764,14 +802,41 @@ class CustomerAccountsViewModel(private val database: AppDatabase) : ViewModel()
 
     private suspend fun refreshSummaries() {
         val pattern = "%${lastQuery.trim()}%"
-        _summaries.value = accountingDao.getCustomerAccountSummaries(pattern)
+        _summaries.value = loadCustomerSummaries(query = pattern)
+    }
+
+    private suspend fun loadCustomerSummaries(query: String): List<CustomerAccountSummary> {
+        val summaries = mutableListOf<CustomerAccountSummary>()
+        var offset = 0
+
+        while (true) {
+            val page =
+                accountingDao.getCustomerAccountSummariesPaged(
+                    query = query,
+                    limit = CUSTOMER_SUMMARIES_PAGE_SIZE,
+                    offset = offset
+                )
+            if (page.isEmpty()) break
+            summaries += page
+            if (page.size < CUSTOMER_SUMMARIES_PAGE_SIZE) break
+            offset += CUSTOMER_SUMMARIES_PAGE_SIZE
+        }
+
+        return summaries
     }
 
     companion object {
+        private const val CUSTOMER_SUMMARIES_PAGE_SIZE = 750
+        private const val CUSTOMER_LEDGER_MAX_ROWS = 1_000
+        private const val CUSTOMER_ORDERS_MAX_ROWS = 500
         private val RECEIPT_ID_CAPTURE = Regex("Receipt\\s*#(\\d+)", RegexOption.IGNORE_CASE)
         private val ORDER_HASH_REGEX = Regex("Order\\s*#\\d+", RegexOption.IGNORE_CASE)
         private val ORDER_ID_PAREN_REGEX = Regex("\\(\\s*ID\\s*\\d+\\s*\\)", RegexOption.IGNORE_CASE)
         private val ORDER_ID_TEXT_REGEX = Regex("\\bID\\s*\\d+\\b", RegexOption.IGNORE_CASE)
         private val MULTI_SPACE_REGEX = Regex("\\s{2,}")
+    }
+
+    private fun text(@StringRes resId: Int, vararg args: Any): String {
+        return appContext.getString(resId, *args)
     }
 }

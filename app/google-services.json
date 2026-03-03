@@ -1,0 +1,55 @@
+{
+  "project_info": {
+    "project_number": "628792441139",
+    "project_id": "ordermanagementsystem-36b41",
+    "storage_bucket": "ordermanagementsystem-36b41.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:628792441139:android:22631581462d44fc6ea646",
+        "android_client_info": {
+          "package_name": "com.zeynbakers.order_management_system"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "628792441139-mlrua1deptqcrar55h0ttss4i4941v4l.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.zeynbakers.order_management_system",
+            "certificate_hash": "59a9a7de2dc64b4dcaf753425a68d3014eab62b1"
+          }
+        },
+        {
+          "client_id": "628792441139-prm5um69a0ifmoir9b23tq15l127plar.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.zeynbakers.order_management_system",
+            "certificate_hash": "e1939cd5d24a44735f12f3ff9a2ead1e3d69bd9a"
+          }
+        },
+        {
+          "client_id": "628792441139-l37qouteb8959n4hr9rj4j8ve1t6lh3r.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBPUcvmnphZ3fE2FB8AOAmq0HES_zNgKF0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "628792441139-l37qouteb8959n4hr9rj4j8ve1t6lh3r.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

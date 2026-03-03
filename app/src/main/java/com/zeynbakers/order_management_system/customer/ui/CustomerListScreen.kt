@@ -69,6 +69,8 @@ import androidx.compose.ui.unit.dp
 import androidx.core.net.toUri
 import com.zeynbakers.order_management_system.R
 import com.zeynbakers.order_management_system.accounting.data.CustomerAccountSummary
+import com.zeynbakers.order_management_system.core.tutorial.TutorialCoachTargets
+import com.zeynbakers.order_management_system.core.tutorial.tutorialCoachTarget
 import com.zeynbakers.order_management_system.core.ui.LocalUiEventDispatcher
 import com.zeynbakers.order_management_system.core.ui.showSnackbar
 import java.math.BigDecimal
@@ -84,6 +86,7 @@ fun CustomerListScreen(
     onCustomerClick: (Long) -> Unit,
     onBack: () -> Unit,
     onAddCustomer: () -> Unit = {},
+    onSyncContacts: () -> Unit = onAddCustomer,
     onPaymentHistory: (Long) -> Unit = {},
     onRecordPayment: (Long) -> Unit = {},
     onAddOrder: (Long) -> Unit = {},
@@ -91,6 +94,7 @@ fun CustomerListScreen(
     onArchiveCustomer: (Long) -> Unit = {},
     onDeleteCustomer: (Long) -> Unit = {},
     onRestoreCustomer: (Long) -> Unit = {},
+    isSyncingContacts: Boolean = false,
     showBack: Boolean = true
 ) {
     CustomersScreenM3(
@@ -100,6 +104,7 @@ fun CustomerListScreen(
         onCustomerClick = onCustomerClick,
         onBack = onBack,
         onAddCustomer = onAddCustomer,
+        onSyncContacts = onSyncContacts,
         onPaymentHistory = onPaymentHistory,
         onRecordPayment = onRecordPayment,
         onAddOrder = onAddOrder,
@@ -107,6 +112,7 @@ fun CustomerListScreen(
         onArchiveCustomer = onArchiveCustomer,
         onDeleteCustomer = onDeleteCustomer,
         onRestoreCustomer = onRestoreCustomer,
+        isSyncingContacts = isSyncingContacts,
         showBack = showBack
     )
 }
@@ -119,6 +125,7 @@ private fun CustomersScreenM3(
     onCustomerClick: (Long) -> Unit,
     onBack: () -> Unit,
     onAddCustomer: () -> Unit,
+    onSyncContacts: () -> Unit,
     onPaymentHistory: (Long) -> Unit,
     onRecordPayment: (Long) -> Unit,
     onAddOrder: (Long) -> Unit,
@@ -126,6 +133,7 @@ private fun CustomersScreenM3(
     onArchiveCustomer: (Long) -> Unit,
     onDeleteCustomer: (Long) -> Unit,
     onRestoreCustomer: (Long) -> Unit,
+    isSyncingContacts: Boolean,
     showBack: Boolean
 ) {
     var queryText by rememberSaveable { mutableStateOf(query) }
@@ -148,6 +156,7 @@ private fun CustomersScreenM3(
             hasActiveFilters || selectedSort != CustomerSort.BalanceDesc
         }
     }
+    val hasAnyCustomers = summaries.isNotEmpty()
     val uiEvents = LocalUiEventDispatcher.current
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
@@ -196,6 +205,10 @@ private fun CustomersScreenM3(
             }
         }
     }
+    val revealImportedCustomers: () -> Unit = {
+        showInactive = true
+        selectedFilter = CustomerFilter.All
+    }
 
     val filteredCustomers by remember(
         summaries,
@@ -206,9 +219,11 @@ private fun CustomersScreenM3(
     ) {
         derivedStateOf {
             val base = summaries.filter { summary ->
-                val hasTransactions =
-                    summary.billed != BigDecimal.ZERO || summary.paid != BigDecimal.ZERO
-                if (!showInactive && !hasTransactions) return@filter false
+                val hasActivity =
+                    summary.hasOrders ||
+                        !isZeroAmount(summary.billed) ||
+                        !isZeroAmount(summary.paid)
+                if (!showInactive && !hasActivity) return@filter false
                 true
             }
             val filtered = base.filter { summary ->
@@ -216,14 +231,15 @@ private fun CustomersScreenM3(
                     CustomerFilter.All -> true
                     CustomerFilter.Owing -> summary.balance > BigDecimal.ZERO
                     CustomerFilter.Credit -> summary.balance < BigDecimal.ZERO
-                    CustomerFilter.Settled -> summary.balance == BigDecimal.ZERO
+                    CustomerFilter.Settled -> isZeroAmount(summary.balance)
                 }
             }.filter { summary ->
                 if (selectedFilter != CustomerFilter.All || !hideZeroBalances) return@filter true
-                val hasTransactions =
-                    summary.billed != BigDecimal.ZERO || summary.paid != BigDecimal.ZERO
-                if (!hasTransactions) return@filter true
-                summary.balance != BigDecimal.ZERO
+                val hasActivity =
+                    summary.hasOrders ||
+                        !isZeroAmount(summary.billed) ||
+                        !isZeroAmount(summary.paid)
+                !isZeroAmount(summary.balance) || hasActivity
             }
             when (selectedSort) {
                 CustomerSort.BalanceDesc -> filtered.sortedByDescending { it.balance }
@@ -264,7 +280,11 @@ private fun CustomersScreenM3(
                 hideZeroBalances = hideZeroBalances,
                 showInactive = showInactive,
                 onFilterClick = { showFilterSheet = true },
-                onSortClick = { showSortSheet = true }
+                onSortClick = { showSortSheet = true },
+                onSyncClick = onSyncContacts,
+                isSyncing = isSyncingContacts,
+                showSyncAction = hasAnyCustomers,
+                modifier = Modifier.tutorialCoachTarget(TutorialCoachTargets.CustomersControlRow)
             )
 
             if (hasActiveControls) {
@@ -289,35 +309,54 @@ private fun CustomersScreenM3(
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = if (queryText.isBlank()) {
-                        stringResource(R.string.customer_all_customers)
-                    } else {
-                        stringResource(R.string.customer_search_results)
-                    },
-                    style = MaterialTheme.typography.labelLarge
-                )
-                Text(
-                    text = pluralStringResource(
-                        R.plurals.customer_result_count,
-                        filteredCustomers.size,
-                        filteredCustomers.size
-                    ),
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                Column {
+                    Text(
+                        text = if (queryText.isBlank()) {
+                            stringResource(R.string.customer_all_customers)
+                        } else {
+                            stringResource(R.string.customer_search_results)
+                        },
+                        style = MaterialTheme.typography.labelLarge
+                    )
+                    Text(
+                        text = pluralStringResource(
+                            R.plurals.customer_result_count,
+                            filteredCustomers.size,
+                            filteredCustomers.size
+                        ),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
 
             Spacer(Modifier.height(6.dp))
 
             if (filteredCustomers.isEmpty()) {
+                val allCustomersWithoutOrders =
+                    hasAnyCustomers &&
+                        summaries.all {
+                            !it.hasOrders &&
+                                isZeroAmount(it.billed) &&
+                                isZeroAmount(it.paid)
+                        }
+                val showImportedNoOrdersState =
+                    queryText.isBlank() &&
+                        !hasActiveFilters &&
+                        !showInactive &&
+                        allCustomersWithoutOrders
                 EmptyCustomersState(
                     isSearching = queryText.isNotBlank(),
                     hasActiveFilters = hasActiveFilters,
+                    hasAnyCustomers = hasAnyCustomers,
+                    showImportedNoOrdersState = showImportedNoOrdersState,
                     onClearFilters = resetFiltersAndSort,
-                    onAddCustomer = onAddCustomer
+                    onAddCustomer = onAddCustomer,
+                    onSyncContacts = onSyncContacts,
+                    onRevealCustomers = revealImportedCustomers
                 )
             } else {
                 LazyColumn(
@@ -349,9 +388,10 @@ private fun CustomersScreenM3(
         val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
         val hasPhone = customer.phone.isNotBlank()
         val canDelete =
-            customer.billed == BigDecimal.ZERO &&
-                customer.paid == BigDecimal.ZERO &&
-                customer.balance == BigDecimal.ZERO
+            !customer.hasOrders &&
+            isZeroAmount(customer.billed) &&
+                isZeroAmount(customer.paid) &&
+                isZeroAmount(customer.balance)
         ModalBottomSheet(
             onDismissRequest = { longPressedCustomer = null },
             sheetState = sheetState
@@ -418,9 +458,10 @@ private fun CustomersScreenM3(
 
     pendingArchiveCustomer?.let { customer ->
         val hasTransactions =
-            customer.billed != BigDecimal.ZERO ||
-                customer.paid != BigDecimal.ZERO ||
-                customer.balance != BigDecimal.ZERO
+            customer.hasOrders ||
+                !isZeroAmount(customer.billed) ||
+                !isZeroAmount(customer.paid) ||
+                !isZeroAmount(customer.balance)
         val titleRes =
             if (hasTransactions) {
                 R.string.customer_archive_title
@@ -495,6 +536,8 @@ private fun CustomersScreenM3(
         )
     }
 }
+
+private fun isZeroAmount(value: BigDecimal): Boolean = value.compareTo(BigDecimal.ZERO) == 0
 
 internal enum class CustomerFilter {
     All,

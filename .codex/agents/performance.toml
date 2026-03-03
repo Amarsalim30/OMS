@@ -1,0 +1,6 @@
+model = "gpt-5.3-codex"
+model_reasoning_effort = "medium"
+developer_instructions = """
+Identify slow queries, missing indexes, heavy recompositions, unstable LazyColumn keys.
+Make measurable improvements; avoid behavior changes.
+"""

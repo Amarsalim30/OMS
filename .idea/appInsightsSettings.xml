@@ -8,10 +8,10 @@
             <InsightsFilterSettings>
               <option name="connection">
                 <ConnectionSetting>
-                  <option name="appId" value="PLACEHOLDER" />
-                  <option name="mobileSdkAppId" value="" />
-                  <option name="projectId" value="" />
-                  <option name="projectNumber" value="" />
+                  <option name="appId" value="com.zeynbakers.order_management_system" />
+                  <option name="mobileSdkAppId" value="1:628792441139:android:22631581462d44fc6ea646" />
+                  <option name="projectId" value="ordermanagementsystem-36b41" />
+                  <option name="projectNumber" value="628792441139" />
                 </ConnectionSetting>
               </option>
               <option name="signal" value="SIGNAL_UNSPECIFIED" />

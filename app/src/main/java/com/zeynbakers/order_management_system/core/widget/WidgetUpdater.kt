@@ -12,7 +12,6 @@ import com.zeynbakers.order_management_system.core.navigation.AppIntents
 import com.zeynbakers.order_management_system.core.navigation.PendingIntentFactory
 import com.zeynbakers.order_management_system.core.util.formatKes
 import com.zeynbakers.order_management_system.order.data.OrderStatus
-import com.zeynbakers.order_management_system.order.data.OrderStatusOverride
 import java.math.BigDecimal
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -48,8 +47,9 @@ object WidgetUpdater {
             orderDao.getOrdersByDate(today.toString())
                 .filter { it.status != OrderStatus.CANCELLED }
                 .sortedByDescending { it.createdAt }
+        val todayTotal = todayOrders.fold(BigDecimal.ZERO) { acc, order -> acc + order.totalAmount }
         val allOrders =
-            orderDao.getActiveOrders().filter { it.statusOverride != OrderStatusOverride.CLOSED }
+            orderDao.getOpenOrdersLimited(WIDGET_OPEN_ORDERS_LIMIT)
 
         val allOrderIds = allOrders.map { it.id }.filter { it != 0L }
         val paidByOrder =
@@ -63,20 +63,58 @@ object WidgetUpdater {
                 val paid = paidByOrder[order.id] ?: BigDecimal.ZERO
                 paid < order.totalAmount
             }
+        val unpaidTotal =
+            allOrders.fold(BigDecimal.ZERO) { acc, order ->
+                val paid = paidByOrder[order.id] ?: BigDecimal.ZERO
+                val due = order.totalAmount - paid
+                if (due > BigDecimal.ZERO) {
+                    acc + due
+                } else {
+                    acc
+                }
+            }
 
         val views = RemoteViews(appContext.packageName, R.layout.widget_today_unpaid)
-        views.setTextViewText(R.id.widget_today_count, "Today: ${todayOrders.size}")
-        views.setTextViewText(R.id.widget_unpaid_count, "Unpaid: $unpaidCount")
+        views.setTextViewText(
+            R.id.widget_today_count,
+            appContext.getString(R.string.widget_today_count_value, todayOrders.size)
+        )
+        views.setTextViewText(
+            R.id.widget_unpaid_count,
+            appContext.getString(
+                R.string.widget_unpaid_count_value,
+                unpaidCount,
+                formatKes(unpaidTotal)
+            )
+        )
+        views.setTextViewText(
+            R.id.widget_today_total,
+            appContext.getString(
+                R.string.widget_today_total_value,
+                formatKes(todayTotal)
+            )
+        )
 
         val lines = todayOrders.take(3).map { order ->
-            val label = order.notes.take(28)
-            "$label - ${formatKes(order.totalAmount)}"
+            val label =
+                order.notes
+                    .trim()
+                    .take(28)
+                    .ifBlank { appContext.getString(R.string.widget_order_fallback) }
+            val due = (order.totalAmount - (paidByOrder[order.id] ?: BigDecimal.ZERO)).max(BigDecimal.ZERO)
+            val amountLabel =
+                if (due > BigDecimal.ZERO) {
+                    formatKes(due)
+                } else {
+                    formatKes(order.totalAmount)
+                }
+            appContext.getString(R.string.widget_note_line_format, label, amountLabel)
         }
         bindLine(views, R.id.widget_line1, lines.getOrNull(0), showIfEmpty = true)
         bindLine(views, R.id.widget_line2, lines.getOrNull(1), showIfEmpty = false)
         bindLine(views, R.id.widget_line3, lines.getOrNull(2), showIfEmpty = false)
         if (lines.isEmpty()) {
-            views.setTextViewText(R.id.widget_line1, "No orders today")
+            views.setTextViewText(R.id.widget_line1, appContext.getString(R.string.widget_today_empty))
         }
 
         val todayIntent =
@@ -91,10 +129,18 @@ object WidgetUpdater {
             Intent(appContext, MainActivity::class.java).apply {
                 action = AppIntents.ACTION_NEW_ORDER
             }
+        val noteIntent =
+            Intent(appContext, MainActivity::class.java).apply {
+                action = AppIntents.ACTION_CAPTURE_VOICE_NOTE
+            }
 
         views.setOnClickPendingIntent(
             R.id.widget_root,
             PendingIntentFactory.activity(appContext, 2001, todayIntent)
+        )
+        views.setOnClickPendingIntent(
+            R.id.widget_action_note,
+            PendingIntentFactory.activity(appContext, 2004, noteIntent)
         )
         views.setOnClickPendingIntent(
             R.id.widget_action_unpaid,
@@ -118,4 +164,6 @@ object WidgetUpdater {
             views.setTextViewText(viewId, text)
         }
     }
+
+    private const val WIDGET_OPEN_ORDERS_LIMIT = 2_000
 }

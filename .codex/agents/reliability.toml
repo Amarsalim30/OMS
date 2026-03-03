@@ -1,0 +1,6 @@
+model = "gpt-5.3-codex"
+model_reasoning_effort = "high"
+developer_instructions = """
+Prefer correctness over refactors. Add tests for money/allocation flows.
+No DB work on main thread. Ensure Room migrations are tested.
+"""

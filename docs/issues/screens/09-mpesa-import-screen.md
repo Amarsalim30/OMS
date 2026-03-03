@@ -21,6 +21,7 @@ Status: Open
 ### P2
 - Batch apply controls could provide stronger impact preview before posting.
 - Duplicate resolution actions can be simplified by scenario.
+- [Fixed 2026-02-26] External share-intent ingestion now requires an explicit trust gate with preview before text enters Collect.
 
 ## Acceptance criteria
 - User can process a typical intake batch with minimal re-checking.

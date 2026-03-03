@@ -13,6 +13,7 @@ import androidx.work.WorkerParameters
 import com.zeynbakers.order_management_system.MainActivity
 import com.zeynbakers.order_management_system.R
 import com.zeynbakers.order_management_system.core.db.DatabaseProvider
+import com.zeynbakers.order_management_system.core.util.formatHourMinuteAmPm
 import com.zeynbakers.order_management_system.core.navigation.PendingIntentFactory
 import com.zeynbakers.order_management_system.core.navigation.AppIntents
 import com.zeynbakers.order_management_system.core.util.parsePickupTime
@@ -131,22 +132,22 @@ class ReminderWorker(
         val count = orders.size
         val title =
             if (leadTimeMinutes >= NotificationPreferences.LEAD_TIME_1_DAY) {
-                "Orders due soon"
+                appContext.getString(R.string.reminder_due_title_day)
             } else {
-                "Orders due within 1 hour"
+                appContext.getString(R.string.reminder_due_title_hour)
             }
         val lines =
             orders.take(5).map { (order, dueAtMillis) ->
                 val name = order.customerId?.let { customerNames[it] }?.takeIf { it.isNotBlank() }
                 val label = name ?: order.notes.take(40)
                 val dueTime = formatDueTime(dueAtMillis, timeZone)
-                "$label - $dueTime"
+                appContext.getString(R.string.reminder_due_line_item, label, dueTime)
             }
         val detailText =
             if (count == 1) {
-                lines.firstOrNull() ?: "1 order due"
+                lines.firstOrNull() ?: appContext.getString(R.string.reminder_due_single_fallback)
             } else {
-                "$count orders due"
+                appContext.getString(R.string.reminder_due_multiple_fallback, count)
             }
         val bigText = lines.joinToString("\n")
         val targetDate = orders.first().first.orderDate
@@ -157,6 +158,13 @@ class ReminderWorker(
                 putExtra(AppIntents.EXTRA_TARGET_DATE, targetDate.toString())
             }
         val pending = PendingIntentFactory.activity(appContext, 1001, intent)
+        val publicVersion =
+            NotificationCompat.Builder(appContext, NotificationChannels.DUE_REMINDER_CHANNEL)
+                .setSmallIcon(R.drawable.ic_notification)
+                .setContentTitle(appContext.getString(R.string.notification_private_title))
+                .setContentText(appContext.getString(R.string.notification_private_text))
+                .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+                .build()
 
         val notification =
             NotificationCompat.Builder(appContext, NotificationChannels.DUE_REMINDER_CHANNEL)
@@ -166,6 +174,8 @@ class ReminderWorker(
                 .setStyle(NotificationCompat.BigTextStyle().bigText(bigText))
                 .setContentIntent(pending)
                 .setAutoCancel(true)
+                .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
+                .setPublicVersion(publicVersion)
                 .build()
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
@@ -182,14 +192,21 @@ class ReminderWorker(
     }
 
     private fun sendDailySummary(date: LocalDate, totalOrders: Int, unpaidCount: Int) {
-        val title = "Daily summary"
-        val text = "Today: $totalOrders orders, $unpaidCount unpaid"
+        val title = appContext.getString(R.string.reminder_daily_title)
+        val text = appContext.getString(R.string.reminder_daily_text, totalOrders, unpaidCount)
         val intent =
             Intent(appContext, MainActivity::class.java).apply {
                 action = AppIntents.ACTION_SHOW_SUMMARY
                 putExtra(AppIntents.EXTRA_TARGET_DATE, date.toString())
             }
         val pending = PendingIntentFactory.activity(appContext, 1002, intent)
+        val publicVersion =
+            NotificationCompat.Builder(appContext, NotificationChannels.DAILY_SUMMARY_CHANNEL)
+                .setSmallIcon(R.drawable.ic_notification)
+                .setContentTitle(appContext.getString(R.string.notification_private_title))
+                .setContentText(appContext.getString(R.string.notification_private_text))
+                .setVisibility(NotificationCompat.VISIBILITY_PUBLIC)
+                .build()
         val notification =
             NotificationCompat.Builder(appContext, NotificationChannels.DAILY_SUMMARY_CHANNEL)
                 .setSmallIcon(R.drawable.ic_notification)
@@ -197,6 +214,8 @@ class ReminderWorker(
                 .setContentText(text)
                 .setContentIntent(pending)
                 .setAutoCancel(true)
+                .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
+                .setPublicVersion(publicVersion)
                 .build()
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
@@ -223,9 +242,7 @@ class ReminderWorker(
 
     private fun formatDueTime(epochMillis: Long, timeZone: TimeZone): String {
         val time = Instant.fromEpochMilliseconds(epochMillis).toLocalDateTime(timeZone).time
-        val hour = time.hour.toString().padStart(2, '0')
-        val minute = time.minute.toString().padStart(2, '0')
-        return "$hour:$minute"
+        return formatHourMinuteAmPm(time.hour, time.minute)
     }
 
     private fun shouldSendSummary(

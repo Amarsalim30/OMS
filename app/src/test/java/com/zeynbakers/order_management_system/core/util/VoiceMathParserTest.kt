@@ -1,4 +1,4 @@
-package com.zeynbakers.order_management_system.core.util
+﻿package com.zeynbakers.order_management_system.core.util
 
 import java.math.BigDecimal
 import org.junit.Assert.assertEquals
@@ -23,6 +23,19 @@ class VoiceMathParserTest {
     }
 
     @Test
+    fun `supports shorthand amounts and currency noise`() {
+        assertValue("1.5k + 200", BigDecimal("1700"))
+        assertValue("ksh 1200 plus 300", BigDecimal("1500"))
+        assertValue("2m minus 500k", BigDecimal("1500000"))
+    }
+
+    @Test
+    fun `supports percentage phrasing`() {
+        assertValue("10 percent of 500", BigDecimal("50"))
+        assertValue("100 + 10%", BigDecimal("110"))
+    }
+
+    @Test
     fun `rejects consecutive numbers without an operator`() {
         assertNull(parseVoiceMath("1000 800"))
     }
@@ -39,7 +52,8 @@ class VoiceMathParserTest {
 
     @Test
     fun `supports unicode multiply and divide symbols`() {
-        assertValue("7 × 8", BigDecimal("56"))
-        assertValue("20 ÷ 5", BigDecimal("4"))
+        assertValue("7 \u00D7 8", BigDecimal("56"))
+        assertValue("20 \u00F7 5", BigDecimal("4"))
     }
 }
+

@@ -10,6 +10,8 @@ import com.zeynbakers.order_management_system.AppCalendarCallbacks
 import com.zeynbakers.order_management_system.AppCalendarState
 import com.zeynbakers.order_management_system.AppFeatureNavigationActions
 import com.zeynbakers.order_management_system.AppFeatureSupportActions
+import com.zeynbakers.order_management_system.MoneyRecordContext
+import com.zeynbakers.order_management_system.navigateTopLevel
 import com.zeynbakers.order_management_system.accounting.ui.PaymentHistoryFilter
 import com.zeynbakers.order_management_system.core.navigation.AppRoutes
 import com.zeynbakers.order_management_system.core.notifications.NotificationScheduler
@@ -18,6 +20,7 @@ import com.zeynbakers.order_management_system.order.ui.CalendarScreen
 import com.zeynbakers.order_management_system.order.ui.DayDetailScreen
 import com.zeynbakers.order_management_system.order.ui.OrderViewModel
 import com.zeynbakers.order_management_system.order.ui.SummaryScreen
+import java.math.BigDecimal
 import kotlinx.datetime.LocalDate
 
 internal fun NavGraphBuilder.calendarGraph(
@@ -62,18 +65,71 @@ internal fun NavGraphBuilder.calendarGraph(
             onOpenMore = navigationActions.onOpenMore,
             onMonthSettled = { year, month -> calendarCallbacks.onMonthSettled(year, month) },
             openQuickAddDate = calendarState.quickAddDate,
-            onQuickAddConsumed = { calendarCallbacks.onQuickAddDateChange(null) }
+            onQuickAddConsumed = { calendarCallbacks.onQuickAddDateChange(null) },
+            showInteractiveTutorial = false
+        )
+    }
+
+    composable(AppRoutes.CalendarTutorial) {
+        CalendarScreen(
+            days = calendarState.calendarDays,
+            currentYear = calendarState.currentYear,
+            currentMonth = calendarState.currentMonth,
+            baseYear = calendarState.baseYear,
+            baseMonth = calendarState.baseMonth,
+            monthSnapshots = calendarState.monthSnapshots,
+            monthTotal = calendarState.monthTotal,
+            monthBadgeCount = calendarState.monthBadgeCount,
+            selectedDate = calendarState.selectedDate,
+            onSelectDate = { calendarCallbacks.onSelectedDateChange(it) },
+            onOpenDay = { date ->
+                calendarCallbacks.onSelectedDateChange(date)
+                navController.navigate(AppRoutes.day(date))
+            },
+            onSaveOrder = { date, notes, total, name, phone, pickupTime ->
+                orderViewModel.saveOrder(
+                    date = date,
+                    notes = notes,
+                    totalAmount = total,
+                    customerName = name,
+                    customerPhone = phone,
+                    pickupTime = pickupTime,
+                    existingOrderId = null
+                )
+                WidgetUpdater.enqueue(navController.context)
+                NotificationScheduler.enqueueNow(navController.context)
+            },
+            searchCustomers = { query -> orderViewModel.searchCustomers(query) },
+            onSummaryClick = { navController.navigate(AppRoutes.Summary) },
+            onOpenMore = navigationActions.onOpenMore,
+            onMonthSettled = { year, month -> calendarCallbacks.onMonthSettled(year, month) },
+            openQuickAddDate = calendarState.quickAddDate,
+            onQuickAddConsumed = { calendarCallbacks.onQuickAddDateChange(null) },
+            showInteractiveTutorial = true,
+            onInteractiveTutorialFinished = {
+                navigationActions.startPracticalTutorial(1)
+                navigateTopLevel(navController, AppRoutes.Calendar, resetToRoot = true)
+            }
         )
     }
 
     composable(
         route = AppRoutes.Day,
-        arguments = listOf(navArgument(AppRoutes.ARG_DATE) { type = NavType.StringType })
+        arguments = listOf(
+            navArgument(AppRoutes.ARG_DATE) { type = NavType.StringType },
+            navArgument(AppRoutes.ARG_ORDER_ID) {
+                type = NavType.StringType
+                nullable = true
+                defaultValue = null
+            }
+        )
     ) { entry ->
         val dateArg = entry.arguments?.getString(AppRoutes.ARG_DATE)
         val date =
             dateArg?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
                 ?: supportActions.currentDate()
+        val focusOrderId =
+            entry.arguments?.getString(AppRoutes.ARG_ORDER_ID)?.toLongOrNull()
         LaunchedEffect(date) {
             calendarCallbacks.onSelectedDateChange(date)
             orderViewModel.loadOrdersForDate(date)
@@ -129,10 +185,19 @@ internal fun NavGraphBuilder.calendarGraph(
                 navigationActions.navigateToPaymentHistory(PaymentHistoryFilter.Order(orderId), null)
             },
             onReceivePayment = { order ->
-                navigationActions.navigateToMoneyRecord(order.customerId)
+                val paid = calendarState.orderPaidAmounts[order.id] ?: BigDecimal.ZERO
+                val outstanding = (order.totalAmount - paid).max(BigDecimal.ZERO)
+                navigationActions.navigateToMoneyRecord(
+                    MoneyRecordContext(
+                        customerId = order.customerId,
+                        orderId = order.id,
+                        outstandingAmount = outstanding
+                    )
+                )
             },
             loadCustomerById = { id -> orderViewModel.getCustomerById(id) },
             searchCustomers = { query -> orderViewModel.searchCustomers(query) },
+            initialFocusOrderId = focusOrderId,
             draft = calendarState.dayDrafts[date],
             onDraftChange = { updated ->
                 if (updated == null) {

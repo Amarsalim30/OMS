@@ -23,6 +23,10 @@ This document captures the current logic, UI, and UX of the Order Management Sys
   - Orders (unpaid view)
   - Customers
   - Money
+- Tab switches reset to the selected tab root to avoid cross-tab back-stack carry-over.
+- Back behavior:
+  - pop within the current tab's flow when in-tab history exists
+  - exit from tab root instead of traversing prior tab roots
 - "Settings" bottom sheet actions:
   - Backup and restore
   - Notifications
@@ -42,7 +46,9 @@ This document captures the current logic, UI, and UX of the Order Management Sys
 - Import contacts: `import_contacts`
 
 ### 3.3 Intents and shortcuts
-- Share intent (text/plain): when receiving shared text, append to M-PESA intake if already on Money/M-PESA; otherwise switch to Money/M-PESA and prefill with shared text.
+- Share intent (text/plain): receiving shared payment text always opens an explicit trust gate with preview first.
+  - Confirm: append only when already on `Money > Collect`, else switch to `Money > Collect` and prefill.
+  - Dismiss: discard shared text with no ingestion.
 - App shortcuts:
   - New order
   - Today
@@ -277,8 +283,9 @@ This document captures the current logic, UI, and UX of the Order Management Sys
 
 ## 5.3 Accounting module
 ### 5.3.1 Money screen (tabs)
-- TabRow with three tabs: M-PESA, Manual, Ledger.
-- Each tab shows its own screen with shared top tabs.
+- TabRow with two tabs: Collect, Record.
+- Collect hosts M-PESA message intake and apply workflows.
+- Record hosts manual payment entry workflows.
 
 ### 5.3.2 M-PESA import
 **UI**

@@ -13,8 +13,6 @@ import com.zeynbakers.order_management_system.accounting.data.PaymentReceiptEnti
 import com.zeynbakers.order_management_system.accounting.data.PaymentReceiptStatus
 import com.zeynbakers.order_management_system.core.db.AppDatabase
 import com.zeynbakers.order_management_system.order.data.OrderEntity
-import com.zeynbakers.order_management_system.order.data.OrderStatus
-import com.zeynbakers.order_management_system.order.data.OrderStatusOverride
 import java.math.BigDecimal
 import kotlinx.datetime.Clock
 
@@ -155,68 +153,80 @@ class PaymentReceiptProcessor(private val database: AppDatabase) {
         descriptionBase: String
     ): Boolean {
         return database.withTransaction {
-            val receipt = receiptDao.getById(receiptId) ?: return@withTransaction false
-            val now = Clock.System.now().toEpochMilliseconds()
-            val existingAllocations = allocationDao.getByReceiptId(receiptId)
-            existingAllocations.filter { it.status != PaymentAllocationStatus.VOIDED }.forEach { allocationRow ->
-                val entryId =
-                    allocationRow.accountEntryId?.let {
-                        accountingDao.insertAccountEntry(
-                            AccountEntryEntity(
-                                orderId = allocationRow.orderId,
-                                customerId = allocationRow.customerId,
-                                type = EntryType.REVERSAL,
-                                amount = allocationRow.amount,
-                                date = now,
-                                description = buildReallocateDescription(receiptId)
-                            )
-                        )
-                    }
-                allocationDao.markVoided(
-                    id = allocationRow.id,
-                    status = PaymentAllocationStatus.VOIDED,
-                    reversalEntryId = entryId,
-                    voidedAt = now,
-                    voidReason = "Reallocated"
-                )
-            }
-
-            val resolvedCustomerId =
-                when (allocation) {
-                    is ReceiptAllocation.Order -> orderDao.getOrderById(allocation.orderId)?.customerId
-                    is ReceiptAllocation.OldestOrders -> allocation.customerId
-                    is ReceiptAllocation.CustomerCredit -> allocation.customerId
-                    ReceiptAllocation.Unapplied -> receipt.customerId
-                }
-            val resetReceipt =
-                receipt.copy(
-                    status = PaymentReceiptStatus.UNAPPLIED,
-                    customerId = resolvedCustomerId ?: receipt.customerId
-                )
-            receiptDao.update(resetReceipt)
-
-            val totalApplied =
-                when (allocation) {
-                    is ReceiptAllocation.Order ->
-                        applyToOrder(resetReceipt, allocation.orderId, descriptionBase)
-                    is ReceiptAllocation.OldestOrders ->
-                        applyToOldestOrders(resetReceipt, allocation.customerId, descriptionBase)
-                    is ReceiptAllocation.CustomerCredit ->
-                        applyToCustomerCredit(resetReceipt, allocation.customerId, descriptionBase, resetReceipt.amount)
-                    ReceiptAllocation.Unapplied -> BigDecimal.ZERO
-                }
-            val status =
-                when {
-                    allocation == ReceiptAllocation.Unapplied -> PaymentReceiptStatus.UNAPPLIED
-                    totalApplied <= BigDecimal.ZERO -> PaymentReceiptStatus.UNAPPLIED
-                    totalApplied < resetReceipt.amount -> PaymentReceiptStatus.PARTIAL
-                    else -> PaymentReceiptStatus.APPLIED
-                }
-            if (resetReceipt.status != status) {
-                receiptDao.update(resetReceipt.copy(status = status))
-            }
-            true
+            reallocateReceiptInTransaction(
+                receiptId = receiptId,
+                allocation = allocation,
+                descriptionBase = descriptionBase
+            )
         }
+    }
+
+    private suspend fun reallocateReceiptInTransaction(
+        receiptId: Long,
+        allocation: ReceiptAllocation,
+        descriptionBase: String
+    ): Boolean {
+        val receipt = receiptDao.getById(receiptId) ?: return false
+        val now = Clock.System.now().toEpochMilliseconds()
+        val existingAllocations = allocationDao.getByReceiptId(receiptId)
+        existingAllocations.filter { it.status != PaymentAllocationStatus.VOIDED }.forEach { allocationRow ->
+            val entryId =
+                allocationRow.accountEntryId?.let {
+                    accountingDao.insertAccountEntry(
+                        AccountEntryEntity(
+                            orderId = allocationRow.orderId,
+                            customerId = allocationRow.customerId,
+                            type = EntryType.REVERSAL,
+                            amount = allocationRow.amount,
+                            date = now,
+                            description = buildReallocateDescription(receiptId)
+                        )
+                    )
+                }
+            allocationDao.markVoided(
+                id = allocationRow.id,
+                status = PaymentAllocationStatus.VOIDED,
+                reversalEntryId = entryId,
+                voidedAt = now,
+                voidReason = "Reallocated"
+            )
+        }
+
+        val resolvedCustomerId =
+            when (allocation) {
+                is ReceiptAllocation.Order -> orderDao.getOrderById(allocation.orderId)?.customerId
+                is ReceiptAllocation.OldestOrders -> allocation.customerId
+                is ReceiptAllocation.CustomerCredit -> allocation.customerId
+                ReceiptAllocation.Unapplied -> receipt.customerId
+            }
+        val resetReceipt =
+            receipt.copy(
+                status = PaymentReceiptStatus.UNAPPLIED,
+                customerId = resolvedCustomerId ?: receipt.customerId
+            )
+        receiptDao.update(resetReceipt)
+
+        val totalApplied =
+            when (allocation) {
+                is ReceiptAllocation.Order ->
+                    applyToOrder(resetReceipt, allocation.orderId, descriptionBase)
+                is ReceiptAllocation.OldestOrders ->
+                    applyToOldestOrders(resetReceipt, allocation.customerId, descriptionBase)
+                is ReceiptAllocation.CustomerCredit ->
+                    applyToCustomerCredit(resetReceipt, allocation.customerId, descriptionBase, resetReceipt.amount)
+                ReceiptAllocation.Unapplied -> BigDecimal.ZERO
+            }
+        val status =
+            when {
+                allocation == ReceiptAllocation.Unapplied -> PaymentReceiptStatus.UNAPPLIED
+                totalApplied <= BigDecimal.ZERO -> PaymentReceiptStatus.UNAPPLIED
+                totalApplied < resetReceipt.amount -> PaymentReceiptStatus.PARTIAL
+                else -> PaymentReceiptStatus.APPLIED
+            }
+        if (resetReceipt.status != status) {
+            receiptDao.update(resetReceipt.copy(status = status))
+        }
+        return true
     }
 
     suspend fun moveAllocations(
@@ -226,24 +236,23 @@ class PaymentReceiptProcessor(private val database: AppDatabase) {
         moveFullReceipts: Boolean
     ): AllocationMoveSummary {
         if (allocationIds.isEmpty()) return AllocationMoveSummary(0, 0)
-        val allocations =
-            allocationDao.getByIds(allocationIds)
-                .filter { it.status == PaymentAllocationStatus.APPLIED }
-        if (allocations.isEmpty()) return AllocationMoveSummary(0, 0)
-
-        val receiptIds = allocations.map { it.receiptId }.distinct()
-        if (moveFullReceipts) {
-            receiptIds.forEach { receiptId ->
-                reallocateReceipt(
-                    receiptId = receiptId,
-                    allocation = target,
-                    descriptionBase = descriptionBase
-                )
-            }
-            return AllocationMoveSummary(allocations.size, receiptIds.size)
-        }
-
         return database.withTransaction {
+            val allocations =
+                allocationDao.getByIds(allocationIds)
+                    .filter { it.status == PaymentAllocationStatus.APPLIED }
+            if (allocations.isEmpty()) return@withTransaction AllocationMoveSummary(0, 0)
+
+            val receiptIds = allocations.map { it.receiptId }.distinct()
+            if (moveFullReceipts) {
+                receiptIds.forEach { receiptId ->
+                    reallocateReceiptInTransaction(
+                        receiptId = receiptId,
+                        allocation = target,
+                        descriptionBase = descriptionBase
+                    )
+                }
+                return@withTransaction AllocationMoveSummary(allocations.size, receiptIds.size)
+            }
             val receiptsById = receiptDao.getByIds(receiptIds).associateBy { it.id }
             val allocationsByReceipt = allocations.groupBy { it.receiptId }
             val now = Clock.System.now().toEpochMilliseconds()
@@ -403,36 +412,40 @@ class PaymentReceiptProcessor(private val database: AppDatabase) {
         var remainingPayment = receipt.amount
         val now = receipt.receivedAt
         val description = buildReceiptDescription(receipt.id, descriptionBase)
-        val orders =
-            orderDao.getOrdersByCustomer(customerId)
-                .filter {
-                    it.status != OrderStatus.CANCELLED &&
-                        it.statusOverride != OrderStatusOverride.CLOSED
-                }
-                .sortedWith(
-                    compareBy<OrderEntity> { it.orderDate }
-                        .thenBy { it.createdAt }
-                        .thenBy { it.id }
+
+        var offset = 0
+        while (remainingPayment > BigDecimal.ZERO) {
+            val orders =
+                orderDao.getOpenOrdersByCustomerPaged(
+                    customerId = customerId,
+                    limit = OLDEST_ORDERS_PAGE_SIZE,
+                    offset = offset
                 )
+            if (orders.isEmpty()) break
 
-        for (order in orders) {
-            if (remainingPayment <= BigDecimal.ZERO) break
-            val paidSoFar = accountingDao.getPaidForOrder(order.id)
-            val remaining = order.totalAmount - paidSoFar
-            if (remaining <= BigDecimal.ZERO) continue
+            for (order in orders) {
+                if (remainingPayment <= BigDecimal.ZERO) break
+                val paidSoFar = accountingDao.getPaidForOrder(order.id)
+                val remaining = order.totalAmount - paidSoFar
+                if (remaining <= BigDecimal.ZERO) continue
 
-            val applied = if (remainingPayment > remaining) remaining else remainingPayment
-            val entryId = insertCreditEntry(order.id, customerId, applied, description, now)
-            insertAllocation(
-                receiptId = receipt.id,
-                orderId = order.id,
-                customerId = customerId,
-                amount = applied,
-                type = PaymentAllocationType.ORDER,
-                accountEntryId = entryId,
-                createdAt = now
-            )
-            remainingPayment -= applied
+                val applied = if (remainingPayment > remaining) remaining else remainingPayment
+                val entryId = insertCreditEntry(order.id, customerId, applied, description, now)
+                insertAllocation(
+                    receiptId = receipt.id,
+                    orderId = order.id,
+                    customerId = customerId,
+                    amount = applied,
+                    type = PaymentAllocationType.ORDER,
+                    accountEntryId = entryId,
+                    createdAt = now
+                )
+                remainingPayment -= applied
+            }
+            if (orders.size < OLDEST_ORDERS_PAGE_SIZE) {
+                break
+            }
+            offset += OLDEST_ORDERS_PAGE_SIZE
         }
 
         if (remainingPayment > BigDecimal.ZERO) {
@@ -504,36 +517,40 @@ class PaymentReceiptProcessor(private val database: AppDatabase) {
         var remainingPayment = amount
         val now = receipt.receivedAt
         val description = buildReceiptDescription(receipt.id, descriptionBase)
-        val orders =
-            orderDao.getOrdersByCustomer(customerId)
-                .filter {
-                    it.status != OrderStatus.CANCELLED &&
-                        it.statusOverride != OrderStatusOverride.CLOSED
-                }
-                .sortedWith(
-                    compareBy<OrderEntity> { it.orderDate }
-                        .thenBy { it.createdAt }
-                        .thenBy { it.id }
+
+        var offset = 0
+        while (remainingPayment > BigDecimal.ZERO) {
+            val orders =
+                orderDao.getOpenOrdersByCustomerPaged(
+                    customerId = customerId,
+                    limit = OLDEST_ORDERS_PAGE_SIZE,
+                    offset = offset
                 )
+            if (orders.isEmpty()) break
 
-        for (order in orders) {
-            if (remainingPayment <= BigDecimal.ZERO) break
-            val paidSoFar = accountingDao.getPaidForOrder(order.id)
-            val remaining = order.totalAmount - paidSoFar
-            if (remaining <= BigDecimal.ZERO) continue
+            for (order in orders) {
+                if (remainingPayment <= BigDecimal.ZERO) break
+                val paidSoFar = accountingDao.getPaidForOrder(order.id)
+                val remaining = order.totalAmount - paidSoFar
+                if (remaining <= BigDecimal.ZERO) continue
 
-            val applied = if (remainingPayment > remaining) remaining else remainingPayment
-            val entryId = insertCreditEntry(order.id, customerId, applied, description, now)
-            insertAllocation(
-                receiptId = receipt.id,
-                orderId = order.id,
-                customerId = customerId,
-                amount = applied,
-                type = PaymentAllocationType.ORDER,
-                accountEntryId = entryId,
-                createdAt = now
-            )
-            remainingPayment -= applied
+                val applied = if (remainingPayment > remaining) remaining else remainingPayment
+                val entryId = insertCreditEntry(order.id, customerId, applied, description, now)
+                insertAllocation(
+                    receiptId = receipt.id,
+                    orderId = order.id,
+                    customerId = customerId,
+                    amount = applied,
+                    type = PaymentAllocationType.ORDER,
+                    accountEntryId = entryId,
+                    createdAt = now
+                )
+                remainingPayment -= applied
+            }
+            if (orders.size < OLDEST_ORDERS_PAGE_SIZE) {
+                break
+            }
+            offset += OLDEST_ORDERS_PAGE_SIZE
         }
 
         if (remainingPayment > BigDecimal.ZERO) {
@@ -673,5 +690,9 @@ class PaymentReceiptProcessor(private val database: AppDatabase) {
 
     private fun buildReallocateDescription(receiptId: Long): String {
         return "Reallocated receipt #$receiptId"
+    }
+
+    companion object {
+        private const val OLDEST_ORDERS_PAGE_SIZE = 250
     }
 }

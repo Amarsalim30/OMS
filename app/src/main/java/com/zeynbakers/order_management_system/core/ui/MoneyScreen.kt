@@ -14,10 +14,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.zeynbakers.order_management_system.R
+import com.zeynbakers.order_management_system.MoneyRecordContext
 import com.zeynbakers.order_management_system.accounting.ui.PaymentApplySummary
 import com.zeynbakers.order_management_system.accounting.ui.ManualPaymentScreen
 import com.zeynbakers.order_management_system.accounting.ui.MpesaImportScreen
 import com.zeynbakers.order_management_system.accounting.ui.PaymentIntakeViewModel
+import com.zeynbakers.order_management_system.core.tutorial.TutorialCoachTargets
+import com.zeynbakers.order_management_system.core.tutorial.tutorialCoachTarget
 import com.zeynbakers.order_management_system.customer.ui.CustomerAccountsViewModel
 
 enum class MoneyTab {
@@ -27,13 +30,13 @@ enum class MoneyTab {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MoneyScreen(
+internal fun MoneyScreen(
     selectedTab: MoneyTab,
     onTabChange: (MoneyTab) -> Unit,
     paymentIntakeViewModel: PaymentIntakeViewModel,
     customerViewModel: CustomerAccountsViewModel,
     initialText: String?,
-    manualCustomerId: Long?,
+    moneyRecordContext: MoneyRecordContext?,
     onManualContextConsumed: () -> Unit,
     onManualSaved: () -> Unit,
     onApplied: (PaymentApplySummary) -> Unit,
@@ -49,11 +52,13 @@ fun MoneyScreen(
             ) {
                 TabRow(selectedTabIndex = selectedTab.ordinal) {
                     Tab(
+                        modifier = Modifier.tutorialCoachTarget(TutorialCoachTargets.MoneyCollectTab),
                         selected = selectedTab == MoneyTab.Collect,
                         onClick = { onTabChange(MoneyTab.Collect) },
                         text = { Text(stringResource(R.string.money_tab_collect)) }
                     )
                     Tab(
+                        modifier = Modifier.tutorialCoachTarget(TutorialCoachTargets.MoneyRecordTab),
                         selected = selectedTab == MoneyTab.Record,
                         onClick = { onTabChange(MoneyTab.Record) },
                         text = { Text(stringResource(R.string.money_tab_record)) }
@@ -78,7 +83,9 @@ fun MoneyScreen(
             MoneyTab.Record -> {
                 ManualPaymentScreen(
                     customerViewModel = customerViewModel,
-                    initialCustomerId = manualCustomerId,
+                    initialCustomerId = moneyRecordContext?.customerId,
+                    initialOrderId = moneyRecordContext?.orderId,
+                    initialAmount = moneyRecordContext?.outstandingAmount,
                     onContextConsumed = onManualContextConsumed,
                     onPaymentRecorded = onManualSaved,
                     showTopBar = false,

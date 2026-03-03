@@ -1,184 +1,180 @@
-﻿# Title: Backup Module Line-by-Line Fault Review (Drive + SAF Reliability)
+﻿# Title: Backup Module Final Fault Review (Refreshed 2026-02-22)
 
 ## Status
-Resolved in code (2026-02-20), pending device QA on Oppo/ColorOS picker behavior
+Final code review completed against current implementation.
+
+- Core backup integrity pipeline is strong.
+- Remaining issues are mainly configuration/UX consistency and SAF edge-case robustness.
 
 ## Scope Reviewed
-- `app/src/main/java/com/zeynbakers/order_management_system/core/backup/BackupAttentionNotifier.kt`
 - `app/src/main/java/com/zeynbakers/order_management_system/core/backup/BackupManager.kt`
-- `app/src/main/java/com/zeynbakers/order_management_system/core/backup/BackupModels.kt`
+- `app/src/main/java/com/zeynbakers/order_management_system/core/backup/BackupSettingsScreen.kt`
 - `app/src/main/java/com/zeynbakers/order_management_system/core/backup/BackupPreferences.kt`
 - `app/src/main/java/com/zeynbakers/order_management_system/core/backup/BackupScheduler.kt`
-- `app/src/main/java/com/zeynbakers/order_management_system/core/backup/BackupSettingsScreen.kt`
 - `app/src/main/java/com/zeynbakers/order_management_system/core/backup/DailyBackupWorker.kt`
 - `app/src/main/java/com/zeynbakers/order_management_system/core/backup/ManualBackupWorker.kt`
 - `app/src/main/java/com/zeynbakers/order_management_system/core/backup/RestoreWorker.kt`
+- `app/src/main/java/com/zeynbakers/order_management_system/core/navigation/graphs/OnboardingGraph.kt`
+- `docs/issues/backup-system-complete-reference-2026-02-22.md`
 
-## Goal
-Fix backup module faults that block or degrade Google Drive backup UX/reliability ("picker opens but no Drive", unstable cloud writes, restore safety gaps).
+## Open Findings (ordered by severity)
 
-## Findings (ordered by severity)
-
-### P0-1: Cloud folder selection can be rejected even when URI permission is granted
+### P1-1: Onboarding SAF persistable permission flow is weaker than settings flow
 - File refs:
-  - `app/src/main/java/com/zeynbakers/order_management_system/core/backup/BackupSettingsScreen.kt:154`
-  - `app/src/main/java/com/zeynbakers/order_management_system/core/backup/BackupSettingsScreen.kt:158`
-  - `app/src/main/java/com/zeynbakers/order_management_system/core/backup/BackupManager.kt:380`
+  - `app/src/main/java/com/zeynbakers/order_management_system/core/navigation/graphs/OnboardingGraph.kt:163`
+  - `app/src/main/java/com/zeynbakers/order_management_system/core/navigation/graphs/OnboardingGraph.kt:170`
+  - `app/src/main/java/com/zeynbakers/order_management_system/core/backup/BackupSettingsScreen.kt:823`
+  - `app/src/main/java/com/zeynbakers/order_management_system/core/backup/BackupSettingsScreen.kt:833`
 - Problem:
-  - After picking a tree URI, the flow immediately calls `isSafTargetAccessible()` and blocks selection if `DocumentFile.exists()` is false.
-  - Some cloud providers (or transient network state) can return false/unknown immediately after grant.
+  - Onboarding directly persists fixed `READ|WRITE` flags.
+  - Settings correctly masks granted flags and retries with required flags.
 - Impact:
-  - User selects a valid Drive folder but app rejects it as unavailable.
-  - Feels like "Drive not working" even when provider is valid.
+  - On some providers/OEMs, onboarding can silently fail to persist URI access and backup setup may not stick.
 - Fix direction:
-  - Accept and persist URI immediately after permission grant.
-  - Downgrade immediate accessibility test to non-blocking warning.
-  - Use storage probe/manual backup as the authoritative write validation.
+  - Extract shared SAF permission persistence helper and use it in both onboarding and settings.
 
-### P0-2: `SafFile` backup path is non-atomic and can corrupt the destination backup
+### P1-2: Runtime supports `SafDirectory`, but settings UI exposes only file picker path
 - File refs:
-  - `app/src/main/java/com/zeynbakers/order_management_system/core/backup/BackupManager.kt:699`
-  - `app/src/main/java/com/zeynbakers/order_management_system/core/backup/BackupManager.kt:705`
-  - `app/src/main/java/com/zeynbakers/order_management_system/core/backup/BackupManager.kt:710`
+  - `app/src/main/java/com/zeynbakers/order_management_system/core/backup/BackupPreferences.kt:59`
+  - `app/src/main/java/com/zeynbakers/order_management_system/core/backup/BackupSettingsScreen.kt:123`
+  - `app/src/main/java/com/zeynbakers/order_management_system/core/backup/BackupSettingsScreen.kt:138`
+  - `app/src/main/java/com/zeynbakers/order_management_system/core/backup/BackupSettingsScreen.kt:771`
 - Problem:
-  - Backup writes directly to final file URI (`"w"`) with no temp + finalize phase.
-  - Interruption/crash/provider failure can leave a partial file at the same URI.
+  - Core model and manager still support `BackupTargetType.SafDirectory`.
+  - Settings only uses `CreateDocument` and always writes `SafFile` via `setFileTargetSelection`.
+  - `setTargetSelection(...)` has no active call path.
 - Impact:
-  - Last backup may be silently replaced with unreadable/corrupt archive.
+  - Capability/UX mismatch and maintenance drift.
+  - Folder mode reliability improvements exist in core but are not user-configurable from screen.
 - Fix direction:
-  - Implement two-phase write for file mode as well:
-    1. Write temp document.
-    2. Verify archive/manifest/checksum.
-    3. Replace final only after verification.
+  - Either remove folder mode from runtime model, or re-introduce folder mode controls (`OpenDocumentTree`) and target mode selector.
 
-### P0-3: Backup snapshot is not transactionally consistent
+### P1-3: Restore policy defaults to `LegacyCompatible` with no in-screen control
 - File refs:
-  - `app/src/main/java/com/zeynbakers/order_management_system/core/backup/BackupManager.kt:558`
-  - `app/src/main/java/com/zeynbakers/order_management_system/core/backup/BackupManager.kt:564`
+  - `app/src/main/java/com/zeynbakers/order_management_system/core/backup/BackupPreferences.kt:29`
+  - `app/src/main/java/com/zeynbakers/order_management_system/core/backup/BackupPreferences.kt:103`
+  - `app/src/main/java/com/zeynbakers/order_management_system/core/backup/BackupManager.kt:246`
+  - `app/src/main/java/com/zeynbakers/order_management_system/core/backup/BackupManager.kt:657`
 - Problem:
-  - Backup reads each table via separate DAO calls without a single read transaction/snapshot boundary.
+  - Policy is implemented in core, but settings UI does not expose policy choice.
+  - Default remains `LegacyCompatible`.
 - Impact:
-  - Concurrent writes can produce cross-table inconsistency (orders/items/payments mismatch).
-  - Restore may succeed structurally but restore logically inconsistent business data.
+  - Restore posture is weaker than strict-by-default hardening intent.
 - Fix direction:
-  - Perform export reads under a consistent snapshot transaction (or pause writes during export window).
+  - Set default to `Strict` for new installs and expose explicit policy UI with warning copy for legacy mode.
 
-### P1-1: Folder picker launch contract is generic and OEM behavior is inconsistent
+### P1-4: `SafFile` health/probe can report healthy from permission fallback even when URI is stale
 - File refs:
-  - `app/src/main/java/com/zeynbakers/order_management_system/core/backup/BackupSettingsScreen.kt:131`
-  - `app/src/main/java/com/zeynbakers/order_management_system/core/backup/BackupSettingsScreen.kt:175`
+  - `app/src/main/java/com/zeynbakers/order_management_system/core/backup/BackupManager.kt:354`
+  - `app/src/main/java/com/zeynbakers/order_management_system/core/backup/BackupManager.kt:373`
+  - `app/src/main/java/com/zeynbakers/order_management_system/core/backup/BackupManager.kt:378`
+  - `app/src/main/java/com/zeynbakers/order_management_system/core/backup/BackupManager.kt:400`
+  - `app/src/main/java/com/zeynbakers/order_management_system/core/backup/BackupManager.kt:280`
 - Problem:
-  - Uses `StartActivityForResult` + manual intent for tree picker instead of `ActivityResultContracts.OpenDocumentTree()`.
+  - `isSafFileWritable()` returns true if persisted read/write permission exists, even when descriptor open fails.
+  - `evaluateTargetHealth()` and `runStorageProbe()` rely on that.
 - Impact:
-  - On some OEM ROMs the flow can behave like local-first picker UX and hide/obscure providers.
+  - UI can show healthy/test-passed while actual backup write later fails.
 - Fix direction:
-  - Switch to `OpenDocumentTree()` contract directly.
-  - Keep launch input null for change-folder action to avoid app-side pinning.
+  - For health/probe, require at least one concrete I/O capability signal (descriptor or short write/read check) instead of permission fallback alone.
 
-### P1-2: Persisted URI grant uses hardcoded flags, not returned flags
+### P2-1: `SafFile` post-write verification failure intentionally skips rollback
 - File refs:
-  - `app/src/main/java/com/zeynbakers/order_management_system/core/backup/BackupSettingsScreen.kt:137`
-  - `app/src/main/java/com/zeynbakers/order_management_system/core/backup/BackupSettingsScreen.kt:143`
-  - `app/src/main/java/com/zeynbakers/order_management_system/core/backup/BackupSettingsScreen.kt:203`
-  - `app/src/main/java/com/zeynbakers/order_management_system/core/backup/BackupSettingsScreen.kt:209`
+  - `app/src/main/java/com/zeynbakers/order_management_system/core/backup/BackupManager.kt:851`
+  - `app/src/main/java/com/zeynbakers/order_management_system/core/backup/BackupManager.kt:873`
+  - `app/src/main/java/com/zeynbakers/order_management_system/core/backup/BackupManager.kt:885`
+  - `app/src/main/java/com/zeynbakers/order_management_system/core/backup/BackupManager.kt:935`
 - Problem:
-  - `takePersistableUriPermission()` is called with fixed read/write flags instead of masking `result.data?.flags` grant bits.
+  - Once write is marked complete, rollback path is skipped even if subsequent verification fails.
 - Impact:
-  - Some providers/devices can reject persist grant unexpectedly.
+  - Rare provider inconsistency can leave selected file in uncertain state.
 - Fix direction:
-  - Use granted flags mask:
-    - `(intentFlags and (FLAG_GRANT_READ_URI_PERMISSION or FLAG_GRANT_WRITE_URI_PERMISSION))`
+  - Where supported, write to temp sibling and only replace on verified success.
+  - If not possible, surface stronger user warning and immediate retry guidance.
 
-### P1-3: `runStorageProbe()` for `SafFile` touches the real backup file
+### P2-2: Output-stream fallback chain is not exception-safe per mode attempt
 - File refs:
-  - `app/src/main/java/com/zeynbakers/order_management_system/core/backup/BackupManager.kt:282`
-  - `app/src/main/java/com/zeynbakers/order_management_system/core/backup/BackupManager.kt:287`
+  - `app/src/main/java/com/zeynbakers/order_management_system/core/backup/BackupManager.kt:894`
+  - `app/src/main/java/com/zeynbakers/order_management_system/core/backup/BackupManager.kt:928`
+  - `app/src/main/java/com/zeynbakers/order_management_system/core/backup/BackupManager.kt:995`
 - Problem:
-  - Probe opens selected backup in `"wa"` mode.
+  - `openSafOutputStreamForWrite()` tries `"wt" ?: "w" ?: default`, but if first call throws, later fallbacks are not attempted in that method.
 - Impact:
-  - Probe may alter metadata/content semantics of the actual backup target.
+  - Some providers that reject one mode could fail backup even though a fallback mode would work.
 - Fix direction:
-  - Probe against a temporary sibling file (or create/delete dedicated probe URI), never the production backup file.
+  - Attempt each mode in separate `runCatching` blocks and continue to next mode on failure.
 
-### P1-4: Restore reads entire ZIP into memory with no entry/size guard
+### P2-3: Backup settings copy/labels are file-centric across all target types
 - File refs:
-  - `app/src/main/java/com/zeynbakers/order_management_system/core/backup/BackupManager.kt:942`
-  - `app/src/main/java/com/zeynbakers/order_management_system/core/backup/BackupManager.kt:957`
+  - `app/src/main/java/com/zeynbakers/order_management_system/core/backup/BackupSettingsScreen.kt:349`
+  - `app/src/main/java/com/zeynbakers/order_management_system/core/backup/BackupSettingsScreen.kt:354`
+  - `app/src/main/res/values/strings.xml:526`
+  - `app/src/main/res/values/strings.xml:527`
 - Problem:
-  - `readZipEntries()` buffers every entry into memory unbounded.
+  - Subtitle and primary label always describe selected file behavior.
+  - This is inaccurate when target is `AppPrivate` and ambiguous for dormant `SafDirectory` state.
 - Impact:
-  - Large/hostile archives can trigger OOM or app kill.
+  - User can misunderstand where backups are saved and how updates happen.
 - Fix direction:
-  - Add per-entry and total-uncompressed byte limits.
-  - Reject zip bombs / oversized archives early.
+  - Render target-specific labels and explanatory text.
 
-### P1-5: Force-key mismatch between scheduler and daily worker
+### P2-4: App-private mode discoverability/switching is weak in settings UX
 - File refs:
-  - `app/src/main/java/com/zeynbakers/order_management_system/core/backup/BackupScheduler.kt:20`
-  - `app/src/main/java/com/zeynbakers/order_management_system/core/backup/DailyBackupWorker.kt:52`
+  - `app/src/main/java/com/zeynbakers/order_management_system/core/backup/BackupSettingsScreen.kt:288`
+  - `app/src/main/java/com/zeynbakers/order_management_system/core/backup/BackupSettingsScreen.kt:386`
+  - `app/src/main/res/values/strings.xml:454`
 - Problem:
-  - Scheduler key is `"force_backup"`; daily worker key is `"force"`.
+  - Screen logic supports `AppPrivate`, but primary action is always "choose file" and no explicit mode switch is exposed.
+  - String resources for app-storage switch exist but are not surfaced in this screen.
 - Impact:
-  - Any future path expecting shared force key will silently fail.
+  - Non-technical users may not realize local app storage backup mode is available.
 - Fix direction:
-  - Use `BackupScheduler.KEY_FORCE` everywhere.
+  - Add explicit storage mode picker (App storage vs Backup file), with clear mode status and implications.
 
-### P2-1: Initial health in preferences is optimistic for SAF targets
-- File refs:
-  - `app/src/main/java/com/zeynbakers/order_management_system/core/backup/BackupPreferences.kt:107`
-  - `app/src/main/java/com/zeynbakers/order_management_system/core/backup/BackupPreferences.kt:113`
-- Problem:
-  - Non-empty SAF URI is marked `Healthy` without permission/access checks.
-- Impact:
-  - UI can briefly display misleading health until re-evaluated by manager.
-- Fix direction:
-  - Either store `Unknown` state in prefs model or resolve with manager checks before UI render.
+## Resolved Findings (verified in current code)
 
-### P2-2: Switching to app-private storage clears existing SAF selection
-- File refs:
-  - `app/src/main/java/com/zeynbakers/order_management_system/core/backup/BackupSettingsScreen.kt:477`
-  - `app/src/main/java/com/zeynbakers/order_management_system/core/backup/BackupSettingsScreen.kt:478`
-- Problem:
-  - Choosing App storage clears folder/file URI metadata immediately.
-- Impact:
-  - User loses previously configured cloud target and must re-link later.
-- Fix direction:
-  - Preserve last SAF selection across mode switches; only clear on explicit "Forget location" action.
+### Resolved: transactional export snapshot
+- `app/src/main/java/com/zeynbakers/order_management_system/core/backup/BackupManager.kt:686`
 
-## Google Drive-specific diagnosis for current user symptom
+### Resolved: ZIP size guardrails (entry and total)
+- `app/src/main/java/com/zeynbakers/order_management_system/core/backup/BackupManager.kt:73`
+- `app/src/main/java/com/zeynbakers/order_management_system/core/backup/BackupManager.kt:1441`
 
-### Observed symptom
-- Picker opens in local phone folder view (e.g., Oppo storage), Drive not visible.
+### Resolved: force key mismatch
+- `app/src/main/java/com/zeynbakers/order_management_system/core/backup/BackupScheduler.kt:21`
+- `app/src/main/java/com/zeynbakers/order_management_system/core/backup/DailyBackupWorker.kt:13`
 
-### Code-level contributors
-- Generic picker contract path (`StartActivityForResult`) instead of `OpenDocumentTree` contract in `BackupSettingsScreen.kt:131`.
-- Immediate hard accessibility rejection can make valid cloud picks appear broken (`BackupSettingsScreen.kt:154-160`).
+### Resolved: preflight and restore integrity hardening
+- `app/src/main/java/com/zeynbakers/order_management_system/core/backup/BackupManager.kt:1212`
+- `app/src/main/java/com/zeynbakers/order_management_system/core/backup/BackupManager.kt:1233`
+- `app/src/main/java/com/zeynbakers/order_management_system/core/backup/BackupManager.kt:1413`
 
-### Platform constraint (important)
-- Even with correct SAF tree intent, OEM DocumentsUI implementations can still default local-first or hide providers.
-- App cannot force Drive provider visibility when OEM picker is limited.
+### Resolved: folder backup growth (rolling single-file behavior)
+- `app/src/main/java/com/zeynbakers/order_management_system/core/backup/BackupManager.kt:63`
+- `app/src/main/java/com/zeynbakers/order_management_system/core/backup/BackupManager.kt:509`
+- `app/src/main/java/com/zeynbakers/order_management_system/core/backup/BackupManager.kt:625`
 
-## Required implementation plan
-1. Replace folder picker launcher with `ActivityResultContracts.OpenDocumentTree()` and persist only granted flags.
-2. Remove blocking `isSafTargetAccessible` gate at selection time; make it warning-only.
-3. Make `SafFile` backup atomic (temp -> verify -> finalize).
-4. Move backup export reads into a consistent snapshot transaction.
-5. Add zip size guards and fail-fast messages for oversized/corrupt archives.
-6. Unify force-key constants and add regression tests.
-7. Preserve SAF target across location mode switches.
+## Alignment Check vs `backup-system-complete-reference-2026-02-22.md`
+- The reference doc is correct on architecture and major reliability behavior.
+- It should keep explicitly calling out these still-open items:
+  - onboarding permission persistence parity
+  - `SafDirectory` model/UI mismatch
+  - restore policy default and missing UI control
+  - health/probe false-positive risk for stale SAF file URIs
+  - target-specific UX copy cleanup
 
-## Test plan updates required
-- Add instrumentation tests for:
-  - Tree URI selection persistence with returned flags mask.
-  - Selection accepted even when immediate provider `exists()` returns false.
-  - Atomic saf-file write interruption behavior.
-- Add unit tests for:
-  - Zip entry size guard logic.
-  - Force-key wiring consistency.
-  - Health evaluation state transitions (NeedsRelink/Unavailable/Healthy).
+## Recommended Execution Order
+1. Unify SAF permission persistence logic (onboarding + settings).
+2. Resolve mode mismatch (`SafDirectory` deprecate or expose).
+3. Switch restore default to `Strict` and surface policy control.
+4. Fix `isSafFileWritable`/probe false-positive behavior.
+5. Improve `writeSafFileBytes` output-stream fallback robustness.
+6. Complete target-specific copy and mode switch UX.
 
-## Definition of done for this issue
-- User can select/retain cloud target without false negative rejection.
-- Backups in SAF folder/file modes are crash-safe and verifiable.
-- Restore rejects oversized/invalid archives safely.
-- Picker flow is best-effort OEM-compatible and no longer app-side brittle.
+## Definition of Done
+- Onboarding and settings persist SAF grants with the same provider-safe logic.
+- Backup target modes exposed in UI exactly match runtime capabilities.
+- Restore strictness is visible and defaults to secure behavior.
+- Health/probe status reflects real write capability, not permission-only fallback.
+- SAF file write fallback path is resilient across provider mode differences.
+- Backup screen wording matches active storage target.

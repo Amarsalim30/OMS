@@ -48,9 +48,15 @@ import kotlinx.datetime.toJavaLocalDate
 @Composable
 internal fun SummaryCard(
     count: Int,
-    totalOutstanding: BigDecimal
+    totalOutstanding: BigDecimal,
+    modifier: Modifier = Modifier
 ) {
-    AppCard(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
+    AppCard(
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 8.dp)
+    ) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(4.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -149,7 +155,15 @@ internal fun UnpaidOrderRow(
     onReceivePayment: () -> Unit
 ) {
     val haptic = LocalHapticFeedback.current
-    val walkInLabel = stringResource(R.string.unpaid_customer_walk_in)
+    val hasCustomer = !customerLabel.isNullOrBlank()
+    val hasNotes = order.notes.isNotBlank()
+    val primaryLabel =
+        if (hasNotes) {
+            order.notes
+        } else {
+            customerLabel?.takeIf { it.isNotBlank() }
+                ?: stringResource(R.string.unpaid_unnamed_order)
+        }
     AppCard(
         modifier =
             modifier
@@ -166,7 +180,7 @@ internal fun UnpaidOrderRow(
                 ) {
                     Box(contentAlignment = Alignment.Center) {
                         Text(
-                            text = getInitials(customerLabel ?: walkInLabel),
+                            text = getInitials(primaryLabel),
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onPrimaryContainer
@@ -184,16 +198,16 @@ internal fun UnpaidOrderRow(
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = customerLabel ?: walkInLabel,
+                                text = primaryLabel,
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onSurface,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
-                            if (order.notes.isNotBlank()) {
+                            if (hasCustomer && hasNotes) {
                                 Text(
-                                    text = order.notes,
+                                    text = customerLabel.orEmpty(),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     maxLines = 1,

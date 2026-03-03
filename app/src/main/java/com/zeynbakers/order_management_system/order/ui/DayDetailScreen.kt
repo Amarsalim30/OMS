@@ -17,12 +17,14 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
@@ -31,10 +33,14 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
+import androidx.compose.material3.SwipeToDismissBox
+import androidx.compose.material3.SwipeToDismissBoxState
+import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -52,7 +58,6 @@ import androidx.compose.ui.unit.dp
 import com.zeynbakers.order_management_system.R
 import com.zeynbakers.order_management_system.accounting.domain.ReceiptAllocation
 import com.zeynbakers.order_management_system.core.ui.LocalAmountFieldRegistry
-import com.zeynbakers.order_management_system.core.ui.LocalVoiceCalcAccess
 import com.zeynbakers.order_management_system.core.ui.LocalVoiceInputRouter
 import com.zeynbakers.order_management_system.core.ui.LocalVoiceOverlaySuppressed
 import com.zeynbakers.order_management_system.core.ui.components.AppFilterRow
@@ -89,6 +94,7 @@ fun DayDetailScreen(
         onReceivePayment: (OrderEntity) -> Unit,
         loadCustomerById: suspend (Long) -> CustomerEntity?,
         searchCustomers: suspend (String) -> List<CustomerEntity>,
+        initialFocusOrderId: Long? = null,
         draft: OrderDraft?,
         onDraftChange: (OrderDraft?) -> Unit
 ) {
@@ -115,12 +121,14 @@ fun DayDetailScreen(
     var deleteSelectedOrderId by remember { mutableStateOf<Long?>(null) }
     var deleteMoveFullReceipts by remember { mutableStateOf(true) }
     val amountRegistry = LocalAmountFieldRegistry.current
-    val voiceCalcAccess = LocalVoiceCalcAccess.current
     val overlaySuppressed = LocalVoiceOverlaySuppressed.current
     val voiceRouter = LocalVoiceInputRouter.current
-    var orderFilter by rememberSaveable { mutableStateOf(DayOrderFilter.All) }
+    var orderFilter by rememberSaveable(dateKey) { mutableStateOf(DayOrderFilter.All) }
     var searchQuery by rememberSaveable(dateKey) { mutableStateOf("") }
     var isSearchExpanded by rememberSaveable(dateKey) { mutableStateOf(false) }
+    var pendingFocusOrderId by rememberSaveable(dateKey) { mutableStateOf(initialFocusOrderId) }
+    var highlightedOrderId by rememberSaveable(dateKey) { mutableStateOf(initialFocusOrderId) }
+    val listState = rememberLazyListState()
     val formatter = remember {
         NumberFormat.getNumberInstance(Locale.forLanguageTag("en-KE")).apply {
             minimumFractionDigits = 2
@@ -192,6 +200,15 @@ fun DayDetailScreen(
             isSearchExpanded = true
         }
     }
+    LaunchedEffect(dateKey, initialFocusOrderId) {
+        if (initialFocusOrderId != null) {
+            orderFilter = DayOrderFilter.All
+            searchQuery = ""
+            isSearchExpanded = false
+            pendingFocusOrderId = initialFocusOrderId
+            highlightedOrderId = initialFocusOrderId
+        }
+    }
     LaunchedEffect(pendingDeleteOrder?.id) {
         val order = pendingDeleteOrder ?: return@LaunchedEffect
         deleteAllocations = loadOrderPaymentAllocations(order.id)
@@ -220,33 +237,49 @@ fun DayDetailScreen(
             remember(orders, orderFilter, orderPaidAmounts, searchQuery, customerNames) {
                 derivedStateOf {
                     val normalizedQuery = searchQuery.trim().lowercase()
-                    orders.filter { order ->
+                    val filtered = orders.filter { order ->
                         val paidAmount = orderPaidAmounts[order.id] ?: BigDecimal.ZERO
+                        val paymentState = resolvePaymentState(order.totalAmount, paidAmount)
                         val matchesStatus =
                                 when (orderFilter) {
                                     DayOrderFilter.All -> true
-                                    DayOrderFilter.Unpaid ->
-                                            resolvePaymentState(order.totalAmount, paidAmount) ==
-                                                    PaymentState.UNPAID
-                                    DayOrderFilter.Partial ->
-                                            resolvePaymentState(order.totalAmount, paidAmount) ==
-                                                    PaymentState.PARTIAL
-                                    DayOrderFilter.Paid ->
-                                            resolvePaymentState(order.totalAmount, paidAmount) ==
-                                                    PaymentState.PAID
-                                    DayOrderFilter.Overpaid ->
-                                            resolvePaymentState(order.totalAmount, paidAmount) ==
-                                                    PaymentState.OVERPAID
+                                    DayOrderFilter.Due ->
+                                        paymentState == PaymentState.UNPAID || paymentState == PaymentState.PARTIAL
+                                    DayOrderFilter.NoPayment -> paymentState == PaymentState.UNPAID
+                                    DayOrderFilter.Partial -> paymentState == PaymentState.PARTIAL
+                                    DayOrderFilter.Paid -> paymentState == PaymentState.PAID
+                                    DayOrderFilter.Overpaid -> paymentState == PaymentState.OVERPAID
                                 }
                         if (!matchesStatus) return@filter false
                         if (normalizedQuery.isBlank()) return@filter true
                         val customerLabel =
                                 order.customerId?.let { customerNames[it] }.orEmpty().lowercase()
+                        val amountLabel = order.totalAmount.stripTrailingZeros().toPlainString().lowercase()
+                        val pickupLabel = plannerPickupDisplay(order.pickupTime).orEmpty().lowercase()
+                        val pickupRaw = order.pickupTime.orEmpty().lowercase()
                         order.notes.lowercase().contains(normalizedQuery) ||
-                                customerLabel.contains(normalizedQuery)
+                                customerLabel.contains(normalizedQuery) ||
+                                amountLabel.contains(normalizedQuery) ||
+                                pickupLabel.contains(normalizedQuery) ||
+                                pickupRaw.contains(normalizedQuery)
                     }
+                    sortOrdersForPlanner(filtered)
                 }
             }
+    LaunchedEffect(pendingFocusOrderId, filteredOrders) {
+        val targetOrderId = pendingFocusOrderId ?: return@LaunchedEffect
+        val targetIndex = filteredOrders.indexOfFirst { it.id == targetOrderId }
+        if (targetIndex < 0) {
+            return@LaunchedEffect
+        }
+        // First two items are the summary card and filter/search controls.
+        listState.animateScrollToItem(targetIndex + 2)
+        pendingFocusOrderId = null
+        delay(2200)
+        if (highlightedOrderId == targetOrderId) {
+            highlightedOrderId = null
+        }
+    }
     val onBackClick = {
         if (isEditorOpen) {
             isEditorOpen = false
@@ -326,8 +359,11 @@ fun DayDetailScreen(
                 }
             }
     ) { padding ->
-        LazyColumn(modifier = Modifier.padding(padding)) {
-            item { DaySummaryCard(date = date, dayTotal = dayTotal, stats = dayStats) }
+        LazyColumn(
+            state = listState,
+            modifier = Modifier.padding(padding)
+        ) {
+            item { DaySummaryCard(dayTotal = dayTotal, stats = dayStats) }
             if (orders.isNotEmpty()) {
                 item {
                     Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)) {
@@ -335,11 +371,13 @@ fun DayDetailScreen(
                                 options = dayOrderFilterOptions(orders.size, dayStats),
                                 selectedKey = orderFilter.name,
                                 onSelect = { selected ->
-                                    orderFilter = DayOrderFilter.valueOf(selected)
+                                    orderFilter =
+                                        runCatching { DayOrderFilter.valueOf(selected) }
+                                            .getOrDefault(DayOrderFilter.All)
                                 },
                                 showMoreAsIcon = true
                         )
-                        Spacer(Modifier.height(6.dp))
+                        Spacer(Modifier.height(4.dp))
                         val orderCountLabel =
                                 if (searchQuery.isBlank() && orderFilter == DayOrderFilter.All) {
                                     stringResource(R.string.day_orders_count, filteredOrders.size)
@@ -365,13 +403,14 @@ fun DayDetailScreen(
                                     onClick = {
                                         if (searchVisible) {
                                             isSearchExpanded = false
+                                            searchQuery = ""
                                         } else {
                                             isSearchExpanded = true
                                         }
                                     }
                             ) {
                                 Icon(imageVector = Icons.Filled.Search, contentDescription = null)
-                                Spacer(Modifier.width(6.dp))
+                                Spacer(Modifier.width(4.dp))
                                 Text(
                                         text =
                                                 if (searchVisible) {
@@ -388,7 +427,7 @@ fun DayDetailScreen(
                                 exit = shrinkVertically() + fadeOut()
                         ) {
                             Column {
-                                Spacer(Modifier.height(6.dp))
+                                Spacer(Modifier.height(4.dp))
                                 OutlinedTextField(
                                         value = searchQuery,
                                         onValueChange = { searchQuery = it },
@@ -398,7 +437,7 @@ fun DayDetailScreen(
                                         placeholder = {
                                             Text(
                                                     stringResource(
-                                                            R.string.day_search_notes_or_customer
+                                                            R.string.day_search_notes_customer_amount_pickup
                                                     )
                                             )
                                         },
@@ -452,7 +491,7 @@ fun DayDetailScreen(
                                     else -> null
                                 }
                         if (activeContextLabel != null) {
-                            Spacer(Modifier.height(6.dp))
+                            Spacer(Modifier.height(4.dp))
                             Surface(
                                     color = MaterialTheme.colorScheme.surfaceVariant,
                                     shape = RoundedCornerShape(999.dp)
@@ -482,31 +521,50 @@ fun DayDetailScreen(
             } else {
                 items(items = filteredOrders, key = { it.id }) { order ->
                     val customerLabel =
-                            order.customerId?.let { customerNames[it] }
-                                    ?: stringResource(R.string.day_no_customer)
+                            order.customerId?.let { customerNames[it] }?.takeIf { it.isNotBlank() }
                     val paidAmount = orderPaidAmounts[order.id] ?: BigDecimal.ZERO
                     val paymentState = resolvePaymentState(order.totalAmount, paidAmount)
-                    OrderListItem(
-                            order = order,
-                            customerLabel = customerLabel,
-                            paidAmount = paidAmount,
-                            paymentState = paymentState,
-                            onEdit = {
-                                notes = order.notes
-                                totalText = order.totalAmount.toPlainString()
-                                editingOrderId = order.id
-                                notesError = null
-                                totalError = null
-                                customerError = null
-                                isEditorOpen = true
-                            },
-                            onDelete = { pendingDeleteOrder = order },
-                            onPaymentHistory = { onOrderPaymentHistory(order.id) },
-                            onReceivePayment = { onReceivePayment(order) }
-                    )
+                    val dismissState =
+                            rememberSwipeToDismissBoxState(
+                                    confirmValueChange = {
+                                        when (it) {
+                                            SwipeToDismissBoxValue.EndToStart -> {
+                                                pendingDeleteOrder = order
+                                                false
+                                            }
+                                            SwipeToDismissBoxValue.StartToEnd,
+                                            SwipeToDismissBoxValue.Settled -> false
+                                        }
+                                    }
+                            )
+                    SwipeToDismissBox(
+                            state = dismissState,
+                            enableDismissFromStartToEnd = false,
+                            enableDismissFromEndToStart = true,
+                            backgroundContent = { DayDeleteSwipeBackground(dismissState) }
+                    ) {
+                        OrderListItem(
+                                order = order,
+                                customerLabel = customerLabel,
+                                paidAmount = paidAmount,
+                                paymentState = paymentState,
+                                isFocused = highlightedOrderId == order.id,
+                                onEdit = {
+                                    notes = order.notes
+                                    totalText = order.totalAmount.toPlainString()
+                                    editingOrderId = order.id
+                                    notesError = null
+                                    totalError = null
+                                    customerError = null
+                                    isEditorOpen = true
+                                },
+                                onPaymentHistory = { onOrderPaymentHistory(order.id) },
+                                onReceivePayment = { onReceivePayment(order) }
+                        )
+                    }
                 }
             }
-            item { Spacer(Modifier.height(80.dp)) }
+            item { Spacer(Modifier.height(72.dp)) }
         }
     }
     DayOrderEditorDialog(
@@ -524,7 +582,6 @@ fun DayDetailScreen(
             customerError = customerError,
             formatter = formatter,
             amountRegistry = amountRegistry,
-            voiceCalcAccess = voiceCalcAccess,
             voiceRouter = voiceRouter,
             onSaveOrder = onSaveOrder,
             onDraftChange = onDraftChange,
@@ -560,4 +617,39 @@ fun DayDetailScreen(
             onDeleteOrder = onDeleteOrder,
             onDeleteOrderWithPayments = onDeleteOrderWithPayments
     )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun DayDeleteSwipeBackground(dismissState: SwipeToDismissBoxState) {
+    if (dismissState.dismissDirection != SwipeToDismissBoxValue.EndToStart) return
+    Row(
+            modifier =
+                    Modifier.fillMaxWidth()
+                            .padding(horizontal = 24.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+    ) {
+        Spacer(modifier = Modifier.weight(1f))
+        Surface(
+                color = MaterialTheme.colorScheme.errorContainer,
+                shape = RoundedCornerShape(999.dp)
+        ) {
+            Row(
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+            ) {
+                Icon(
+                        imageVector = Icons.Outlined.Delete,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onErrorContainer
+                )
+                Spacer(Modifier.width(6.dp))
+                Text(
+                        text = stringResource(R.string.day_delete_order),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onErrorContainer
+                )
+            }
+        }
+    }
 }

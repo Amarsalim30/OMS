@@ -4,6 +4,7 @@ import java.math.BigDecimal
 import java.math.RoundingMode
 import java.text.NumberFormat
 import java.text.SimpleDateFormat
+import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 
@@ -14,6 +15,11 @@ fun formatKes(amount: BigDecimal): String {
 }
 
 fun formatDateTime(epochMillis: Long): String {
-    val formatter = SimpleDateFormat("dd MMM, HH:mm", Locale.getDefault())
-    return formatter.format(Date(epochMillis))
+    val dateFormatter = SimpleDateFormat("dd MMM", Locale.getDefault())
+    val calendar = Calendar.getInstance().apply { timeInMillis = epochMillis }
+    val timePart = formatHourMinuteAmPm(
+        hour24 = calendar.get(Calendar.HOUR_OF_DAY),
+        minute = calendar.get(Calendar.MINUTE)
+    )
+    return "${dateFormatter.format(Date(epochMillis))}, $timePart"
 }

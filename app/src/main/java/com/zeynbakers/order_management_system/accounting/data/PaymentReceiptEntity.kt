@@ -3,12 +3,22 @@
 package com.zeynbakers.order_management_system.accounting.data
 
 import androidx.room.Entity
+import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
+import com.zeynbakers.order_management_system.customer.data.CustomerEntity
 import java.math.BigDecimal
 
 @Entity(
     tableName = "payment_receipts",
+    foreignKeys = [
+        ForeignKey(
+            entity = CustomerEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["customerId"],
+            onDelete = ForeignKey.SET_NULL
+        )
+    ],
     indices = [
         Index(value = ["transactionCode"], unique = true),
         Index(value = ["hash"], unique = true),

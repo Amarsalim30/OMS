@@ -9,19 +9,19 @@ class PaymentIntakeHistoryViewModelTest {
 
     @Test
     fun `historyLoadErrorMessageOrNull returns null for cancellation`() {
-        assertNull(historyLoadErrorMessageOrNull(CancellationException("cancelled")))
+        assertNull(historyLoadErrorMessageOrNull(CancellationException("cancelled"), "fallback"))
     }
 
     @Test
     fun `historyLoadErrorMessageOrNull returns throwable message for errors`() {
-        assertEquals("boom", historyLoadErrorMessageOrNull(IllegalStateException("boom")))
+        assertEquals("boom", historyLoadErrorMessageOrNull(IllegalStateException("boom"), "fallback"))
     }
 
     @Test
     fun `historyLoadErrorMessageOrNull returns fallback message when missing`() {
         assertEquals(
-            "Unable to load payment history.",
-            historyLoadErrorMessageOrNull(IllegalStateException())
+            "fallback",
+            historyLoadErrorMessageOrNull(IllegalStateException(), "fallback")
         )
     }
 }

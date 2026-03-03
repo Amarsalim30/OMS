@@ -2,14 +2,31 @@
 
 package com.zeynbakers.order_management_system.order.data
 
-import androidx.room.*
+import androidx.room.Entity
+import androidx.room.ForeignKey
+import androidx.room.Index
+import androidx.room.PrimaryKey
+import com.zeynbakers.order_management_system.customer.data.CustomerEntity
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.Clock
 import java.math.BigDecimal
 
 @Entity(
     tableName = "orders",
-    indices = [Index("orderDate"), Index("customerId")]
+    foreignKeys = [
+        ForeignKey(
+            entity = CustomerEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["customerId"],
+            onDelete = ForeignKey.SET_NULL
+        )
+    ],
+    indices = [
+        Index("orderDate"),
+        Index("customerId"),
+        Index(value = ["orderDate", "createdAt", "id"]),
+        Index(value = ["customerId", "orderDate", "createdAt", "id"])
+    ]
 )
 data class OrderEntity(
     @PrimaryKey(autoGenerate = true)

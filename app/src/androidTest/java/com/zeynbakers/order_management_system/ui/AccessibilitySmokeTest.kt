@@ -330,7 +330,6 @@ class AccessibilitySmokeTest {
                 MaterialTheme {
                     CustomerDetailScreen(
                         customer = customer,
-                        ledger = listOf(ledgerEntry),
                         balance = BigDecimal("1000.00"),
                         financeSummary = CustomerFinanceSummary(
                             orderTotal = BigDecimal("1000.00"),
@@ -339,7 +338,6 @@ class AccessibilitySmokeTest {
                             netBalance = BigDecimal("1000.00")
                         ),
                         orders = listOf(orderUi),
-                        orderLabels = mapOf(order.id to "Order #5"),
                         onBack = {},
                         onPaymentHistory = {},
                         onOpenStatement = {},

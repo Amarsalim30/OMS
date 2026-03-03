@@ -16,10 +16,10 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -49,6 +49,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -73,7 +74,8 @@ internal fun CalendarTopAppBar(
     onMonthPickerClick: () -> Unit,
     onToday: () -> Unit,
     onSummaryClick: () -> Unit,
-    onMoreClick: () -> Unit
+    onMoreClick: () -> Unit,
+    moreButtonModifier: Modifier = Modifier
 ) {
     CenterAlignedTopAppBar(
         title = {
@@ -118,11 +120,14 @@ internal fun CalendarTopAppBar(
                         textAlign = TextAlign.Center,
                         modifier = Modifier
                             .fillMaxSize()
-                            .padding(top = 5.dp)
+                            .padding(top = 7.dp)
                     )
                 }
             }
-            IconButton(onClick = onMoreClick) {
+            IconButton(
+                onClick = onMoreClick,
+                modifier = moreButtonModifier
+            ) {
                 Icon(
                     imageVector = Icons.Filled.MoreVert,
                     contentDescription = stringResource(R.string.action_more)
@@ -189,7 +194,7 @@ internal fun MonthPickerSheet(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                items(monthList) { month ->
+                items(monthList, key = { it.ordinal }) { month ->
                     val monthNumber = month.ordinal + 1
                     val isSelected = pickerYear == initialYear && monthNumber == initialMonth
                     val label = monthLabels.getOrNull(monthNumber - 1)?.takeIf { it.isNotBlank() }
@@ -448,11 +453,14 @@ private fun LegendItem(label: String, state: PaymentState) {
 @Composable
 internal fun WeekdayHeaderRow(weekStart: Int) {
     val locale = Locale.getDefault()
-    val dayLabels = DateFormatSymbols(locale).shortWeekdays
-    val dayOrder = (0 until 7).map { offset ->
-        ((weekStart - 1 + offset) % 7) + 1
+    val labels = remember(locale, weekStart) {
+        val dayLabels = DateFormatSymbols(locale).shortWeekdays
+        val dayOrder =
+            (0 until 7).map { offset ->
+                ((weekStart - 1 + offset) % 7) + 1
+            }
+        dayOrder.map { dayLabels[it] }
     }
-    val labels = dayOrder.map { dayLabels[it] }
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -460,7 +468,7 @@ internal fun WeekdayHeaderRow(weekStart: Int) {
         horizontalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         labels.forEachIndexed { index, label ->
-            val dayIndex = dayOrder[index]
+            val dayIndex = ((weekStart - 1 + index) % 7) + 1
             val color =
                 when (dayIndex) {
                     Calendar.SATURDAY -> MaterialTheme.colorScheme.primary
@@ -485,11 +493,13 @@ internal fun MonthGrid(
     onSelectDate: (LocalDate) -> Unit,
     onOpenDay: (LocalDate) -> Unit,
     onQuickAdd: (LocalDate) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onDayBoundsChanged: ((LocalDate, Rect) -> Unit)? = null
 ) {
     val verticalPadding = 4.dp
     val horizontalPadding = 10.dp
     val spacing = 3.dp
+    val weeks = remember(days) { days.chunked(7) }
     BoxWithConstraints(modifier = modifier) {
         val rows = (days.size / 7).coerceAtLeast(1)
         val availableHeight = maxHeight - (verticalPadding * 2) - (spacing * (rows - 1))
@@ -497,26 +507,39 @@ internal fun MonthGrid(
         val cellHeight = (availableHeight / rows)
             .coerceAtMost(sixRowHeight)
             .coerceAtLeast(48.dp)
-        LazyVerticalGrid(
-            columns = GridCells.Fixed(7),
-            modifier = Modifier.fillMaxSize(),
-            userScrollEnabled = true,
-            contentPadding = PaddingValues(horizontal = horizontalPadding, vertical = verticalPadding),
-            horizontalArrangement = Arrangement.spacedBy(spacing),
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = horizontalPadding, vertical = verticalPadding),
             verticalArrangement = Arrangement.spacedBy(spacing)
         ) {
-            items(items = days, key = { it.date.toString() }) { day ->
-                DayCell(
-                    day = day,
-                    isSelected = selectedDate == day.date,
-                    onSelectDate = onSelectDate,
-                    onOpenDay = onOpenDay,
-                    onQuickAdd = onQuickAdd,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(cellHeight)
-                        .heightIn(min = 48.dp)
-                )
+            weeks.forEach { week ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(spacing)
+                ) {
+                    week.forEach { day ->
+                        DayCell(
+                            day = day,
+                            isSelected = selectedDate == day.date,
+                            onSelectDate = onSelectDate,
+                            onOpenDay = onOpenDay,
+                            onQuickAdd = onQuickAdd,
+                            onBoundsChanged = { bounds -> onDayBoundsChanged?.invoke(day.date, bounds) },
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(cellHeight)
+                                .heightIn(min = 48.dp)
+                        )
+                    }
+                    repeat((7 - week.size).coerceAtLeast(0)) {
+                        Spacer(
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(cellHeight)
+                        )
+                    }
+                }
             }
         }
     }

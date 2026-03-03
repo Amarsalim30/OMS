@@ -20,7 +20,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -42,7 +45,8 @@ internal fun DayCell(
     onSelectDate: (LocalDate) -> Unit,
     onOpenDay: (LocalDate) -> Unit,
     onQuickAdd: (LocalDate) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    onBoundsChanged: ((Rect) -> Unit)? = null
 ) {
     val hasOrders = day.orderCount > 0
     val markerStates = remember(day.orderStates, day.orderCount, day.paymentState) {
@@ -51,8 +55,11 @@ internal fun DayCell(
     val dayDescription = remember(day, markerStates, isSelected) {
         buildDayContentDescription(day, markerStates, isSelected)
     }
-    val dayTag = remember(day) { "day-cell-${day.date}" }
-    val compactTotal = if (hasOrders) formatKesCompact(day.totalAmount) else null
+    val dayTag = remember(day.date) { "day-cell-${day.date}" }
+    val compactTotal =
+        remember(day.totalAmount, hasOrders) {
+            if (hasOrders) formatKesCompact(day.totalAmount) else null
+        }
     val statusTextColor =
         when (day.paymentState) {
             PaymentState.UNPAID -> calendarPaymentStateColor(PaymentState.UNPAID)
@@ -98,6 +105,9 @@ internal fun DayCell(
     Surface(
         modifier = modifier
             .testTag(dayTag)
+            .onGloballyPositioned { coordinates ->
+                onBoundsChanged?.invoke(coordinates.boundsInRoot())
+            }
             .semantics(mergeDescendants = true) {
                 contentDescription = dayDescription
                 role = Role.Button

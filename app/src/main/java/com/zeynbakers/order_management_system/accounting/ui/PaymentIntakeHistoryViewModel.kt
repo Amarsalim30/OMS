@@ -1,7 +1,10 @@
 ﻿package com.zeynbakers.order_management_system.accounting.ui
 
+import android.content.Context
+import androidx.annotation.StringRes
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.zeynbakers.order_management_system.R
 import com.zeynbakers.order_management_system.accounting.data.PaymentAllocationStatus
 import com.zeynbakers.order_management_system.accounting.data.PaymentAllocationType
 import com.zeynbakers.order_management_system.accounting.data.EntryType
@@ -73,7 +76,10 @@ data class MoveOrderOption(
     val label: String
 )
 
-class PaymentIntakeHistoryViewModel(private val database: AppDatabase) : ViewModel() {
+class PaymentIntakeHistoryViewModel(
+    private val database: AppDatabase,
+    private val appContext: Context
+) : ViewModel() {
     private val receiptDao = database.paymentReceiptDao()
     private val allocationDao = database.paymentAllocationDao()
     private val customerDao = database.customerDao()
@@ -103,7 +109,11 @@ class PaymentIntakeHistoryViewModel(private val database: AppDatabase) : ViewMod
             } catch (t: CancellationException) {
                 throw t
             } catch (t: Exception) {
-                _error.value = historyLoadErrorMessageOrNull(t)
+                _error.value =
+                    historyLoadErrorMessageOrNull(
+                        t,
+                        appContext.getString(R.string.payment_history_load_failed)
+                    )
             } finally {
                 _isLoading.value = false
             }
@@ -114,9 +124,9 @@ class PaymentIntakeHistoryViewModel(private val database: AppDatabase) : ViewMod
         return withContext(Dispatchers.IO) {
             val applied = receiptProcessor.voidReceipt(receiptId, reason)
             if (applied) {
-                PaymentHistoryActionResult(true, "Payment voided")
+                PaymentHistoryActionResult(true, text(R.string.payment_history_action_voided))
             } else {
-                PaymentHistoryActionResult(false, "Payment not found or already voided")
+                PaymentHistoryActionResult(false, text(R.string.payment_history_action_void_failed))
             }
         }
     }
@@ -131,7 +141,7 @@ class PaymentIntakeHistoryViewModel(private val database: AppDatabase) : ViewMod
     ): PaymentHistoryActionResult {
         return withContext(Dispatchers.IO) {
             val receipt = receiptDao.getById(receiptId)
-                ?: return@withContext PaymentHistoryActionResult(false, "Payment not found")
+                ?: return@withContext PaymentHistoryActionResult(false, text(R.string.payment_history_action_not_found))
             val updated =
                 receiptProcessor.reallocateReceipt(
                     receiptId = receiptId,
@@ -139,9 +149,9 @@ class PaymentIntakeHistoryViewModel(private val database: AppDatabase) : ViewMod
                     descriptionBase = buildReceiptDescription(receipt)
                 )
             if (updated) {
-                PaymentHistoryActionResult(true, "Payment moved")
+                PaymentHistoryActionResult(true, text(R.string.payment_history_action_moved))
             } else {
-                PaymentHistoryActionResult(false, "Unable to move payment")
+                PaymentHistoryActionResult(false, text(R.string.payment_history_action_move_failed))
             }
         }
     }
@@ -180,27 +190,29 @@ class PaymentIntakeHistoryViewModel(private val database: AppDatabase) : ViewMod
     suspend fun applyReceiptToOldestOrders(receiptId: Long): PaymentHistoryActionResult {
         return withContext(Dispatchers.IO) {
             val receipt = receiptDao.getById(receiptId)
-                ?: return@withContext PaymentHistoryActionResult(false, "Payment not found")
+                ?: return@withContext PaymentHistoryActionResult(false, text(R.string.payment_history_action_not_found))
             if (receipt.status != PaymentReceiptStatus.UNAPPLIED) {
-                return@withContext PaymentHistoryActionResult(false, "Payment already used")
+                return@withContext PaymentHistoryActionResult(false, text(R.string.payment_history_action_already_used))
             }
             val customerId = receipt.customerId
-                ?: return@withContext PaymentHistoryActionResult(false, "Missing customer")
+                ?: return@withContext PaymentHistoryActionResult(false, text(R.string.payment_history_action_missing_customer))
             receiptProcessor.createAndApplyReceipt(
                 receipt = receipt,
                 descriptionBase = buildReceiptDescription(receipt),
                 allocation = ReceiptAllocation.OldestOrders(customerId)
             )
-            PaymentHistoryActionResult(true, "Used on oldest orders")
+            PaymentHistoryActionResult(true, text(R.string.payment_history_action_used_oldest))
         }
     }
 
     private suspend fun buildHistory(filter: PaymentHistoryFilter): HistoryResult {
         val receipts =
             when (filter) {
-                PaymentHistoryFilter.All -> receiptDao.getAll()
-                is PaymentHistoryFilter.Customer -> receiptDao.getByCustomerId(filter.customerId)
-                is PaymentHistoryFilter.Order -> receiptDao.getByOrderId(filter.orderId)
+                PaymentHistoryFilter.All -> receiptDao.getAllLimited(HISTORY_MAX_RECEIPTS)
+                is PaymentHistoryFilter.Customer ->
+                    receiptDao.getByCustomerIdLimited(filter.customerId, HISTORY_MAX_RECEIPTS)
+                is PaymentHistoryFilter.Order ->
+                    receiptDao.getByOrderIdLimited(filter.orderId, HISTORY_MAX_RECEIPTS)
             }
 
         val header = buildHeader(filter)
@@ -314,14 +326,17 @@ class PaymentIntakeHistoryViewModel(private val database: AppDatabase) : ViewMod
                 val customer = customerDao.getById(filter.customerId)
                 if (customer == null) {
                     PaymentHistoryHeader(
-                        title = "Customer payments",
-                        subtitle = "Customer #${filter.customerId}"
+                        title = text(R.string.payment_history_header_customer),
+                        subtitle = text(R.string.payment_history_header_customer_id, filter.customerId)
                     )
                 } else {
-                    val subtitle = customer.phone.takeIf { it.isNotBlank() }?.let { "${customer.name} - $it" }
+                    val subtitle =
+                        customer.phone.takeIf { it.isNotBlank() }?.let {
+                            text(R.string.payment_history_header_customer_phone, customer.name, it)
+                        }
                         ?: customer.name
                     PaymentHistoryHeader(
-                        title = "Customer payments",
+                        title = text(R.string.payment_history_header_customer),
                         subtitle = subtitle
                     )
                 }
@@ -330,7 +345,7 @@ class PaymentIntakeHistoryViewModel(private val database: AppDatabase) : ViewMod
                 val order = orderDao.getOrderById(filter.orderId)
                 val label =
                     if (order == null) {
-                        "Order ID ${filter.orderId}"
+                        text(R.string.payment_history_header_order_id, filter.orderId)
                     } else {
                         formatOrderLabelWithId(
                             orderId = order.id,
@@ -342,7 +357,7 @@ class PaymentIntakeHistoryViewModel(private val database: AppDatabase) : ViewMod
                     }
                 val subtitle = label
                 PaymentHistoryHeader(
-                    title = "Order payments",
+                    title = text(R.string.payment_history_header_order),
                     subtitle = subtitle
                 )
             }
@@ -388,9 +403,17 @@ class PaymentIntakeHistoryViewModel(private val database: AppDatabase) : ViewMod
         val header: PaymentHistoryHeader?,
         val items: List<PaymentHistoryItemUi>
     )
+
+    companion object {
+        private const val HISTORY_MAX_RECEIPTS = 500
+    }
+
+    private fun text(@StringRes resId: Int, vararg args: Any): String {
+        return appContext.getString(resId, *args)
+    }
 }
 
-internal fun historyLoadErrorMessageOrNull(throwable: Throwable): String? {
+internal fun historyLoadErrorMessageOrNull(throwable: Throwable, fallback: String): String? {
     if (throwable is CancellationException) return null
-    return throwable.message ?: "Unable to load payment history."
+    return throwable.message ?: fallback
 }

@@ -107,28 +107,23 @@ fun MpesaImportScreen(
         }
     }
 
-    val totalDetected = transactions.size
-    val duplicateCount = transactions.count { it.duplicateState != DuplicateState.NONE }
-    val needsMatchCount =
-        transactions.count { it.duplicateState == DuplicateState.NONE && !it.canApply() }
-    val readyItems =
-        transactions.filter { it.duplicateState == DuplicateState.NONE && it.canApply() }
-    val readyCount = readyItems.size
-    val readyAmount =
-        readyItems.fold(BigDecimal.ZERO) { acc, item -> acc + item.amount }
-    val rawIsLarge = rawText.lineSequence().count() > 3 || rawText.length > 220
+    val intakeStats = remember(transactions) { transactions.toIntakeStats() }
+    val totalDetected = intakeStats.totalDetected
+    val duplicateCount = intakeStats.duplicatesCount
+    val needsMatchCount = intakeStats.needsCount
+    val readyCount = intakeStats.readyCount
+    val readyAmount = intakeStats.readyAmount
+    val selectedCount = intakeStats.selectedCount
+    val selectedReadyCount = intakeStats.selectedReadyCount
+    val selectedReadyAmount = intakeStats.selectedReadyAmount
+    val allCount = intakeStats.totalDetected
+    val needsCount = intakeStats.needsCount
+    val duplicatesCount = intakeStats.duplicatesCount
+    val rawIsLarge = remember(rawText) { rawText.lineSequence().count() > 3 || rawText.length > 220 }
     val rawPreviewLine =
-        rawText.lineSequence().firstOrNull { it.isNotBlank() }?.trim() ?: rawText.trim()
-    val allCount = transactions.size
-    val needsCount =
-        transactions.count { it.duplicateState == DuplicateState.NONE && !it.canApply() }
-    val duplicatesCount = transactions.count { it.duplicateState != DuplicateState.NONE }
-    val selectedCount = transactions.count { it.selected }
-    val selectedReadyItems =
-        transactions.filter { it.selected && it.duplicateState == DuplicateState.NONE && it.canApply() }
-    val selectedReadyCount = selectedReadyItems.size
-    val selectedReadyAmount =
-        selectedReadyItems.fold(BigDecimal.ZERO) { acc, item -> acc + item.amount }
+        remember(rawText) {
+            rawText.lineSequence().firstOrNull { it.isNotBlank() }?.trim() ?: rawText.trim()
+        }
     val filteredTransactions =
         remember(transactions, intakeFilter) {
             when (intakeFilter) {
@@ -481,4 +476,57 @@ private enum class IntakeFilter(val labelRes: Int) {
     Needs(R.string.money_filter_needs_short),
     Duplicates(R.string.money_filter_duplicates_short),
     Selected(R.string.money_filter_selected_short)
+}
+
+private data class IntakeStats(
+    val totalDetected: Int,
+    val duplicatesCount: Int,
+    val needsCount: Int,
+    val readyCount: Int,
+    val readyAmount: BigDecimal,
+    val selectedCount: Int,
+    val selectedReadyCount: Int,
+    val selectedReadyAmount: BigDecimal
+)
+
+private fun List<MpesaTransactionUi>.toIntakeStats(): IntakeStats {
+    var duplicatesCount = 0
+    var needsCount = 0
+    var readyCount = 0
+    var readyAmount = BigDecimal.ZERO
+    var selectedCount = 0
+    var selectedReadyCount = 0
+    var selectedReadyAmount = BigDecimal.ZERO
+
+    forEach { item ->
+        val isDuplicate = item.duplicateState != DuplicateState.NONE
+        val canApply = item.canApply()
+        if (isDuplicate) {
+            duplicatesCount += 1
+        } else if (!canApply) {
+            needsCount += 1
+        } else {
+            readyCount += 1
+            readyAmount += item.amount
+        }
+
+        if (item.selected) {
+            selectedCount += 1
+            if (!isDuplicate && canApply) {
+                selectedReadyCount += 1
+                selectedReadyAmount += item.amount
+            }
+        }
+    }
+
+    return IntakeStats(
+        totalDetected = size,
+        duplicatesCount = duplicatesCount,
+        needsCount = needsCount,
+        readyCount = readyCount,
+        readyAmount = readyAmount,
+        selectedCount = selectedCount,
+        selectedReadyCount = selectedReadyCount,
+        selectedReadyAmount = selectedReadyAmount
+    )
 }

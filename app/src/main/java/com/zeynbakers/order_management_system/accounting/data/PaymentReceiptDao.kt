@@ -28,8 +28,24 @@ interface PaymentReceiptDao {
     @Query("SELECT * FROM payment_receipts ORDER BY receivedAt DESC, id DESC")
     suspend fun getAll(): List<PaymentReceiptEntity>
 
+    @Query("SELECT * FROM payment_receipts ORDER BY receivedAt DESC, id DESC LIMIT :limit")
+    suspend fun getAllLimited(limit: Int): List<PaymentReceiptEntity>
+
     @Query("SELECT * FROM payment_receipts WHERE customerId = :customerId ORDER BY receivedAt DESC, id DESC")
     suspend fun getByCustomerId(customerId: Long): List<PaymentReceiptEntity>
+
+    @Query(
+        """
+        SELECT * FROM payment_receipts
+        WHERE customerId = :customerId
+        ORDER BY receivedAt DESC, id DESC
+        LIMIT :limit
+        """
+    )
+    suspend fun getByCustomerIdLimited(customerId: Long, limit: Int): List<PaymentReceiptEntity>
+
+    @Query("SELECT COUNT(*) FROM payment_receipts WHERE customerId = :customerId")
+    suspend fun countByCustomerId(customerId: Long): Int
 
     @Query(
         """
@@ -41,6 +57,18 @@ interface PaymentReceiptDao {
         """
     )
     suspend fun getByOrderId(orderId: Long): List<PaymentReceiptEntity>
+
+    @Query(
+        """
+        SELECT DISTINCT r.*
+        FROM payment_receipts r
+        INNER JOIN payment_allocations a ON a.receiptId = r.id
+        WHERE a.orderId = :orderId
+        ORDER BY r.receivedAt DESC, r.id DESC
+        LIMIT :limit
+        """
+    )
+    suspend fun getByOrderIdLimited(orderId: Long, limit: Int): List<PaymentReceiptEntity>
 
     @Query("SELECT * FROM payment_receipts WHERE transactionCode IN (:codes)")
     suspend fun getByCodes(codes: List<String>): List<PaymentReceiptEntity>

@@ -2,6 +2,7 @@ package com.zeynbakers.order_management_system
 
 import androidx.compose.foundation.layout.Column
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -58,6 +59,41 @@ internal fun WhatsNewDialog(
         confirmButton = {
             TextButton(onClick = onDismiss) {
                 Text(stringResource(R.string.whats_new_action))
+            }
+        }
+    )
+}
+
+@Composable
+internal fun SharedPaymentTrustDialog(
+    previewText: String,
+    onDismiss: () -> Unit,
+    onConfirm: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(R.string.share_payment_trust_title)) },
+        text = {
+            Column {
+                Text(stringResource(R.string.share_payment_trust_body))
+                Text(
+                    text = stringResource(R.string.share_payment_trust_preview_label),
+                    style = MaterialTheme.typography.labelMedium
+                )
+                Text(
+                    text = previewText,
+                    style = MaterialTheme.typography.bodySmall
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onConfirm) {
+                Text(stringResource(R.string.share_payment_trust_confirm))
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text(stringResource(R.string.share_payment_trust_dismiss))
             }
         }
     )

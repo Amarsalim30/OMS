@@ -61,4 +61,33 @@ class CustomerListActionsTest {
 
         composeRule.onNodeWithText("More filters").assert(SemanticsMatcher("exists") { true })
     }
+
+    @Test
+    fun settledCustomerWithOrders_isVisibleByDefault() {
+        composeRule.setContent {
+            MaterialTheme {
+                CustomerListScreen(
+                    query = "",
+                    summaries =
+                        listOf(
+                            CustomerAccountSummary(
+                                customerId = 2L,
+                                name = "Settled With Orders",
+                                phone = "0711111111",
+                                billed = BigDecimal.ZERO,
+                                paid = BigDecimal.ZERO,
+                                balance = BigDecimal.ZERO,
+                                hasOrders = true
+                            )
+                        ),
+                    onQueryChange = {},
+                    onCustomerClick = {},
+                    onBack = {},
+                    showBack = false
+                )
+            }
+        }
+
+        composeRule.onNodeWithText("Settled With Orders").assert(SemanticsMatcher("exists") { true })
+    }
 }

@@ -6,6 +6,8 @@ import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
+import com.zeynbakers.order_management_system.customer.data.CustomerEntity
+import com.zeynbakers.order_management_system.order.data.OrderEntity
 import java.math.BigDecimal
 
 @Entity(
@@ -16,13 +18,38 @@ import java.math.BigDecimal
             parentColumns = ["id"],
             childColumns = ["receiptId"],
             onDelete = ForeignKey.CASCADE
+        ),
+        ForeignKey(
+            entity = OrderEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["orderId"],
+            onDelete = ForeignKey.SET_NULL
+        ),
+        ForeignKey(
+            entity = CustomerEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["customerId"],
+            onDelete = ForeignKey.SET_NULL
+        ),
+        ForeignKey(
+            entity = AccountEntryEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["accountEntryId"],
+            onDelete = ForeignKey.SET_NULL
+        ),
+        ForeignKey(
+            entity = AccountEntryEntity::class,
+            parentColumns = ["id"],
+            childColumns = ["reversalEntryId"],
+            onDelete = ForeignKey.SET_NULL
         )
     ],
     indices = [
         Index("receiptId"),
         Index("orderId"),
         Index("customerId"),
-        Index("accountEntryId")
+        Index("accountEntryId"),
+        Index("reversalEntryId")
     ]
 )
 data class PaymentAllocationEntity(

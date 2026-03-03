@@ -24,6 +24,12 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Sort
@@ -33,6 +39,7 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.outlined.Person
+import androidx.compose.material.icons.outlined.Sync
 import androidx.compose.material3.Button
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.DropdownMenu
@@ -53,6 +60,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
@@ -158,24 +166,73 @@ internal fun CustomerListControlRow(
     showInactive: Boolean,
     onFilterClick: () -> Unit,
     onSortClick: () -> Unit,
+    onSyncClick: () -> Unit,
+    isSyncing: Boolean,
+    showSyncAction: Boolean,
+    modifier: Modifier = Modifier,
 ) {
+    val syncSpinTransition = rememberInfiniteTransition(label = "customer_sync_spin")
+    val syncIconRotation =
+        syncSpinTransition.animateFloat(
+            initialValue = 0f,
+            targetValue = 360f,
+            animationSpec =
+                infiniteRepeatable(
+                    animation = tween(durationMillis = 900, easing = LinearEasing),
+                    repeatMode = RepeatMode.Restart
+                ),
+            label = "customer_sync_icon_rotation"
+        ).value
     Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        ControlIconButton(
-            icon = Icons.Filled.Tune,
-            contentDescription = stringResource(R.string.action_more_filters),
-            active = selectedFilter != CustomerFilter.All || !hideZeroBalances || showInactive,
-            onClick = onFilterClick
-        )
-        ControlIconButton(
-            icon = Icons.AutoMirrored.Filled.Sort,
-            contentDescription = stringResource(R.string.action_sort),
-            active = selectedSort != CustomerSort.BalanceDesc,
-            onClick = onSortClick
-        )
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            ControlIconButton(
+                icon = Icons.Filled.Tune,
+                contentDescription = stringResource(R.string.action_more_filters),
+                active = selectedFilter != CustomerFilter.All || !hideZeroBalances || showInactive,
+                onClick = onFilterClick
+            )
+            ControlIconButton(
+                icon = Icons.AutoMirrored.Filled.Sort,
+                contentDescription = stringResource(R.string.action_sort),
+                active = selectedSort != CustomerSort.BalanceDesc,
+                onClick = onSortClick
+            )
+        }
+        if (showSyncAction) {
+            TextButton(
+                onClick = onSyncClick,
+                enabled = !isSyncing,
+                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.Sync,
+                    contentDescription = null,
+                    modifier =
+                        Modifier
+                            .size(18.dp)
+                            .graphicsLayer {
+                                rotationZ = if (isSyncing) syncIconRotation else 0f
+                            }
+                )
+                Spacer(Modifier.width(4.dp))
+                Text(
+                    text =
+                        if (isSyncing) {
+                            stringResource(R.string.customer_syncing_contacts)
+                        } else {
+                            stringResource(R.string.customer_sync_contacts)
+                        },
+                    maxLines = 1
+                )
+            }
+        }
     }
 }
 
@@ -482,9 +539,30 @@ private fun CompactBalanceChip(balance: BigDecimal) {
 internal fun EmptyCustomersState(
         isSearching: Boolean,
         hasActiveFilters: Boolean,
+        hasAnyCustomers: Boolean,
+        showImportedNoOrdersState: Boolean,
         onClearFilters: () -> Unit,
-        onAddCustomer: () -> Unit
+        onAddCustomer: () -> Unit,
+        onSyncContacts: () -> Unit,
+        onRevealCustomers: () -> Unit
 ) {
+    val titleText =
+            when {
+                isSearching -> stringResource(R.string.customer_no_customers_found)
+                hasActiveFilters -> stringResource(R.string.customer_no_customers_for_filters)
+                showImportedNoOrdersState -> stringResource(R.string.customer_no_orders_for_imported_title)
+                hasAnyCustomers -> stringResource(R.string.customer_no_customers_for_filters)
+                else -> stringResource(R.string.customer_no_customers_yet)
+            }
+    val bodyText =
+            when {
+                isSearching -> stringResource(R.string.customer_try_different_search)
+                hasActiveFilters -> stringResource(R.string.customer_adjust_or_clear_filters)
+                showImportedNoOrdersState -> stringResource(R.string.customer_no_orders_for_imported_body)
+                hasAnyCustomers -> stringResource(R.string.customer_adjust_or_clear_filters)
+                else -> stringResource(R.string.customer_import_contacts_first)
+            }
+
     Column(
             modifier = Modifier.fillMaxWidth().padding(top = 20.dp),
             horizontalAlignment = Alignment.CenterHorizontally
@@ -497,26 +575,12 @@ internal fun EmptyCustomersState(
         )
         Spacer(Modifier.height(6.dp))
         Text(
-                text =
-                        if (isSearching) {
-                            stringResource(R.string.customer_no_customers_found)
-                        } else if (hasActiveFilters) {
-                            stringResource(R.string.customer_no_customers_for_filters)
-                        } else {
-                            stringResource(R.string.customer_no_customers_yet)
-                        },
+                text = titleText,
                 style = MaterialTheme.typography.titleMedium
         )
         Spacer(Modifier.height(6.dp))
         Text(
-                text =
-                        if (isSearching) {
-                            stringResource(R.string.customer_try_different_search)
-                        } else if (hasActiveFilters) {
-                            stringResource(R.string.customer_adjust_or_clear_filters)
-                        } else {
-                            stringResource(R.string.customer_add_first)
-                        },
+                text = bodyText,
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
         )
@@ -525,8 +589,14 @@ internal fun EmptyCustomersState(
             Button(onClick = onClearFilters) {
                 Text(stringResource(R.string.customer_reset_filters))
             }
-            Spacer(Modifier.height(4.dp))
-            TextButton(onClick = onAddCustomer) { Text(stringResource(R.string.customer_add)) }
+        } else if (showImportedNoOrdersState) {
+            Button(onClick = onRevealCustomers) {
+                Text(stringResource(R.string.customer_show_imported_contacts))
+            }
+        } else if (!hasAnyCustomers) {
+            Button(onClick = onSyncContacts) {
+                Text(stringResource(R.string.customer_import_contacts_action))
+            }
         } else {
             Button(onClick = onAddCustomer) { Text(stringResource(R.string.customer_add)) }
         }

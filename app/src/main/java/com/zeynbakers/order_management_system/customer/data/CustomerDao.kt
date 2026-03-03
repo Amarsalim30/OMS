@@ -14,6 +14,9 @@ interface CustomerDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAll(customers: List<CustomerEntity>)
 
+    @Insert(onConflict = OnConflictStrategy.IGNORE)
+    suspend fun insertIgnore(customer: CustomerEntity): Long
+
     @Update
     suspend fun update(customer: CustomerEntity)
 

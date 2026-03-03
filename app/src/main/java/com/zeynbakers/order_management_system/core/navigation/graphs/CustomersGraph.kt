@@ -1,22 +1,48 @@
 package com.zeynbakers.order_management_system.core.navigation.graphs
 
+import android.Manifest
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
+import android.content.Intent
+import android.content.pm.PackageManager
+import android.os.SystemClock
+import android.provider.Settings
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
+import androidx.core.content.ContextCompat
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.composable
 import androidx.navigation.navArgument
+import com.zeynbakers.order_management_system.R
 import com.zeynbakers.order_management_system.AppCustomersCallbacks
 import com.zeynbakers.order_management_system.AppCustomersState
 import com.zeynbakers.order_management_system.AppFeatureNavigationActions
 import com.zeynbakers.order_management_system.AppFeatureSupportActions
+import com.zeynbakers.order_management_system.MoneyRecordContext
 import com.zeynbakers.order_management_system.accounting.ui.PaymentHistoryFilter
 import com.zeynbakers.order_management_system.core.navigation.AppRoutes
+import com.zeynbakers.order_management_system.core.onboarding.OnboardingPreferences
 import com.zeynbakers.order_management_system.customer.ui.CustomerAccountsViewModel
 import com.zeynbakers.order_management_system.customer.ui.CustomerDetailScreen
 import com.zeynbakers.order_management_system.customer.ui.CustomerListScreen
 import com.zeynbakers.order_management_system.customer.ui.ImportContactsScreen
 import com.zeynbakers.order_management_system.customer.ui.CustomerStatementScreen
+import com.zeynbakers.order_management_system.customer.ui.ImportContact
+import com.zeynbakers.order_management_system.customer.domain.ContactsSyncResult
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 
 internal fun NavGraphBuilder.customersGraph(
     navController: NavHostController,
@@ -27,6 +53,49 @@ internal fun NavGraphBuilder.customersGraph(
     supportActions: AppFeatureSupportActions
 ) {
     composable(AppRoutes.Customers) {
+        val context = LocalContext.current
+        val scope = rememberCoroutineScope()
+        val permissionRequiredMessage = stringResource(R.string.contacts_permission_required_for_import)
+        val syncFailedMessage = stringResource(R.string.customer_sync_contacts_failed)
+        var isSyncingContacts by rememberSaveable { mutableStateOf(false) }
+
+        suspend fun runInlineContactsSync() {
+            if (isSyncingContacts) return
+            isSyncingContacts = true
+            val startedAt = SystemClock.elapsedRealtime()
+            try {
+                val contacts: List<ImportContact> = supportActions.loadContacts()
+                val result: ContactsSyncResult = customerViewModel.importContactsBulk(contacts)
+                supportActions.onShowMessage(
+                    context.getString(
+                        R.string.customer_sync_contacts_done,
+                        result.added,
+                        result.updated
+                    )
+                )
+            } catch (_: SecurityException) {
+                supportActions.onShowMessage(permissionRequiredMessage)
+            } catch (_: Throwable) {
+                supportActions.onShowMessage(syncFailedMessage)
+            } finally {
+                val elapsed = SystemClock.elapsedRealtime() - startedAt
+                val remaining = (3_000L - elapsed).coerceAtLeast(0L)
+                if (remaining > 0) {
+                    delay(remaining)
+                }
+                isSyncingContacts = false
+            }
+        }
+
+        val contactsPermissionLauncher =
+            rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+                if (granted) {
+                    scope.launch { runInlineContactsSync() }
+                } else {
+                    supportActions.onShowMessage(permissionRequiredMessage)
+                }
+            }
+
         LaunchedEffect(customersState.customerQuery) {
             customerViewModel.searchCustomers(customersState.customerQuery)
         }
@@ -39,11 +108,23 @@ internal fun NavGraphBuilder.customersGraph(
             },
             onBack = { navController.popBackStack() },
             onAddCustomer = navigationActions.openImportContacts,
+            onSyncContacts = {
+                if (isSyncingContacts) {
+                    return@CustomerListScreen
+                }
+                if (hasContactsPermission(context)) {
+                    scope.launch { runInlineContactsSync() }
+                } else {
+                    contactsPermissionLauncher.launch(Manifest.permission.READ_CONTACTS)
+                }
+            },
             onPaymentHistory = { customerId ->
                 navigationActions.navigateToPaymentHistory(PaymentHistoryFilter.Customer(customerId), null)
             },
             onRecordPayment = { customerId ->
-                navigationActions.navigateToMoneyRecord(customerId)
+                navigationActions.navigateToMoneyRecord(
+                    MoneyRecordContext(customerId = customerId)
+                )
             },
             onAddOrder = {
                 val targetDate = supportActions.currentDate()
@@ -58,6 +139,7 @@ internal fun NavGraphBuilder.customersGraph(
             onRestoreCustomer = { customerId ->
                 customerViewModel.unarchiveCustomer(customerId)
             },
+            isSyncingContacts = isSyncingContacts,
             showBack = false
         )
     }
@@ -83,7 +165,9 @@ internal fun NavGraphBuilder.customersGraph(
                 navController.navigate(AppRoutes.customerStatement(id))
             },
             onReceivePayment = {
-                navigationActions.navigateToMoneyRecord(customerId)
+                navigationActions.navigateToMoneyRecord(
+                    MoneyRecordContext(customerId = customerId)
+                )
             },
             onOrderPaymentHistory = { orderId ->
                 navigationActions.navigateToPaymentHistory(PaymentHistoryFilter.Order(orderId), null)
@@ -118,7 +202,11 @@ internal fun NavGraphBuilder.customersGraph(
                 val targetDate = supportActions.currentDate()
                 navigationActions.navigateToCalendarQuickAdd(targetDate)
             },
-            onRecordPayment = { navigationActions.navigateToMoneyRecord(customerId) },
+            onRecordPayment = {
+                navigationActions.navigateToMoneyRecord(
+                    MoneyRecordContext(customerId = customerId)
+                )
+            },
             onMarkBadDebt = { amount, note ->
                 customerViewModel.markBadDebt(customerId, amount, note)
                 supportActions.refreshAfterPayments()
@@ -127,17 +215,90 @@ internal fun NavGraphBuilder.customersGraph(
     }
 
     composable(AppRoutes.ImportContacts) {
-        LaunchedEffect(Unit) {
+        val context = LocalContext.current
+        val scope = rememberCoroutineScope()
+        val onboardingPrefs = remember { OnboardingPreferences(context) }
+        val selectAtLeastOneMessage = stringResource(R.string.import_contacts_select_at_least_one)
+        val permissionRequiredMessage = stringResource(R.string.contacts_permission_required_for_import)
+        val loadFailedMessage = stringResource(R.string.import_contacts_load_failed)
+        var hasPermission by remember { mutableStateOf(hasContactsPermission(context)) }
+        var permissionRequested by rememberSaveable { mutableStateOf(false) }
+        var loadError by rememberSaveable { mutableStateOf<String?>(null) }
+        val activity = context.findActivity()
+        val permissionPermanentlyDenied =
+            !hasPermission &&
+                permissionRequested &&
+                activity?.let {
+                    !androidx.core.app.ActivityCompat.shouldShowRequestPermissionRationale(
+                        it,
+                        Manifest.permission.READ_CONTACTS
+                    )
+                } == true
+
+        suspend fun loadContactsSafely() {
+            if (!hasPermission) {
+                customersCallbacks.onImportContactsChange(emptyList())
+                customersCallbacks.onSelectedContactPhonesChange(emptySet())
+                customersCallbacks.onContactsLoadingChange(false)
+                loadError = permissionRequiredMessage
+                return
+            }
             customersCallbacks.onContactsLoadingChange(true)
-            customersCallbacks.onImportContactsChange(supportActions.loadContacts())
-            customersCallbacks.onSelectedContactPhonesChange(emptySet())
-            customersCallbacks.onContactsLoadingChange(false)
+            try {
+                val loaded = supportActions.loadContacts()
+                customersCallbacks.onImportContactsChange(loaded)
+                customersCallbacks.onSelectedContactPhonesChange(emptySet())
+                loadError = null
+            } catch (_: SecurityException) {
+                hasPermission = false
+                customersCallbacks.onImportContactsChange(emptyList())
+                customersCallbacks.onSelectedContactPhonesChange(emptySet())
+                loadError = permissionRequiredMessage
+            } catch (_: Throwable) {
+                customersCallbacks.onImportContactsChange(emptyList())
+                customersCallbacks.onSelectedContactPhonesChange(emptySet())
+                loadError = loadFailedMessage
+            } finally {
+                customersCallbacks.onContactsLoadingChange(false)
+            }
         }
+
+        val permissionLauncher =
+            rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+                permissionRequested = true
+                hasPermission = granted
+                if (!granted) {
+                    loadError = permissionRequiredMessage
+                }
+            }
+
+        LaunchedEffect(hasPermission) {
+            if (hasPermission) {
+                loadContactsSafely()
+            } else {
+                customersCallbacks.onImportContactsChange(emptyList())
+                customersCallbacks.onSelectedContactPhonesChange(emptySet())
+                customersCallbacks.onContactsLoadingChange(false)
+            }
+        }
+
         ImportContactsScreen(
             contacts = customersState.importContacts,
             selectedPhones = customersState.selectedContactPhones,
             isLoading = customersState.isContactsLoading,
+            hasPermission = hasPermission,
+            isPermissionPermanentlyDenied = permissionPermanentlyDenied,
+            errorMessage = loadError,
             onBack = { navController.popBackStack() },
+            onRequestPermission = {
+                permissionLauncher.launch(Manifest.permission.READ_CONTACTS)
+            },
+            onOpenSettings = {
+                openAppSettings(context)
+            },
+            onRetryLoad = {
+                scope.launch { loadContactsSafely() }
+            },
             onToggleSelect = { phone ->
                 customersCallbacks.onSelectedContactPhonesChange(
                     if (customersState.selectedContactPhones.contains(phone)) {
@@ -162,16 +323,42 @@ internal fun NavGraphBuilder.customersGraph(
             },
             onImport = {
                 if (customersState.selectedContactPhones.isEmpty()) {
-                    supportActions.onShowMessage("Select at least one contact to import")
+                    supportActions.onShowMessage(selectAtLeastOneMessage)
                 } else {
                     val contactsByPhone = customersState.importContacts.associateBy { it.phone }
                     customersState.selectedContactPhones.forEach { phone ->
                         val contact = contactsByPhone[phone] ?: return@forEach
                         customerViewModel.importCustomer(contact.name, contact.phone)
                     }
+                    scope.launch { onboardingPrefs.setContactsSetupDone(true) }
                     navController.popBackStack()
                 }
             }
         )
     }
+}
+
+private fun hasContactsPermission(context: Context): Boolean {
+    return ContextCompat.checkSelfPermission(
+        context,
+        Manifest.permission.READ_CONTACTS
+    ) == PackageManager.PERMISSION_GRANTED
+}
+
+private fun Context.findActivity(): Activity? {
+    var current: Context? = this
+    while (current is ContextWrapper) {
+        if (current is Activity) return current
+        current = current.baseContext
+    }
+    return null
+}
+
+private fun openAppSettings(context: Context) {
+    val intent =
+        Intent(
+            Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+            android.net.Uri.fromParts("package", context.packageName, null)
+        ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    context.startActivity(intent)
 }

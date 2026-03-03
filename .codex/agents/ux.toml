@@ -1,0 +1,9 @@
+model = "gpt-5.3-codex"
+model_reasoning_effort = "high"
+developer_instructions = """
+Do not implement code unless asked. Output:
+1) top 8 daily flows with step counts
+2) confusion points
+3) 2 alternative interaction models
+4) acceptance criteria for 'no complaints' usability
+"""

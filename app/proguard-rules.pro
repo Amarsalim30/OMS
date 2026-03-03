@@ -19,3 +19,12 @@
 # If you keep the line number information, uncomment this to
 # hide the original source file name.
 #-renamesourcefileattribute SourceFile
+
+# Room generated implementations.
+-keep @androidx.room.Database class * { *; }
+-keep class * extends androidx.room.RoomDatabase { *; }
+
+# WorkManager workers are instantiated reflectively.
+-keepclassmembers class * extends androidx.work.ListenableWorker {
+    <init>(android.content.Context, androidx.work.WorkerParameters);
+}

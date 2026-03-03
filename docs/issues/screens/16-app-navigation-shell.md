@@ -16,9 +16,9 @@ Status: Open
 ## Open issues
 
 ### P1
-- More sheet is useful but can include clearer grouping by workflow.
-- Cross-tab back behavior should stay consistent and predictable.
-- Advanced tools need clearer labels for non-technical owners.
+- [Fixed 2026-02-26] More sheet actions are now grouped by workflow (`Daily work`, `System setup`, `Learning`) for faster scanning.
+- [Fixed 2026-02-26] Cross-tab back behavior now uses root-reset tab navigation to stay consistent and predictable.
+- [Fixed 2026-02-26] Advanced tools now use clearer owner-focused labels with supporting descriptions.
 
 ### P2
 - No customizable quick actions for each business owner preference.

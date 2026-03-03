@@ -12,6 +12,7 @@ internal fun topLevelRouteFor(route: String?): String? {
     return when {
         route == null -> null
         route == AppRoutes.Calendar -> AppRoutes.Calendar
+        route == AppRoutes.CalendarTutorial -> AppRoutes.Calendar
         route.startsWith("day/") -> AppRoutes.Calendar
         route == AppRoutes.Summary -> AppRoutes.Calendar
         route == AppRoutes.Orders -> AppRoutes.Orders
@@ -113,4 +114,22 @@ internal fun monthLabel(year: Int, month: Int): String {
         else -> "Month"
     }
     return "$monthName $year"
+}
+
+internal fun shouldAppendSharedPaymentText(
+    currentRoute: String?,
+    isMoneyCollectTab: Boolean
+): Boolean {
+    return currentRoute == AppRoutes.Money && isMoneyCollectTab
+}
+
+internal fun sharedPaymentTextPreview(
+    text: String,
+    maxChars: Int = 160
+): String {
+    val normalized = text.trim().replace("\r\n", "\n")
+    if (normalized.length <= maxChars) {
+        return normalized
+    }
+    return normalized.take(maxChars).trimEnd() + "..."
 }

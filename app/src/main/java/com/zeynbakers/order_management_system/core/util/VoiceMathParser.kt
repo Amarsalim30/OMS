@@ -1,4 +1,4 @@
-package com.zeynbakers.order_management_system.core.util
+﻿package com.zeynbakers.order_management_system.core.util
 
 import java.math.BigDecimal
 import java.math.RoundingMode
@@ -29,6 +29,8 @@ private fun normalizeTranscript(input: String): String {
             .replace(",", "")
             .replace("×", "*")
             .replace("÷", "/")
+            .replace("Ã—", "*")
+            .replace("Ã·", "/")
             .replace(Regex("(?<!\\d)\\.|\\.(?!\\d)"), " ")
             .replace("divided by", "/")
             .replace(Regex("\\bover\\b"), "/")
@@ -36,31 +38,34 @@ private fun normalizeTranscript(input: String): String {
             .replace(Regex("\\btime\\b"), "*")
             .replace(Regex("\\btimes\\b"), "*")
             .replace(Regex("\\bmultiply\\b"), "*")
-            .replace(Regex("\\bx\\b"), "*")
             .replace(Regex("(?<=\\d)x(?=\\d)"), "*")
-            .replace(Regex("\\bto\\b"), "two")
-            .replace(Regex("\\btoo\\b"), "two")
-            .replace(Regex("\\bfor\\b"), "four")
-            .replace(Regex("\\bfore\\b"), "four")
-            .replace(Regex("\\bate\\b"), "eight")
+            .replace(Regex("\\bx\\b"), "*")
             .replace(Regex("\\bplus\\b"), "+")
             .replace(Regex("\\badd\\b"), "+")
             .replace(Regex("\\bminus\\b"), " - ")
             .replace(Regex("\\bsubtract\\b"), " - ")
             .replace(Regex("\\bless\\b"), " - ")
             .replace(Regex("\\bdeduct\\b"), " - ")
+            .replace(Regex("\\bto\\b"), "two")
+            .replace(Regex("\\btoo\\b"), "two")
+            .replace(Regex("\\bfor\\b"), "four")
+            .replace(Regex("\\bfore\\b"), "four")
+            .replace(Regex("\\bate\\b"), "eight")
             .replace(Regex("([a-z]+)-([a-z]+)"), "$1 $2")
             .replace(Regex("\\bcash\\b"), " ")
             .replace(Regex("\\bkes\\b"), " ")
-            .replace("ksh", " ")
+            .replace("ksh.", " ")
             .replace("kshs", " ")
+            .replace("ksh", " ")
+            .replace("shs", " ")
             .replace("shillings", " ")
             .replace("shilling", " ")
             .replace("bob", " ")
             .replace("=", " ")
+            .replace("%", " percent ")
             .replace(Regex("([+\\-*/])"), " $1 ")
             .replace(Regex("[^a-z0-9+\\-*/.% ]"), " ")
-    return cleaned.split(Regex("\\s+")).joinToString(" ")
+    return cleaned.split(Regex("\\s+")).joinToString(" ").trim()
 }
 
 private fun normalizeFallback(input: String): String {
@@ -69,11 +74,14 @@ private fun normalizeFallback(input: String): String {
             .replace(",", "")
             .replace("×", "*")
             .replace("÷", "/")
+            .replace("Ã—", "*")
+            .replace("Ã·", "/")
             .replace(Regex("(?<!\\d)\\.|\\.(?!\\d)"), " ")
+            .replace("%", " percent ")
             .replace(Regex("(?<=\\d)x(?=\\d)"), "*")
-            .replace(Regex("[^0-9+\\-*/.% ]"), " ")
+            .replace(Regex("[^0-9a-z+\\-*/.% ]"), " ")
             .replace(Regex("([+\\-*/])"), " $1 ")
-    return cleaned.split(Regex("\\s+")).joinToString(" ")
+    return cleaned.split(Regex("\\s+")).joinToString(" ").trim()
 }
 
 private fun parseFromTokens(normalized: String): VoiceMathParseResult? {
@@ -90,7 +98,8 @@ private sealed class Token {
     data class Operator(val op: Char) : Token()
 }
 
-private val IGNORE_WORDS = setOf("cash", "kes", "ksh", "kshs", "shillings", "shilling", "bob")
+private val IGNORE_WORDS =
+    setOf("cash", "kes", "ksh", "kshs", "ksh.", "shs", "shillings", "shilling", "bob")
 
 private fun tokenize(tokens: List<String>): List<Token>? {
     val output = mutableListOf<Token>()
@@ -116,11 +125,7 @@ private fun tokenize(tokens: List<String>): List<Token>? {
 
     while (i < tokens.size) {
         val token = tokens[i]
-        if (token.isBlank()) {
-            i++
-            continue
-        }
-        if (IGNORE_WORDS.contains(token)) {
+        if (token.isBlank() || IGNORE_WORDS.contains(token)) {
             i++
             continue
         }
@@ -130,7 +135,7 @@ private fun tokenize(tokens: List<String>): List<Token>? {
                     val parsed = parseNumberToken(tokens, i + 1) ?: return null
                     val number = parsed.first.negate()
                     i = appendNumber(number, parsed.second)
-                    expectNumber = false
+                    expectNumber = output.lastOrNull() is Token.Operator
                 }
                 "+", "*", "/" -> return null
                 "and" -> {
@@ -143,7 +148,7 @@ private fun tokenize(tokens: List<String>): List<Token>? {
                 else -> {
                     val parsed = parseNumberToken(tokens, i) ?: return null
                     i = appendNumber(parsed.first, parsed.second)
-                    expectNumber = false
+                    expectNumber = output.lastOrNull() is Token.Operator
                 }
             }
         } else {
@@ -170,6 +175,7 @@ private fun tokenize(tokens: List<String>): List<Token>? {
             }
         }
     }
+
     if (expectNumber && output.isNotEmpty()) return null
     return output
 }
@@ -180,11 +186,7 @@ private fun applyPercentShorthand(tokens: List<Token>): List<Token> {
     var i = 0
     while (i < tokens.size) {
         val token = tokens[i]
-        if (token is Token.Number &&
-            i + 2 < tokens.size &&
-            tokens[i + 1] is Token.Operator &&
-            tokens[i + 2] is Token.Percent
-        ) {
+        if (token is Token.Number && i + 2 < tokens.size && tokens[i + 1] is Token.Operator && tokens[i + 2] is Token.Percent) {
             val op = tokens[i + 1] as Token.Operator
             val percent = (tokens[i + 2] as Token.Percent).value
             val applied = token.value.multiply(percent).divide(BigDecimal(100))
@@ -193,9 +195,7 @@ private fun applyPercentShorthand(tokens: List<Token>): List<Token> {
             output.add(Token.Number(applied))
             i += 3
         } else if (token is Token.Percent) {
-            output.add(
-                Token.Number(token.value.divide(BigDecimal(100)))
-            )
+            output.add(Token.Number(token.value.divide(BigDecimal(100))))
             i++
         } else {
             output.add(token)
@@ -208,6 +208,8 @@ private fun applyPercentShorthand(tokens: List<Token>): List<Token> {
 private fun evaluateExpression(tokens: List<Token>): BigDecimal? {
     val values = ArrayDeque<BigDecimal>()
     val ops = ArrayDeque<Char>()
+
+    fun precedence(op: Char): Int = if (op == '*' || op == '/') 2 else 1
 
     fun applyOp(): Boolean {
         if (values.size < 2 || ops.isEmpty()) return false
@@ -229,8 +231,6 @@ private fun evaluateExpression(tokens: List<Token>): BigDecimal? {
         return true
     }
 
-    fun precedence(op: Char): Int = if (op == '*' || op == '/') 2 else 1
-
     tokens.forEach { token ->
         when (token) {
             is Token.Number -> values.addLast(token.value)
@@ -240,24 +240,41 @@ private fun evaluateExpression(tokens: List<Token>): BigDecimal? {
                 }
                 ops.addLast(token.op)
             }
-            is Token.Percent -> {
-                values.addLast(token.value.divide(BigDecimal(100)))
-            }
+            is Token.Percent -> values.addLast(token.value.divide(BigDecimal(100)))
         }
     }
+
     while (ops.isNotEmpty()) {
         if (!applyOp()) return null
     }
+
     return if (values.size == 1) values.last() else null
 }
 
 private fun parseNumberToken(tokens: List<String>, start: Int): Pair<BigDecimal, Int>? {
     val token = tokens[start]
-    val numeric = token.toBigDecimalOrNull()
-    if (numeric != null) {
+    val normalizedToken = token.replace(",", "")
+    normalizedToken.toBigDecimalOrNull()?.let { numeric ->
         return numeric to (start + 1)
     }
+    parseShorthandNumber(normalizedToken)?.let { shorthand ->
+        return shorthand to (start + 1)
+    }
     return parseNumberWords(tokens, start)
+}
+
+private fun parseShorthandNumber(token: String): BigDecimal? {
+    if (token.isBlank()) return null
+    val multiplier =
+        when {
+            token.endsWith("k") -> BigDecimal("1000")
+            token.endsWith("m") -> BigDecimal("1000000")
+            else -> return null
+        }
+    val numericPart = token.dropLast(1)
+    if (numericPart.isBlank()) return null
+    val value = numericPart.toBigDecimalOrNull() ?: return null
+    return value.multiply(multiplier)
 }
 
 private fun parseNumberWords(tokens: List<String>, start: Int): Pair<BigDecimal, Int>? {
@@ -322,38 +339,42 @@ private fun parseNumberWords(tokens: List<String>, start: Int): Pair<BigDecimal,
     return result to i
 }
 
-private val WORD_NUMBERS = mapOf(
-    "zero" to 0L,
-    "one" to 1L,
-    "two" to 2L,
-    "three" to 3L,
-    "four" to 4L,
-    "five" to 5L,
-    "six" to 6L,
-    "seven" to 7L,
-    "eight" to 8L,
-    "nine" to 9L,
-    "ten" to 10L,
-    "eleven" to 11L,
-    "twelve" to 12L,
-    "thirteen" to 13L,
-    "fourteen" to 14L,
-    "fifteen" to 15L,
-    "sixteen" to 16L,
-    "seventeen" to 17L,
-    "eighteen" to 18L,
-    "nineteen" to 19L,
-    "twenty" to 20L,
-    "thirty" to 30L,
-    "forty" to 40L,
-    "fifty" to 50L,
-    "sixty" to 60L,
-    "seventy" to 70L,
-    "eighty" to 80L,
-    "ninety" to 90L
-)
+private val WORD_NUMBERS =
+    mapOf(
+        "zero" to 0L,
+        "one" to 1L,
+        "two" to 2L,
+        "three" to 3L,
+        "four" to 4L,
+        "five" to 5L,
+        "six" to 6L,
+        "seven" to 7L,
+        "eight" to 8L,
+        "nine" to 9L,
+        "ten" to 10L,
+        "eleven" to 11L,
+        "twelve" to 12L,
+        "thirteen" to 13L,
+        "fourteen" to 14L,
+        "fifteen" to 15L,
+        "sixteen" to 16L,
+        "seventeen" to 17L,
+        "eighteen" to 18L,
+        "nineteen" to 19L,
+        "twenty" to 20L,
+        "thirty" to 30L,
+        "forty" to 40L,
+        "fifty" to 50L,
+        "sixty" to 60L,
+        "seventy" to 70L,
+        "eighty" to 80L,
+        "ninety" to 90L
+    )
 
-private val SCALES = mapOf(
-    "thousand" to 1_000L,
-    "million" to 1_000_000L
-)
+private val SCALES =
+    mapOf(
+        "thousand" to 1_000L,
+        "million" to 1_000_000L
+    )
+
+

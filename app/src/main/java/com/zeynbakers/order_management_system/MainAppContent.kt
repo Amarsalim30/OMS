@@ -30,6 +30,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -49,12 +50,20 @@ import com.zeynbakers.order_management_system.accounting.ui.PaymentIntakeHistory
 import com.zeynbakers.order_management_system.accounting.ui.PaymentIntakeViewModel
 import com.zeynbakers.order_management_system.accounting.ui.PaymentHistoryFilter
 import com.zeynbakers.order_management_system.core.backup.BackupScheduler
+import com.zeynbakers.order_management_system.core.contacts.ContactsSyncScheduler
 import com.zeynbakers.order_management_system.core.db.DatabaseProvider
+import com.zeynbakers.order_management_system.core.helper.HelperCaptureActivity
+import com.zeynbakers.order_management_system.core.helper.HelperCaptureMode
+import com.zeynbakers.order_management_system.core.helper.HelperOverlayController
+import com.zeynbakers.order_management_system.core.helper.HelperPreferences
+import com.zeynbakers.order_management_system.core.helper.HelperSettingsState
 import com.zeynbakers.order_management_system.core.navigation.AppIntents
 import com.zeynbakers.order_management_system.core.navigation.AppRoutes
 import com.zeynbakers.order_management_system.core.navigation.AppShortcuts
 import com.zeynbakers.order_management_system.core.navigation.extractSharedText
 import com.zeynbakers.order_management_system.core.notifications.NotificationScheduler
+import com.zeynbakers.order_management_system.core.tutorial.LocalTutorialCoachAnchorRegistry
+import com.zeynbakers.order_management_system.core.tutorial.TutorialCoachAnchorRegistry
 import com.zeynbakers.order_management_system.core.ui.AmountFieldRegistry
 import com.zeynbakers.order_management_system.core.ui.AppScaffold
 import com.zeynbakers.order_management_system.core.ui.AppViewModelFactory
@@ -69,7 +78,6 @@ import com.zeynbakers.order_management_system.core.ui.TopLevelDestination
 import com.zeynbakers.order_management_system.core.ui.UiEvent
 import com.zeynbakers.order_management_system.core.ui.UiEventDispatcher
 import com.zeynbakers.order_management_system.core.ui.VoiceCalcAccess
-import com.zeynbakers.order_management_system.core.ui.VoiceCalculatorOverlay
 import com.zeynbakers.order_management_system.core.ui.VoiceInputRouter
 import com.zeynbakers.order_management_system.core.ui.showSnackbar
 import com.zeynbakers.order_management_system.core.ui.theme.Order_management_systemTheme
@@ -92,12 +100,18 @@ import androidx.compose.runtime.State
 @Composable
 internal fun MainAppContent(
     activity: ComponentActivity,
-    launchIntentState: State<Intent?>
+    launchIntentState: State<Intent?>,
+    startDestination: String
 ) {
             Order_management_systemTheme {
                 val context = LocalContext.current
                 val database = remember { DatabaseProvider.getDatabase(activity.applicationContext) }
-                val viewModelFactory = remember { AppViewModelFactory(database) }
+                val viewModelFactory = remember {
+                    AppViewModelFactory(
+                        database = database,
+                        appContext = context.applicationContext
+                    )
+                }
                 val orderViewModel: OrderViewModel = viewModel(factory = viewModelFactory)
                 val customerViewModel: CustomerAccountsViewModel = viewModel(factory = viewModelFactory)
                 val paymentIntakeViewModel: PaymentIntakeViewModel = viewModel(factory = viewModelFactory)
@@ -106,6 +120,7 @@ internal fun MainAppContent(
                 val voiceRouter = remember { VoiceInputRouter(onApplyTotal = amountRegistry::applyAmount) }
                 val overlaySuppressed = remember { mutableStateOf(false) }
                 val appSnackbarHostState = remember { SnackbarHostState() }
+                val tutorialAnchorRegistry = remember { TutorialCoachAnchorRegistry() }
                 val contactsPermissionMessage =
                     stringResource(R.string.contacts_permission_required_for_import)
                 val uiEventDispatcher = remember(appSnackbarHostState) {
@@ -130,10 +145,15 @@ internal fun MainAppContent(
                 var quickAddDate by remember { mutableStateOf<LocalDate?>(null) }
                 var customerQuery by rememberSaveable { mutableStateOf("") }
                 var paymentIntakeText by rememberSaveable { mutableStateOf<String?>(null) }
+                var pendingSharedPaymentText by rememberSaveable { mutableStateOf<String?>(null) }
                 var moneyTabName by rememberSaveable { mutableStateOf(MoneyTab.Collect.name) }
-                var manualCustomerId by rememberSaveable { mutableStateOf<Long?>(null) }
+                var moneyRecordCustomerId by rememberSaveable { mutableStateOf<Long?>(null) }
+                var moneyRecordOrderId by rememberSaveable { mutableStateOf<Long?>(null) }
+                var moneyRecordOutstandingAmountText by rememberSaveable { mutableStateOf<String?>(null) }
                 var showMoreSheet by rememberSaveable { mutableStateOf(false) }
                 var selectedTopLevelRoute by rememberSaveable { mutableStateOf(AppRoutes.Calendar) }
+                var tutorialActive by rememberSaveable { mutableStateOf(false) }
+                var tutorialStepIndex by rememberSaveable { mutableIntStateOf(0) }
                 var importContacts by remember { mutableStateOf<List<ImportContact>>(emptyList()) }
                 var selectedContactPhones by remember { mutableStateOf<Set<String>>(emptySet()) }
                 var isContactsLoading by remember { mutableStateOf(false) }
@@ -147,12 +167,34 @@ internal fun MainAppContent(
                     )
                 }
                 val updatePrefs = remember { UpdatePreferences(context) }
+                val helperPrefs = remember { HelperPreferences(context) }
                 var showUpdateDialog by remember { mutableStateOf(false) }
+                val helperState by helperPrefs.state.collectAsState(initial = null)
                 val navController = rememberNavController()
                 val navBackStackEntry by navController.currentBackStackEntryAsState()
                 val currentRoute = navBackStackEntry?.destination?.route
                 val activeTopLevelRoute = topLevelRouteFor(currentRoute) ?: selectedTopLevelRoute
                 val moneyTab = runCatching { MoneyTab.valueOf(moneyTabName) }.getOrDefault(MoneyTab.Collect)
+                val moneyRecordContext =
+                    remember(
+                        moneyRecordCustomerId,
+                        moneyRecordOrderId,
+                        moneyRecordOutstandingAmountText
+                    ) {
+                        val hasContext =
+                            moneyRecordCustomerId != null ||
+                                moneyRecordOrderId != null ||
+                                !moneyRecordOutstandingAmountText.isNullOrBlank()
+                        if (!hasContext) {
+                            null
+                        } else {
+                            MoneyRecordContext(
+                                customerId = moneyRecordCustomerId,
+                                orderId = moneyRecordOrderId,
+                                outstandingAmount = moneyRecordOutstandingAmountText?.toBigDecimalOrNull()
+                            )
+                        }
+                    }
                 val updateNotes = remember {
                     listOf(
                         "Share M-PESA messages from Messages directly into the app.",
@@ -222,6 +264,7 @@ internal fun MainAppContent(
                 LaunchedEffect(Unit) {
                     BackupScheduler.ensureScheduled(context)
                     NotificationScheduler.ensureScheduled(context)
+                    ContactsSyncScheduler.ensureScheduled(context)
                     AppShortcuts.ensure(context.applicationContext)
                     WidgetUpdater.enqueue(context)
                     val now = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault())
@@ -233,8 +276,16 @@ internal fun MainAppContent(
                         baseYear = now.year
                     }
                 }
-                LaunchedEffect(activeTopLevelRoute) {
-                    if (activeTopLevelRoute == AppRoutes.Calendar &&
+                LaunchedEffect(helperState?.enabled) {
+                    when (helperState?.enabled) {
+                        true -> HelperOverlayController.start(context.applicationContext)
+                        false -> HelperOverlayController.stop(context.applicationContext)
+                        null -> Unit
+                    }
+                }
+                LaunchedEffect(currentRoute, activeTopLevelRoute) {
+                    if (currentRoute == AppRoutes.Calendar &&
+                        activeTopLevelRoute == AppRoutes.Calendar &&
                         updatePrefs.shouldShowUpdate(BuildConfig.VERSION_NAME)
                     ) {
                         showUpdateDialog = true
@@ -281,9 +332,12 @@ internal fun MainAppContent(
                         )
                     }
                 LaunchedEffect(incomingIntent) {
-                    val intent = incomingIntent ?: return@LaunchedEffect
-                    AppShortcuts.reportShortcutUsed(context.applicationContext, intent.action)
-                    when (intent.action) {
+                    val intent = incomingIntent
+                    val action = intent?.action
+                    if (intent != null) {
+                        AppShortcuts.reportShortcutUsed(context.applicationContext, action)
+                    }
+                    when (action) {
                         AppIntents.ACTION_SHOW_TODAY -> {
                             val targetDate = currentDate()
                             selectedDate = targetDate
@@ -292,7 +346,7 @@ internal fun MainAppContent(
                         }
                         AppIntents.ACTION_SHOW_DAY -> {
                             val targetDate =
-                                intent.getStringExtra(AppIntents.EXTRA_TARGET_DATE)?.let {
+                                intent?.getStringExtra(AppIntents.EXTRA_TARGET_DATE)?.let {
                                     runCatching { LocalDate.parse(it) }.getOrNull()
                                 } ?: currentDate()
                             selectedDate = targetDate
@@ -305,7 +359,7 @@ internal fun MainAppContent(
                         }
                         AppIntents.ACTION_SHOW_SUMMARY -> {
                             summaryDate =
-                                intent.getStringExtra(AppIntents.EXTRA_TARGET_DATE)?.let {
+                                intent?.getStringExtra(AppIntents.EXTRA_TARGET_DATE)?.let {
                                     runCatching { LocalDate.parse(it) }.getOrNull()
                                 } ?: currentDate()
                             selectedTopLevelRoute = AppRoutes.Calendar
@@ -323,28 +377,45 @@ internal fun MainAppContent(
                                 launchSingleTop = true
                             }
                         }
+                        AppIntents.ACTION_SHOW_NOTES_HISTORY -> {
+                            navController.navigate(AppRoutes.NotesHistory) {
+                                launchSingleTop = true
+                            }
+                        }
+                        AppIntents.ACTION_CAPTURE_VOICE_NOTE -> {
+                            val captureIntent =
+                                Intent(context, HelperCaptureActivity::class.java).apply {
+                                    putExtra(HelperCaptureActivity.EXTRA_MODE, HelperCaptureMode.VoiceNote.wireValue)
+                                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                }
+                            context.startActivity(captureIntent)
+                        }
+                        AppIntents.ACTION_CAPTURE_VOICE_CALCULATOR -> {
+                            val captureIntent =
+                                Intent(context, HelperCaptureActivity::class.java).apply {
+                                    putExtra(
+                                        HelperCaptureActivity.EXTRA_MODE,
+                                        HelperCaptureMode.VoiceCalculator.wireValue
+                                    )
+                                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                }
+                            context.startActivity(captureIntent)
+                        }
                         Intent.ACTION_SEND,
                         Intent.ACTION_SEND_MULTIPLE -> {
                             val sharedText = extractSharedText(intent) ?: return@LaunchedEffect
-                            if (currentRoute == AppRoutes.Money && moneyTab == MoneyTab.Collect) {
-                                paymentIntakeViewModel.appendRawText(sharedText)
-                            } else {
-                                paymentIntakeText = sharedText
-                                moneyTabName = MoneyTab.Collect.name
-                                selectedTopLevelRoute = AppRoutes.Money
-                                navController.navigate(AppRoutes.Money) {
-                                    launchSingleTop = true
-                                }
-                            }
+                            pendingSharedPaymentText = sharedText
                         }
                     }
+
                 }
                 CompositionLocalProvider(
                     LocalAmountFieldRegistry provides amountRegistry,
                     LocalVoiceCalcAccess provides voiceCalcAccess,
                     LocalVoiceOverlaySuppressed provides overlaySuppressed,
                     LocalVoiceInputRouter provides voiceRouter,
-                    LocalUiEventDispatcher provides uiEventDispatcher
+                    LocalUiEventDispatcher provides uiEventDispatcher,
+                    LocalTutorialCoachAnchorRegistry provides tutorialAnchorRegistry
                 ) {
                     val calendarState = AppCalendarState(
                         calendarDays = calendarDays,
@@ -390,7 +461,7 @@ internal fun MainAppContent(
                     val accountsState = AppAccountsState(
                         moneyTab = moneyTab,
                         paymentIntakeText = paymentIntakeText,
-                        manualCustomerId = manualCustomerId
+                        moneyRecordContext = moneyRecordContext
                     )
                     val calendarCallbacks = AppCalendarCallbacks(
                         onSelectedDateChange = { selectedDate = it },
@@ -410,16 +481,22 @@ internal fun MainAppContent(
                     val accountsCallbacks = AppAccountsCallbacks(
                         onMoneyTabChange = { moneyTabName = it.name },
                         onPaymentIntakeTextChange = { paymentIntakeText = it },
-                        onManualCustomerIdChange = { manualCustomerId = it }
+                        onMoneyRecordContextChange = { context ->
+                            moneyRecordCustomerId = context?.customerId
+                            moneyRecordOrderId = context?.orderId
+                            moneyRecordOutstandingAmountText = context?.outstandingAmount?.toPlainString()
+                        }
                     )
                     val navigationActions = AppFeatureNavigationActions(
                         onOpenMore = { showMoreSheet = true },
                         openImportContacts = openImportContacts,
-                        navigateToMoneyRecord = { customerId ->
-                            manualCustomerId = customerId
+                        navigateToMoneyRecord = { recordContext ->
+                            moneyRecordCustomerId = recordContext.customerId
+                            moneyRecordOrderId = recordContext.orderId
+                            moneyRecordOutstandingAmountText = recordContext.outstandingAmount?.toPlainString()
                             moneyTabName = MoneyTab.Record.name
                             selectedTopLevelRoute = AppRoutes.Money
-                            navController.navigate(AppRoutes.Money) { launchSingleTop = true }
+                            navigateTopLevel(navController, AppRoutes.Money, resetToRoot = true)
                         },
                         navigateToCalendarQuickAdd = { targetDate ->
                             selectedDate = targetDate
@@ -429,6 +506,11 @@ internal fun MainAppContent(
                         },
                         navigateToPaymentHistory = { filter, focusReceiptId ->
                             navigateToPaymentHistory(navController, filter, focusReceiptId)
+                        },
+                        startPracticalTutorial = { startStep ->
+                            tutorialStepIndex = startStep.coerceAtLeast(0)
+                            tutorialActive = true
+                            showMoreSheet = false
                         }
                     )
                     val supportActions = AppFeatureSupportActions(
@@ -447,12 +529,28 @@ internal fun MainAppContent(
                     MainAppHostScaffold(
                         activity = activity,
                         navController = navController,
+                        startDestination = startDestination,
+                        currentRoute = currentRoute,
                         activeTopLevelRoute = activeTopLevelRoute,
                         selectedTopLevelRoute = selectedTopLevelRoute,
                         onSelectedTopLevelRouteChange = { selectedTopLevelRoute = it },
                         showMoreSheet = showMoreSheet,
                         onShowMoreSheetChange = { showMoreSheet = it },
                         openImportContacts = openImportContacts,
+                        tutorialAnchorRegistry = tutorialAnchorRegistry,
+                        tutorialActive = tutorialActive,
+                        tutorialStepIndex = tutorialStepIndex,
+                        onStartTutorial = { startStep ->
+                            tutorialStepIndex = startStep.coerceAtLeast(0)
+                            tutorialActive = true
+                            showMoreSheet = false
+                        },
+                        onTutorialStepChange = { tutorialStepIndex = it.coerceAtLeast(0) },
+                        onDismissTutorial = {
+                            tutorialActive = false
+                            tutorialStepIndex = 0
+                            showMoreSheet = false
+                        },
                         calendarState = calendarState,
                         ordersState = ordersState,
                         customersState = customersState,
@@ -467,11 +565,6 @@ internal fun MainAppContent(
                         paymentIntakeViewModel = paymentIntakeViewModel,
                         paymentHistoryViewModel = paymentHistoryViewModel,
                         appSnackbarHostState = appSnackbarHostState,
-                        hasRecordPermission = hasRecordPermission,
-                        onRequestRecordPermission = {
-                            recordPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
-                        },
-                        overlaySuppressed = overlaySuppressed,
                         pendingCreditPrompt = pendingCreditPrompt,
                         onDismissCreditPrompt = {
                             pendingCreditPrompt = null
@@ -492,6 +585,28 @@ internal fun MainAppContent(
                             updatePrefs.markVersionSeen(BuildConfig.VERSION_NAME)
                         }
                     )
+
+                    pendingSharedPaymentText?.let { sharedText ->
+                        SharedPaymentTrustDialog(
+                            previewText = sharedPaymentTextPreview(sharedText),
+                            onDismiss = { pendingSharedPaymentText = null },
+                            onConfirm = {
+                                if (shouldAppendSharedPaymentText(
+                                        currentRoute = currentRoute,
+                                        isMoneyCollectTab = moneyTab == MoneyTab.Collect
+                                    )
+                                ) {
+                                    paymentIntakeViewModel.appendRawText(sharedText)
+                                } else {
+                                    paymentIntakeText = sharedText
+                                    moneyTabName = MoneyTab.Collect.name
+                                    selectedTopLevelRoute = AppRoutes.Money
+                                    navigateTopLevel(navController, AppRoutes.Money, resetToRoot = true)
+                                }
+                                pendingSharedPaymentText = null
+                            }
+                        )
+                    }
                 }
             }
 }

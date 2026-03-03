@@ -277,8 +277,21 @@ interface AccountingDao {
     )
     suspend fun getPaidForOrder(orderId: Long): BigDecimal
 
-    @Query("SELECT * FROM account_entries WHERE customerId = :customerId ORDER BY date DESC")
+    @Query("SELECT * FROM account_entries WHERE customerId = :customerId ORDER BY date DESC, id DESC")
     suspend fun getLedgerForCustomer(customerId: Long): List<AccountEntryEntity>
+
+    @Query(
+        """
+        SELECT * FROM account_entries
+        WHERE customerId = :customerId
+        ORDER BY date DESC, id DESC
+        LIMIT :limit
+        """
+    )
+    suspend fun getLedgerForCustomerLimited(customerId: Long, limit: Int): List<AccountEntryEntity>
+
+    @Query("SELECT COUNT(*) FROM account_entries WHERE customerId = :customerId")
+    suspend fun countEntriesForCustomer(customerId: Long): Int
 
     @Query(
         """
@@ -311,7 +324,13 @@ interface AccountingDao {
                 WHEN a.type IN ('CREDIT', 'WRITE_OFF') THEN a.amount
                 WHEN a.type = 'REVERSAL' THEN -a.amount
                 ELSE 0
-            END), 0) as balance
+            END), 0) as balance,
+            EXISTS(
+                SELECT 1
+                FROM orders o
+                WHERE o.customerId = c.id
+                AND o.status != 'CANCELLED'
+            ) as hasOrders
         FROM customers c
         LEFT JOIN account_entries a ON a.customerId = c.id
         WHERE c.isArchived = 0 AND (c.name LIKE :query OR c.phone LIKE :query)
@@ -320,6 +339,44 @@ interface AccountingDao {
         """
     )
     suspend fun getCustomerAccountSummaries(query: String): List<CustomerAccountSummary>
+
+    @Query(
+        """
+        SELECT
+            c.id as customerId,
+            c.name as name,
+            c.phone as phone,
+            IFNULL(SUM(CASE WHEN a.type = 'DEBIT' THEN a.amount ELSE 0 END), 0) as billed,
+            IFNULL(SUM(CASE
+                WHEN a.type IN ('CREDIT', 'WRITE_OFF') THEN a.amount
+                WHEN a.type = 'REVERSAL' THEN -a.amount
+                ELSE 0
+            END), 0) as paid,
+            IFNULL(SUM(CASE WHEN a.type = 'DEBIT' THEN a.amount ELSE 0 END), 0) -
+            IFNULL(SUM(CASE
+                WHEN a.type IN ('CREDIT', 'WRITE_OFF') THEN a.amount
+                WHEN a.type = 'REVERSAL' THEN -a.amount
+                ELSE 0
+            END), 0) as balance,
+            EXISTS(
+                SELECT 1
+                FROM orders o
+                WHERE o.customerId = c.id
+                AND o.status != 'CANCELLED'
+            ) as hasOrders
+        FROM customers c
+        LEFT JOIN account_entries a ON a.customerId = c.id
+        WHERE c.isArchived = 0 AND (c.name LIKE :query OR c.phone LIKE :query)
+        GROUP BY c.id
+        ORDER BY c.name
+        LIMIT :limit OFFSET :offset
+        """
+    )
+    suspend fun getCustomerAccountSummariesPaged(
+        query: String,
+        limit: Int,
+        offset: Int
+    ): List<CustomerAccountSummary>
 
     @Query(
         """

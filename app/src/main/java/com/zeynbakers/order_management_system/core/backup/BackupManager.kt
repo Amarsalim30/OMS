@@ -22,6 +22,8 @@ import com.zeynbakers.order_management_system.accounting.data.PaymentReceiptStat
 import com.zeynbakers.order_management_system.core.db.APP_DATABASE_SCHEMA_VERSION
 import com.zeynbakers.order_management_system.core.db.AppDatabase
 import com.zeynbakers.order_management_system.core.db.DatabaseProvider
+import com.zeynbakers.order_management_system.core.helper.data.HelperNoteEntity
+import com.zeynbakers.order_management_system.core.helper.data.HelperNoteType
 import com.zeynbakers.order_management_system.customer.data.CustomerEntity
 import com.zeynbakers.order_management_system.order.data.ItemCategory
 import com.zeynbakers.order_management_system.order.data.OrderEntity
@@ -38,13 +40,23 @@ import java.io.IOException
 import java.io.InputStream
 import java.io.OutputStream
 import java.math.BigDecimal
+import java.nio.ByteBuffer
+import java.nio.ByteOrder
+import java.security.GeneralSecurityException
 import java.security.MessageDigest
+import java.security.SecureRandom
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.zip.ZipEntry
 import java.util.zip.ZipInputStream
 import java.util.zip.ZipOutputStream
+import javax.crypto.AEADBadTagException
+import javax.crypto.Cipher
+import javax.crypto.SecretKeyFactory
+import javax.crypto.spec.GCMParameterSpec
+import javax.crypto.spec.PBEKeySpec
+import javax.crypto.spec.SecretKeySpec
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -58,6 +70,7 @@ object BackupManager {
     private const val BACKUP_DIR_NAME = "backups"
     private const val BACKUP_FILE_EXTENSION = ".oms"
     private const val LEGACY_BACKUP_FILE_EXTENSION = ".zip"
+    private const val SAF_DIRECTORY_ROLLING_FILE_NAME = "backup_latest.oms"
     private const val MAX_APP_PRIVATE_BACKUPS = 7
     private const val MAX_SAF_DIRECTORY_BACKUPS = 7
     private const val DEFAULT_STAGE = "Preparing"
@@ -70,6 +83,14 @@ object BackupManager {
     private const val MAX_ZIP_ENTRY_BYTES = 64L * 1024L * 1024L
     private const val MAX_ZIP_TOTAL_BYTES = 256L * 1024L * 1024L
     private const val MAX_SAFE_ROLLBACK_BYTES = MAX_ZIP_TOTAL_BYTES
+    private const val MAX_ARCHIVE_BYTES = 320L * 1024L * 1024L
+    private const val PBKDF2_ITERATIONS = 120_000
+    private const val PBKDF2_KEY_SIZE_BITS = 256
+    private const val ENCRYPTION_VERSION: Byte = 1
+    private const val ENCRYPTION_SALT_BYTES = 16
+    private const val ENCRYPTION_IV_BYTES = 12
+    private const val ENCRYPTION_TAG_BITS = 128
+    private val ENCRYPTION_MAGIC = byteArrayOf('O'.code.toByte(), 'M'.code.toByte(), 'S'.code.toByte(), 'E'.code.toByte(), 'N'.code.toByte(), 'C'.code.toByte(), '1'.code.toByte())
     // Legacy-only backup field. Keep for backward-compatible import until schema retirement is complete.
     private const val LEGACY_AMOUNT_PAID_FIELD = "amountPaid"
 
@@ -81,12 +102,21 @@ object BackupManager {
     private const val ENTRY_PAYMENTS = "payments.json"
     private const val ENTRY_PAYMENT_RECEIPTS = "payment_receipts.json"
     private const val ENTRY_PAYMENT_ALLOCATIONS = "payment_allocations.json"
+    private const val ENTRY_HELPER_NOTES = "helper_notes.json"
     private const val ENTRY_LEGACY_MPESA = "mpesa_transactions.json"
     private const val ENTRY_MANIFEST = "manifest.json"
     private const val GOOGLE_DRIVE_PACKAGE = "com.google.android.apps.docs"
     private const val GOOGLE_DRIVE_DOCUMENTS_AUTHORITY_PREFIX = "com.google.android.apps.docs.storage"
     private const val DOCUMENTS_UI_PACKAGE = "com.android.documentsui"
     private const val GOOGLE_DOCUMENTS_UI_PACKAGE = "com.google.android.documentsui"
+    private const val TABLE_CUSTOMERS = "customers"
+    private const val TABLE_ORDERS = "orders"
+    private const val TABLE_ORDER_ITEMS = "order_items"
+    private const val TABLE_ACCOUNT_ENTRIES = "account_entries"
+    private const val TABLE_PAYMENTS = "payments"
+    private const val TABLE_PAYMENT_RECEIPTS = "payment_receipts"
+    private const val TABLE_PAYMENT_ALLOCATIONS = "payment_allocations"
+    private const val TABLE_HELPER_NOTES = "helper_notes"
 
     private val REQUIRED_ENTRIES =
         setOf(
@@ -107,6 +137,7 @@ object BackupManager {
             ENTRY_PAYMENTS,
             ENTRY_PAYMENT_RECEIPTS,
             ENTRY_PAYMENT_ALLOCATIONS,
+            ENTRY_HELPER_NOTES,
             ENTRY_LEGACY_MPESA
         )
 
@@ -117,18 +148,30 @@ object BackupManager {
     ): BackupResult {
         val prefs = BackupPreferences(context)
         val state = prefs.readState()
-        if (state.targetType == BackupTargetType.SafDirectory) {
-            val now = System.currentTimeMillis()
-            val message = "Folder backup is not supported. Choose a backup file."
-            prefs.setLastResult(BackupStatus.Failed, message, now)
-            return BackupResult(success = false, message = message)
-        }
+        val encryptionPassphrase =
+            if (state.encryptionEnabled) {
+                prefs.getEncryptionPassphrase()?.takeIf { it.isNotBlank() }
+            } else {
+                null
+            }
         if (!force && !state.autoEnabled) {
             return BackupResult(success = false, message = "Automatic backup disabled")
         }
+        if (!state.encryptionEnabled && !state.insecureOverrideEnabled) {
+            return BackupResult(
+                success = false,
+                message = "Encrypted backups are required unless insecure override is enabled"
+            )
+        }
+        if (state.encryptionEnabled && encryptionPassphrase.isNullOrBlank()) {
+            return BackupResult(
+                success = false,
+                message = "Backup encryption passphrase is missing"
+            )
+        }
 
         val now = System.currentTimeMillis()
-        val fileName = backupFileName(now)
+        val fileName = backupFileNameForTarget(state.targetType, now)
 
         return try {
             progress?.invoke(5, DEFAULT_STAGE)
@@ -140,33 +183,72 @@ object BackupManager {
                         progress = progress
                     )
                 }
+            val outputBytes =
+                if (state.encryptionEnabled) {
+                    encryptArchiveBytes(
+                        plainArchive = archive.bytes,
+                        passphrase = encryptionPassphrase.orEmpty()
+                    )
+                } else {
+                    archive.bytes
+                }
+            val outputHash = sha256Hex(outputBytes)
 
             val writeResult =
                 withContext(Dispatchers.IO) {
                     when (state.targetType) {
                         BackupTargetType.AppPrivate -> {
-                            val file = writeAppPrivateBackup(context, fileName, archive.bytes) ?: return@withContext null
+                            val file =
+                                writeAppPrivateBackup(
+                                    context = context,
+                                    fileName = fileName,
+                                    archiveBytes = outputBytes,
+                                    decryptionPassphrase = encryptionPassphrase
+                                ) ?: return@withContext null
                             updateAppPrivateLatestPointer(
                                 context = context,
-                                pointer = LatestPointer(fileName = file.name, sha256 = archive.sha256, updatedAt = now)
+                                pointer =
+                                    LatestPointer(
+                                        fileName = file.name,
+                                        sha256 = outputHash,
+                                        updatedAt = now
+                                    )
                             )
                             file.name
                         }
 
                         BackupTargetType.SafDirectory -> {
                             val treeUri = state.targetUri
-                            val writtenName = writeSafBackup(context, treeUri, fileName, archive.bytes) ?: return@withContext null
+                            val writtenName =
+                                writeSafBackup(
+                                    context = context,
+                                    treeUriString = treeUri,
+                                    fileName = fileName,
+                                    archiveBytes = outputBytes,
+                                    decryptionPassphrase = encryptionPassphrase
+                                ) ?: return@withContext null
                             updateSafLatestPointer(
                                 context = context,
                                 treeUriString = treeUri,
-                                pointer = LatestPointer(fileName = writtenName, sha256 = archive.sha256, updatedAt = now)
+                                pointer =
+                                    LatestPointer(
+                                        fileName = writtenName,
+                                        sha256 = outputHash,
+                                        updatedAt = now
+                                    )
                             )
                             writtenName
                         }
 
                         BackupTargetType.SafFile -> {
                             val fileUri = state.targetUri
-                            val writtenName = writeSafFileBackup(context, fileUri, archive.bytes) ?: return@withContext null
+                            val writtenName =
+                                writeSafFileBackup(
+                                    context = context,
+                                    fileUriString = fileUri,
+                                    archiveBytes = outputBytes,
+                                    decryptionPassphrase = encryptionPassphrase
+                                ) ?: return@withContext null
                             writtenName
                         }
                     }
@@ -184,7 +266,7 @@ object BackupManager {
             withContext(Dispatchers.IO) {
                 when (state.targetType) {
                     BackupTargetType.AppPrivate -> pruneOldAppBackups(context)
-                    BackupTargetType.SafDirectory -> pruneOldSafBackups(context, state.targetUri)
+                    BackupTargetType.SafDirectory -> pruneSafBackupsExcept(context, state.targetUri, writeResult)
                     BackupTargetType.SafFile -> Unit
                 }
             }
@@ -218,7 +300,20 @@ object BackupManager {
         progress: ProgressCallback? = null
     ): BackupResult {
         progress?.invoke(5, "Opening backup")
-        val state = BackupPreferences(context).readState()
+        val prefs = BackupPreferences(context)
+        val state = prefs.readState()
+        val encryptionPassphrase =
+            if (state.encryptionEnabled) {
+                prefs.getEncryptionPassphrase()?.takeIf { it.isNotBlank() }
+            } else {
+                null
+            }
+        if (state.encryptionEnabled && encryptionPassphrase.isNullOrBlank()) {
+            return BackupResult(
+                success = false,
+                message = "Backup encryption passphrase is missing"
+            )
+        }
         val input =
             if (uriString.isNullOrBlank()) {
                 openLatestInput(context, state)
@@ -236,7 +331,8 @@ object BackupManager {
                         database = DatabaseProvider.getDatabase(context),
                         inputStream = stream,
                         progress = progress,
-                        manifestPolicy = state.manifestPolicy
+                        manifestPolicy = state.manifestPolicy,
+                        passphrase = encryptionPassphrase
                     )
                 }
             }
@@ -271,10 +367,7 @@ object BackupManager {
                     BackupTargetType.SafDirectory -> probeSafDirectoryInternal(context, state.targetUri)
 
                     BackupTargetType.SafFile -> {
-                        val fileUri = state.targetUri ?: return@withContext BackupResult(false, "Backup file unavailable")
-                        val canWrite = isSafFileWritable(context, fileUri)
-                        if (canWrite) BackupResult(true, "Write test passed")
-                        else BackupResult(false, "Backup file unavailable")
+                        probeSafFileInternal(context, state.targetUri)
                     }
                 }
             } catch (t: Exception) {
@@ -392,12 +485,15 @@ object BackupManager {
 
     private fun isSafFileWritable(context: Context, uriString: String?): Boolean {
         val uri = uriString?.toUri() ?: return false
-        val viaDescriptor =
+        val viaReadWriteDescriptor =
             runCatching {
                 context.contentResolver.openFileDescriptor(uri, "rw")?.use { true } ?: false
             }.getOrDefault(false)
-        if (viaDescriptor) return true
-        return hasPersistedReadWritePermission(context, uriString)
+        if (viaReadWriteDescriptor) return true
+        if (!hasPersistedReadWritePermission(context, uriString)) return false
+        return runCatching {
+            context.contentResolver.openInputStream(uri)?.use { true } ?: false
+        }.getOrDefault(false)
     }
 
     fun buildDriveTroubleshootReport(context: Context, state: BackupState): DriveTroubleshootReport {
@@ -419,7 +515,7 @@ object BackupManager {
         val selectedAuthority = state.targetAuthority ?: state.targetUri?.let { runCatching { it.toUri().authority }.getOrNull() }
         val persistedPermissionValid = hasPersistedReadWritePermission(context, state.targetUri)
         val managedProfile =
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                 context.getSystemService(UserManager::class.java)?.isManagedProfile == true
             } else {
                 false
@@ -491,10 +587,24 @@ object BackupManager {
     }
 
     internal fun sha256HexForTest(raw: String): String = sha256Hex(raw.toByteArray(Charsets.UTF_8))
+    internal fun backupFileNameForTargetForTest(targetType: BackupTargetType, timestamp: Long): String =
+        backupFileNameForTarget(targetType, timestamp)
+    internal fun encryptArchiveForTest(rawBytes: ByteArray, passphrase: String): ByteArray =
+        encryptArchiveBytes(rawBytes, passphrase)
+    internal fun decryptArchiveForTest(rawBytes: ByteArray, passphrase: String?): ByteArray =
+        decryptArchiveBytesIfNeeded(rawBytes, passphrase)
 
     private fun backupFileName(timestamp: Long): String {
         val formatter = SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US)
         return "oms-backup-${formatter.format(Date(timestamp))}$BACKUP_FILE_EXTENSION"
+    }
+
+    private fun backupFileNameForTarget(targetType: BackupTargetType, timestamp: Long): String {
+        return when (targetType) {
+            BackupTargetType.SafDirectory -> SAF_DIRECTORY_ROLLING_FILE_NAME
+            BackupTargetType.AppPrivate,
+            BackupTargetType.SafFile -> backupFileName(timestamp)
+        }
     }
 
     private fun ensureAppPrivateDir(context: Context): File? {
@@ -588,6 +698,46 @@ object BackupManager {
         }
     }
 
+    private fun probeSafFileInternal(context: Context, fileUriString: String?): BackupResult {
+        val uri = fileUriString?.toUri() ?: return BackupResult(false, "Backup file unavailable")
+        return try {
+            val originalBytes =
+                context.contentResolver.openInputStream(uri)?.use { input ->
+                    input.readBytes()
+                } ?: return BackupResult(false, "Backup file unavailable")
+            if (originalBytes.size.toLong() > MAX_SAFE_ROLLBACK_BYTES) {
+                return BackupResult(false, "Backup file too large for probe")
+            }
+            val probeBytes = "probe_${System.currentTimeMillis()}".toByteArray(Charsets.UTF_8)
+            if (!writeSafFileBytes(context, uri, probeBytes)) {
+                return BackupResult(false, "Backup file unavailable")
+            }
+            verifySafFileWrite(
+                context = context,
+                uri = uri,
+                expectedBytes = probeBytes.size.toLong(),
+                expectedHash = sha256Hex(probeBytes)
+            )
+
+            if (!writeSafFileBytes(context, uri, originalBytes)) {
+                return BackupResult(false, "Write verification failed")
+            }
+            verifySafFileWrite(
+                context = context,
+                uri = uri,
+                expectedBytes = originalBytes.size.toLong(),
+                expectedHash = sha256Hex(originalBytes)
+            )
+            BackupResult(true, "Write test passed")
+        } catch (t: Exception) {
+            BackupResult(
+                success = false,
+                message = t.message ?: "Write verification failed",
+                shouldRetry = isRetryableBackupException(t)
+            )
+        }
+    }
+
     private fun pruneOldAppBackups(context: Context) {
         val dir = File(context.filesDir, BACKUP_DIR_NAME)
         if (!dir.exists() || !dir.isDirectory) return
@@ -605,8 +755,25 @@ object BackupManager {
         backups.drop(MAX_SAF_DIRECTORY_BACKUPS).forEach { it.delete() }
     }
 
+    private fun pruneSafBackupsExcept(context: Context, treeUriString: String?, keepName: String) {
+        val treeUri = treeUriString?.toUri() ?: return
+        val tree = DocumentFile.fromTreeUri(context, treeUri) ?: return
+        val keep = keepName.trim()
+        if (keep.isEmpty()) return
+        listSafBackups(tree)
+            .filterNot { file -> (file.name ?: "").trim() == keep }
+            .forEach { it.delete() }
+    }
+
     suspend fun buildRestorePreview(context: Context, uriString: String?): RestorePreview {
-        val state = BackupPreferences(context).readState()
+        val prefs = BackupPreferences(context)
+        val state = prefs.readState()
+        val encryptionPassphrase =
+            if (state.encryptionEnabled) {
+                prefs.getEncryptionPassphrase()?.takeIf { it.isNotBlank() }
+            } else {
+                null
+            }
         val sourceName =
             if (uriString.isNullOrBlank()) {
                 findLatestBackupName(context, state.targetType, state.targetUri) ?: "Latest backup"
@@ -622,7 +789,10 @@ object BackupManager {
 
         return withContext(Dispatchers.IO) {
             input.use { stream ->
-                val rawPayloads = readZipEntries(stream)
+                val rawPayloads =
+                    readZipEntries(
+                        inputStream = prepareArchiveInputStream(stream, encryptionPassphrase)
+                    )
                 val payloads =
                     validateRestoreEntries(
                         rawEntries = rawPayloads,
@@ -664,12 +834,17 @@ object BackupManager {
                     accountEntries = database.accountingDao().getAllAccountEntries(),
                     payments = database.accountingDao().getAllPayments(),
                     paymentReceipts = database.paymentReceiptDao().getAll(),
-                    paymentAllocations = database.paymentAllocationDao().getAll()
+                    paymentAllocations = database.paymentAllocationDao().getAll(),
+                    helperNotes = database.helperNoteDao().getAll()
                 )
             }
+        val exportCounts = snapshot.toExportCounts()
 
         val payloadEntries = linkedMapOf<String, ByteArray>()
-        payloadEntries[ENTRY_METADATA] = buildMetadata(exportedAt, currentDbVersion).toString().toByteArray(Charsets.UTF_8)
+        payloadEntries[ENTRY_METADATA] =
+            buildMetadata(exportedAt, currentDbVersion, exportCounts)
+                .toString()
+                .toByteArray(Charsets.UTF_8)
         payloadEntries[ENTRY_CUSTOMERS] = customersToJson(snapshot.customers).toString().toByteArray(Charsets.UTF_8)
         payloadEntries[ENTRY_ORDERS] = ordersToJson(snapshot.orders).toString().toByteArray(Charsets.UTF_8)
         payloadEntries[ENTRY_ORDER_ITEMS] = orderItemsToJson(snapshot.orderItems).toString().toByteArray(Charsets.UTF_8)
@@ -677,6 +852,7 @@ object BackupManager {
         payloadEntries[ENTRY_PAYMENTS] = paymentsToJson(snapshot.payments).toString().toByteArray(Charsets.UTF_8)
         payloadEntries[ENTRY_PAYMENT_RECEIPTS] = paymentReceiptsToJson(snapshot.paymentReceipts).toString().toByteArray(Charsets.UTF_8)
         payloadEntries[ENTRY_PAYMENT_ALLOCATIONS] = paymentAllocationsToJson(snapshot.paymentAllocations).toString().toByteArray(Charsets.UTF_8)
+        payloadEntries[ENTRY_HELPER_NOTES] = helperNotesToJson(snapshot.helperNotes).toString().toByteArray(Charsets.UTF_8)
 
         progress?.invoke(65, "Writing manifest")
         payloadEntries[ENTRY_MANIFEST] = buildManifest(exportedAt, payloadEntries, currentDbVersion).toByteArray(Charsets.UTF_8)
@@ -693,12 +869,17 @@ object BackupManager {
         return BackupArchive(bytes = zippedBytes, sha256 = sha256Hex(zippedBytes))
     }
 
-    private fun buildMetadata(exportedAt: Long, dbVersion: Int): JSONObject {
+    private fun buildMetadata(exportedAt: Long, dbVersion: Int, exportCounts: Map<String, Int>): JSONObject {
+        val countsJson = JSONObject()
+        exportCounts.forEach { (entryName, count) ->
+            countsJson.put(entryName, count)
+        }
         return JSONObject()
             .put("exportedAt", exportedAt)
             .put("appVersionName", BuildConfig.VERSION_NAME)
             .put("appVersionCode", BuildConfig.VERSION_CODE)
             .put("dbVersion", dbVersion)
+            .put("counts", countsJson)
     }
 
     private fun buildManifest(
@@ -738,7 +919,12 @@ object BackupManager {
         return output.toByteArray()
     }
 
-    private fun writeAppPrivateBackup(context: Context, fileName: String, archiveBytes: ByteArray): File? {
+    private fun writeAppPrivateBackup(
+        context: Context,
+        fileName: String,
+        archiveBytes: ByteArray,
+        decryptionPassphrase: String?
+    ): File? {
         val dir = ensureAppPrivateDir(context) ?: return null
         val finalFile = File(dir, fileName)
         val partialFile = File(dir, "$fileName.partial")
@@ -748,7 +934,13 @@ object BackupManager {
             out.flush()
         }
 
-        partialFile.inputStream().use { verifyArchiveStream(it, currentDatabaseVersion(context = context)) }
+        partialFile.inputStream().use {
+            verifyArchiveStream(
+                inputStream = it,
+                currentDbVersion = currentDatabaseVersion(context = context),
+                passphrase = decryptionPassphrase
+            )
+        }
 
         if (finalFile.exists() && !finalFile.delete()) {
             throw IOException("Unable to replace existing backup")
@@ -771,7 +963,8 @@ object BackupManager {
         context: Context,
         treeUriString: String?,
         fileName: String,
-        archiveBytes: ByteArray
+        archiveBytes: ByteArray,
+        decryptionPassphrase: String?
     ): String? {
         val treeUri = treeUriString?.toUri() ?: return null
         val tree = DocumentFile.fromTreeUri(context, treeUri) ?: return null
@@ -785,13 +978,25 @@ object BackupManager {
             out.flush()
         } ?: return null
 
-        context.contentResolver.openInputStream(partial.uri)?.use { verifyArchiveStream(it, currentDatabaseVersion(context = context)) }
+        context.contentResolver.openInputStream(partial.uri)?.use {
+            verifyArchiveStream(
+                inputStream = it,
+                currentDbVersion = currentDatabaseVersion(context = context),
+                passphrase = decryptionPassphrase
+            )
+        }
             ?: return null
 
         val renamed = partial.renameTo(fileName)
         if (renamed) {
             val finalized = tree.findFile(fileName) ?: return fileName
-            context.contentResolver.openInputStream(finalized.uri)?.use { verifyArchiveStream(it, currentDatabaseVersion(context = context)) }
+            context.contentResolver.openInputStream(finalized.uri)?.use {
+                verifyArchiveStream(
+                    inputStream = it,
+                    currentDbVersion = currentDatabaseVersion(context = context),
+                    passphrase = decryptionPassphrase
+                )
+            }
                 ?: return null
             return finalized.name ?: fileName
         }
@@ -805,7 +1010,13 @@ object BackupManager {
             }
         } ?: return null
         partial.delete()
-        context.contentResolver.openInputStream(finalFile.uri)?.use { verifyArchiveStream(it, currentDatabaseVersion(context = context)) }
+        context.contentResolver.openInputStream(finalFile.uri)?.use {
+            verifyArchiveStream(
+                inputStream = it,
+                currentDbVersion = currentDatabaseVersion(context = context),
+                passphrase = decryptionPassphrase
+            )
+        }
             ?: return null
         return finalFile.name ?: fileName
     }
@@ -813,7 +1024,8 @@ object BackupManager {
     private fun writeSafFileBackup(
         context: Context,
         fileUriString: String?,
-        archiveBytes: ByteArray
+        archiveBytes: ByteArray,
+        decryptionPassphrase: String?
     ): String? {
         val fileUri = fileUriString?.toUri() ?: return null
         val expectedHash = sha256Hex(archiveBytes)
@@ -839,6 +1051,13 @@ object BackupManager {
                 expectedBytes = archiveBytes.size.toLong(),
                 expectedHash = expectedHash
             )
+            context.contentResolver.openInputStream(fileUri)?.use {
+                verifyArchiveStream(
+                    inputStream = it,
+                    currentDbVersion = currentDatabaseVersion(context = context),
+                    passphrase = decryptionPassphrase
+                )
+            } ?: throw IOException("Backup file unavailable")
 
             resolveDisplayNameForUri(context, fileUriString) ?: "selected_backup.oms"
         } catch (error: Exception) {
@@ -958,9 +1177,21 @@ object BackupManager {
         context: Context,
         uri: android.net.Uri
     ): OutputStream? {
-        return context.contentResolver.openOutputStream(uri, "wt")
-            ?: context.contentResolver.openOutputStream(uri, "w")
-            ?: context.contentResolver.openOutputStream(uri)
+        val attempts: Array<String?> = arrayOf("wt", "w", null)
+        attempts.forEach { mode ->
+            val stream =
+                runCatching {
+                    if (mode == null) {
+                        context.contentResolver.openOutputStream(uri)
+                    } else {
+                        context.contentResolver.openOutputStream(uri, mode)
+                    }
+                }.getOrNull()
+            if (stream != null) {
+                return stream
+            }
+        }
+        return null
     }
 
     private fun isSafFileSizePlausible(
@@ -1076,8 +1307,12 @@ object BackupManager {
         }
     }
 
-    private fun verifyArchiveStream(inputStream: InputStream, currentDbVersion: Int) {
-        val entries = readZipEntries(inputStream)
+    private fun verifyArchiveStream(
+        inputStream: InputStream,
+        currentDbVersion: Int,
+        passphrase: String?
+    ) {
+        val entries = readZipEntries(prepareArchiveInputStream(inputStream, passphrase))
         validateRestoreEntries(
             rawEntries = entries,
             currentDbVersion = currentDbVersion,
@@ -1085,15 +1320,159 @@ object BackupManager {
         )
     }
 
+    private fun prepareArchiveInputStream(inputStream: InputStream, passphrase: String?): InputStream {
+        val rawBytes = readInputBytesLimited(inputStream, MAX_ARCHIVE_BYTES)
+        val archiveBytes = decryptArchiveBytesIfNeeded(rawBytes, passphrase)
+        return ByteArrayInputStream(archiveBytes)
+    }
+
+    private fun readInputBytesLimited(inputStream: InputStream, maxBytes: Long): ByteArray {
+        if (maxBytes <= 0L) {
+            throw IllegalArgumentException("Unsupported backup size limit")
+        }
+        val buffer = ByteArray(8_192)
+        val output = ByteArrayOutputStream()
+        var total = 0L
+        var read = inputStream.read(buffer)
+        while (read >= 0) {
+            if (read > 0) {
+                total += read.toLong()
+                if (total > maxBytes) {
+                    throw IllegalArgumentException("Backup archive exceeds supported size")
+                }
+                output.write(buffer, 0, read)
+            }
+            read = inputStream.read(buffer)
+        }
+        return output.toByteArray()
+    }
+
+    private fun encryptArchiveBytes(plainArchive: ByteArray, passphrase: String): ByteArray {
+        if (passphrase.isBlank()) {
+            throw IllegalArgumentException("Backup encryption passphrase is missing")
+        }
+        val salt = ByteArray(ENCRYPTION_SALT_BYTES).also { SecureRandom().nextBytes(it) }
+        val iv = ByteArray(ENCRYPTION_IV_BYTES).also { SecureRandom().nextBytes(it) }
+        val key = deriveEncryptionKey(passphrase, salt)
+        val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+        cipher.init(Cipher.ENCRYPT_MODE, key, GCMParameterSpec(ENCRYPTION_TAG_BITS, iv))
+        val cipherText = cipher.doFinal(plainArchive)
+        val header =
+            ByteBuffer
+                .allocate(
+                    ENCRYPTION_MAGIC.size +
+                        1 +
+                        1 +
+                        1 +
+                        4 +
+                        4
+                )
+                .order(ByteOrder.BIG_ENDIAN)
+                .put(ENCRYPTION_MAGIC)
+                .put(ENCRYPTION_VERSION)
+                .put(salt.size.toByte())
+                .put(iv.size.toByte())
+                .putInt(PBKDF2_ITERATIONS)
+                .putInt(cipherText.size)
+                .array()
+        return ByteArrayOutputStream().use { output ->
+            output.write(header)
+            output.write(salt)
+            output.write(iv)
+            output.write(cipherText)
+            output.toByteArray()
+        }
+    }
+
+    private fun decryptArchiveBytesIfNeeded(rawBytes: ByteArray, passphrase: String?): ByteArray {
+        if (!isEncryptedArchive(rawBytes)) return rawBytes
+        if (passphrase.isNullOrBlank()) {
+            throw IllegalArgumentException("Encrypted backup requires passphrase")
+        }
+        val header =
+            ByteBuffer.wrap(rawBytes)
+                .order(ByteOrder.BIG_ENDIAN)
+        val magic = ByteArray(ENCRYPTION_MAGIC.size)
+        header.get(magic)
+        val version = header.get()
+        if (version != ENCRYPTION_VERSION) {
+            throw IllegalArgumentException("Unsupported encrypted backup version")
+        }
+        val saltLength = header.get().toInt() and 0xFF
+        val ivLength = header.get().toInt() and 0xFF
+        val iterations = header.int
+        val cipherLength = header.int
+        if (saltLength <= 0 || ivLength <= 0 || iterations <= 0 || cipherLength <= 0) {
+            throw IllegalArgumentException("Encrypted backup header is invalid")
+        }
+        val expectedTotal =
+            ENCRYPTION_MAGIC.size +
+                1 +
+                1 +
+                1 +
+                4 +
+                4 +
+                saltLength +
+                ivLength +
+                cipherLength
+        if (rawBytes.size != expectedTotal) {
+            throw IllegalArgumentException("Encrypted backup payload is invalid")
+        }
+        val salt = ByteArray(saltLength)
+        val iv = ByteArray(ivLength)
+        val cipherText = ByteArray(cipherLength)
+        header.get(salt)
+        header.get(iv)
+        header.get(cipherText)
+
+        return try {
+            val key = deriveEncryptionKey(passphrase, salt, iterations)
+            val cipher = Cipher.getInstance("AES/GCM/NoPadding")
+            cipher.init(Cipher.DECRYPT_MODE, key, GCMParameterSpec(ENCRYPTION_TAG_BITS, iv))
+            cipher.doFinal(cipherText)
+        } catch (badTag: AEADBadTagException) {
+            throw IllegalArgumentException("Incorrect backup passphrase")
+        } catch (security: GeneralSecurityException) {
+            throw IllegalArgumentException("Unable to decrypt backup archive")
+        }
+    }
+
+    private fun isEncryptedArchive(rawBytes: ByteArray): Boolean {
+        if (rawBytes.size < ENCRYPTION_MAGIC.size + 3) return false
+        return ENCRYPTION_MAGIC.indices.all { index ->
+            rawBytes[index] == ENCRYPTION_MAGIC[index]
+        }
+    }
+
+    private fun deriveEncryptionKey(
+        passphrase: String,
+        salt: ByteArray,
+        iterations: Int = PBKDF2_ITERATIONS
+    ): SecretKeySpec {
+        val spec = PBEKeySpec(passphrase.toCharArray(), salt, iterations, PBKDF2_KEY_SIZE_BITS)
+        val rawKey =
+            runCatching {
+                SecretKeyFactory.getInstance("PBKDF2WithHmacSHA256")
+                    .generateSecret(spec)
+                    .encoded
+            }.getOrElse {
+                SecretKeyFactory.getInstance("PBKDF2WithHmacSHA1")
+                    .generateSecret(spec)
+                    .encoded
+            }
+        return SecretKeySpec(rawKey, "AES")
+    }
+
     private suspend fun importDatabase(
         database: AppDatabase,
         inputStream: InputStream,
         progress: ProgressCallback?,
-        manifestPolicy: RestoreManifestPolicy
+        manifestPolicy: RestoreManifestPolicy,
+        passphrase: String?
     ) {
         progress?.invoke(15, "Reading backup")
         val currentDbVersion = currentDatabaseVersion(database = database)
-        val rawPayloads = readZipEntries(inputStream)
+        val rawPayloads = readZipEntries(prepareArchiveInputStream(inputStream, passphrase))
         val payloads =
             validateRestoreEntries(
                 rawEntries = rawPayloads,
@@ -1108,11 +1487,23 @@ object BackupManager {
         val payments = parsePayments(payloads[ENTRY_PAYMENTS])
         val receipts = parsePaymentReceipts(payloads[ENTRY_PAYMENT_RECEIPTS])
         val allocations = parsePaymentAllocations(payloads[ENTRY_PAYMENT_ALLOCATIONS])
+        val helperNotes = parseHelperNotes(payloads[ENTRY_HELPER_NOTES])
         val legacyMpesa = parseLegacyMpesaTransactions(payloads[ENTRY_LEGACY_MPESA])
         val resolvedReceipts =
             if (receipts.isNotEmpty()) receipts else legacyMpesaToReceipts(legacyMpesa)
         val resolvedAllocations =
             if (allocations.isNotEmpty()) allocations else legacyMpesaToAllocations(legacyMpesa)
+        val expectedPersistedCounts =
+            PersistedTableCounts(
+                customers = customers.size,
+                orders = orders.size,
+                orderItems = orderItems.size,
+                accountEntries = accountEntries.size,
+                payments = payments.size,
+                paymentReceipts = resolvedReceipts.size,
+                paymentAllocations = resolvedAllocations.size,
+                helperNotes = helperNotes.size
+            )
 
         progress?.invoke(70, "Restoring data")
         database.withTransaction {
@@ -1124,6 +1515,8 @@ object BackupManager {
             database.accountingDao().insertPayments(payments)
             database.paymentReceiptDao().insertAll(resolvedReceipts)
             database.paymentAllocationDao().insertAll(resolvedAllocations)
+            database.helperNoteDao().insertAll(helperNotes)
+            verifyRestoredTableCounts(database, expectedPersistedCounts)
         }
         progress?.invoke(95, "Finalizing")
     }
@@ -1171,13 +1564,138 @@ object BackupManager {
                 parseArrayStrict(textEntries.getValue(entryName), entryName)
             }
 
+        metadata.optJSONObject("counts")?.let { counts ->
+            verifyMetadataCounts(counts = counts, textEntries = textEntries)
+        }
+
         if (rawEntries.containsKey(ENTRY_MANIFEST)) {
             verifyManifest(rawEntries, textEntries.getValue(ENTRY_MANIFEST))
         } else if (manifestPolicy == RestoreManifestPolicy.Strict) {
             throw IllegalArgumentException("Backup manifest is required in strict mode")
         }
 
+        val customers = parseCustomers(textEntries[ENTRY_CUSTOMERS])
+        val orders = parseOrders(textEntries[ENTRY_ORDERS])
+        val orderItems = parseOrderItems(textEntries[ENTRY_ORDER_ITEMS])
+        val accountEntries = parseAccountEntries(textEntries[ENTRY_ACCOUNT_ENTRIES])
+        val payments = parsePayments(textEntries[ENTRY_PAYMENTS])
+        val receipts = parsePaymentReceipts(textEntries[ENTRY_PAYMENT_RECEIPTS])
+        val allocations = parsePaymentAllocations(textEntries[ENTRY_PAYMENT_ALLOCATIONS])
+        val helperNotes = parseHelperNotes(textEntries[ENTRY_HELPER_NOTES])
+        val legacyMpesa = parseLegacyMpesaTransactions(textEntries[ENTRY_LEGACY_MPESA])
+        val resolvedReceipts = if (receipts.isNotEmpty()) receipts else legacyMpesaToReceipts(legacyMpesa)
+        val resolvedAllocations =
+            if (allocations.isNotEmpty()) allocations else legacyMpesaToAllocations(legacyMpesa)
+        validateRecordGraph(
+            customers = customers,
+            orders = orders,
+            orderItems = orderItems,
+            accountEntries = accountEntries,
+            payments = payments,
+            receipts = resolvedReceipts,
+            allocations = resolvedAllocations,
+            helperNotes = helperNotes
+        )
+
         return textEntries
+    }
+
+    private fun verifyMetadataCounts(counts: JSONObject, textEntries: Map<String, String>) {
+        val keys = counts.keys()
+        while (keys.hasNext()) {
+            val entryName = keys.next().trim()
+            if (!ARRAY_ENTRIES.contains(entryName)) {
+                throw IllegalArgumentException("Backup metadata count references unsupported entry: $entryName")
+            }
+            val expectedCount = counts.optInt(entryName, -1)
+            if (expectedCount < 0) {
+                throw IllegalArgumentException("Backup metadata has invalid count for $entryName")
+            }
+            val payload =
+                textEntries[entryName]
+                    ?: throw IllegalArgumentException("Backup metadata references missing entry: $entryName")
+            val actualCount =
+                runCatching { JSONArray(payload).length() }
+                    .getOrElse { throw IllegalArgumentException("Backup payload is invalid for $entryName") }
+            if (actualCount != expectedCount) {
+                throw IllegalArgumentException(
+                    "Backup metadata count mismatch for $entryName (expected $expectedCount, found $actualCount)"
+                )
+            }
+        }
+    }
+
+    private fun validateRecordGraph(
+        customers: List<CustomerEntity>,
+        orders: List<OrderEntity>,
+        orderItems: List<OrderItemEntity>,
+        accountEntries: List<AccountEntryEntity>,
+        payments: List<PaymentEntity>,
+        receipts: List<PaymentReceiptEntity>,
+        allocations: List<PaymentAllocationEntity>,
+        helperNotes: List<HelperNoteEntity>
+    ) {
+        validatePositiveUniqueIds("customers", customers.map { it.id })
+        validatePositiveUniqueIds("orders", orders.map { it.id })
+        validatePositiveUniqueIds("order_items", orderItems.map { it.id })
+        validatePositiveUniqueIds("account_entries", accountEntries.map { it.id })
+        validatePositiveUniqueIds("payments", payments.map { it.id })
+        validatePositiveUniqueIds("payment_receipts", receipts.map { it.id })
+        validatePositiveUniqueIds("payment_allocations", allocations.map { it.id })
+        validatePositiveUniqueIds("helper_notes", helperNotes.map { it.id })
+
+        val customerIds = customers.map { it.id }.toHashSet()
+        val orderIds = orders.map { it.id }.toHashSet()
+        val accountEntryIds = accountEntries.map { it.id }.toHashSet()
+        val receiptIds = receipts.map { it.id }.toHashSet()
+
+        ensureReferencesExist("orders.customerId", orders.mapNotNull { it.customerId }, customerIds)
+        ensureReferencesExist("order_items.orderId", orderItems.map { it.orderId }, orderIds)
+        ensureReferencesExist("payments.orderId", payments.map { it.orderId }, orderIds)
+        ensureReferencesExist("account_entries.orderId", accountEntries.mapNotNull { it.orderId }, orderIds)
+        ensureReferencesExist("account_entries.customerId", accountEntries.mapNotNull { it.customerId }, customerIds)
+        ensureReferencesExist("payment_receipts.customerId", receipts.mapNotNull { it.customerId }, customerIds)
+        ensureReferencesExist("payment_allocations.receiptId", allocations.map { it.receiptId }, receiptIds)
+        ensureReferencesExist("payment_allocations.orderId", allocations.mapNotNull { it.orderId }, orderIds)
+        ensureReferencesExist("payment_allocations.customerId", allocations.mapNotNull { it.customerId }, customerIds)
+        ensureReferencesExist(
+            "payment_allocations.accountEntryId",
+            allocations.mapNotNull { it.accountEntryId },
+            accountEntryIds
+        )
+        ensureReferencesExist(
+            "payment_allocations.reversalEntryId",
+            allocations.mapNotNull { it.reversalEntryId },
+            accountEntryIds
+        )
+        ensureReferencesExist("helper_notes.linkedCustomerId", helperNotes.mapNotNull { it.linkedCustomerId }, customerIds)
+    }
+
+    private fun validatePositiveUniqueIds(label: String, ids: List<Long>) {
+        val nonPositive = ids.filter { it <= 0L }
+        if (nonPositive.isNotEmpty()) {
+            val sample = nonPositive.take(5).joinToString()
+            throw IllegalArgumentException("Backup $label contains non-positive ids (examples: $sample)")
+        }
+        val duplicates =
+            ids.groupingBy { it }
+                .eachCount()
+                .filterValues { it > 1 }
+                .keys
+                .take(5)
+        if (duplicates.isNotEmpty()) {
+            throw IllegalArgumentException(
+                "Backup $label contains duplicate ids: ${duplicates.joinToString()}"
+            )
+        }
+    }
+
+    private fun ensureReferencesExist(label: String, refs: List<Long>, targets: Set<Long>) {
+        if (refs.isEmpty()) return
+        val missing = refs.filterNot { targets.contains(it) }.distinct().take(5)
+        if (missing.isNotEmpty()) {
+            throw IllegalArgumentException("Backup $label references missing ids: ${missing.joinToString()}")
+        }
     }
 
     private fun verifyManifest(rawEntries: Map<String, ByteArray>, manifestPayload: String) {
@@ -1231,6 +1749,32 @@ object BackupManager {
     private fun parseArrayStrict(payload: String, entryName: String) {
         runCatching { JSONArray(payload) }
             .getOrElse { throw IllegalArgumentException("Backup payload is invalid for $entryName") }
+    }
+
+    private fun verifyRestoredTableCounts(database: AppDatabase, expected: PersistedTableCounts) {
+        verifyTableCount(database, TABLE_CUSTOMERS, expected.customers)
+        verifyTableCount(database, TABLE_ORDERS, expected.orders)
+        verifyTableCount(database, TABLE_ORDER_ITEMS, expected.orderItems)
+        verifyTableCount(database, TABLE_ACCOUNT_ENTRIES, expected.accountEntries)
+        verifyTableCount(database, TABLE_PAYMENTS, expected.payments)
+        verifyTableCount(database, TABLE_PAYMENT_RECEIPTS, expected.paymentReceipts)
+        verifyTableCount(database, TABLE_PAYMENT_ALLOCATIONS, expected.paymentAllocations)
+        verifyTableCount(database, TABLE_HELPER_NOTES, expected.helperNotes)
+    }
+
+    private fun verifyTableCount(database: AppDatabase, tableName: String, expected: Int) {
+        val query = "SELECT COUNT(*) FROM $tableName"
+        val actual =
+            database.openHelper.writableDatabase
+                .query(query)
+                .use { cursor ->
+                    if (cursor.moveToFirst()) cursor.getInt(0) else 0
+                }
+        if (actual != expected) {
+            throw IllegalStateException(
+                "Restore verification failed for $tableName (expected $expected rows, found $actual)"
+            )
+        }
     }
 
     private fun readZipEntries(
@@ -1422,6 +1966,32 @@ object BackupManager {
         return array
     }
 
+    private fun helperNotesToJson(notes: List<HelperNoteEntity>): JSONArray {
+        val array = JSONArray()
+        notes.forEach { note ->
+            array.put(
+                JSONObject()
+                    .put("id", note.id)
+                    .put("createdAt", note.createdAt)
+                    .put("updatedAt", note.updatedAt)
+                    .put("type", note.type.name)
+                    .put("rawTranscript", note.rawTranscript)
+                    .put("displayText", note.displayText)
+                    .put("calculatorExpression", note.calculatorExpression ?: JSONObject.NULL)
+                    .put("calculatorResult", note.calculatorResult ?: JSONObject.NULL)
+                    .put("detectedPhone", note.detectedPhone ?: JSONObject.NULL)
+                    .put("detectedPhoneDigits", note.detectedPhoneDigits ?: JSONObject.NULL)
+                    .put("detectedAmountRaw", note.detectedAmountRaw ?: JSONObject.NULL)
+                    .put("detectedAmountNormalized", note.detectedAmountNormalized ?: JSONObject.NULL)
+                    .put("linkedCustomerId", note.linkedCustomerId ?: JSONObject.NULL)
+                    .put("sourceApp", note.sourceApp ?: JSONObject.NULL)
+                    .put("pinned", note.pinned)
+                    .put("deleted", note.deleted)
+            )
+        }
+        return array
+    }
+
     private fun parseCustomers(payload: String?): List<CustomerEntity> {
         val array = parseArray(payload) ?: return emptyList()
         return (0 until array.length()).map { index ->
@@ -1581,6 +2151,51 @@ object BackupManager {
                 createdAt = obj.getLong("createdAt"),
                 voidedAt = voidedAt,
                 voidReason = voidReason
+            )
+        }
+    }
+
+    private fun parseHelperNotes(payload: String?): List<HelperNoteEntity> {
+        val array = parseArray(payload) ?: return emptyList()
+        return (0 until array.length()).map { index ->
+            val obj = array.getJSONObject(index)
+            val calculatorExpression =
+                if (obj.isNull("calculatorExpression")) null else obj.getString("calculatorExpression")
+            val calculatorResult =
+                if (obj.isNull("calculatorResult")) null else obj.getString("calculatorResult")
+            val detectedPhone =
+                if (obj.isNull("detectedPhone")) null else obj.getString("detectedPhone")
+            val detectedPhoneDigits =
+                if (obj.isNull("detectedPhoneDigits")) null else obj.getString("detectedPhoneDigits")
+            val detectedAmountRaw =
+                if (obj.isNull("detectedAmountRaw")) null else obj.getString("detectedAmountRaw")
+            val detectedAmountNormalized =
+                if (obj.isNull("detectedAmountNormalized")) null else obj.getString("detectedAmountNormalized")
+            val linkedCustomerId =
+                if (obj.isNull("linkedCustomerId")) null else obj.getLong("linkedCustomerId")
+            val sourceApp =
+                if (obj.isNull("sourceApp")) null else obj.getString("sourceApp")
+            val deleted = obj.optBoolean("deleted", false)
+            val pinned = obj.optBoolean("pinned", false)
+            val rawTranscript = obj.optString("rawTranscript", "")
+            val displayText = obj.optString("displayText", rawTranscript)
+            HelperNoteEntity(
+                id = obj.getLong("id"),
+                createdAt = obj.getLong("createdAt"),
+                updatedAt = obj.optLong("updatedAt", obj.getLong("createdAt")),
+                type = HelperNoteType.valueOf(obj.getString("type")),
+                rawTranscript = rawTranscript,
+                displayText = displayText,
+                calculatorExpression = calculatorExpression,
+                calculatorResult = calculatorResult,
+                detectedPhone = detectedPhone,
+                detectedPhoneDigits = detectedPhoneDigits,
+                detectedAmountRaw = detectedAmountRaw,
+                detectedAmountNormalized = detectedAmountNormalized,
+                linkedCustomerId = linkedCustomerId,
+                sourceApp = sourceApp,
+                pinned = pinned,
+                deleted = deleted
             )
         }
     }
@@ -1790,8 +2405,22 @@ object BackupManager {
         val accountEntries: List<AccountEntryEntity>,
         val payments: List<PaymentEntity>,
         val paymentReceipts: List<PaymentReceiptEntity>,
-        val paymentAllocations: List<PaymentAllocationEntity>
-    )
+        val paymentAllocations: List<PaymentAllocationEntity>,
+        val helperNotes: List<HelperNoteEntity>
+    ) {
+        fun toExportCounts(): Map<String, Int> {
+            return linkedMapOf(
+                ENTRY_CUSTOMERS to customers.size,
+                ENTRY_ORDERS to orders.size,
+                ENTRY_ORDER_ITEMS to orderItems.size,
+                ENTRY_ACCOUNT_ENTRIES to accountEntries.size,
+                ENTRY_PAYMENTS to payments.size,
+                ENTRY_PAYMENT_RECEIPTS to paymentReceipts.size,
+                ENTRY_PAYMENT_ALLOCATIONS to paymentAllocations.size,
+                ENTRY_HELPER_NOTES to helperNotes.size
+            )
+        }
+    }
 
     private data class BackupArchive(
         val bytes: ByteArray,
@@ -1823,5 +2452,16 @@ object BackupManager {
         val customerId: Long?,
         val orderId: Long?,
         val accountEntryId: Long?
+    )
+
+    private data class PersistedTableCounts(
+        val customers: Int,
+        val orders: Int,
+        val orderItems: Int,
+        val accountEntries: Int,
+        val payments: Int,
+        val paymentReceipts: Int,
+        val paymentAllocations: Int,
+        val helperNotes: Int
     )
 }

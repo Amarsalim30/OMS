@@ -1,7 +1,12 @@
 package com.zeynbakers.order_management_system.core.notifications
 
 import android.Manifest
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -33,12 +38,14 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import com.zeynbakers.order_management_system.R
 
@@ -49,9 +56,22 @@ fun NotificationSettingsScreen(onBack: () -> Unit) {
     val prefs = remember { NotificationPreferences(context) }
     var settings by remember { mutableStateOf(prefs.readSettings()) }
     var hasPermission by remember { mutableStateOf(hasNotificationPermission(context)) }
+    var permissionRequested by rememberSaveable { mutableStateOf(false) }
+    val activity = context.findActivity()
+    val permanentlyDenied =
+        requiresPermission() &&
+            !hasPermission &&
+            permissionRequested &&
+            activity?.let {
+                !ActivityCompat.shouldShowRequestPermissionRationale(
+                    it,
+                    Manifest.permission.POST_NOTIFICATIONS
+                )
+            } == true
 
     val permissionLauncher =
         rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+            permissionRequested = true
             hasPermission = granted || !requiresPermission()
             if (granted) {
                 NotificationScheduler.setEnabled(context, true)
@@ -107,7 +127,11 @@ fun NotificationSettingsScreen(onBack: () -> Unit) {
                     checked = settings.enabled,
                     onCheckedChange = { enabled ->
                         if (enabled && requiresPermission() && !hasPermission) {
-                            permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                            if (permanentlyDenied) {
+                                openAppSettings(context)
+                            } else {
+                                permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                            }
                             return@Switch
                         }
                         NotificationScheduler.setEnabled(context, enabled)
@@ -122,8 +146,23 @@ fun NotificationSettingsScreen(onBack: () -> Unit) {
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.error
                 )
-                TextButton(onClick = { permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS) }) {
-                    Text(stringResource(R.string.notifications_grant_permission))
+                TextButton(
+                    onClick = {
+                        if (permanentlyDenied) {
+                            openAppSettings(context)
+                        } else {
+                            permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                        }
+                    }
+                ) {
+                    Text(
+                        text =
+                            if (permanentlyDenied) {
+                                stringResource(R.string.permission_primer_open_settings)
+                            } else {
+                                stringResource(R.string.notifications_grant_permission)
+                            }
+                    )
                 }
             }
 
@@ -220,5 +259,23 @@ private fun hasNotificationPermission(context: android.content.Context): Boolean
 
 private fun requiresPermission(): Boolean {
     return android.os.Build.VERSION.SDK_INT >= 33
+}
+
+private fun Context.findActivity(): Activity? {
+    var current: Context? = this
+    while (current is ContextWrapper) {
+        if (current is Activity) return current
+        current = current.baseContext
+    }
+    return null
+}
+
+private fun openAppSettings(context: Context) {
+    val intent =
+        Intent(
+            Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+            android.net.Uri.fromParts("package", context.packageName, null)
+        ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+    context.startActivity(intent)
 }
 

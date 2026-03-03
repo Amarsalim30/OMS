@@ -1,5 +1,6 @@
 package com.zeynbakers.order_management_system.order.ui
 
+import androidx.compose.runtime.Immutable
 import java.math.BigDecimal
 import kotlinx.datetime.LocalDate
 
@@ -10,6 +11,7 @@ enum class PaymentState {
     OVERPAID
 }
 
+@Immutable
 data class CalendarDayUi(
         val date: LocalDate,
         val orderCount: Int,

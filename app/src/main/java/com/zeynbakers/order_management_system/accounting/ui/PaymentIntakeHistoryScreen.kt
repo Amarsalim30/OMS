@@ -60,6 +60,8 @@ import com.zeynbakers.order_management_system.core.ui.components.AppCard
 import com.zeynbakers.order_management_system.core.ui.components.AppEmptyState
 import com.zeynbakers.order_management_system.core.ui.components.AppFilterOption
 import com.zeynbakers.order_management_system.core.ui.components.AppFilterRow
+import com.zeynbakers.order_management_system.core.tutorial.TutorialCoachTargets
+import com.zeynbakers.order_management_system.core.tutorial.tutorialCoachTarget
 import com.zeynbakers.order_management_system.core.util.formatDateTime
 import com.zeynbakers.order_management_system.core.util.formatKes
 import kotlinx.coroutines.launch
@@ -116,7 +118,12 @@ fun PaymentIntakeHistoryScreen(
         contentWindowInsets = WindowInsets(0),
         topBar = {
             TopAppBar(
-                title = { Text(screenTitle) },
+                title = {
+                    Text(
+                        text = screenTitle,
+                        modifier = Modifier.tutorialCoachTarget(TutorialCoachTargets.PaymentHistoryTitle)
+                    )
+                },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(

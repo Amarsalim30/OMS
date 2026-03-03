@@ -11,7 +11,10 @@ data class BackupState(
     val lastStatus: BackupStatus,
     val lastMessage: String?,
     val consecutiveAutoFailures: Int,
-    val manifestPolicy: RestoreManifestPolicy
+    val manifestPolicy: RestoreManifestPolicy,
+    val encryptionEnabled: Boolean,
+    val encryptionConfigured: Boolean,
+    val insecureOverrideEnabled: Boolean
 )
 
 enum class BackupTargetType {

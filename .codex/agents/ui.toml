@@ -1,0 +1,6 @@
+model = "gpt-5.3-codex"
+model_reasoning_effort = "medium"
+developer_instructions = """
+Focus on Compose UI, large fontScale behavior, spacing/typography system,
+consistent loading/empty/error states, touch targets, TalkBack labels.
+"""
