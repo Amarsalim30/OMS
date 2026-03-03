@@ -94,13 +94,13 @@ fun ManualPaymentScreen(
     val scope = rememberCoroutineScope()
 
     LaunchedEffect(initialCustomerId, initialOrderId, initialAmount) {
-        if (initialCustomerId != null) {
-            selectedCustomerId = initialCustomerId
-            selectedOrderId = initialOrderId
-            amountText = initialAmount?.toPlainString().orEmpty()
-            customerQuery = ""
-            onContextConsumed()
-        }
+        val hasContext = initialCustomerId != null || initialOrderId != null || initialAmount != null
+        if (!hasContext) return@LaunchedEffect
+        selectedCustomerId = initialCustomerId
+        selectedOrderId = initialOrderId
+        amountText = initialAmount?.toPlainString().orEmpty()
+        customerQuery = ""
+        onContextConsumed()
     }
 
     LaunchedEffect(selectedCustomerId) {
@@ -137,8 +137,8 @@ fun ManualPaymentScreen(
     val parsedAmount = amountText.trim().takeIf { it.isNotEmpty() }?.let {
         runCatching { BigDecimal(it) }.getOrNull()
     }
-    val canSave =
-        selectedCustomerId != null && parsedAmount != null && parsedAmount > BigDecimal.ZERO
+    val hasAllocationTarget = selectedCustomerId != null || selectedOrderId != null
+    val canSave = hasAllocationTarget && parsedAmount != null && parsedAmount > BigDecimal.ZERO
 
     val layoutDirection = LocalLayoutDirection.current
     val contentPadding =
@@ -170,14 +170,16 @@ fun ManualPaymentScreen(
                 ) {
                     Button(
                         onClick = {
-                            val customerId = selectedCustomerId ?: return@Button
                             val amount = parsedAmount
                             if (amount == null || amount <= BigDecimal.ZERO) {
                                 amountError = enterValidAmount
                                 return@Button
                             }
+                            if (selectedCustomerId == null && selectedOrderId == null) {
+                                return@Button
+                            }
                             customerViewModel.recordPayment(
-                                customerId = customerId,
+                                customerId = selectedCustomerId,
                                 amount = amount,
                                 method = selectedMethod,
                                 note = noteText,
@@ -207,6 +209,25 @@ fun ManualPaymentScreen(
             item {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     if (selectedCustomerId == null) {
+                        selectedOrderId?.let { contextOrderId ->
+                            Surface(
+                                tonalElevation = 1.dp,
+                                shape = MaterialTheme.shapes.medium,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Column(modifier = Modifier.padding(12.dp)) {
+                                    Text(
+                                        text = stringResource(R.string.payment_history_header_order_id, contextOrderId),
+                                        style = MaterialTheme.typography.titleSmall
+                                    )
+                                    Text(
+                                        text = stringResource(R.string.money_anonymous_payment_hint),
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        }
                         Text(
                             text = stringResource(R.string.money_select_customer),
                             style = MaterialTheme.typography.titleSmall
@@ -224,7 +245,6 @@ fun ManualPaymentScreen(
                                     TextButton(
                                         onClick = {
                                             selectedCustomerId = summary.customerId
-                                            selectedOrderId = null
                                             customerQuery = ""
                                         }
                                     ) {
@@ -315,7 +335,7 @@ fun ManualPaymentScreen(
                         },
                         label = { Text(stringResource(R.string.money_amount_kes)) },
                         placeholder = { Text(stringResource(R.string.money_kes_zero)) },
-                        enabled = selectedCustomerId != null,
+                        enabled = hasAllocationTarget,
                         keyboardOptions = KeyboardOptions(
                             keyboardType = KeyboardType.Decimal,
                             imeAction = ImeAction.Next
@@ -339,13 +359,13 @@ fun ManualPaymentScreen(
                             label = stringResource(R.string.money_method_cash),
                             selected = selectedMethod == PaymentMethod.CASH,
                             onClick = { selectedMethod = PaymentMethod.CASH },
-                            enabled = selectedCustomerId != null
+                            enabled = hasAllocationTarget
                         )
                         MethodChip(
                             label = stringResource(R.string.money_method_mpesa),
                             selected = selectedMethod == PaymentMethod.MPESA,
                             onClick = { selectedMethod = PaymentMethod.MPESA },
-                            enabled = selectedCustomerId != null
+                            enabled = hasAllocationTarget
                         )
                     }
 
@@ -353,30 +373,32 @@ fun ManualPaymentScreen(
                         value = noteText,
                         onValueChange = { noteText = it },
                         label = { Text(stringResource(R.string.money_note_optional)) },
-                        enabled = selectedCustomerId != null,
+                        enabled = hasAllocationTarget,
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
                         modifier = Modifier.fillMaxWidth()
                     )
 
                     Text(text = stringResource(R.string.money_allocation), style = MaterialTheme.typography.titleSmall)
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        FilterChip(
-                            selected = selectedOrderId == null,
-                            onClick = { selectedOrderId = null },
-                            label = { Text(stringResource(R.string.money_oldest_orders)) },
-                            enabled = selectedCustomerId != null
-                        )
-                        FilterChip(
-                            selected = selectedOrderId != null,
-                            onClick = { showOrderSheet = true },
-                            label = { Text(stringResource(R.string.money_pick_order)) },
-                            enabled = selectedCustomerId != null
-                        )
+                    if (selectedCustomerId != null) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            FilterChip(
+                                selected = selectedOrderId == null,
+                                onClick = { selectedOrderId = null },
+                                label = { Text(stringResource(R.string.money_oldest_orders)) },
+                                enabled = true
+                            )
+                            FilterChip(
+                                selected = selectedOrderId != null,
+                                onClick = { showOrderSheet = true },
+                                label = { Text(stringResource(R.string.money_pick_order)) },
+                                enabled = true
+                            )
+                        }
                     }
-                    if (selectedOrderId != null) {
+                    selectedOrderId?.let { contextOrderId ->
                         val label =
-                            orderLabels[selectedOrderId]
-                                ?: eligibleOrders.firstOrNull { it.order.id == selectedOrderId }?.let { order ->
+                            orderLabels[contextOrderId]
+                                ?: eligibleOrders.firstOrNull { it.order.id == contextOrderId }?.let { order ->
                                     formatOrderLabel(
                                         date = order.order.orderDate,
                                         customerName = customer?.name,
@@ -384,7 +406,8 @@ fun ManualPaymentScreen(
                                         totalAmount = order.order.totalAmount
                                     )
                                 }
-                        if (!label.isNullOrBlank()) {
+                                ?: stringResource(R.string.payment_history_header_order_id, contextOrderId)
+                        if (label.isNotBlank()) {
                             Text(
                                 text = stringResource(R.string.money_selected_label, label),
                                 style = MaterialTheme.typography.bodySmall,

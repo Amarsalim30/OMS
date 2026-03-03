@@ -278,15 +278,16 @@ class CustomerAccountsViewModel(
     }
 
     fun recordPayment(
-        customerId: Long,
+        customerId: Long?,
         amount: BigDecimal,
         method: PaymentMethod,
         note: String,
         orderId: Long?
     ) {
         viewModelScope.launch {
+            if (customerId == null && orderId == null) return@launch
             recordPaymentInternal(customerId, amount, method, note, orderId)
-            loadCustomer(customerId)
+            customerId?.let { loadCustomer(it) }
             refreshSummaries()
         }
     }
@@ -486,13 +487,14 @@ class CustomerAccountsViewModel(
     }
 
     internal suspend fun recordPaymentInternal(
-        customerId: Long,
+        customerId: Long?,
         amount: BigDecimal,
         method: PaymentMethod,
         note: String,
         orderId: Long?
     ) {
         if (amount <= BigDecimal.ZERO) return
+        if (customerId == null && orderId == null) return
 
         val baseDescription =
             if (note.isNotBlank()) {
@@ -509,6 +511,9 @@ class CustomerAccountsViewModel(
             }
 
         val processor = PaymentReceiptProcessor(database)
+        val order = orderId?.let { id -> orderDao.getOrderById(id) }
+        if (orderId != null && order == null) return
+        val resolvedCustomerId = customerId ?: order?.customerId
         val now = Clock.System.now().toEpochMilliseconds()
         val receipt =
             processor.createReceipt(
@@ -520,14 +525,16 @@ class CustomerAccountsViewModel(
                 senderName = null,
                 senderPhone = null,
                 rawText = null,
-                customerId = customerId,
+                customerId = resolvedCustomerId,
                 note = note.takeIf { it.isNotBlank() }
             )
         val allocation =
-            if (orderId == null) {
+            if (orderId != null) {
+                ReceiptAllocation.Order(orderId)
+            } else if (customerId != null) {
                 ReceiptAllocation.OldestOrders(customerId)
             } else {
-                ReceiptAllocation.Order(orderId)
+                return
             }
         processor.createAndApplyReceipt(
             receipt = receipt,

@@ -94,6 +94,7 @@
     <string name="money_selected_label">Selected: %1$s</string>
     <string name="money_no_open_orders">No open orders for this customer.</string>
     <string name="money_due_amount">%1$s - Due %2$s</string>
+    <string name="money_anonymous_payment_hint">No customer selected. This payment will be saved as anonymous for this order.</string>
     <string name="money_needs_customer_match">Needs customer match before applying.</string>
     <string name="money_existing_receipt">Existing receipt</string>
     <string name="money_view_receipt">View receipt</string>
