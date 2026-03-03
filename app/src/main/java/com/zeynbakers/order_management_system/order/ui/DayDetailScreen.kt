@@ -110,6 +110,7 @@ fun DayDetailScreen(
     var totalError by remember { mutableStateOf<String?>(null) }
     var customerError by remember { mutableStateOf<String?>(null) }
     var suggestions by remember { mutableStateOf<List<CustomerEntity>>(emptyList()) }
+    var suppressedNoMatchQuery by rememberSaveable(dateKey) { mutableStateOf("") }
     var pendingDeleteOrder by remember { mutableStateOf<OrderEntity?>(null) }
     var deleteAllocations by remember {
         mutableStateOf<List<OrderPaymentAllocationUi>>(emptyList())
@@ -187,13 +188,29 @@ fun DayDetailScreen(
     DisposableEffect(Unit) { onDispose { overlaySuppressed.value = false } }
     LaunchedEffect(notes, customerPhone) {
         val query = extractCustomerQueryFromNotes(notes)
+        val normalizedQuery = query.trim().lowercase()
         val selectedPhone = customerPhone.trim()
-        if (query.isBlank() || selectedPhone.isNotBlank()) {
+        if (selectedPhone.isNotBlank()) {
+            suggestions = emptyList()
+            suppressedNoMatchQuery = ""
+            return@LaunchedEffect
+        }
+        if (normalizedQuery.isBlank()) {
+            suggestions = emptyList()
+            suppressedNoMatchQuery = ""
+            return@LaunchedEffect
+        }
+        if (
+                suppressedNoMatchQuery.isNotBlank() &&
+                        normalizedQuery.startsWith(suppressedNoMatchQuery)
+        ) {
             suggestions = emptyList()
             return@LaunchedEffect
         }
         delay(250)
-        suggestions = searchCustomers(query)
+        val matches = searchCustomers(query)
+        suggestions = matches
+        suppressedNoMatchQuery = if (matches.isEmpty()) normalizedQuery else ""
     }
     LaunchedEffect(searchQuery) {
         if (searchQuery.isNotBlank()) {
