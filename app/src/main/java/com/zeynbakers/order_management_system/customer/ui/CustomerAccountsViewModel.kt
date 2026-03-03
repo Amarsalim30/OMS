@@ -22,6 +22,8 @@ import com.zeynbakers.order_management_system.core.db.AppDatabase
 import com.zeynbakers.order_management_system.core.util.formatOrderLabel
 import com.zeynbakers.order_management_system.core.util.normalizePhoneNumberE164
 import com.zeynbakers.order_management_system.core.util.expandPhoneCandidates
+import com.zeynbakers.order_management_system.customer.domain.ContactsSyncResult
+import com.zeynbakers.order_management_system.customer.domain.syncContactsIntoCustomers
 import com.zeynbakers.order_management_system.customer.data.CustomerEntity
 import com.zeynbakers.order_management_system.order.data.OrderEntity
 import com.zeynbakers.order_management_system.order.data.OrderStatus
@@ -92,46 +94,26 @@ class CustomerAccountsViewModel(
 
     fun importCustomer(name: String, phone: String) {
         viewModelScope.launch {
-            val normalizedPhone = normalizePhoneNumberE164(phone) ?: return@launch
-            val cleanName = name.trim().ifBlank { normalizedPhone }
-
-            val exactMatch = customerDao.getByPhone(normalizedPhone)
-            val existing =
-                exactMatch ?: customerDao.getByPhones(expandPhoneCandidates(phone))
-            if (existing != null) {
-                val canUpdatePhone =
-                    existing.phone != normalizedPhone &&
-                        exactMatch == null &&
-                        customerDao.getByPhone(normalizedPhone) == null
-                val updated =
-                    existing.copy(
-                        name = if (cleanName.isNotBlank()) cleanName else existing.name,
-                        phone = if (canUpdatePhone) normalizedPhone else existing.phone,
-                        isArchived = false
+            importContactsBulk(
+                listOf(
+                    ImportContact(
+                        name = name,
+                        phone = phone
                     )
-                if (updated != existing) {
-                    customerDao.update(updated)
-                }
-            } else {
-                val insertedId =
-                    customerDao.insertIgnore(CustomerEntity(name = cleanName, phone = normalizedPhone))
-                if (insertedId == -1L) {
-                    customerDao.getByPhone(normalizedPhone)?.let { concurrent ->
-                        val shouldUpdate = concurrent.isArchived || concurrent.name != cleanName
-                        if (shouldUpdate) {
-                            customerDao.update(
-                                concurrent.copy(
-                                    name = cleanName.ifBlank { concurrent.name },
-                                    isArchived = false
-                                )
-                            )
-                        }
-                    }
-                }
-            }
-
-            refreshSummaries()
+                )
+            )
         }
+    }
+
+    suspend fun importContactsBulk(contacts: List<ImportContact>): ContactsSyncResult {
+        val result = withContext(Dispatchers.IO) {
+            syncContactsIntoCustomers(
+                database = database,
+                contacts = contacts
+            )
+        }
+        refreshSummaries()
+        return result
     }
 
     fun archiveCustomer(customerId: Long) {

@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.ContextWrapper
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.os.SystemClock
 import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -38,7 +39,10 @@ import com.zeynbakers.order_management_system.customer.ui.CustomerDetailScreen
 import com.zeynbakers.order_management_system.customer.ui.CustomerListScreen
 import com.zeynbakers.order_management_system.customer.ui.ImportContactsScreen
 import com.zeynbakers.order_management_system.customer.ui.CustomerStatementScreen
+import com.zeynbakers.order_management_system.customer.ui.ImportContact
+import com.zeynbakers.order_management_system.customer.domain.ContactsSyncResult
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
 
 internal fun NavGraphBuilder.customersGraph(
     navController: NavHostController,
@@ -49,6 +53,49 @@ internal fun NavGraphBuilder.customersGraph(
     supportActions: AppFeatureSupportActions
 ) {
     composable(AppRoutes.Customers) {
+        val context = LocalContext.current
+        val scope = rememberCoroutineScope()
+        val permissionRequiredMessage = stringResource(R.string.contacts_permission_required_for_import)
+        val syncFailedMessage = stringResource(R.string.customer_sync_contacts_failed)
+        var isSyncingContacts by rememberSaveable { mutableStateOf(false) }
+
+        suspend fun runInlineContactsSync() {
+            if (isSyncingContacts) return
+            isSyncingContacts = true
+            val startedAt = SystemClock.elapsedRealtime()
+            try {
+                val contacts: List<ImportContact> = supportActions.loadContacts()
+                val result: ContactsSyncResult = customerViewModel.importContactsBulk(contacts)
+                supportActions.onShowMessage(
+                    context.getString(
+                        R.string.customer_sync_contacts_done,
+                        result.added,
+                        result.updated
+                    )
+                )
+            } catch (_: SecurityException) {
+                supportActions.onShowMessage(permissionRequiredMessage)
+            } catch (_: Throwable) {
+                supportActions.onShowMessage(syncFailedMessage)
+            } finally {
+                val elapsed = SystemClock.elapsedRealtime() - startedAt
+                val remaining = (3_000L - elapsed).coerceAtLeast(0L)
+                if (remaining > 0) {
+                    delay(remaining)
+                }
+                isSyncingContacts = false
+            }
+        }
+
+        val contactsPermissionLauncher =
+            rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+                if (granted) {
+                    scope.launch { runInlineContactsSync() }
+                } else {
+                    supportActions.onShowMessage(permissionRequiredMessage)
+                }
+            }
+
         LaunchedEffect(customersState.customerQuery) {
             customerViewModel.searchCustomers(customersState.customerQuery)
         }
@@ -61,7 +108,16 @@ internal fun NavGraphBuilder.customersGraph(
             },
             onBack = { navController.popBackStack() },
             onAddCustomer = navigationActions.openImportContacts,
-            onSyncContacts = navigationActions.openImportContacts,
+            onSyncContacts = {
+                if (isSyncingContacts) {
+                    return@CustomerListScreen
+                }
+                if (hasContactsPermission(context)) {
+                    scope.launch { runInlineContactsSync() }
+                } else {
+                    contactsPermissionLauncher.launch(Manifest.permission.READ_CONTACTS)
+                }
+            },
             onPaymentHistory = { customerId ->
                 navigationActions.navigateToPaymentHistory(PaymentHistoryFilter.Customer(customerId), null)
             },
@@ -83,6 +139,7 @@ internal fun NavGraphBuilder.customersGraph(
             onRestoreCustomer = { customerId ->
                 customerViewModel.unarchiveCustomer(customerId)
             },
+            isSyncingContacts = isSyncingContacts,
             showBack = false
         )
     }

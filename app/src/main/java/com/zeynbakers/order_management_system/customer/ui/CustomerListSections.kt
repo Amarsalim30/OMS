@@ -24,6 +24,12 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Sort
@@ -54,6 +60,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
@@ -160,9 +167,22 @@ internal fun CustomerListControlRow(
     onFilterClick: () -> Unit,
     onSortClick: () -> Unit,
     onSyncClick: () -> Unit,
+    isSyncing: Boolean,
     showSyncAction: Boolean,
     modifier: Modifier = Modifier,
 ) {
+    val syncSpinTransition = rememberInfiniteTransition(label = "customer_sync_spin")
+    val syncIconRotation =
+        syncSpinTransition.animateFloat(
+            initialValue = 0f,
+            targetValue = 360f,
+            animationSpec =
+                infiniteRepeatable(
+                    animation = tween(durationMillis = 900, easing = LinearEasing),
+                    repeatMode = RepeatMode.Restart
+                ),
+            label = "customer_sync_icon_rotation"
+        ).value
     Row(
         modifier = modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
@@ -188,16 +208,27 @@ internal fun CustomerListControlRow(
         if (showSyncAction) {
             TextButton(
                 onClick = onSyncClick,
+                enabled = !isSyncing,
                 contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
             ) {
                 Icon(
                     imageVector = Icons.Outlined.Sync,
                     contentDescription = null,
-                    modifier = Modifier.size(18.dp)
+                    modifier =
+                        Modifier
+                            .size(18.dp)
+                            .graphicsLayer {
+                                rotationZ = if (isSyncing) syncIconRotation else 0f
+                            }
                 )
                 Spacer(Modifier.width(4.dp))
                 Text(
-                    text = stringResource(R.string.customer_sync_contacts),
+                    text =
+                        if (isSyncing) {
+                            stringResource(R.string.customer_syncing_contacts)
+                        } else {
+                            stringResource(R.string.customer_sync_contacts)
+                        },
                     maxLines = 1
                 )
             }

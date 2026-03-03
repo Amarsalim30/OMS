@@ -50,6 +50,7 @@ import com.zeynbakers.order_management_system.accounting.ui.PaymentIntakeHistory
 import com.zeynbakers.order_management_system.accounting.ui.PaymentIntakeViewModel
 import com.zeynbakers.order_management_system.accounting.ui.PaymentHistoryFilter
 import com.zeynbakers.order_management_system.core.backup.BackupScheduler
+import com.zeynbakers.order_management_system.core.contacts.ContactsSyncScheduler
 import com.zeynbakers.order_management_system.core.db.DatabaseProvider
 import com.zeynbakers.order_management_system.core.helper.HelperCaptureActivity
 import com.zeynbakers.order_management_system.core.helper.HelperCaptureMode
@@ -263,6 +264,7 @@ internal fun MainAppContent(
                 LaunchedEffect(Unit) {
                     BackupScheduler.ensureScheduled(context)
                     NotificationScheduler.ensureScheduled(context)
+                    ContactsSyncScheduler.ensureScheduled(context)
                     AppShortcuts.ensure(context.applicationContext)
                     WidgetUpdater.enqueue(context)
                     val now = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault())

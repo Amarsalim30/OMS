@@ -94,6 +94,7 @@ fun CustomerListScreen(
     onArchiveCustomer: (Long) -> Unit = {},
     onDeleteCustomer: (Long) -> Unit = {},
     onRestoreCustomer: (Long) -> Unit = {},
+    isSyncingContacts: Boolean = false,
     showBack: Boolean = true
 ) {
     CustomersScreenM3(
@@ -111,6 +112,7 @@ fun CustomerListScreen(
         onArchiveCustomer = onArchiveCustomer,
         onDeleteCustomer = onDeleteCustomer,
         onRestoreCustomer = onRestoreCustomer,
+        isSyncingContacts = isSyncingContacts,
         showBack = showBack
     )
 }
@@ -131,6 +133,7 @@ private fun CustomersScreenM3(
     onArchiveCustomer: (Long) -> Unit,
     onDeleteCustomer: (Long) -> Unit,
     onRestoreCustomer: (Long) -> Unit,
+    isSyncingContacts: Boolean,
     showBack: Boolean
 ) {
     var queryText by rememberSaveable { mutableStateOf(query) }
@@ -279,6 +282,7 @@ private fun CustomersScreenM3(
                 onFilterClick = { showFilterSheet = true },
                 onSortClick = { showSortSheet = true },
                 onSyncClick = onSyncContacts,
+                isSyncing = isSyncingContacts,
                 showSyncAction = hasAnyCustomers,
                 modifier = Modifier.tutorialCoachTarget(TutorialCoachTargets.CustomersControlRow)
             )

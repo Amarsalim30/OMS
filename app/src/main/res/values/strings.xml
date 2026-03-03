@@ -350,6 +350,9 @@
     <string name="customer_import_contacts_first">Import contacts to start managing customer orders.</string>
     <string name="customer_import_contacts_action">Import contacts</string>
     <string name="customer_sync_contacts">Sync contacts</string>
+    <string name="customer_syncing_contacts">Syncing...</string>
+    <string name="customer_sync_contacts_done">Contacts synced: %1$d added, %2$d updated.</string>
+    <string name="customer_sync_contacts_failed">Could not sync contacts right now. Try again.</string>
     <string name="customer_show_imported_contacts">Show imported contacts</string>
     <string name="customer_reset_filters">Reset filters</string>
     <string name="customer_filters_active">Filters active</string>
