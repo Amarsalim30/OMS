@@ -15,7 +15,7 @@ android {
         applicationId = "com.zeynbakers.order_management_system"
         minSdk = 24
         targetSdk = 36
-        versionCode = 7
+        versionCode = 8
         versionName = "3.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"

@@ -210,6 +210,7 @@ internal fun OrderEditorSheet(
                 modifier = Modifier
                     .fillMaxSize()
                     .imePadding()
+                    .padding(horizontal = 4.dp, vertical = 14.dp)
             ) {
                 Row(
                     modifier = Modifier
