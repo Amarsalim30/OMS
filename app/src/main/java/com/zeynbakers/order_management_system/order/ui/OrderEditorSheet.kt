@@ -320,13 +320,12 @@ internal fun OrderEditorSheet(
                                         onClick = {
                                             onCustomerNameChange("")
                                             onCustomerPhoneChange("")
-                                        },
-                                        modifier = Modifier.size(18.dp)
+                                        }
                                     ) {
                                         Icon(
                                             imageVector = Icons.Filled.Close,
                                             contentDescription = stringResource(R.string.action_clear),
-                                            modifier = Modifier.size(14.dp)
+                                            modifier = Modifier.size(18.dp)
                                         )
                                     }
                                 }

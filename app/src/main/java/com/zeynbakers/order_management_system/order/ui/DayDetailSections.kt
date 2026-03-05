@@ -116,10 +116,12 @@ private fun SummaryMetric(
 }
 
 @Composable
-internal fun EmptyDayState(title: String, subtitle: String) {
+internal fun EmptyDayState(title: String, subtitle: String, onAddOrder: () -> Unit) {
     AppEmptyState(
             title = title,
             body = subtitle,
+            actionLabel = stringResource(R.string.day_add_order),
+            onAction = onAddOrder,
             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp)
     )
 }
@@ -235,7 +237,7 @@ internal fun OrderListItem(
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             IconButton(
                                     onClick = onEdit,
-                                    modifier = Modifier.size(34.dp)
+                                    modifier = Modifier.size(48.dp)
                             ) {
                                 Icon(
                                         imageVector = Icons.Filled.Edit,
@@ -245,7 +247,7 @@ internal fun OrderListItem(
                             }
                             IconButton(
                                     onClick = onPaymentHistory,
-                                    modifier = Modifier.size(34.dp)
+                                    modifier = Modifier.size(48.dp)
                             ) {
                                 Icon(
                                         imageVector = Icons.Outlined.History,

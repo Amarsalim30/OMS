@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -426,7 +427,10 @@ fun DayDetailScreen(
                                         }
                                     }
                             ) {
-                                Icon(imageVector = Icons.Filled.Search, contentDescription = null)
+                                Icon(
+                                        imageVector = Icons.Filled.Search,
+                                        contentDescription = stringResource(R.string.action_search)
+                                )
                                 Spacer(Modifier.width(4.dp))
                                 Text(
                                         text =
@@ -461,12 +465,16 @@ fun DayDetailScreen(
                                         leadingIcon = {
                                             Icon(
                                                     imageVector = Icons.Filled.Search,
-                                                    contentDescription = null
+                                                    contentDescription =
+                                                            stringResource(R.string.action_search)
                                             )
                                         },
                                         trailingIcon = {
                                             if (searchQuery.isNotBlank()) {
-                                                IconButton(onClick = { searchQuery = "" }) {
+                                                IconButton(
+                                                        onClick = { searchQuery = "" },
+                                                        modifier = Modifier.size(48.dp)
+                                                ) {
                                                     Icon(
                                                             imageVector = Icons.Filled.Close,
                                                             contentDescription =
@@ -532,7 +540,11 @@ fun DayDetailScreen(
                 item {
                     EmptyDayState(
                             title = stringResource(emptyTitleRes),
-                            subtitle = stringResource(emptySubtitleRes)
+                            subtitle = stringResource(emptySubtitleRes),
+                            onAddOrder = {
+                                editingOrderId = null
+                                isEditorOpen = true
+                            }
                     )
                 }
             } else {
