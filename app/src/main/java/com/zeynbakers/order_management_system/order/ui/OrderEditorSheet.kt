@@ -42,6 +42,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.InputChip
 import androidx.compose.material3.InputChipDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -212,7 +213,7 @@ internal fun OrderEditorSheet(
                 modifier = Modifier
                     .fillMaxSize()
                     .imePadding()
-                    .padding(horizontal = 8.dp, vertical = 16.dp)
+                    .padding(horizontal = 12.dp, vertical = 16.dp)
             ) {
                 Row(
                     modifier = Modifier
@@ -248,6 +249,11 @@ internal fun OrderEditorSheet(
                         }
                         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     }
+
+                    SectionLabel(
+                        text = stringResource(R.string.order_editor_required_section_label),
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)
+                    )
 
                     InlineEditorRow(
                         icon = Icons.Filled.EditNote,
@@ -331,6 +337,12 @@ internal fun OrderEditorSheet(
                     }
 
                     if (customerPhone.isBlank() && suggestions.isNotEmpty()) {
+                        Text(
+                            text = stringResource(R.string.order_editor_suggestions_label),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(start = 52.dp, end = 16.dp, bottom = 6.dp)
+                        )
                         Surface(
                             shape = RoundedCornerShape(12.dp),
                             tonalElevation = 4.dp,
@@ -394,7 +406,27 @@ internal fun OrderEditorSheet(
                         )
                     }
 
+                    statusText?.takeIf { it.isNotBlank() }?.let {
+                        OutlinedCard(
+                            modifier = Modifier
+                                .padding(start = 52.dp, end = 16.dp, bottom = 12.dp)
+                                .fillMaxWidth()
+                        ) {
+                            Text(
+                                text = it,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
+                            )
+                        }
+                    }
+
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+
+                    SectionLabel(
+                        text = stringResource(R.string.order_editor_total_amount_label),
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)
+                    )
 
                     val totalDisplay =
                         when {
@@ -462,6 +494,12 @@ internal fun OrderEditorSheet(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
+                        Text(
+                            text = stringResource(R.string.order_editor_quick_amounts_label),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.fillMaxWidth().padding(bottom = 2.dp)
+                        )
                         quickAmountAdds.forEach { amount ->
                             FilterChip(
                                 selected = false,
@@ -471,6 +509,8 @@ internal fun OrderEditorSheet(
                                         .stripTrailingZeros()
                                         .toPlainString()
                                     onTotalTextChange(updated)
+                                    editingRow = EditingRow.TOTAL
+                                    scope.launch { delay(40); totalRequester.requestFocus() }
                                 },
                                 label = {
                                     Text(
@@ -485,6 +525,11 @@ internal fun OrderEditorSheet(
                     }
 
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+
+                    SectionLabel(
+                        text = stringResource(R.string.order_editor_customer_schedule_section),
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)
+                    )
 
                     ValueRow(
                         icon = Icons.Filled.Schedule,
@@ -511,11 +556,21 @@ internal fun OrderEditorSheet(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
+                        Text(
+                            text = stringResource(R.string.order_editor_quick_pickup_label),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.fillMaxWidth().padding(bottom = 2.dp)
+                        )
                         quickPickupTimes.forEach { value ->
                             val isSelected = isSamePickupTime(pickupTimeText, value)
                             FilterChip(
                                 selected = isSelected,
-                                onClick = { onPickupTimeChange(value) },
+                                onClick = {
+                                    onPickupTimeChange(value)
+                                    editingRow = EditingRow.NONE
+                                    focusManager.clearFocus(force = true)
+                                },
                                 label = { Text(formatDisplayPickupTime(value)) }
                             )
                         }
@@ -610,6 +665,21 @@ internal fun OrderEditorSheet(
         }
     }
 }
+
+@Composable
+private fun SectionLabel(
+    text: String,
+    modifier: Modifier = Modifier
+) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.titleSmall,
+        fontWeight = FontWeight.Medium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = modifier
+    )
+}
+
 @Composable
 private fun ValueRow(
     icon: ImageVector?,
@@ -770,7 +840,7 @@ private fun OrderEditorTutorialPanel(hint: OrderEditorTutorialHint) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 10.dp),
+                .padding(horizontal = 12.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Text(
