@@ -206,6 +206,7 @@ internal fun DayOrderEditorDialog(
         },
         suggestions = suggestions,
         onSuggestionSelected = { customer ->
+            onSetNotes(stripTrailingCustomerQueryFromNotes(notes))
             onSetCustomerName(customer.name)
             onSetCustomerPhone(customer.phone)
             onSetSuggestions(emptyList())

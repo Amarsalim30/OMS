@@ -1,7 +1,9 @@
 package com.zeynbakers.order_management_system.order.ui
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,9 +20,8 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.relocation.BringIntoViewRequester
-import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -28,20 +29,23 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AccessTime
 import androidx.compose.material.icons.filled.AttachMoney
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.EditNote
-import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.InputChip
+import androidx.compose.material3.InputChipDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -62,13 +66,13 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
@@ -99,8 +103,7 @@ internal data class OrderEditorTutorialHint(
 private enum class EditingRow {
     NONE,
     NOTES,
-    TOTAL,
-    CUSTOMER
+    TOTAL
 }
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
@@ -149,8 +152,6 @@ internal fun OrderEditorSheet(
     val focusManagerState by rememberUpdatedState(focusManager)
     val notesRequester = remember { FocusRequester() }
     val totalRequester = remember { FocusRequester() }
-    val customerRequester = remember { FocusRequester() }
-    val customerBringIntoViewRequester = remember { BringIntoViewRequester() }
     val scope = rememberCoroutineScope()
     val setTotalText by rememberUpdatedState<(String) -> Unit>({ onTotalTextChange(it) })
     val formScrollState = rememberScrollState()
@@ -165,6 +166,14 @@ internal fun OrderEditorSheet(
     val quickAmountAdds = remember { listOf(100, 500, 1000) }
     val quickAmountFormatter = remember { NumberFormat.getIntegerInstance() }
     val quickPickupTimes = remember { listOf("09:00", "12:00", "15:00", "18:00") }
+    val quickChipBorder = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.65f))
+    val quickChipColors =
+        FilterChipDefaults.filterChipColors(
+            containerColor = Color.Transparent,
+            selectedContainerColor = Color.Transparent,
+            labelColor = MaterialTheme.colorScheme.onSurface,
+            selectedLabelColor = MaterialTheme.colorScheme.onSurface
+        )
     val normalizedTotal = totalText.toBigDecimalOrNull()
     val totalSummaryFormatter = remember {
         NumberFormat.getNumberInstance().apply {
@@ -172,7 +181,6 @@ internal fun OrderEditorSheet(
             maximumFractionDigits = 2
         }
     }
-    val formattedTotalSummary = normalizedTotal?.let { totalSummaryFormatter.format(it) }
     val currencyPrefix = stringResource(R.string.order_editor_currency_prefix)
 
     val (initialHour, initialMinute) = remember(pickupTimeText) { parseTimeForPicker(pickupTimeText) }
@@ -214,6 +222,7 @@ internal fun OrderEditorSheet(
                 modifier = Modifier
                     .fillMaxSize()
                     .imePadding()
+                    .padding(horizontal = 6.dp, vertical = 10.dp)
             ) {
                 Row(
                     modifier = Modifier
@@ -244,45 +253,40 @@ internal fun OrderEditorSheet(
                         .verticalScroll(formScrollState)
                 ) {
                     tutorialHint?.let {
-                        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
+                        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 16.dp)) {
                             OrderEditorTutorialPanel(it)
                         }
                         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     }
 
-                    if (editingRow == EditingRow.NOTES) {
-                        InlineEditorRow(
-                            icon = Icons.Filled.EditNote,
-                            value = notes,
-                            placeholder = stringResource(R.string.order_editor_notes_placeholder),
-                            onValueChange = { onNotesChange(sanitizeOrderNotesInput(it)) },
-                            focusRequester = notesRequester,
-                            keyboardOptions = KeyboardOptions(
-                                capitalization = KeyboardCapitalization.Sentences,
-                                imeAction = ImeAction.Next
-                            ),
-                            keyboardActions = KeyboardActions(
-                                onNext = {
-                                    editingRow = EditingRow.TOTAL
-                                    scope.launch { delay(40); totalRequester.requestFocus() }
-                                }
-                            ),
-                            onFocused = onNotesFocused,
-                            onClear = { onNotesChange("") },
-                            modifier = notesFieldModifier
-                        )
-                    } else {
-                        ValueRow(
-                            icon = Icons.Filled.EditNote,
-                            value = notes,
-                            placeholder = stringResource(R.string.order_editor_notes_placeholder),
-                            onClick = {
+                    InlineEditorRow(
+                        icon = Icons.Filled.EditNote,
+                        value = notes,
+                        placeholder = stringResource(R.string.order_editor_notes_placeholder),
+                        onValueChange = { onNotesChange(sanitizeOrderNotesInput(it)) },
+                        focusRequester = notesRequester,
+                        keyboardOptions = KeyboardOptions(
+                            capitalization = KeyboardCapitalization.Sentences,
+                            imeAction = ImeAction.Next
+                        ),
+                        keyboardActions = KeyboardActions(
+                            onNext = {
+                                editingRow = EditingRow.TOTAL
+                                scope.launch { delay(40); totalRequester.requestFocus() }
+                            }
+                        ),
+                        onFocused = onNotesFocused,
+                        onClear = if (editingRow == EditingRow.NOTES) ({ onNotesChange("") }) else null,
+                        readOnly = editingRow != EditingRow.NOTES,
+                        onRowClick = {
+                            if (editingRow != EditingRow.NOTES) {
                                 editingRow = EditingRow.NOTES
                                 scope.launch { delay(40); notesRequester.requestFocus() }
-                            },
-                            modifier = notesFieldModifier
-                        )
-                    }
+                            }
+                        },
+                        textMaxLines = 5,
+                        modifier = notesFieldModifier.then(customerFieldModifier)
+                    )
 
                     notesError?.let {
                         Text(
@@ -291,6 +295,134 @@ internal fun OrderEditorSheet(
                             style = MaterialTheme.typography.bodySmall,
                             modifier = Modifier.padding(start = 52.dp, end = 16.dp, bottom = 8.dp)
                         )
+                    }
+
+                    if (customerPhone.isNotBlank()) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(start = 52.dp, end = 16.dp, bottom = 12.dp)
+                                .then(customerFieldModifier),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            InputChip(
+                                selected = true,
+                                onClick = {},
+                                colors =
+                                    InputChipDefaults.inputChipColors(
+                                        selectedContainerColor = Color(0xFF1E88E5),
+                                        selectedLabelColor = Color.White,
+                                        selectedTrailingIconColor = Color.White
+                                    ),
+                                label = {
+                                    val label = customerName.ifBlank { customerPhone }
+                                    Text(
+                                        text = label,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                },
+                                trailingIcon = {
+                                    IconButton(
+                                        onClick = {
+                                            onCustomerNameChange("")
+                                            onCustomerPhoneChange("")
+                                        }
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Filled.Close,
+                                            contentDescription = stringResource(R.string.action_clear),
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
+                                }
+                            )
+                        }
+                    }
+
+                    if (customerPhone.isBlank() && suggestions.isNotEmpty()) {
+                        Text(
+                            text = stringResource(R.string.order_editor_suggestions_label),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(start = 52.dp, end = 16.dp, bottom = 6.dp)
+                        )
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            tonalElevation = 4.dp,
+                            shadowElevation = 2.dp,
+                            color = MaterialTheme.colorScheme.surfaceContainer,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(start = 52.dp, end = 16.dp, bottom = 12.dp)
+                                .then(customerFieldModifier)
+                        ) {
+                            Column(
+                                modifier = Modifier.fillMaxWidth(),
+                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                suggestions.take(5).forEachIndexed { index, customer ->
+                                    Surface(
+                                        onClick = {
+                                            onSuggestionSelected(customer)
+                                            editingRow = EditingRow.NOTES
+                                            scope.launch {
+                                                delay(40)
+                                                notesRequester.requestFocus()
+                                            }
+                                        },
+                                        color = MaterialTheme.colorScheme.surfaceContainer
+                                    ) {
+                                        Row(
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .sizeIn(minHeight = 48.dp)
+                                                .padding(horizontal = 12.dp, vertical = 12.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Text(
+                                                text = customer.name,
+                                                style = MaterialTheme.typography.bodyMedium,
+                                                modifier = Modifier.weight(1f)
+                                            )
+                                            if (customer.phone.isNotBlank()) {
+                                                Text(
+                                                    text = customer.phone,
+                                                    style = MaterialTheme.typography.bodySmall,
+                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                                )
+                                            }
+                                        }
+                                    }
+                                    if (index < suggestions.take(5).lastIndex) {
+                                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    customerError?.let {
+                        Text(
+                            text = it,
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodySmall,
+                            modifier = Modifier.padding(start = 52.dp, end = 16.dp, bottom = 8.dp)
+                        )
+                    }
+
+                    statusText?.takeIf { it.isNotBlank() }?.let {
+                        OutlinedCard(
+                            modifier = Modifier
+                                .padding(start = 52.dp, end = 16.dp, bottom = 12.dp)
+                                .fillMaxWidth()
+                        ) {
+                            Text(
+                                text = it,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)
+                            )
+                        }
                     }
 
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
@@ -357,9 +489,9 @@ internal fun OrderEditorSheet(
                     }
 
                     FlowRow(
-                        modifier = Modifier.padding(start = 52.dp, end = 16.dp, bottom = 10.dp),
+                        modifier = Modifier.padding(start = 52.dp, end = 16.dp, bottom = 12.dp),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         quickAmountAdds.forEach { amount ->
                             FilterChip(
@@ -370,6 +502,8 @@ internal fun OrderEditorSheet(
                                         .stripTrailingZeros()
                                         .toPlainString()
                                     onTotalTextChange(updated)
+                                    editingRow = EditingRow.TOTAL
+                                    scope.launch { delay(40); totalRequester.requestFocus() }
                                 },
                                 label = {
                                     Text(
@@ -378,107 +512,11 @@ internal fun OrderEditorSheet(
                                             quickAmountFormatter.format(amount)
                                         )
                                     )
-                                }
+                                },
+                                border = quickChipBorder,
+                                colors = quickChipColors
                             )
                         }
-                    }
-
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-
-                    if (editingRow == EditingRow.CUSTOMER) {
-                        InlineEditorRow(
-                            icon = Icons.Filled.Person,
-                            value = customerName,
-                            placeholder = stringResource(R.string.order_editor_customer_search_placeholder),
-                            onValueChange = {
-                                onCustomerNameChange(it)
-                                if (customerPhone.isNotBlank()) {
-                                    onCustomerPhoneChange("")
-                                }
-                            },
-                            focusRequester = customerRequester,
-                            keyboardOptions = KeyboardOptions(
-                                capitalization = KeyboardCapitalization.Words,
-                                imeAction = ImeAction.Done
-                            ),
-                            keyboardActions = KeyboardActions(onDone = {
-                                focusManager.clearFocus()
-                                editingRow = EditingRow.NONE
-                            }),
-                            onClear = {
-                                onCustomerNameChange("")
-                                onCustomerPhoneChange("")
-                            },
-                            bringIntoViewRequester = customerBringIntoViewRequester,
-                            onFocused = {
-                                scope.launch {
-                                    delay(120)
-                                    customerBringIntoViewRequester.bringIntoView()
-                                }
-                            },
-                            modifier = customerFieldModifier
-                        )
-                    } else {
-                        ValueRow(
-                            icon = Icons.Filled.Person,
-                            value = customerName,
-                            placeholder = stringResource(R.string.order_editor_customer_search_placeholder),
-                            onClick = {
-                                editingRow = EditingRow.CUSTOMER
-                                scope.launch { delay(40); customerRequester.requestFocus() }
-                            },
-                            modifier = customerFieldModifier
-                        )
-                    }
-
-                    if (suggestions.isNotEmpty()) {
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(start = 52.dp, end = 16.dp, bottom = 10.dp),
-                            verticalArrangement = Arrangement.spacedBy(4.dp)
-                        ) {
-                            suggestions.take(4).forEach { customer ->
-                                Surface(
-                                    onClick = {
-                                        onSuggestionSelected(customer)
-                                        editingRow = EditingRow.NONE
-                                        focusManager.clearFocus(force = true)
-                                    },
-                                    shape = RoundedCornerShape(10.dp),
-                                    color = MaterialTheme.colorScheme.surfaceContainerLow
-                                ) {
-                                    Row(
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .padding(horizontal = 10.dp, vertical = 8.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Text(
-                                            text = customer.name,
-                                            style = MaterialTheme.typography.bodyMedium,
-                                            modifier = Modifier.weight(1f)
-                                        )
-                                        if (customer.phone.isNotBlank()) {
-                                            Text(
-                                                text = customer.phone,
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    customerError?.let {
-                        Text(
-                            text = it,
-                            color = MaterialTheme.colorScheme.error,
-                            style = MaterialTheme.typography.bodySmall,
-                            modifier = Modifier.padding(start = 52.dp, end = 16.dp, bottom = 8.dp)
-                        )
                     }
 
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
@@ -504,16 +542,22 @@ internal fun OrderEditorSheet(
                     }
 
                     FlowRow(
-                        modifier = Modifier.padding(start = 52.dp, end = 16.dp, bottom = 10.dp),
+                        modifier = Modifier.padding(start = 52.dp, end = 16.dp, bottom = 12.dp),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         quickPickupTimes.forEach { value ->
                             val isSelected = isSamePickupTime(pickupTimeText, value)
                             FilterChip(
                                 selected = isSelected,
-                                onClick = { onPickupTimeChange(value) },
-                                label = { Text(formatDisplayPickupTime(value)) }
+                                onClick = {
+                                    onPickupTimeChange(value)
+                                    editingRow = EditingRow.NONE
+                                    focusManager.clearFocus(force = true)
+                                },
+                                label = { Text(formatDisplayPickupTime(value)) },
+                                border = quickChipBorder,
+                                colors = quickChipColors
                             )
                         }
                     }
@@ -531,18 +575,14 @@ internal fun OrderEditorSheet(
                         Text(stringResource(R.string.action_cancel))
                     }
                     Spacer(Modifier.weight(1f))
-                    formattedTotalSummary?.let {
-                        Text(
-                            text = stringResource(R.string.order_editor_footer_total, it),
-                            style = MaterialTheme.typography.labelLarge,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(end = 8.dp)
-                        )
-                    }
                     Button(
                         onClick = onSave,
                         enabled = canSave,
-                        modifier = saveButtonModifier
+                        shape = RoundedCornerShape(24.dp),
+                        colors = ButtonDefaults.buttonColors(),
+                        modifier =
+                            saveButtonModifier
+                                .sizeIn(minWidth = 104.dp, minHeight = 50.dp)
                     ) {
                         Text(stringResource(R.string.action_save))
                     }
@@ -607,22 +647,26 @@ internal fun OrderEditorSheet(
         }
     }
 }
+
 @Composable
 private fun ValueRow(
     icon: ImageVector?,
     value: String,
     placeholder: String,
     onClick: () -> Unit,
+    textMaxLines: Int = 1,
     modifier: Modifier = Modifier
 ) {
     val hasValue = value.isNotBlank()
+    val isMultiline = textMaxLines > 1
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .sizeIn(minHeight = 48.dp)
             .clickable(onClick = onClick)
             .then(modifier)
-            .padding(horizontal = 16.dp, vertical = 14.dp),
-        verticalAlignment = Alignment.CenterVertically
+            .padding(horizontal = 16.dp, vertical = 16.dp),
+        verticalAlignment = if (isMultiline) Alignment.Top else Alignment.CenterVertically
     ) {
         icon?.let {
             Icon(
@@ -637,10 +681,20 @@ private fun ValueRow(
             text = if (hasValue) value else placeholder,
             style = MaterialTheme.typography.bodyLarge,
             color = if (hasValue) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
+            minLines = 1,
+            maxLines = textMaxLines,
+            overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f)
         )
         // Keep a fixed trailing slot so switching to inline edit does not shrink text width.
-        Box(modifier = Modifier.size(40.dp))
+        Box(
+            modifier =
+                if (isMultiline) {
+                    Modifier.defaultMinSize(minWidth = 48.dp)
+                } else {
+                    Modifier.defaultMinSize(minWidth = 48.dp, minHeight = 48.dp)
+                }
+        )
     }
 }
 
@@ -657,16 +711,27 @@ private fun InlineEditorRow(
     onFocused: (() -> Unit)? = null,
     onClear: (() -> Unit)? = null,
     leadingText: String? = null,
-    bringIntoViewRequester: BringIntoViewRequester? = null
+    textMaxLines: Int = 1,
+    readOnly: Boolean = false,
+    onRowClick: (() -> Unit)? = null
 ) {
+    val isMultiline = textMaxLines > 1
     val textStyle: TextStyle = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface)
     val cursorBrush = Brush.verticalGradient(listOf(MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.primary))
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .sizeIn(minHeight = 48.dp)
+            .then(
+                if (readOnly && onRowClick != null) {
+                    Modifier.clickable(onClick = onRowClick)
+                } else {
+                    Modifier
+                }
+            )
             .then(modifier)
-            .padding(horizontal = 16.dp, vertical = 14.dp),
-        verticalAlignment = Alignment.CenterVertically
+            .padding(horizontal = 16.dp, vertical = 16.dp),
+        verticalAlignment = if (isMultiline) Alignment.Top else Alignment.CenterVertically
     ) {
         icon?.let {
             Icon(
@@ -690,23 +755,19 @@ private fun InlineEditorRow(
         BasicTextField(
             value = value,
             onValueChange = onValueChange,
-            singleLine = true,
+            singleLine = textMaxLines == 1,
+            minLines = 1,
+            maxLines = textMaxLines,
+            readOnly = readOnly,
             textStyle = textStyle,
             keyboardOptions = keyboardOptions,
             keyboardActions = keyboardActions,
             cursorBrush = cursorBrush,
             modifier = Modifier
                 .weight(1f)
-                .let { base ->
-                    if (bringIntoViewRequester != null) {
-                        base.bringIntoViewRequester(bringIntoViewRequester)
-                    } else {
-                        base
-                    }
-                }
                 .focusRequester(focusRequester)
                 .onFocusChanged {
-                    if (it.isFocused) {
+                    if (!readOnly && it.isFocused) {
                         onFocused?.invoke()
                     }
                 },
@@ -722,8 +783,11 @@ private fun InlineEditorRow(
             }
         )
 
-        Box(modifier = Modifier.size(40.dp), contentAlignment = Alignment.Center) {
-            if (onClear != null && value.isNotBlank()) {
+        Box(
+            modifier = Modifier.defaultMinSize(minWidth = 48.dp, minHeight = 48.dp),
+            contentAlignment = if (isMultiline) Alignment.TopCenter else Alignment.Center
+        ) {
+            if (!readOnly && onClear != null && value.isNotBlank()) {
                 IconButton(onClick = onClear) {
                     Icon(
                         imageVector = Icons.Filled.Close,
@@ -744,7 +808,7 @@ private fun OrderEditorTutorialPanel(hint: OrderEditorTutorialHint) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 10.dp),
+                .padding(horizontal = 12.dp, vertical = 8.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             Text(

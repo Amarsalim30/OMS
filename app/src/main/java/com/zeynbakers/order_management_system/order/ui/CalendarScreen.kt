@@ -88,6 +88,7 @@ fun CalendarScreen(
     var totalError by remember { mutableStateOf<String?>(null) }
     var customerError by remember { mutableStateOf<String?>(null) }
     var suggestions by remember { mutableStateOf<List<CustomerEntity>>(emptyList()) }
+    var suppressedNoMatchQuery by remember { mutableStateOf("") }
     var isMonthPickerOpen by remember { mutableStateOf(false) }
     var isLegendOpen by remember { mutableStateOf(false) }
     val context = LocalContext.current
@@ -120,16 +121,31 @@ fun CalendarScreen(
     }
 
     LaunchedEffect(Unit) {
-        snapshotFlow { customerName.trim() to customerPhone.trim() }
+        snapshotFlow { notes to customerPhone.trim() }
             .debounce(250)
             .distinctUntilChanged()
-            .collectLatest { (query, selectedPhone) ->
-                suggestions =
-                    if (query.isBlank() || selectedPhone.isNotBlank()) {
-                        emptyList()
-                    } else {
-                        searchCustomers(query)
+            .collectLatest { (notesText, selectedPhone) ->
+                val query = extractCustomerQueryFromNotes(notesText)
+                val normalizedQuery = query.trim().lowercase()
+                when {
+                    selectedPhone.isNotBlank() -> {
+                        suggestions = emptyList()
+                        suppressedNoMatchQuery = ""
                     }
+                    normalizedQuery.isBlank() -> {
+                        suggestions = emptyList()
+                        suppressedNoMatchQuery = ""
+                    }
+                    suppressedNoMatchQuery.isNotBlank() &&
+                        normalizedQuery.startsWith(suppressedNoMatchQuery) -> {
+                        suggestions = emptyList()
+                    }
+                    else -> {
+                        val matches = searchCustomers(query)
+                        suggestions = matches
+                        suppressedNoMatchQuery = if (matches.isEmpty()) normalizedQuery else ""
+                    }
+                }
             }
     }
 
@@ -667,9 +683,11 @@ fun CalendarScreen(
             },
             suggestions = suggestions,
             onSuggestionSelected = { customer ->
+                notes = stripTrailingCustomerQueryFromNotes(notes)
                 customerName = customer.name
                 customerPhone = customer.phone
                 suggestions = emptyList()
+                suppressedNoMatchQuery = ""
             },
             customerError = customerError,
             canSave = canSave,
@@ -684,6 +702,8 @@ fun CalendarScreen(
                 notesError = null
                 totalError = null
                 customerError = null
+                suggestions = emptyList()
+                suppressedNoMatchQuery = ""
             },
             onCancel = { isQuickAddOpen = false },
             onNotesFocused = { voiceRouter.onFocusTarget(VoiceTarget.Notes) },

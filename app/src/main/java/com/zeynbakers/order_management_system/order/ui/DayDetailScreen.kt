@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -54,6 +55,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import com.zeynbakers.order_management_system.R
 import com.zeynbakers.order_management_system.accounting.domain.ReceiptAllocation
@@ -110,6 +112,7 @@ fun DayDetailScreen(
     var totalError by remember { mutableStateOf<String?>(null) }
     var customerError by remember { mutableStateOf<String?>(null) }
     var suggestions by remember { mutableStateOf<List<CustomerEntity>>(emptyList()) }
+    var suppressedNoMatchQuery by rememberSaveable(dateKey) { mutableStateOf("") }
     var pendingDeleteOrder by remember { mutableStateOf<OrderEntity?>(null) }
     var deleteAllocations by remember {
         mutableStateOf<List<OrderPaymentAllocationUi>>(emptyList())
@@ -185,15 +188,31 @@ fun DayDetailScreen(
     }
     LaunchedEffect(isEditorOpen) { overlaySuppressed.value = isEditorOpen }
     DisposableEffect(Unit) { onDispose { overlaySuppressed.value = false } }
-    LaunchedEffect(customerName, customerPhone) {
-        val query = customerName.trim()
+    LaunchedEffect(notes, customerPhone) {
+        val query = extractCustomerQueryFromNotes(notes)
+        val normalizedQuery = query.trim().lowercase()
         val selectedPhone = customerPhone.trim()
-        if (query.isBlank() || selectedPhone.isNotBlank()) {
+        if (selectedPhone.isNotBlank()) {
+            suggestions = emptyList()
+            suppressedNoMatchQuery = ""
+            return@LaunchedEffect
+        }
+        if (normalizedQuery.isBlank()) {
+            suggestions = emptyList()
+            suppressedNoMatchQuery = ""
+            return@LaunchedEffect
+        }
+        if (
+                suppressedNoMatchQuery.isNotBlank() &&
+                        normalizedQuery.startsWith(suppressedNoMatchQuery)
+        ) {
             suggestions = emptyList()
             return@LaunchedEffect
         }
         delay(250)
-        suggestions = searchCustomers(query)
+        val matches = searchCustomers(query)
+        suggestions = matches
+        suppressedNoMatchQuery = if (matches.isEmpty()) normalizedQuery else ""
     }
     LaunchedEffect(searchQuery) {
         if (searchQuery.isNotBlank()) {
@@ -377,7 +396,7 @@ fun DayDetailScreen(
                                 },
                                 showMoreAsIcon = true
                         )
-                        Spacer(Modifier.height(4.dp))
+                        Spacer(Modifier.height(8.dp))
                         val orderCountLabel =
                                 if (searchQuery.isBlank() && orderFilter == DayOrderFilter.All) {
                                     stringResource(R.string.day_orders_count, filteredOrders.size)
@@ -409,7 +428,10 @@ fun DayDetailScreen(
                                         }
                                     }
                             ) {
-                                Icon(imageVector = Icons.Filled.Search, contentDescription = null)
+                                Icon(
+                                        imageVector = Icons.Filled.Search,
+                                        contentDescription = stringResource(R.string.action_search)
+                                )
                                 Spacer(Modifier.width(4.dp))
                                 Text(
                                         text =
@@ -444,7 +466,8 @@ fun DayDetailScreen(
                                         leadingIcon = {
                                             Icon(
                                                     imageVector = Icons.Filled.Search,
-                                                    contentDescription = null
+                                                    contentDescription =
+                                                            stringResource(R.string.action_search)
                                             )
                                         },
                                         trailingIcon = {
@@ -462,6 +485,7 @@ fun DayDetailScreen(
                                             }
                                         },
                                         singleLine = true,
+                                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                                         modifier = Modifier.fillMaxWidth()
                                 )
                             }
@@ -491,7 +515,7 @@ fun DayDetailScreen(
                                     else -> null
                                 }
                         if (activeContextLabel != null) {
-                            Spacer(Modifier.height(4.dp))
+                            Spacer(Modifier.height(8.dp))
                             Surface(
                                     color = MaterialTheme.colorScheme.surfaceVariant,
                                     shape = RoundedCornerShape(999.dp)
