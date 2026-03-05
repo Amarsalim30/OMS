@@ -116,12 +116,10 @@ private fun SummaryMetric(
 }
 
 @Composable
-internal fun EmptyDayState(title: String, subtitle: String, onAddOrder: () -> Unit) {
+internal fun EmptyDayState(title: String, subtitle: String) {
     AppEmptyState(
             title = title,
             body = subtitle,
-            actionLabel = stringResource(R.string.day_add_order),
-            onAction = onAddOrder,
             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 14.dp)
     )
 }

@@ -14,7 +14,6 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -471,10 +470,7 @@ fun DayDetailScreen(
                                         },
                                         trailingIcon = {
                                             if (searchQuery.isNotBlank()) {
-                                                IconButton(
-                                                        onClick = { searchQuery = "" },
-                                                        modifier = Modifier.size(48.dp)
-                                                ) {
+                                                IconButton(onClick = { searchQuery = "" }) {
                                                     Icon(
                                                             imageVector = Icons.Filled.Close,
                                                             contentDescription =
@@ -540,11 +536,7 @@ fun DayDetailScreen(
                 item {
                     EmptyDayState(
                             title = stringResource(emptyTitleRes),
-                            subtitle = stringResource(emptySubtitleRes),
-                            onAddOrder = {
-                                editingOrderId = null
-                                isEditorOpen = true
-                            }
+                            subtitle = stringResource(emptySubtitleRes)
                     )
                 }
             } else {
