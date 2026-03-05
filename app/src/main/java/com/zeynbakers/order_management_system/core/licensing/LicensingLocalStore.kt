@@ -32,10 +32,11 @@ internal class LicensingLocalStore(context: Context) {
             return false
         }
         val lastValidatedAt = prefs.getLong(KEY_LAST_VALIDATED_AT, 0L)
-        if (lastValidatedAt <= 0L) {
-            return false
-        }
-        return nowMillis - lastValidatedAt <= graceWindowMillis
+        return isWithinOfflineGraceWindow(
+            nowMillis = nowMillis,
+            lastValidatedAtMillis = lastValidatedAt,
+            graceWindowMillis = graceWindowMillis
+        )
     }
 
     private companion object {
@@ -44,4 +45,16 @@ internal class LicensingLocalStore(context: Context) {
         const val KEY_LAST_VALIDATED_UID = "last_validated_uid"
         const val KEY_LAST_VALIDATED_AT = "last_validated_at"
     }
+}
+
+internal fun isWithinOfflineGraceWindow(
+    nowMillis: Long,
+    lastValidatedAtMillis: Long,
+    graceWindowMillis: Long
+): Boolean {
+    if (lastValidatedAtMillis <= 0L || graceWindowMillis < 0L) {
+        return false
+    }
+    val elapsedMillis = nowMillis - lastValidatedAtMillis
+    return elapsedMillis in 0..graceWindowMillis
 }
