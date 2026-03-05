@@ -1,6 +1,7 @@
 package com.zeynbakers.order_management_system.order.ui
 
 import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -16,12 +17,12 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.Payments
+import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -192,12 +193,12 @@ internal fun OrderListItem(
                 Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
                     Column(
                             modifier = Modifier.weight(1f),
-                            verticalArrangement = Arrangement.spacedBy(2.dp)
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
                         Text(
                                 text = order.notes,
                                 style = MaterialTheme.typography.titleSmall,
-                                maxLines = 1,
+                                maxLines = 2,
                                 overflow = TextOverflow.Ellipsis
                         )
                         if (pickupText != null || customerLabel != null) {
@@ -212,7 +213,7 @@ internal fun OrderListItem(
                                     text = metaText,
                                     style = MaterialTheme.typography.labelMedium,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    maxLines = 1,
+                                    maxLines = 2,
                                     overflow = TextOverflow.Ellipsis
                             )
                         }
@@ -220,7 +221,7 @@ internal fun OrderListItem(
                     Spacer(Modifier.width(8.dp))
                     Column(
                             horizontalAlignment = Alignment.End,
-                            verticalArrangement = Arrangement.spacedBy(2.dp)
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
                         Text(
                                 text = formatKes(order.totalAmount),
@@ -232,7 +233,10 @@ internal fun OrderListItem(
                                 overflow = TextOverflow.Ellipsis,
                                 modifier = Modifier.widthIn(min = 72.dp)
                         )
-                        Row(verticalAlignment = Alignment.CenterVertically) {
+                        Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
                             IconButton(
                                     onClick = onEdit,
                                     modifier = Modifier.size(48.dp)
@@ -281,19 +285,26 @@ internal fun OrderListItem(
                             modifier = Modifier.weight(1f)
                     )
                 }
-                if (showReceive) {
-                    TextButton(onClick = onReceivePayment, modifier = Modifier.align(Alignment.End)) {
-                        Icon(
-                                imageVector = Icons.Outlined.Payments,
-                                contentDescription = null,
-                                modifier = Modifier.size(16.dp)
+                Box(modifier = Modifier.fillMaxWidth()) {
+                    if (showReceive) {
+                        AssistChip(
+                                onClick = onReceivePayment,
+                                label = {
+                                    Text(stringResource(R.string.customer_action_record_payment))
+                                },
+                                leadingIcon = {
+                                    Icon(
+                                            imageVector = Icons.Outlined.Payments,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(16.dp)
+                                    )
+                                },
+                                modifier = Modifier.align(Alignment.CenterEnd)
                         )
-                        Spacer(Modifier.width(6.dp))
-                        Text(stringResource(R.string.customer_action_record_payment))
+                    } else {
+                        // Keep row heights visually consistent regardless of payment state.
+                        Spacer(modifier = Modifier.heightIn(min = 32.dp))
                     }
-                } else {
-                    // Keep row heights visually consistent regardless of payment state.
-                    Spacer(modifier = Modifier.heightIn(min = 24.dp))
                 }
             }
         }

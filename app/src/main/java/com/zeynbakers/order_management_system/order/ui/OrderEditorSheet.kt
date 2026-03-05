@@ -2,6 +2,7 @@ package com.zeynbakers.order_management_system.order.ui
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,6 +19,7 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -210,12 +212,12 @@ internal fun OrderEditorSheet(
                 modifier = Modifier
                     .fillMaxSize()
                     .imePadding()
-                    .padding(horizontal = 4.dp, vertical = 14.dp)
+                    .padding(horizontal = 8.dp, vertical = 16.dp)
             ) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 10.dp),
+                        .padding(horizontal = 16.dp, vertical = 12.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
@@ -241,45 +243,40 @@ internal fun OrderEditorSheet(
                         .verticalScroll(formScrollState)
                 ) {
                     tutorialHint?.let {
-                        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp)) {
+                        Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 16.dp)) {
                             OrderEditorTutorialPanel(it)
                         }
                         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     }
 
-                    if (editingRow == EditingRow.NOTES) {
-                        InlineEditorRow(
-                            icon = Icons.Filled.EditNote,
-                            value = notes,
-                            placeholder = stringResource(R.string.order_editor_notes_placeholder),
-                            onValueChange = { onNotesChange(sanitizeOrderNotesInput(it)) },
-                            focusRequester = notesRequester,
-                            keyboardOptions = KeyboardOptions(
-                                capitalization = KeyboardCapitalization.Sentences,
-                                imeAction = ImeAction.Next
-                            ),
-                            keyboardActions = KeyboardActions(
-                                onNext = {
-                                    editingRow = EditingRow.TOTAL
-                                    scope.launch { delay(40); totalRequester.requestFocus() }
-                                }
-                            ),
-                            onFocused = onNotesFocused,
-                            onClear = { onNotesChange("") },
-                            modifier = notesFieldModifier.then(customerFieldModifier)
-                        )
-                    } else {
-                        ValueRow(
-                            icon = Icons.Filled.EditNote,
-                            value = notes,
-                            placeholder = stringResource(R.string.order_editor_notes_placeholder),
-                            onClick = {
+                    InlineEditorRow(
+                        icon = Icons.Filled.EditNote,
+                        value = notes,
+                        placeholder = stringResource(R.string.order_editor_notes_placeholder),
+                        onValueChange = { onNotesChange(sanitizeOrderNotesInput(it)) },
+                        focusRequester = notesRequester,
+                        keyboardOptions = KeyboardOptions(
+                            capitalization = KeyboardCapitalization.Sentences,
+                            imeAction = ImeAction.Next
+                        ),
+                        keyboardActions = KeyboardActions(
+                            onNext = {
+                                editingRow = EditingRow.TOTAL
+                                scope.launch { delay(40); totalRequester.requestFocus() }
+                            }
+                        ),
+                        onFocused = onNotesFocused,
+                        onClear = if (editingRow == EditingRow.NOTES) ({ onNotesChange("") }) else null,
+                        readOnly = editingRow != EditingRow.NOTES,
+                        onRowClick = {
+                            if (editingRow != EditingRow.NOTES) {
                                 editingRow = EditingRow.NOTES
                                 scope.launch { delay(40); notesRequester.requestFocus() }
-                            },
-                            modifier = notesFieldModifier.then(customerFieldModifier)
-                        )
-                    }
+                            }
+                        },
+                        textMaxLines = 5,
+                        modifier = notesFieldModifier.then(customerFieldModifier)
+                    )
 
                     notesError?.let {
                         Text(
@@ -294,7 +291,7 @@ internal fun OrderEditorSheet(
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(start = 52.dp, end = 16.dp, bottom = 10.dp)
+                                .padding(start = 52.dp, end = 16.dp, bottom = 12.dp)
                                 .then(customerFieldModifier),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
@@ -341,12 +338,12 @@ internal fun OrderEditorSheet(
                             color = MaterialTheme.colorScheme.surfaceContainer,
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(start = 52.dp, end = 16.dp, bottom = 10.dp)
+                                .padding(start = 52.dp, end = 16.dp, bottom = 12.dp)
                                 .then(customerFieldModifier)
                         ) {
                             Column(
                                 modifier = Modifier.fillMaxWidth(),
-                                verticalArrangement = Arrangement.spacedBy(2.dp)
+                                verticalArrangement = Arrangement.spacedBy(4.dp)
                             ) {
                                 suggestions.take(5).forEachIndexed { index, customer ->
                                     Surface(
@@ -363,7 +360,8 @@ internal fun OrderEditorSheet(
                                         Row(
                                             modifier = Modifier
                                                 .fillMaxWidth()
-                                                .padding(horizontal = 10.dp, vertical = 8.dp),
+                                                .sizeIn(minHeight = 48.dp)
+                                                .padding(horizontal = 12.dp, vertical = 12.dp),
                                             verticalAlignment = Alignment.CenterVertically
                                         ) {
                                             Text(
@@ -460,9 +458,9 @@ internal fun OrderEditorSheet(
                     }
 
                     FlowRow(
-                        modifier = Modifier.padding(start = 52.dp, end = 16.dp, bottom = 10.dp),
+                        modifier = Modifier.padding(start = 52.dp, end = 16.dp, bottom = 12.dp),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         quickAmountAdds.forEach { amount ->
                             FilterChip(
@@ -509,9 +507,9 @@ internal fun OrderEditorSheet(
                     }
 
                     FlowRow(
-                        modifier = Modifier.padding(start = 52.dp, end = 16.dp, bottom = 10.dp),
+                        modifier = Modifier.padding(start = 52.dp, end = 16.dp, bottom = 12.dp),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         quickPickupTimes.forEach { value ->
                             val isSelected = isSamePickupTime(pickupTimeText, value)
@@ -618,16 +616,19 @@ private fun ValueRow(
     value: String,
     placeholder: String,
     onClick: () -> Unit,
+    textMaxLines: Int = 1,
     modifier: Modifier = Modifier
 ) {
     val hasValue = value.isNotBlank()
+    val isMultiline = textMaxLines > 1
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .sizeIn(minHeight = 48.dp)
             .clickable(onClick = onClick)
             .then(modifier)
-            .padding(horizontal = 16.dp, vertical = 14.dp),
-        verticalAlignment = Alignment.CenterVertically
+            .padding(horizontal = 16.dp, vertical = 16.dp),
+        verticalAlignment = if (isMultiline) Alignment.Top else Alignment.CenterVertically
     ) {
         icon?.let {
             Icon(
@@ -642,10 +643,20 @@ private fun ValueRow(
             text = if (hasValue) value else placeholder,
             style = MaterialTheme.typography.bodyLarge,
             color = if (hasValue) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant,
+            minLines = 1,
+            maxLines = textMaxLines,
+            overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f)
         )
         // Keep a fixed trailing slot so switching to inline edit does not shrink text width.
-        Box(modifier = Modifier.size(40.dp))
+        Box(
+            modifier =
+                if (isMultiline) {
+                    Modifier.defaultMinSize(minWidth = 48.dp)
+                } else {
+                    Modifier.defaultMinSize(minWidth = 48.dp, minHeight = 48.dp)
+                }
+        )
     }
 }
 
@@ -661,16 +672,28 @@ private fun InlineEditorRow(
     modifier: Modifier = Modifier,
     onFocused: (() -> Unit)? = null,
     onClear: (() -> Unit)? = null,
-    leadingText: String? = null
+    leadingText: String? = null,
+    textMaxLines: Int = 1,
+    readOnly: Boolean = false,
+    onRowClick: (() -> Unit)? = null
 ) {
+    val isMultiline = textMaxLines > 1
     val textStyle: TextStyle = MaterialTheme.typography.bodyLarge.copy(color = MaterialTheme.colorScheme.onSurface)
     val cursorBrush = Brush.verticalGradient(listOf(MaterialTheme.colorScheme.primary, MaterialTheme.colorScheme.primary))
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .sizeIn(minHeight = 48.dp)
+            .then(
+                if (readOnly && onRowClick != null) {
+                    Modifier.clickable(onClick = onRowClick)
+                } else {
+                    Modifier
+                }
+            )
             .then(modifier)
-            .padding(horizontal = 16.dp, vertical = 14.dp),
-        verticalAlignment = Alignment.CenterVertically
+            .padding(horizontal = 16.dp, vertical = 16.dp),
+        verticalAlignment = if (isMultiline) Alignment.Top else Alignment.CenterVertically
     ) {
         icon?.let {
             Icon(
@@ -694,7 +717,10 @@ private fun InlineEditorRow(
         BasicTextField(
             value = value,
             onValueChange = onValueChange,
-            singleLine = true,
+            singleLine = textMaxLines == 1,
+            minLines = 1,
+            maxLines = textMaxLines,
+            readOnly = readOnly,
             textStyle = textStyle,
             keyboardOptions = keyboardOptions,
             keyboardActions = keyboardActions,
@@ -703,7 +729,7 @@ private fun InlineEditorRow(
                 .weight(1f)
                 .focusRequester(focusRequester)
                 .onFocusChanged {
-                    if (it.isFocused) {
+                    if (!readOnly && it.isFocused) {
                         onFocused?.invoke()
                     }
                 },
@@ -719,8 +745,11 @@ private fun InlineEditorRow(
             }
         )
 
-        Box(modifier = Modifier.size(40.dp), contentAlignment = Alignment.Center) {
-            if (onClear != null && value.isNotBlank()) {
+        Box(
+            modifier = Modifier.defaultMinSize(minWidth = 48.dp, minHeight = 48.dp),
+            contentAlignment = if (isMultiline) Alignment.TopCenter else Alignment.Center
+        ) {
+            if (!readOnly && onClear != null && value.isNotBlank()) {
                 IconButton(onClick = onClear) {
                     Icon(
                         imageVector = Icons.Filled.Close,

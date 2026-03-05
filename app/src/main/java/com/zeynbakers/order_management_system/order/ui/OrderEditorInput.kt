@@ -5,7 +5,8 @@ private val chatHeaderDashRegex =
     Regex("^\\d{1,2}[/-]\\d{1,2}(?:[/-]\\d{2,4})?,\\s*\\d{1,2}:\\d{2}\\s*(?:am|pm)?\\s*-\\s*[^:\\n]{1,120}:\\s*", RegexOption.IGNORE_CASE)
 private val chatExportLineRegex = Regex("(?m)^\\s*\\[[^\\]]{3,80}]\\s*[^:\\n]{1,120}:\\s*")
 private val whitespaceNoiseRegex = Regex("[\\t\\u00A0\\u202F]+")
-private val customerQueryWordRegex = Regex("[\\p{L}\\d+][\\p{L}\\d+\\-]*")
+private val customerQueryWordRegex = Regex("[\\p{L}][\\p{L}'\\-]*")
+private val customerQueryLineBreakRegex = Regex("\\n+")
 
 internal fun sanitizeAmountInput(raw: String): String {
     val builder = StringBuilder(raw.length)
@@ -45,9 +46,13 @@ internal fun sanitizeOrderNotesInput(raw: String): String {
 }
 
 internal fun extractCustomerQueryFromNotes(notes: String): String {
-    val tail = notes.trimEnd().takeLast(64)
-    val tokens = customerQueryWordRegex.findAll(tail).map { it.value }.toList()
+    val tail = notes.trimEnd().takeLast(96)
+    val tailLine = customerQueryLineBreakRegex.split(tail).lastOrNull().orEmpty().trim()
+    if (tailLine.isBlank()) return ""
+
+    val tokens = customerQueryWordRegex.findAll(tailLine).map { it.value }.toList()
     if (tokens.isEmpty()) return ""
+
     val query = tokens.takeLast(2).joinToString(" ").trim()
     return if (query.length >= 3) query else ""
 }

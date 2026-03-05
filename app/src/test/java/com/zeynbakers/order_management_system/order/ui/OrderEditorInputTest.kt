@@ -50,4 +50,12 @@ class OrderEditorInputTest {
         val raw = "Meatpie 3\nKanzu 2\nExtra chilli"
         assertEquals(raw, sanitizeOrderNotesInput(raw))
     }
+
+    @Test
+    fun `extractCustomerQueryFromNotes ignores amounts and only reads trailing name words`() {
+        assertEquals("", extractCustomerQueryFromNotes("Keki 2 1000"))
+        assertEquals("Asha", extractCustomerQueryFromNotes("Keki 2 1000 Asha"))
+        assertEquals("Asha Salim", extractCustomerQueryFromNotes("Keki 2 1000 Asha Salim"))
+        assertEquals("Asha", extractCustomerQueryFromNotes("Keki 2\nAsha"))
+    }
 }
