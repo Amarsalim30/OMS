@@ -1,6 +1,7 @@
 package com.zeynbakers.order_management_system.order.ui
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.Arrangement
@@ -34,8 +35,10 @@ import androidx.compose.material.icons.filled.EditNote
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -70,7 +73,6 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
@@ -164,6 +166,14 @@ internal fun OrderEditorSheet(
     val quickAmountAdds = remember { listOf(100, 500, 1000) }
     val quickAmountFormatter = remember { NumberFormat.getIntegerInstance() }
     val quickPickupTimes = remember { listOf("09:00", "12:00", "15:00", "18:00") }
+    val quickChipBorder = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.65f))
+    val quickChipColors =
+        FilterChipDefaults.filterChipColors(
+            containerColor = Color.Transparent,
+            selectedContainerColor = Color.Transparent,
+            labelColor = MaterialTheme.colorScheme.onSurface,
+            selectedLabelColor = MaterialTheme.colorScheme.onSurface
+        )
     val normalizedTotal = totalText.toBigDecimalOrNull()
     val totalSummaryFormatter = remember {
         NumberFormat.getNumberInstance().apply {
@@ -171,7 +181,6 @@ internal fun OrderEditorSheet(
             maximumFractionDigits = 2
         }
     }
-    val formattedTotalSummary = normalizedTotal?.let { totalSummaryFormatter.format(it) }
     val currencyPrefix = stringResource(R.string.order_editor_currency_prefix)
 
     val (initialHour, initialMinute) = remember(pickupTimeText) { parseTimeForPicker(pickupTimeText) }
@@ -213,12 +222,12 @@ internal fun OrderEditorSheet(
                 modifier = Modifier
                     .fillMaxSize()
                     .imePadding()
-                    .padding(horizontal = 12.dp, vertical = 16.dp)
+                    .padding(horizontal = 6.dp, vertical = 10.dp)
             ) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 12.dp),
+                        .padding(horizontal = 16.dp, vertical = 10.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
@@ -249,11 +258,6 @@ internal fun OrderEditorSheet(
                         }
                         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     }
-
-                    SectionLabel(
-                        text = stringResource(R.string.order_editor_required_section_label),
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)
-                    )
 
                     InlineEditorRow(
                         icon = Icons.Filled.EditNote,
@@ -423,11 +427,6 @@ internal fun OrderEditorSheet(
 
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
 
-                    SectionLabel(
-                        text = stringResource(R.string.order_editor_total_amount_label),
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)
-                    )
-
                     val totalDisplay =
                         when {
                             normalizedTotal != null -> "$currencyPrefix ${totalSummaryFormatter.format(normalizedTotal)}"
@@ -494,12 +493,6 @@ internal fun OrderEditorSheet(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Text(
-                            text = stringResource(R.string.order_editor_quick_amounts_label),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.fillMaxWidth().padding(bottom = 2.dp)
-                        )
                         quickAmountAdds.forEach { amount ->
                             FilterChip(
                                 selected = false,
@@ -519,17 +512,14 @@ internal fun OrderEditorSheet(
                                             quickAmountFormatter.format(amount)
                                         )
                                     )
-                                }
+                                },
+                                border = quickChipBorder,
+                                colors = quickChipColors
                             )
                         }
                     }
 
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-
-                    SectionLabel(
-                        text = stringResource(R.string.order_editor_customer_schedule_section),
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)
-                    )
 
                     ValueRow(
                         icon = Icons.Filled.Schedule,
@@ -556,12 +546,6 @@ internal fun OrderEditorSheet(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        Text(
-                            text = stringResource(R.string.order_editor_quick_pickup_label),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.fillMaxWidth().padding(bottom = 2.dp)
-                        )
                         quickPickupTimes.forEach { value ->
                             val isSelected = isSamePickupTime(pickupTimeText, value)
                             FilterChip(
@@ -571,7 +555,9 @@ internal fun OrderEditorSheet(
                                     editingRow = EditingRow.NONE
                                     focusManager.clearFocus(force = true)
                                 },
-                                label = { Text(formatDisplayPickupTime(value)) }
+                                label = { Text(formatDisplayPickupTime(value)) },
+                                border = quickChipBorder,
+                                colors = quickChipColors
                             )
                         }
                     }
@@ -589,18 +575,14 @@ internal fun OrderEditorSheet(
                         Text(stringResource(R.string.action_cancel))
                     }
                     Spacer(Modifier.weight(1f))
-                    formattedTotalSummary?.let {
-                        Text(
-                            text = stringResource(R.string.order_editor_footer_total, it),
-                            style = MaterialTheme.typography.labelLarge,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(end = 8.dp)
-                        )
-                    }
                     Button(
                         onClick = onSave,
                         enabled = canSave,
-                        modifier = saveButtonModifier
+                        shape = RoundedCornerShape(24.dp),
+                        colors = ButtonDefaults.buttonColors(),
+                        modifier =
+                            saveButtonModifier
+                                .sizeIn(minWidth = 104.dp, minHeight = 50.dp)
                     ) {
                         Text(stringResource(R.string.action_save))
                     }
@@ -664,20 +646,6 @@ internal fun OrderEditorSheet(
             }
         }
     }
-}
-
-@Composable
-private fun SectionLabel(
-    text: String,
-    modifier: Modifier = Modifier
-) {
-    Text(
-        text = text,
-        style = MaterialTheme.typography.titleSmall,
-        fontWeight = FontWeight.Medium,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = modifier
-    )
 }
 
 @Composable
