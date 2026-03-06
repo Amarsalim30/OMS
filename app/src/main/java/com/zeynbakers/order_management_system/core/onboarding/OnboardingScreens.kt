@@ -58,6 +58,9 @@ import com.zeynbakers.order_management_system.core.ui.components.AppCard
 import kotlinx.coroutines.launch
 import kotlinx.datetime.TimeZone
 
+private val onboardingCurrencyOptions = listOf("KES", "USD", "EUR")
+private const val defaultOnboardingCurrency = "KES"
+
 @Composable
 fun SplashScreen(
     onShouldEnterHome: suspend () -> Boolean,
@@ -231,7 +234,7 @@ fun SetupChecklistScreen(
         mutableStateOf(onboardingState.businessName)
     }
     var currency by rememberSaveable(onboardingState.currency) {
-        mutableStateOf(onboardingState.currency.ifBlank { "KES" })
+        mutableStateOf(onboardingState.currency.ifBlank { defaultOnboardingCurrency })
     }
     var timezone by rememberSaveable(onboardingState.timezone) {
         mutableStateOf(onboardingState.timezone.ifBlank { TimeZone.currentSystemDefault().id })
@@ -427,7 +430,7 @@ fun SetupChecklistScreen(
                                     modifier = Modifier.fillMaxWidth(),
                                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                                 ) {
-                                    listOf("KES", "USD", "EUR").forEach { option ->
+                                    onboardingCurrencyOptions.forEach { option ->
                                         FilterChip(
                                             selected = currency == option,
                                             onClick = { currency = option },
@@ -751,7 +754,7 @@ fun BusinessProfileScreen(
 ) {
     var businessName by rememberSaveable { mutableStateOf(onboardingState.businessName) }
     var currency by rememberSaveable {
-        mutableStateOf(onboardingState.currency.ifBlank { "KES" })
+        mutableStateOf(onboardingState.currency.ifBlank { defaultOnboardingCurrency })
     }
     var timezone by rememberSaveable {
         mutableStateOf(onboardingState.timezone.ifBlank { TimeZone.currentSystemDefault().id })
@@ -809,7 +812,7 @@ fun BusinessProfileScreen(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    listOf("KES", "USD", "EUR").forEach { option ->
+                    onboardingCurrencyOptions.forEach { option ->
                         FilterChip(
                             selected = currency == option,
                             onClick = { currency = option },

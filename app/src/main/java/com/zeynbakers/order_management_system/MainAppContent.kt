@@ -195,16 +195,8 @@ internal fun MainAppContent(
                             )
                         }
                     }
-                val updateNotes = remember {
-                    listOf(
-                        "Share M-PESA messages from Messages directly into the app.",
-                        "Oldest-order allocation is now the default when applying payments.",
-                        "Each order has its own payment history, plus move/void controls.",
-                        "Clearer order labels across screens for faster recognition.",
-                        "Improved M-PESA amount parsing for cleaner imports.",
-                        "Better voice recognition for notes and customer details.",
-                        "Faster voice calculator responses when adding totals."
-                    )
+                val updateNotes = remember(context) {
+                    context.resources.getStringArray(R.array.update_notes_latest).toList()
                 }
                 val contactsPermissionLauncher = rememberLauncherForActivityResult(
                     ActivityResultContracts.RequestPermission()
@@ -516,7 +508,13 @@ internal fun MainAppContent(
                     val supportActions = AppFeatureSupportActions(
                         refreshAfterPayments = refreshAfterPayments,
                         currentDate = currentDate,
-                        monthLabel = ::monthLabel,
+                        monthLabel = { year, month ->
+                            monthLabel(
+                                year = year,
+                                month = month,
+                                loadingLabel = context.getString(R.string.calendar_loading)
+                            )
+                        },
                         onShowMessage = { message ->
                             scope.launch { uiEventDispatcher.showSnackbar(message) }
                         },

@@ -977,4 +977,13 @@
     <string name="auth_error_email_invalid_credentials">Invalid email or password.</string>
     <string name="auth_error_email_account_exists">Email already registered. Try signing in.</string>
     <string name="auth_error_email_generic">Email sign-in failed. Check your details and try again.</string>
+    <string-array name="update_notes_latest">
+        <item>Share M-PESA messages from Messages directly into the app.</item>
+        <item>Oldest-order allocation is now the default when applying payments.</item>
+        <item>Each order has its own payment history, plus move/void controls.</item>
+        <item>Clearer order labels across screens for faster recognition.</item>
+        <item>Improved M-PESA amount parsing for cleaner imports.</item>
+        <item>Better voice recognition for notes and customer details.</item>
+        <item>Faster voice calculator responses when adding totals.</item>
+    </string-array>
 </resources>
