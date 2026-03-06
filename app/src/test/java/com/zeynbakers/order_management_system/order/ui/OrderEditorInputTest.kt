@@ -58,4 +58,11 @@ class OrderEditorInputTest {
         assertEquals("Asha Salim", extractCustomerQueryFromNotes("Keki 2 1000 Asha Salim"))
         assertEquals("Asha", extractCustomerQueryFromNotes("Keki 2\nAsha"))
     }
+
+    @Test
+    fun `stripTrailingCustomerQueryFromNotes removes only trailing customer suffix`() {
+        assertEquals("Keki 2 1000", stripTrailingCustomerQueryFromNotes("Keki 2 1000 Asha"))
+        assertEquals("Keki 2 1000", stripTrailingCustomerQueryFromNotes("Keki 2 1000"))
+        assertEquals("Keki 2", stripTrailingCustomerQueryFromNotes("Keki 2\nAsha Salim"))
+    }
 }

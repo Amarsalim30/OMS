@@ -50,7 +50,14 @@ internal fun extractCustomerQueryFromNotes(notes: String): String {
     val tailLine = customerQueryLineBreakRegex.split(tail).lastOrNull().orEmpty().trim()
     if (tailLine.isBlank()) return ""
 
-    val tokens = customerQueryWordRegex.findAll(tailLine).map { it.value }.toList()
+    val candidateSegment =
+        if (tailLine.any(Char::isDigit)) {
+            tailLine.substring(tailLine.indexOfLast(Char::isDigit) + 1)
+        } else {
+            tailLine
+        }
+
+    val tokens = customerQueryWordRegex.findAll(candidateSegment).map { it.value }.toList()
     if (tokens.isEmpty()) return ""
 
     val query = tokens.takeLast(2).joinToString(" ").trim()

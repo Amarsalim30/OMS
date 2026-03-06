@@ -2,6 +2,7 @@ package com.zeynbakers.order_management_system
 
 import android.content.Intent
 import android.os.Bundle
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -24,9 +25,16 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         launchIntent.value = intent
         lifecycleScope.launch {
-            val onboardingCompleted =
-                OnboardingPreferences(this@MainActivity).readState().onboardingCompleted
-            val startDestination = if (onboardingCompleted) AppRoutes.Calendar else AppRoutes.Intro
+            val startDestination =
+                runCatching {
+                    val onboardingCompleted =
+                        OnboardingPreferences(this@MainActivity).readState().onboardingCompleted
+                    if (onboardingCompleted) AppRoutes.Calendar else AppRoutes.Intro
+                }
+                    .onFailure { error ->
+                        Log.e(TAG, "Failed to read onboarding state; falling back to intro route", error)
+                    }
+                    .getOrDefault(AppRoutes.Intro)
             shouldKeepSplash = false
             setContent {
                 AuthGate {
@@ -43,5 +51,9 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         launchIntent.value = intent
+    }
+
+    private companion object {
+        const val TAG = "MainActivity"
     }
 }

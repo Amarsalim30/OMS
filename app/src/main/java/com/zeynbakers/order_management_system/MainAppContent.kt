@@ -41,6 +41,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -105,6 +106,7 @@ internal fun MainAppContent(
 ) {
             Order_management_systemTheme {
                 val context = LocalContext.current
+                val resources = LocalResources.current
                 val database = remember { DatabaseProvider.getDatabase(activity.applicationContext) }
                 val viewModelFactory = remember {
                     AppViewModelFactory(
@@ -174,6 +176,7 @@ internal fun MainAppContent(
                 val navBackStackEntry by navController.currentBackStackEntryAsState()
                 val currentRoute = navBackStackEntry?.destination?.route
                 val activeTopLevelRoute = topLevelRouteFor(currentRoute) ?: selectedTopLevelRoute
+                val calendarLoadingLabel = stringResource(R.string.calendar_loading)
                 val moneyTab = runCatching { MoneyTab.valueOf(moneyTabName) }.getOrDefault(MoneyTab.Collect)
                 val moneyRecordContext =
                     remember(
@@ -195,8 +198,8 @@ internal fun MainAppContent(
                             )
                         }
                     }
-                val updateNotes = remember(context) {
-                    context.resources.getStringArray(R.array.update_notes_latest).toList()
+                val updateNotes = remember(resources) {
+                    resources.getStringArray(R.array.update_notes_latest).toList()
                 }
                 val contactsPermissionLauncher = rememberLauncherForActivityResult(
                     ActivityResultContracts.RequestPermission()
@@ -512,7 +515,7 @@ internal fun MainAppContent(
                             monthLabel(
                                 year = year,
                                 month = month,
-                                loadingLabel = context.getString(R.string.calendar_loading)
+                                loadingLabel = calendarLoadingLabel
                             )
                         },
                         onShowMessage = { message ->

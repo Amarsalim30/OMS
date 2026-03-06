@@ -18,6 +18,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
 import androidx.core.content.ContextCompat
 import androidx.navigation.NavGraphBuilder
@@ -54,9 +55,15 @@ internal fun NavGraphBuilder.customersGraph(
 ) {
     composable(AppRoutes.Customers) {
         val context = LocalContext.current
+        val resources = LocalResources.current
         val scope = rememberCoroutineScope()
         val permissionRequiredMessage = stringResource(R.string.contacts_permission_required_for_import)
         val syncFailedMessage = stringResource(R.string.customer_sync_contacts_failed)
+        val formatSyncContactsDoneMessage = remember(resources) {
+            { added: Int, updated: Int ->
+                resources.getString(R.string.customer_sync_contacts_done, added, updated)
+            }
+        }
         var isSyncingContacts by rememberSaveable { mutableStateOf(false) }
 
         suspend fun runInlineContactsSync() {
@@ -67,11 +74,7 @@ internal fun NavGraphBuilder.customersGraph(
                 val contacts: List<ImportContact> = supportActions.loadContacts()
                 val result: ContactsSyncResult = customerViewModel.importContactsBulk(contacts)
                 supportActions.onShowMessage(
-                    context.getString(
-                        R.string.customer_sync_contacts_done,
-                        result.added,
-                        result.updated
-                    )
+                    formatSyncContactsDoneMessage(result.added, result.updated)
                 )
             } catch (_: SecurityException) {
                 supportActions.onShowMessage(permissionRequiredMessage)

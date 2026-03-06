@@ -1,5 +1,6 @@
 package com.zeynbakers.order_management_system.core.licensing
 
+import android.util.Log
 import android.os.Build
 import com.google.firebase.firestore.DocumentReference
 import com.google.firebase.firestore.FirebaseFirestore
@@ -31,18 +32,30 @@ internal class LicensingRepository(
     private val nowMillisProvider: () -> Long = { System.currentTimeMillis() }
 ) {
     suspend fun validateSignedInUser(uid: String): LicensingValidationResult {
+        Log.i(TAG, "Validation start")
+
+        fun blocked(reason: LicensingBlockReason): LicensingValidationResult.Blocked {
+            Log.w(TAG, "Validation blocked: $reason")
+            return LicensingValidationResult.Blocked(reason)
+        }
+
+        fun allowed(path: String): LicensingValidationResult.Allowed {
+            Log.i(TAG, "Validation success: $path")
+            return LicensingValidationResult.Allowed
+        }
+
         val nowMillis = nowMillisProvider()
         val installId = localStore.getOrCreateInstallId()
         val userRef = firestore.collection(COLLECTION_USERS).document(uid)
         return try {
             val entitlementSnapshot = userRef.get(Source.SERVER).await()
             if (!entitlementSnapshot.exists()) {
-                return LicensingValidationResult.Blocked(LicensingBlockReason.EntitlementMissing)
+                return blocked(LicensingBlockReason.EntitlementMissing)
             }
 
             val allowed = entitlementSnapshot.getBoolean(FIELD_ALLOWED) ?: false
             if (!allowed) {
-                return LicensingValidationResult.Blocked(LicensingBlockReason.AccessDenied)
+                return blocked(LicensingBlockReason.AccessDenied)
             }
 
             val maxDevices = (entitlementSnapshot.getLong(FIELD_MAX_DEVICES) ?: DEFAULT_MAX_DEVICES)
@@ -50,7 +63,7 @@ internal class LicensingRepository(
                 .coerceAtLeast(1)
             val expiresAt = entitlementSnapshot.getLong(FIELD_EXPIRES_AT) ?: 0L
             if (expiresAt > 0L && nowMillis > expiresAt) {
-                return LicensingValidationResult.Blocked(LicensingBlockReason.EntitlementExpired)
+                return blocked(LicensingBlockReason.EntitlementExpired)
             }
 
             val deviceRef = userRef.collection(COLLECTION_DEVICES).document(installId)
@@ -58,11 +71,11 @@ internal class LicensingRepository(
             if (deviceSnapshot.exists()) {
                 val revoked = deviceSnapshot.getBoolean(FIELD_REVOKED) ?: false
                 if (revoked) {
-                    return LicensingValidationResult.Blocked(LicensingBlockReason.DeviceRevoked)
+                    return blocked(LicensingBlockReason.DeviceRevoked)
                 }
                 touchDevice(deviceRef, nowMillis)
                 localStore.updateLastValidated(uid, nowMillis)
-                return LicensingValidationResult.Allowed
+                return allowed("existing_device")
             }
 
             val activeDevicesCount = userRef.collection(COLLECTION_DEVICES)
@@ -71,22 +84,27 @@ internal class LicensingRepository(
                 .await()
                 .size()
             if (activeDevicesCount >= maxDevices) {
-                return LicensingValidationResult.Blocked(LicensingBlockReason.DeviceLimitReached)
+                return blocked(LicensingBlockReason.DeviceLimitReached)
             }
 
             registerDevice(deviceRef, nowMillis)
             localStore.updateLastValidated(uid, nowMillis)
-            LicensingValidationResult.Allowed
+            allowed("registered_device")
         } catch (error: Exception) {
             when {
-                shouldTreatAsOffline(error) ->
+                shouldTreatAsOffline(error) -> {
+                    Log.w(TAG, "Validation retryable failure: offline_or_timeout", error)
                     if (localStore.isWithinGraceWindow(uid, nowMillis, OFFLINE_GRACE_WINDOW_MS)) {
-                        LicensingValidationResult.Allowed
+                        allowed("offline_grace")
                     } else {
-                        LicensingValidationResult.Blocked(LicensingBlockReason.OfflineGraceExpired)
+                        blocked(LicensingBlockReason.OfflineGraceExpired)
                     }
+                }
 
-                else -> LicensingValidationResult.Blocked(LicensingBlockReason.ValidationFailed)
+                else -> {
+                    Log.e(TAG, "Validation fatal failure", error)
+                    blocked(LicensingBlockReason.ValidationFailed)
+                }
             }
         }
     }
@@ -123,6 +141,7 @@ internal class LicensingRepository(
     }
 
     private companion object {
+        const val TAG = "LicensingRepository"
         const val COLLECTION_USERS = "users"
         const val COLLECTION_DEVICES = "devices"
 

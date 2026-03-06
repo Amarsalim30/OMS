@@ -61,3 +61,12 @@
   - Blocked -> show reason screen
 - Must include a small set of tests or verifiable manual test checklist for each P0 acceptance test.
 - Do not refactor unrelated modules while implementing licensing.
+
+## Long-horizon execution rules
+- Finish implementation work milestone by milestone, not as a shallow sweep.
+- After every meaningful change, run the best available verification commands.
+- If checks fail, fix them before proceeding.
+- Update plans.md and implementation-log.md continuously.
+- Do not claim something is complete unless it is implemented and verified.
+- If blocked, document the exact blocker, affected files, attempted fixes, and next best action.
+- Prefer production-safe incremental improvement over large speculative rewrites.
