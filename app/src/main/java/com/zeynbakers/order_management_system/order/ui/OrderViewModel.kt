@@ -123,7 +123,7 @@ class OrderViewModel(private val database: AppDatabase) : ViewModel() {
                 }
             result.creditPrompt?.let { _creditPrompt.value = it }
             loadOrdersForDate(result.date)
-            refreshMonthTotals()
+            refreshMonthSnapshots(result.affectedMonths)
         }
     }
 
@@ -202,8 +202,17 @@ class OrderViewModel(private val database: AppDatabase) : ViewModel() {
                 orderId = orderId,
                 customerId = customerId
             )
+        val affectedMonths =
+            buildSet {
+                add(date.toMonthKey())
+                existingOrder?.orderDate?.let { add(it.toMonthKey()) }
+            }
 
-        return SaveOrderResult(date = date, creditPrompt = creditPrompt)
+        return SaveOrderResult(
+            date = date,
+            affectedMonths = affectedMonths,
+            creditPrompt = creditPrompt
+        )
     }
 
     private suspend fun buildCreditPromptIfEligible(
@@ -255,7 +264,7 @@ class OrderViewModel(private val database: AppDatabase) : ViewModel() {
                 now = now
             )
             loadOrdersForDate(order.orderDate)
-            refreshMonthTotals()
+            refreshMonthSnapshots(setOf(order.orderDate.toMonthKey()))
             _creditPrompt.value = null
         }
     }
@@ -334,11 +343,12 @@ class OrderViewModel(private val database: AppDatabase) : ViewModel() {
 
     fun cancelOrder(orderId: Long, date: LocalDate) {
         viewModelScope.launch {
+            val existingDate = orderDao.getOrderById(orderId)?.orderDate ?: date
             database.withTransaction {
                 cancelOrderTransactional(orderId)
             }
-            loadOrdersForDate(date)
-            refreshMonthTotals()
+            loadOrdersForDate(existingDate)
+            refreshMonthSnapshots(setOf(existingDate.toMonthKey()))
             loadUnpaidOrders()
         }
     }
@@ -407,6 +417,7 @@ class OrderViewModel(private val database: AppDatabase) : ViewModel() {
         target: ReceiptAllocation?,
         moveFullReceipts: Boolean
     ): Boolean {
+        val existingDate = orderDao.getOrderById(orderId)?.orderDate ?: date
         database.withTransaction {
             val validAllocationIds =
                 if (allocationIds.isEmpty()) {
@@ -450,8 +461,8 @@ class OrderViewModel(private val database: AppDatabase) : ViewModel() {
             }
             cancelOrderTransactional(orderId)
         }
-        loadOrdersForDate(date)
-        refreshMonthTotals()
+        loadOrdersForDate(existingDate)
+        refreshMonthSnapshots(setOf(existingDate.toMonthKey()))
         loadUnpaidOrders()
         return true
     }
@@ -613,10 +624,26 @@ class OrderViewModel(private val database: AppDatabase) : ViewModel() {
         }
     }
 
-    private fun refreshMonthTotals() {
-        val month = lastMonth ?: return
-        val year = lastYear ?: return
-        loadMonth(month = month, year = year, forceRefresh = true)
+    private fun refreshMonthSnapshots(affectedMonths: Set<MonthKey>) {
+        if (affectedMonths.isEmpty()) return
+        viewModelScope.launch {
+            // Drop stale entries first so pager pages cannot keep rendering old prefetched data.
+            _monthSnapshots.value = _monthSnapshots.value - affectedMonths
+            val currentKey =
+                if (lastYear != null && lastMonth != null) {
+                    MonthKey(year = lastYear!!, month = lastMonth!!)
+                } else {
+                    null
+                }
+            affectedMonths.forEach { key ->
+                loadMonth(
+                    month = key.month,
+                    year = key.year,
+                    setAsCurrent = key == currentKey,
+                    forceRefresh = true
+                )
+            }
+        }
     }
 
     fun loadUnpaidOrders() {
@@ -782,6 +809,7 @@ data class OrderCreditPrompt(
 
 private data class SaveOrderResult(
     val date: LocalDate,
+    val affectedMonths: Set<MonthKey>,
     val creditPrompt: OrderCreditPrompt?
 )
 
@@ -809,3 +837,5 @@ internal fun shouldPromptForAvailableCredit(
     if (outstandingAfterSave <= BigDecimal.ZERO) return false
     return true
 }
+
+private fun LocalDate.toMonthKey(): MonthKey = MonthKey(year = year, month = monthNumber)
