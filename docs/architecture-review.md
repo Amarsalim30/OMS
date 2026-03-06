@@ -1,80 +1,48 @@
 # Architecture Review
 
-## Current architecture snapshot
-- Single Android app module with feature-first packages: `order`, `customer`, `accounting`, and `core`.
-- Single-activity Compose app with an AuthGate and licensing validation before the main navigation shell.
-- Navigation is already split across:
-  - `MainAppContent.kt`
-  - `MainAppHostScaffold.kt`
-  - `AppFeatureNavHost.kt`
-  - `AppNavigationHelpers.kt`
-  - `core/navigation/graphs/*`
-- Room and DAO persistence remain the main data backbone.
-- Background scheduling exists for notifications, contacts sync, and backup scheduling.
+Date: 2026-03-06 (refresh)
+
+## Current architecture
+- Single-module Android app (`app`) using Kotlin + Jetpack Compose.
+- Feature-first packaging across `order`, `customer`, `accounting`, with shared platform concerns in `core`.
+- Navigation already partially decomposed via graph files and app-shell helpers.
 
 ## Strengths
-- Package boundaries broadly follow product domains and are still understandable for a single-module app.
-- The app shell is not a pure monolith anymore; navigation graphs and scaffold concerns have already been split out.
-- Licensing and entitlement validation are isolated into `core/licensing`, which is a healthier boundary than mixing them into UI code.
-- ADR and requirements documentation already exists for several higher-risk flows.
+- Domain boundaries are mostly understandable.
+- Licensing/auth gate exists and is isolated under `core/licensing`.
+- Room schema history and migration tests exist.
 
-## Architectural concerns
+## Key architecture issues
 
-### A1. `BackupManager.kt` is still the highest-risk mixed-responsibility class
+### A1. Oversized backup orchestration
 - Severity: high
-- Files: `app/src/main/java/com/zeynbakers/order_management_system/core/backup/BackupManager.kt`
-- Production impact: backup archive creation, crypto, manifest handling, restore mapping, and error policy remain tightly coupled, which makes regressions hard to isolate.
-- Recommendation: extract collaborators in this order:
-  1. archive and metadata I/O
-  2. crypto codec and key material handling
-  3. restore mapping and validation
-  4. orchestration and user-facing result mapping
-- Implement timing: later
+- Files: `core/backup/BackupManager.kt`
+- Production impact: mixed responsibilities (I/O, crypto, restore mapping, policy) increase blast radius.
+- Fix: split into smaller collaborators with clear contracts; keep manager as orchestrator only.
+- Timing: later
 - Change risk: medium-high
 
-### A2. `HelperOverlayService.kt` still combines multiple lifecycle-sensitive responsibilities
+### A2. Oversized helper overlay service
 - Severity: high
-- Files: `app/src/main/java/com/zeynbakers/order_management_system/core/helper/HelperOverlayService.kt`
-- Production impact: overlay lifecycle, microphone or audio handling, and command parsing are coupled into one long-lived service, which is a bad place for subtle regressions.
-- Recommendation: extract command parsing, permission state checks, and overlay view coordination into explicit collaborators before adding new helper features.
-- Implement timing: later
+- Files: `core/helper/HelperOverlayService.kt`
+- Production impact: lifecycle + UI + voice/mic + command coordination in one class complicates reliability.
+- Fix: extract permission gate, parser, and overlay coordinator classes.
+- Timing: later
 - Change risk: medium-high
 
-### A3. `MainAppContent.kt` remains large, but the original March audit overstated the problem
+### A3. Main app shell still broad but trending better
 - Severity: medium
-- Files:
-  - `app/src/main/java/com/zeynbakers/order_management_system/MainAppContent.kt`
-  - `app/src/main/java/com/zeynbakers/order_management_system/MainAppHostScaffold.kt`
-  - `app/src/main/java/com/zeynbakers/order_management_system/AppFeatureNavHost.kt`
-  - `app/src/main/java/com/zeynbakers/order_management_system/core/navigation/graphs/*`
-- Production impact: `MainAppContent.kt` still owns a wide state surface and several side effects, but navigation shell responsibilities have already been partially decomposed.
-- Recommendation: continue incremental extraction around side-effect handlers, permission coordinators, and shared-intent routing rather than rewriting the whole app shell.
-- Implement timing: later
+- Files: `MainAppContent.kt`, `MainAppHostScaffold.kt`, `core/navigation/graphs/*`
+- Production impact: broad state surface increases coupling.
+- Fix: incremental extraction of side-effect coordinators rather than rewrite.
+- Timing: later
 - Change risk: medium
 
-### A4. Startup resilience is in a better state than the initial audit suggested
-- Severity: resolved in this pass
-- Files: `app/src/main/java/com/zeynbakers/order_management_system/MainActivity.kt`
-- Production impact: startup now has a safer fallback if onboarding-state reads fail.
-- Recommendation: keep the fail-safe startup path and add direct tests when a practical harness is available.
-- Implement timing: already implemented
-- Change risk: low
+## Implement-now decision in this pass
+- No large architecture rewrite performed.
+- Focus kept on security hygiene + documentation/plan hardening.
 
-## Recommended target architecture
-1. Keep the single-module structure for now. The current risk is inside oversized classes, not in the module graph.
-2. Continue extracting high-risk collaborators from backup and helper subsystems before touching lower-risk screens.
-3. Preserve the current navigation graph split and shrink `MainAppContent.kt` by moving side-effect handling behind narrower helpers.
-4. Add tests before each high-risk extraction so the refactor remains production-safe.
-
-## Status after this pass
-- Completed:
-  - Startup fallback hardening in `MainActivity.kt`.
-  - Additional parser tests and resource-access lint cleanup.
-  - Removal of dead legacy order UI files.
-- Still deferred:
-  - `BackupManager.kt` modularization.
-  - `HelperOverlayService.kt` modularization.
-  - Further `MainAppContent.kt` state-surface reduction.
-
-## Decision
-No big rewrite is justified in this repository today. The correct path remains incremental refactoring with verification after each extraction.
+## Recommended next architectural milestone
+1. Introduce backup subcomponents behind interfaces and test seams.
+2. Reduce overlay service responsibilities.
+3. Add minimal architecture decision records for each extraction milestone.
