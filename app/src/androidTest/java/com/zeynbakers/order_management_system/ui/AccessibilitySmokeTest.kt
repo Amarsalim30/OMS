@@ -2,35 +2,39 @@ package com.zeynbakers.order_management_system.ui
 
 import android.content.Context
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assert
+import androidx.compose.ui.test.hasClickAction
+import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.test.core.app.ApplicationProvider
 import com.zeynbakers.order_management_system.R
-import com.zeynbakers.order_management_system.accounting.data.AccountEntryEntity
 import com.zeynbakers.order_management_system.accounting.data.CustomerAccountSummary
-import com.zeynbakers.order_management_system.accounting.data.EntryType
 import com.zeynbakers.order_management_system.accounting.ui.AllocationMode
 import com.zeynbakers.order_management_system.accounting.ui.DuplicateState
 import com.zeynbakers.order_management_system.accounting.ui.MpesaAllocationSheet
 import com.zeynbakers.order_management_system.accounting.ui.MpesaTransactionUi
+import com.zeynbakers.order_management_system.core.ui.LocalVoiceInputRouter
+import com.zeynbakers.order_management_system.core.ui.VoiceInputRouter
 import com.zeynbakers.order_management_system.customer.data.CustomerEntity
 import com.zeynbakers.order_management_system.customer.ui.CustomerDetailScreen
+import com.zeynbakers.order_management_system.customer.ui.CustomerFinanceSummary
+import com.zeynbakers.order_management_system.customer.ui.CustomerListScreen
+import com.zeynbakers.order_management_system.customer.ui.CustomerOrderUi
+import com.zeynbakers.order_management_system.customer.ui.OrderEffectiveStatus
+import com.zeynbakers.order_management_system.customer.ui.OrderPaymentState
 import com.zeynbakers.order_management_system.order.data.OrderEntity
 import com.zeynbakers.order_management_system.order.ui.CalendarScreen
 import com.zeynbakers.order_management_system.order.ui.DayDetailScreen
 import com.zeynbakers.order_management_system.order.ui.SummaryScreen
-import com.zeynbakers.order_management_system.customer.ui.CustomerFinanceSummary
-import com.zeynbakers.order_management_system.customer.ui.CustomerOrderUi
-import com.zeynbakers.order_management_system.customer.ui.OrderEffectiveStatus
-import com.zeynbakers.order_management_system.customer.ui.OrderPaymentState
-import com.zeynbakers.order_management_system.customer.ui.CustomerListScreen
 import java.math.BigDecimal
 import kotlinx.datetime.LocalDate
 import org.junit.Assert.assertTrue
@@ -41,9 +45,21 @@ class AccessibilitySmokeTest {
     @get:Rule
     val composeRule = createComposeRule()
 
+    private fun setTestContent(content: @Composable () -> Unit) {
+        composeRule.setContent {
+            CompositionLocalProvider(
+                LocalVoiceInputRouter provides VoiceInputRouter(onApplyTotal = {})
+            ) {
+                content()
+            }
+        }
+        composeRule.waitForIdle()
+    }
+
     @Test
     fun calendarPrimaryActionsMeetTouchTarget() {
-        composeRule.setContent {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        setTestContent {
             MaterialTheme {
                 CalendarScreen(
                     days = emptyList(),
@@ -69,14 +85,20 @@ class AccessibilitySmokeTest {
         }
 
         val minTouchTargetPx = with(composeRule.density) { 48.dp.toPx() }
+        val addOrderLabel = context.getString(R.string.calendar_add_order)
+        val todayLabel = context.getString(R.string.calendar_today)
 
-        val addOrderNode = composeRule.onNodeWithContentDescription("Add order")
+        val addOrderNode = composeRule.onNode(
+            hasContentDescription(addOrderLabel) and hasClickAction()
+        )
             .assert(SemanticsMatcher("exists") { true })
             .fetchSemanticsNode()
         assertTrue(addOrderNode.boundsInRoot.width >= minTouchTargetPx)
         assertTrue(addOrderNode.boundsInRoot.height >= minTouchTargetPx)
 
-        val todayNode = composeRule.onNodeWithContentDescription("Today")
+        val todayNode = composeRule.onNode(
+            hasContentDescription(todayLabel) and hasClickAction()
+        )
             .assert(SemanticsMatcher("exists") { true })
             .fetchSemanticsNode()
         assertTrue(todayNode.boundsInRoot.width >= minTouchTargetPx)
@@ -85,6 +107,7 @@ class AccessibilitySmokeTest {
 
     @Test
     fun dayDetailFiltersStayDiscoverableAtLargeFontScale() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
         val date = LocalDate(2026, 2, 7)
         val order =
             OrderEntity(
@@ -94,7 +117,7 @@ class AccessibilitySmokeTest {
                 totalAmount = BigDecimal("1000.00")
             )
 
-        composeRule.setContent {
+        setTestContent {
             CompositionLocalProvider(LocalDensity provides Density(density = 1f, fontScale = 1.6f)) {
                 MaterialTheme {
                     DayDetailScreen(
@@ -120,12 +143,20 @@ class AccessibilitySmokeTest {
             }
         }
 
-        composeRule.onNodeWithText("More filters").assert(SemanticsMatcher("exists") { true })
-        composeRule.onNodeWithText("Search orders").assert(SemanticsMatcher("exists") { true })
+        composeRule
+            .onNodeWithContentDescription(context.getString(R.string.action_more_filters))
+            .assert(SemanticsMatcher("exists") { true })
+        composeRule
+            .onNodeWithText(context.getString(R.string.day_show_search))
+            .performClick()
+        composeRule
+            .onNodeWithText(context.getString(R.string.day_search_orders))
+            .assert(SemanticsMatcher("exists") { true })
     }
 
     @Test
     fun customerPrimaryActionsStayDiscoverableAtLargeFontScale() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
         val summary =
             CustomerAccountSummary(
                 customerId = 1L,
@@ -136,7 +167,7 @@ class AccessibilitySmokeTest {
                 balance = BigDecimal("1000.00")
             )
 
-        composeRule.setContent {
+        setTestContent {
             CompositionLocalProvider(LocalDensity provides Density(density = 1f, fontScale = 1.6f)) {
                 MaterialTheme {
                     CustomerListScreen(
@@ -158,10 +189,24 @@ class AccessibilitySmokeTest {
             }
         }
 
-        composeRule.onNodeWithText("Pay").assert(SemanticsMatcher("exists") { true })
-        composeRule.onNodeWithText("Order").assert(SemanticsMatcher("exists") { true })
-        composeRule.onNodeWithText("Message").assert(SemanticsMatcher("exists") { true })
-        composeRule.onNodeWithText("Search customers").assert(SemanticsMatcher("exists") { true })
+        composeRule
+            .onNodeWithContentDescription(context.getString(R.string.action_search))
+            .assert(SemanticsMatcher("exists") { true })
+        composeRule
+            .onNodeWithContentDescription(context.getString(R.string.action_more_filters))
+            .assert(SemanticsMatcher("exists") { true })
+        composeRule
+            .onNodeWithContentDescription(context.getString(R.string.customer_actions))
+            .performClick()
+        composeRule
+            .onNodeWithText(context.getString(R.string.customer_action_record_payment))
+            .assert(SemanticsMatcher("exists") { true })
+        composeRule
+            .onNodeWithText(context.getString(R.string.customer_action_new_order))
+            .assert(SemanticsMatcher("exists") { true })
+        composeRule
+            .onNodeWithText(context.getString(R.string.customer_action_message))
+            .assert(SemanticsMatcher("exists") { true })
     }
 
     @Test
@@ -175,7 +220,7 @@ class AccessibilitySmokeTest {
                 totalAmount = BigDecimal("1000.00")
             )
 
-        composeRule.setContent {
+        setTestContent {
             MaterialTheme {
                 SummaryScreen(
                     monthLabel = "February 2026",
@@ -314,18 +359,8 @@ class AccessibilitySmokeTest {
                 effectiveStatus = OrderEffectiveStatus.OPEN,
                 statusOverride = null
             )
-        val ledgerEntry =
-            AccountEntryEntity(
-                id = 1L,
-                orderId = order.id,
-                customerId = customer.id,
-                type = EntryType.DEBIT,
-                amount = BigDecimal("1000.00"),
-                date = 0L,
-                description = "Bread order"
-            )
 
-        composeRule.setContent {
+        setTestContent {
             CompositionLocalProvider(LocalDensity provides Density(density = 1f, fontScale = 1.6f)) {
                 MaterialTheme {
                     CustomerDetailScreen(
@@ -352,13 +387,9 @@ class AccessibilitySmokeTest {
 
         composeRule.onNodeWithText(context.getString(R.string.customer_action_record_payment))
             .assert(SemanticsMatcher("exists") { true })
-        composeRule.onNodeWithText(context.getString(R.string.customer_detail_search_statement))
+        composeRule.onNodeWithText(context.getString(R.string.customer_action_view_statement))
             .assert(SemanticsMatcher("exists") { true })
-
-        val minTouchTargetPx = with(composeRule.density) { 48.dp.toPx() }
-        val statementNode = composeRule.onNodeWithContentDescription(context.getString(R.string.customer_detail_statement))
-            .fetchSemanticsNode()
-        assertTrue(statementNode.boundsInRoot.width >= minTouchTargetPx)
-        assertTrue(statementNode.boundsInRoot.height >= minTouchTargetPx)
+        composeRule.onNodeWithText(context.getString(R.string.customer_detail_receipt_history))
+            .assert(SemanticsMatcher("exists") { true })
     }
 }

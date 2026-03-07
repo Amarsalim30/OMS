@@ -52,6 +52,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -98,7 +100,10 @@ internal fun CalendarTopAppBar(
             }
         },
         navigationIcon = {
-            IconButton(onClick = onSummaryClick) {
+            IconButton(
+                onClick = onSummaryClick,
+                modifier = Modifier.size(48.dp)
+            ) {
                 Icon(
                     imageVector = Icons.Filled.BarChart,
                     contentDescription = stringResource(R.string.calendar_summary)
@@ -106,11 +111,17 @@ internal fun CalendarTopAppBar(
             }
         },
         actions = {
-            IconButton(onClick = onToday) {
+            val todayLabel = stringResource(R.string.calendar_today)
+            IconButton(
+                onClick = onToday,
+                modifier = Modifier
+                    .size(48.dp)
+                    .semantics { contentDescription = todayLabel }
+            ) {
                 Box(modifier = Modifier.size(24.dp)) {
                     Icon(
                         imageVector = Icons.Filled.CalendarToday,
-                        contentDescription = stringResource(R.string.calendar_today),
+                        contentDescription = null,
                         modifier = Modifier.fillMaxSize()
                     )
                     Text(
@@ -126,7 +137,7 @@ internal fun CalendarTopAppBar(
             }
             IconButton(
                 onClick = onMoreClick,
-                modifier = moreButtonModifier
+                modifier = moreButtonModifier.size(48.dp)
             ) {
                 Icon(
                     imageVector = Icons.Filled.MoreVert,

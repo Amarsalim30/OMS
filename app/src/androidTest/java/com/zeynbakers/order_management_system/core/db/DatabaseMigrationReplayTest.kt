@@ -2,6 +2,7 @@ package com.zeynbakers.order_management_system.core.db
 
 import androidx.room.testing.MigrationTestHelper
 import androidx.sqlite.db.SupportSQLiteDatabase
+import androidx.sqlite.db.SupportSQLiteOpenHelper
 import androidx.sqlite.db.framework.FrameworkSQLiteOpenHelperFactory
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
@@ -24,11 +25,7 @@ class DatabaseMigrationReplayTest {
 
     @Test
     fun migration12To13_nullsOrphansAndKeepsIntegrity() {
-        helper.createDatabase(TEST_DB, 12).apply {
-            createV12Schema(this)
-            seedV12Data(this)
-            close()
-        }
+        createV12Database()
 
         val migrated =
             helper.runMigrationsAndValidate(
@@ -55,6 +52,33 @@ class DatabaseMigrationReplayTest {
 
         val fkViolations = migrated.queryLongOrNull("SELECT COUNT(*) FROM pragma_foreign_key_check")
         assertEquals(0L, fkViolations)
+    }
+
+    private fun createV12Database() {
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        context.deleteDatabase(TEST_DB)
+        val configuration =
+            SupportSQLiteOpenHelper.Configuration.builder(context)
+                .name(TEST_DB)
+                .callback(
+                    object : SupportSQLiteOpenHelper.Callback(12) {
+                        override fun onCreate(db: SupportSQLiteDatabase) {
+                            createV12Schema(db)
+                            seedV12Data(db)
+                        }
+
+                        override fun onUpgrade(
+                            db: SupportSQLiteDatabase,
+                            oldVersion: Int,
+                            newVersion: Int
+                        ) = Unit
+                    }
+                )
+                .build()
+        FrameworkSQLiteOpenHelperFactory()
+            .create(configuration)
+            .writableDatabase
+            .close()
     }
 
     private fun createV12Schema(db: SupportSQLiteDatabase) {

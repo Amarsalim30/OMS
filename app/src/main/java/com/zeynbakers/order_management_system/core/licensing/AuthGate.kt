@@ -11,7 +11,6 @@ import androidx.credentials.GetCredentialRequest
 import androidx.credentials.exceptions.GetCredentialCancellationException
 import androidx.credentials.exceptions.GetCredentialException
 import androidx.credentials.exceptions.NoCredentialException
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -24,25 +23,21 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.auth.FirebaseAuthInvalidCredentialsException
-import com.google.firebase.auth.FirebaseAuthInvalidUserException
-import com.google.firebase.auth.FirebaseAuthUserCollisionException
 import com.google.firebase.auth.GoogleAuthProvider
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.android.libraries.identity.googleid.GetGoogleIdOption
@@ -50,6 +45,9 @@ import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import com.google.android.libraries.identity.googleid.GoogleIdTokenParsingException
 import com.zeynbakers.order_management_system.R
 import com.zeynbakers.order_management_system.core.ui.theme.Order_management_systemTheme
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 
@@ -58,6 +56,7 @@ internal fun AuthGate(
     authorizedContent: @Composable () -> Unit
 ) {
     val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
     val auth = remember { FirebaseAuth.getInstance() }
     val repository = remember {
         LicensingRepository(
@@ -71,8 +70,6 @@ internal fun AuthGate(
     var gateState by remember { mutableStateOf<GateUiState>(GateUiState.Validating) }
     var authInFlight by remember { mutableStateOf(false) }
     var authErrorResId by remember { mutableIntStateOf(0) }
-    var email by rememberSaveable { mutableStateOf("") }
-    var password by rememberSaveable { mutableStateOf("") }
 
     suspend fun validateCurrentUser() {
         val user = auth.currentUser
@@ -95,6 +92,26 @@ internal fun AuthGate(
         validateCurrentUser()
     }
 
+    val revalidateOnStart = rememberUpdatedState {
+        if (gateState == GateUiState.Validating || authInFlight) {
+            return@rememberUpdatedState
+        }
+        scope.launch {
+            authInFlight = true
+            validateCurrentUser()
+        }
+    }
+
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_START) {
+                revalidateOnStart.value()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
     Order_management_systemTheme {
         when (val state = gateState) {
             GateUiState.Validating -> {
@@ -103,12 +120,8 @@ internal fun AuthGate(
 
             GateUiState.SignedOut -> {
                 LoginScreen(
-                    email = email,
-                    password = password,
                     inFlight = authInFlight,
                     errorMessage = authErrorResId.takeIf { it != 0 }?.let { stringResource(it) },
-                    onEmailChange = { email = it },
-                    onPasswordChange = { password = it },
                     onSignInWithGoogle = {
                         scope.launch {
                             authInFlight = true
@@ -143,32 +156,6 @@ internal fun AuthGate(
                             } catch (error: Exception) {
                                 authInFlight = false
                                 authErrorResId = R.string.auth_error_google_firebase_failed
-                            }
-                        }
-                    },
-                    onSignInWithEmail = {
-                        scope.launch {
-                            authInFlight = true
-                            authErrorResId = 0
-                            try {
-                                auth.signInWithEmailAndPassword(email.trim(), password).await()
-                                validateCurrentUser()
-                            } catch (error: Exception) {
-                                authInFlight = false
-                                authErrorResId = emailAuthErrorResId(error)
-                            }
-                        }
-                    },
-                    onCreateAccountWithEmail = {
-                        scope.launch {
-                            authInFlight = true
-                            authErrorResId = 0
-                            try {
-                                auth.createUserWithEmailAndPassword(email.trim(), password).await()
-                                validateCurrentUser()
-                            } catch (error: Exception) {
-                                authInFlight = false
-                                authErrorResId = emailAuthErrorResId(error)
                             }
                         }
                     }
@@ -210,17 +197,10 @@ private sealed interface GateUiState {
 
 @Composable
 private fun LoginScreen(
-    email: String,
-    password: String,
     inFlight: Boolean,
     errorMessage: String?,
-    onEmailChange: (String) -> Unit,
-    onPasswordChange: (String) -> Unit,
-    onSignInWithGoogle: () -> Unit,
-    onSignInWithEmail: () -> Unit,
-    onCreateAccountWithEmail: () -> Unit
+    onSignInWithGoogle: () -> Unit
 ) {
-    val emailActionsEnabled = !inFlight && email.trim().isNotBlank() && password.isNotBlank()
     Surface(modifier = Modifier.fillMaxSize()) {
         Column(
             modifier = Modifier
@@ -256,48 +236,6 @@ private fun LoginScreen(
                     .padding(top = 20.dp)
             ) {
                 Text(text = stringResource(R.string.auth_sign_in_google_button))
-            }
-            Text(
-                text = stringResource(R.string.auth_sign_in_method_or),
-                style = MaterialTheme.typography.bodySmall,
-                modifier = Modifier.padding(top = 14.dp)
-            )
-            androidx.compose.material3.OutlinedTextField(
-                value = email,
-                onValueChange = onEmailChange,
-                label = { Text(stringResource(R.string.auth_email_label)) },
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 12.dp)
-            )
-            androidx.compose.material3.OutlinedTextField(
-                value = password,
-                onValueChange = onPasswordChange,
-                label = { Text(stringResource(R.string.auth_password_label)) },
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
-                visualTransformation = PasswordVisualTransformation(),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 10.dp)
-            )
-            Button(
-                onClick = onSignInWithEmail,
-                enabled = emailActionsEnabled,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 12.dp)
-            ) {
-                Text(text = stringResource(R.string.auth_sign_in_email_button))
-            }
-            TextButton(
-                onClick = onCreateAccountWithEmail,
-                enabled = emailActionsEnabled,
-                modifier = Modifier.padding(top = 4.dp)
-            ) {
-                Text(text = stringResource(R.string.auth_create_account_button))
             }
             if (inFlight) {
                 CircularProgressIndicator(modifier = Modifier.padding(top = 8.dp))
@@ -381,16 +319,6 @@ private fun blockedReasonMessageRes(reason: LicensingBlockReason): Int {
         LicensingBlockReason.EntitlementExpired -> R.string.auth_blocked_expired
         LicensingBlockReason.OfflineGraceExpired -> R.string.auth_blocked_offline_grace
         LicensingBlockReason.ValidationFailed -> R.string.auth_blocked_validation_failed
-    }
-}
-
-@StringRes
-private fun emailAuthErrorResId(error: Exception): Int {
-    return when (error) {
-        is FirebaseAuthInvalidUserException -> R.string.auth_error_email_account_not_found
-        is FirebaseAuthInvalidCredentialsException -> R.string.auth_error_email_invalid_credentials
-        is FirebaseAuthUserCollisionException -> R.string.auth_error_email_account_exists
-        else -> R.string.auth_error_email_generic
     }
 }
 

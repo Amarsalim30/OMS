@@ -1,42 +1,50 @@
 # Production Readiness Plan
 
-Date: 2026-03-06 (current pass)
+Date: 2026-03-07
 
 ## Goals
-- Complete a repository-wide production-readiness audit with actionable severity-ranked findings.
-- Remove immediately risky artifacts/issues that can be fixed safely now.
-- Keep an implementation trail and verification evidence.
+- Audit the repo deeply enough to produce severity-ranked, evidence-backed findings.
+- Ship safe, reviewable fixes in the highest-value areas touched by this pass.
+- Keep documentation, plan, and implementation log aligned with actual code and verification state.
 
-## Non-goals
-- No broad framework migration.
-- No large architecture rewrite in a single pass.
-- No unverified claims for device-only or signed-release checks.
+## Non-Goals
+- No speculative architecture rewrite.
+- No undocumented auth/back-end product changes.
+- No claim that device-only verification is complete when it is not.
 
-## Ordered milestones
-
-### Milestone 1 — Deep audit and evidence capture
+## Ordered Milestones
+### Milestone 1 - Deep Audit And Evidence Capture
 - Acceptance criteria:
-  - All required docs refreshed with repo-specific findings.
-  - Findings include severity, impacted files, production impact, recommendation, now/later decision, and risk.
-- Validation commands:
+  - Required audit docs refreshed with repo-specific findings.
+  - Findings include severity, affected files, impact, recommendation, implement-now-vs-later, and change risk.
+  - Release blockers identified explicitly.
+- Verification commands:
   - `git status --short`
 
-### Milestone 2 — Immediate high-value fixes
+### Milestone 2 - Correctness And Security Hardening
 - Acceptance criteria:
-  - Remove unsafe repository artifacts with no runtime impact.
-  - Record actions in `implementation-log.md`.
-- Validation commands:
-  - `git status --short`
+  - Auth gate matches documented Google-only licensing flow.
+  - Licensing cache is hardened and repository logic is testable.
+  - Parser crash path is guarded and covered by tests.
+  - At least one verified performance hotspot is improved without changing product behavior.
+- Verification commands:
   - `./gradlew :app:testDebugUnitTest --console=plain`
   - `./gradlew :app:lintDebug --console=plain`
+  - `./gradlew :app:assembleRelease --console=plain`
 
-### Milestone 3 — Production-readiness reconciliation
+### Milestone 3 - Production Readiness Reconciliation
 - Acceptance criteria:
-  - Docs reflect implemented changes and remaining blockers.
-  - Commit produced with reviewable scope.
-- Validation commands:
+  - Docs show fixed vs open work and current release blockers.
+  - Implementation log records actual commands, failures, and blockers from this pass.
+  - Unverifiable items and tooling blockers are stated plainly.
+- Verification commands:
+  - `./gradlew :app:connectedDebugAndroidTest --console=plain`
+  - `adb devices`
   - `git status --short`
 
-## Rollback/risk notes
-- This pass targets low-risk hygiene/documentation improvements.
-- Any non-documentation change should remain isolated and reversible.
+## Rollback And Risk Notes
+- This pass intentionally stayed within licensing, manifest hardening, payment-intake resilience, and a small SQL optimization.
+- Remaining high-risk work is documented instead of being forced into an unsafe rewrite.
+- The biggest open risk is still server-trusted device-limit enforcement; no local-only patch in this pass closes that gap safely.
+- Connected-test harness instability is documented as a release blocker instead of being papered over with unverified runner changes.
+- Late-session local Compose reruns degraded from targeted passes to `No compose hierarchies found in the app`, so local connected verification cannot be treated as a stable gate from this machine.

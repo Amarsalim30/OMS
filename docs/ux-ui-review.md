@@ -1,39 +1,23 @@
 # UX/UI Review
 
-Date: 2026-03-06 (refresh)
+Date: 2026-03-07
 
-## Audit scope
-Reviewed flow clarity, data entry efficiency, empty/error feedback, and accessibility baseline from available code paths and existing test/docs evidence.
+## Summary
+- The app already contains detailed screen-level UX reviews under `docs/issues/`, so this document focuses on production-facing cross-cutting UX findings from the current pass.
+- The most important UX correction made here was aligning login behavior with the documented entitlement model: approved Google account in, blocked reason out, no extra credential path.
 
 ## Findings
+| ID | Severity | Affected files | Production impact | Recommendation | Implement now vs later | Change risk | Status |
+|---|---|---|---|---|---|---|---|
+| UX-1 | Medium | `core/licensing/AuthGate.kt`, `strings.xml` | Email/password login and self-signup created a confusing auth story and did not match the product requirement. | Keep the login surface single-purpose: approved Google account only. | Implemented now. | Low | Fixed |
+| UX-2 | Medium | `core/licensing/AuthGate.kt` | Blocked users get a reason and retry, but no stronger support or remediation guidance. | Add concise admin/help copy once support workflow is documented. | Later. | Low | Open |
+| UX-3 | Medium | order/customer/accounting screens | Loading, empty, and error state consistency still varies by screen, increasing cognitive load in long workflows. | Converge on shared async-state patterns and explicit retry affordances. | Later. | Medium | Open |
+| UX-4 | Low-Medium | app-wide accessibility and instrumentation coverage | Accessibility confidence still depends on limited smoke checks and issue-review docs rather than a green device-backed suite. | Restore connected UI test coverage and manual accessibility checklist execution before release. | Later. | Medium | Open |
 
-### U1. Core task UX is powerful but dense
-- Severity: medium
-- Affected files: order/customer/accounting Compose screens
-- Why it matters: heavy surfaces increase training burden and input mistakes.
-- Recommended fix: prioritize hierarchy cleanup and progressive disclosure in high-frequency screens.
-- Implement now/later: later
-- Risk: medium
+## Implemented In This Pass
+- Simplified the auth gate UI to one documented sign-in path.
+- Kept the existing blocked-reason screen intact so operator messaging still stays clear when entitlement/device validation fails.
 
-### U2. State feedback consistency gaps
-- Severity: medium
-- Affected files: screen sections under `order/ui`, `customer/ui`, `accounting/ui`
-- Why it matters: uneven loading/empty/error affordances reduce operator confidence.
-- Recommended fix: shared state components + explicit retries where async work happens.
-- Implement now/later: later
-- Risk: medium
-
-### U3. Accessibility needs a real-device pass
-- Severity: high
-- Affected areas: focus order, TalkBack labels, touch target consistency, permission prompts
-- Why it matters: accessibility regressions typically escape unit-only validation.
-- Recommended fix: run and expand instrumentation accessibility coverage before GA.
-- Implement now/later: later
-- Risk: low to code, high to release UX quality
-
-## Changes completed this pass
-- Removed accidental personal-media artifacts from repo root to improve product/professional hygiene.
-
-## Remaining UX release criteria
-- Validate critical task journeys with real operators.
-- Run instrumentation accessibility checks on representative devices.
+## Open UX Risks
+- Existing issue docs still point to complexity in order creation, day detail, unpaid follow-up, and customer-heavy screens.
+- A targeted device-backed accessibility pass succeeded, but full tactile validation for auth, notifications, widget behavior, and the entire Compose suite is still incomplete because the whole connected suite is unstable on this host.

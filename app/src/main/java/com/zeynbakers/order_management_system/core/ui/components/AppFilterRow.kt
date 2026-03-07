@@ -20,6 +20,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.res.stringResource
 import com.zeynbakers.order_management_system.R
 
@@ -58,14 +59,20 @@ fun AppFilterRow(
         }
         if (secondary.isNotEmpty()) {
             if (showMoreAsIcon) {
-                IconButton(onClick = { showMore = true }) {
+                IconButton(
+                    onClick = { showMore = true },
+                    modifier = Modifier.testTag("app-filter-more")
+                ) {
                     Icon(
                         imageVector = Icons.Filled.Tune,
                         contentDescription = stringResource(R.string.action_more_filters)
                     )
                 }
             } else {
-                TextButton(onClick = { showMore = true }) {
+                TextButton(
+                    onClick = { showMore = true },
+                    modifier = Modifier.testTag("app-filter-more")
+                ) {
                     Text(stringResource(R.string.action_more_filters))
                 }
             }

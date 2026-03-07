@@ -1,32 +1,22 @@
 # Refactor Roadmap
 
-Date: 2026-03-06 (refresh)
+Date: 2026-03-07
 
-## Guiding principles
-- Incremental, test-backed refactors only.
-- Reduce risk in highest-blast-radius code first.
-- Preserve behavior unless a defect/security issue is confirmed.
+## Principles
+- Keep milestones production-safe and reviewable.
+- Do not mix licensing-critical changes with unrelated broad rewrites.
+- Add tests before or alongside every extraction that changes risky behavior.
 
-## Milestones
+## Ordered Milestones
+| Milestone | Focus | Why | Acceptance criteria | Risk |
+|---|---|---|---|---|
+| 1 | Trusted licensing device claims | Current `maxDevices` enforcement is improved but still not server-trusted. | Device registration no longer depends on the current client-driven claim path; trusted rules/design documented; licensing checklist updated. | Medium-High |
+| 2 | App shell decomposition | `MainAppContent.kt` is too broad for safe iteration. | Route-specific state holders extracted with no nav behavior change; smoke tests and build remain green. | Medium-High |
+| 3 | Backup subsystem decomposition | `BackupManager.kt` is too large and multi-purpose. | Archive build, target write, restore validation, and restore execution have separate collaborators and tests. | Medium-High |
+| 4 | Worker hardening | Background reliability and battery efficiency still need cleanup. | Contacts/notification/backup workers classify retryable vs permanent failures and log consistently. | Medium |
+| 5 | Test and CI restoration | Device-backed confidence is incomplete and the local connected suite is unstable. | Connected tests reproducible in CI/local, migration replay fixed, high-risk flows gated before release. | Medium |
 
-### R1. Security/repo hygiene (completed)
-- Remove accidental personal artifacts and document controls.
-- Status: completed in this pass.
-
-### R2. Backup subsystem decomposition (planned)
-- Extract archive I/O, crypto, restore mapping, and orchestration layers.
-- Add unit tests around each extracted boundary.
-
-### R3. Helper overlay service decomposition (planned)
-- Separate lifecycle, permission gating, command parsing, and UI coordination.
-- Add targeted tests for parser/permission logic.
-
-### R4. App-shell simplification (planned)
-- Continue reducing side-effect density in `MainAppContent.kt`.
-- Keep navigation behavior stable.
-
-### R5. UX/state consistency (planned)
-- Standardize loading/empty/error states and retry affordances across major flows.
-
-### R6. Release confidence hardening (planned)
-- Expand device-backed and signed-build validation coverage.
+## Deferred But Valuable
+- Customer search scalability work (prefix or FTS).
+- Centralized telemetry with redaction policy.
+- Longer-term modularization if app-shell and backup decomposition are not enough.

@@ -18,6 +18,8 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
@@ -72,6 +74,7 @@ internal fun BalanceCard(
             }
         }
     val netAmount = netBalance.abs()
+    val fontScale = LocalDensity.current.fontScale
     Surface(
         tonalElevation = 1.dp,
         shape = MaterialTheme.shapes.medium,
@@ -175,28 +178,64 @@ internal fun BalanceCard(
             Button(
                 onClick = onViewStatement,
                 enabled = canReceive,
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier
+                    .testTag("customer-view-statement-button")
+                    .fillMaxWidth()
+                    .height(48.dp)
             ) {
                 Text(stringResource(R.string.customer_action_view_statement))
             }
             Spacer(Modifier.height(6.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                OutlinedButton(
-                    onClick = onReceivePayment,
-                    enabled = canReceive,
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Text(stringResource(R.string.customer_action_record_payment))
-                }
-                TextButton(
-                    onClick = onViewPaymentHistory,
-                    enabled = canReceive,
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Text(stringResource(R.string.customer_detail_receipt_history))
+            BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+                val stackActions = fontScale > 1.3f || maxWidth < 360.dp
+                if (stackActions) {
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        OutlinedButton(
+                            onClick = onReceivePayment,
+                            enabled = canReceive,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(48.dp)
+                        ) {
+                            Text(stringResource(R.string.customer_action_record_payment))
+                        }
+                        TextButton(
+                            onClick = onViewPaymentHistory,
+                            enabled = canReceive,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(48.dp)
+                        ) {
+                            Text(stringResource(R.string.customer_detail_receipt_history))
+                        }
+                    }
+                } else {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        OutlinedButton(
+                            onClick = onReceivePayment,
+                            enabled = canReceive,
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(48.dp)
+                        ) {
+                            Text(stringResource(R.string.customer_action_record_payment))
+                        }
+                        TextButton(
+                            onClick = onViewPaymentHistory,
+                            enabled = canReceive,
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(48.dp)
+                        ) {
+                            Text(stringResource(R.string.customer_detail_receipt_history))
+                        }
+                    }
                 }
             }
         }

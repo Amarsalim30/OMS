@@ -159,16 +159,7 @@ class PaymentIntakeHistoryViewModel(
     suspend fun loadMoveOrderOptions(customerId: Long): List<MoveOrderOption> {
         return withContext(Dispatchers.IO) {
             val orders =
-                orderDao.getOrdersByCustomer(customerId)
-                .filter {
-                    it.status != com.zeynbakers.order_management_system.order.data.OrderStatus.CANCELLED &&
-                        it.statusOverride != com.zeynbakers.order_management_system.order.data.OrderStatusOverride.CLOSED
-                }
-                .sortedWith(
-                    compareBy<OrderEntity> { it.orderDate }
-                        .thenBy { it.createdAt }
-                        .thenBy { it.id }
-                )
+                orderDao.getOpenOrdersByCustomer(customerId)
             val customerIds = orders.mapNotNull { it.customerId }.distinct()
             val customerNames =
                 if (customerIds.isEmpty()) emptyMap()

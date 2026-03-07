@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material.icons.Icons
@@ -30,6 +31,9 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.dp
 import com.zeynbakers.order_management_system.R
 import com.zeynbakers.order_management_system.core.util.formatKes
 import com.zeynbakers.order_management_system.core.util.normalizePickupTime
@@ -43,15 +47,15 @@ import com.zeynbakers.order_management_system.core.tutorial.tutorialCoachTarget
 import com.zeynbakers.order_management_system.core.calendar.CalendarPreferences
 import com.zeynbakers.order_management_system.customer.data.CustomerEntity
 import java.math.BigDecimal
+import java.time.format.DateTimeFormatter
+import java.util.Calendar
+import java.util.Locale
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import kotlinx.datetime.LocalDate
-import java.util.Calendar
-import java.util.Locale
-import java.time.format.DateTimeFormatter
 import kotlinx.datetime.toJavaLocalDate
 
 @OptIn(ExperimentalMaterial3Api::class, FlowPreview::class)
@@ -340,11 +344,15 @@ fun CalendarScreen(
             )
         },
         floatingActionButton = {
+            val addOrderLabel = stringResource(R.string.calendar_add_order)
             SmallFloatingActionButton(
                 modifier =
-                    Modifier.onGloballyPositioned { coordinates ->
-                        fabBounds = coordinates.boundsInRoot()
-                    }
+                    Modifier
+                        .size(48.dp)
+                        .semantics { contentDescription = addOrderLabel }
+                        .onGloballyPositioned { coordinates ->
+                            fabBounds = coordinates.boundsInRoot()
+                        }
                         .tutorialCoachTarget(TutorialCoachTargets.CalendarAddOrderFab),
                 onClick = {
                     openQuickAddSheet()
@@ -359,7 +367,7 @@ fun CalendarScreen(
             ) {
                 Icon(
                     imageVector = Icons.Filled.Add,
-                    contentDescription = stringResource(R.string.calendar_add_order)
+                    contentDescription = null
                 )
             }
         }

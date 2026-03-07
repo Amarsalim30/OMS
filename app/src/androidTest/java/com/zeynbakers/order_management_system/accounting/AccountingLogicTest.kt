@@ -32,6 +32,17 @@ class AccountingLogicTest {
 
     private lateinit var db: AppDatabase
 
+    private suspend fun createCustomer(
+        name: String = "Test Customer",
+        phone: String = "+254700000000"
+    ): Long =
+        db.customerDao().insert(
+            CustomerEntity(
+                name = name,
+                phone = phone
+            )
+        )
+
     @Before
     fun setUp() {
         db = Room.inMemoryDatabaseBuilder(
@@ -49,12 +60,13 @@ class AccountingLogicTest {
     fun upsertDebit_isIdempotent() = runBlocking {
         val orderDao = db.orderDao()
         val accountingDao = db.accountingDao()
+        val customerId = createCustomer(phone = "+254700000101")
         val orderId = orderDao.insert(
             OrderEntity(
                 orderDate = LocalDate(2026, 1, 2),
                 notes = "Test",
                 totalAmount = BigDecimal("100.00"),
-                customerId = 1L
+                customerId = customerId
             )
         )
 
@@ -64,14 +76,14 @@ class AccountingLogicTest {
 
         accountingDao.upsertDebitForOrder(
             orderId = orderId,
-            customerId = 1L,
+            customerId = customerId,
             amount = BigDecimal("100.00"),
             date = date,
             description = "Charge: Order #$orderId"
         )
         accountingDao.upsertDebitForOrder(
             orderId = orderId,
-            customerId = 1L,
+            customerId = customerId,
             amount = BigDecimal("120.00"),
             date = date,
             description = "Charge: Order #$orderId"
@@ -87,13 +99,14 @@ class AccountingLogicTest {
         val orderDao = db.orderDao()
         val accountingDao = db.accountingDao()
         val processor = OrderProcessor(orderDao, accountingDao)
+        val customerId = createCustomer(phone = "+254700000102")
 
         val orderId = orderDao.insert(
             OrderEntity(
                 orderDate = LocalDate(2026, 2, 3),
                 notes = "Test",
                 totalAmount = BigDecimal("80.00"),
-                customerId = 1L
+                customerId = customerId
             )
         )
 
@@ -103,7 +116,7 @@ class AccountingLogicTest {
 
         accountingDao.upsertDebitForOrder(
             orderId = orderId,
-            customerId = 1L,
+            customerId = customerId,
             amount = BigDecimal("80.00"),
             date = date,
             description = "Charge: Order #$orderId"
@@ -181,13 +194,14 @@ class AccountingLogicTest {
         val orderDao = db.orderDao()
         val accountingDao = db.accountingDao()
         val viewModel = CustomerAccountsViewModel(db, ApplicationProvider.getApplicationContext())
+        val customerId = createCustomer(phone = "+254700000103")
 
         val orderId = orderDao.insert(
             OrderEntity(
                 orderDate = LocalDate(2026, 3, 4),
                 notes = "Test",
                 totalAmount = BigDecimal("100.00"),
-                customerId = 1L
+                customerId = customerId
             )
         )
 
@@ -197,14 +211,14 @@ class AccountingLogicTest {
 
         accountingDao.upsertDebitForOrder(
             orderId = orderId,
-            customerId = 1L,
+            customerId = customerId,
             amount = BigDecimal("100.00"),
             date = date,
             description = "Charge: Order #$orderId"
         )
 
         viewModel.recordPaymentInternal(
-            customerId = 1L,
+            customerId = customerId,
             amount = BigDecimal("150.00"),
             method = com.zeynbakers.order_management_system.accounting.data.PaymentMethod.CASH,
             note = "",
@@ -212,7 +226,7 @@ class AccountingLogicTest {
         )
 
         val paidForOrder = accountingDao.getPaidForOrder(orderId)
-        val balance = accountingDao.getCustomerBalance(1L)
+        val balance = accountingDao.getCustomerBalance(customerId)
 
         assertEquals(BigDecimal("100.00"), paidForOrder)
         assertEquals(BigDecimal("-50.00"), balance)
@@ -223,13 +237,14 @@ class AccountingLogicTest {
         val orderDao = db.orderDao()
         val accountingDao = db.accountingDao()
         val viewModel = CustomerAccountsViewModel(db, ApplicationProvider.getApplicationContext())
+        val customerId = createCustomer(phone = "+254700000104")
 
         val firstOrderId = orderDao.insert(
             OrderEntity(
                 orderDate = LocalDate(2026, 4, 1),
                 notes = "Older",
                 totalAmount = BigDecimal("100.00"),
-                customerId = 1L
+                customerId = customerId
             )
         )
         val secondOrderId = orderDao.insert(
@@ -237,12 +252,12 @@ class AccountingLogicTest {
                 orderDate = LocalDate(2026, 4, 2),
                 notes = "Newer",
                 totalAmount = BigDecimal("200.00"),
-                customerId = 1L
+                customerId = customerId
             )
         )
 
         viewModel.recordPaymentInternal(
-            customerId = 1L,
+            customerId = customerId,
             amount = BigDecimal("150.00"),
             method = com.zeynbakers.order_management_system.accounting.data.PaymentMethod.CASH,
             note = "",
@@ -251,7 +266,7 @@ class AccountingLogicTest {
 
         val firstPaid = accountingDao.getPaidForOrder(firstOrderId)
         val secondPaid = accountingDao.getPaidForOrder(secondOrderId)
-        val unallocatedCredits = accountingDao.getLedgerForCustomer(1L)
+        val unallocatedCredits = accountingDao.getLedgerForCustomer(customerId)
             .filter { it.type == EntryType.CREDIT && it.orderId == null }
 
         assertEquals(BigDecimal("100.00"), firstPaid)
@@ -264,6 +279,7 @@ class AccountingLogicTest {
         val orderDao = db.orderDao()
         val accountingDao = db.accountingDao()
         val viewModel = CustomerAccountsViewModel(db, ApplicationProvider.getApplicationContext())
+        val customerId = createCustomer(phone = "+254700000105")
 
         val firstOrderDate = LocalDate(2026, 5, 1)
         val secondOrderDate = LocalDate(2026, 5, 2)
@@ -273,7 +289,7 @@ class AccountingLogicTest {
                 orderDate = firstOrderDate,
                 notes = "First",
                 totalAmount = BigDecimal("2000.00"),
-                customerId = 1L
+                customerId = customerId
             )
         )
         val secondOrderId = orderDao.insert(
@@ -281,27 +297,27 @@ class AccountingLogicTest {
                 orderDate = secondOrderDate,
                 notes = "Second",
                 totalAmount = BigDecimal("1500.00"),
-                customerId = 1L
+                customerId = customerId
             )
         )
 
         accountingDao.upsertDebitForOrder(
             orderId = firstOrderId,
-            customerId = 1L,
+            customerId = customerId,
             amount = BigDecimal("2000.00"),
             date = firstOrderDate.atStartOfDayIn(TimeZone.currentSystemDefault()).toEpochMilliseconds(),
             description = "Charge: Order #$firstOrderId"
         )
         accountingDao.upsertDebitForOrder(
             orderId = secondOrderId,
-            customerId = 1L,
+            customerId = customerId,
             amount = BigDecimal("1500.00"),
             date = secondOrderDate.atStartOfDayIn(TimeZone.currentSystemDefault()).toEpochMilliseconds(),
             description = "Charge: Order #$secondOrderId"
         )
 
         viewModel.recordPaymentInternal(
-            customerId = 1L,
+            customerId = customerId,
             amount = BigDecimal("1000.00"),
             method = com.zeynbakers.order_management_system.accounting.data.PaymentMethod.CASH,
             note = "",
@@ -309,7 +325,7 @@ class AccountingLogicTest {
         )
 
         viewModel.markBadDebt(
-            customerId = 1L,
+            customerId = customerId,
             amount = BigDecimal("1200.00"),
             note = "Unreachable"
         )
@@ -317,7 +333,7 @@ class AccountingLogicTest {
         // markBadDebt is async via viewModelScope; wait for persistence.
         var synced = false
         for (attempt in 0 until 20) {
-            if (accountingDao.getCustomerBalance(1L) == BigDecimal("1300.00")) {
+            if (accountingDao.getCustomerBalance(customerId) == BigDecimal("1300.00")) {
                 synced = true
                 break
             }
@@ -327,9 +343,9 @@ class AccountingLogicTest {
 
         val firstPaid = accountingDao.getPaidForOrder(firstOrderId)
         val secondPaid = accountingDao.getPaidForOrder(secondOrderId)
-        val balance = accountingDao.getCustomerBalance(1L)
+        val balance = accountingDao.getCustomerBalance(customerId)
         val customerLevelWriteOffs =
-            accountingDao.getLedgerForCustomer(1L)
+            accountingDao.getLedgerForCustomer(customerId)
                 .filter { it.type == EntryType.WRITE_OFF && it.orderId == null }
 
         assertEquals(BigDecimal("2000.00"), firstPaid)

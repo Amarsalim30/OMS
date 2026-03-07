@@ -524,11 +524,14 @@ class PaymentIntakeViewModel(private val database: AppDatabase) : ViewModel() {
         parseJob?.cancel()
         parseJob =
             viewModelScope.launch(Dispatchers.IO) {
-            val parsed = MpesaParser.parse(rawText)
-            val ui = buildUi(parsed)
-            if (requestId == parseRequestId) {
-                _transactions.value = ui
-            }
+                val ui =
+                    runCatching {
+                        val parsed = MpesaParser.parse(rawText)
+                        buildUi(parsed)
+                    }.getOrDefault(emptyList())
+                if (requestId == parseRequestId) {
+                    _transactions.value = ui
+                }
             }
     }
 

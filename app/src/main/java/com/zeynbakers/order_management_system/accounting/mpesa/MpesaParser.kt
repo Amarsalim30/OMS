@@ -36,7 +36,10 @@ object MpesaParser {
         val cleaned = rawText.replace("\r\n", "\n").trim()
         if (cleaned.isBlank()) return emptyList()
         val segments = splitIntoSegments(cleaned)
-        val parsed = segments.mapNotNull { parseSegment(it) }
+        val parsed =
+            segments.mapNotNull { segment ->
+                runCatching { parseSegment(segment) }.getOrNull()
+            }
         val withCode = parsed.filter { it.transactionCode != null }.distinctBy { it.transactionCode }
         val withoutCode = parsed.filter { it.transactionCode == null }
         return withCode + withoutCode
@@ -152,23 +155,39 @@ object MpesaParser {
         val day = dateMatch.groupValues[1].toIntOrNull() ?: return null
         val month = dateMatch.groupValues[2].toIntOrNull() ?: return null
         val yearRaw = dateMatch.groupValues[3].toIntOrNull() ?: return null
+        if (day !in 1..31 || month !in 1..12) return null
         val year = if (yearRaw < 100) 2000 + min(yearRaw, 99) else yearRaw
         val timeMatch = timeRegex.find(text)
         val (hour, minute) = if (timeMatch != null) {
             val hourRaw = timeMatch.groupValues[1].toIntOrNull() ?: 0
             val minuteRaw = timeMatch.groupValues[2].toIntOrNull() ?: 0
+            if (minuteRaw !in 0..59) return null
             val ampm = timeMatch.groupValues[3].uppercase()
             val adjustedHour =
                 when (ampm) {
-                    "AM" -> if (hourRaw == 12) 0 else hourRaw
-                    "PM" -> if (hourRaw < 12) hourRaw + 12 else hourRaw
-                    else -> hourRaw
+                    "AM" -> {
+                        if (hourRaw !in 1..12) return null
+                        if (hourRaw == 12) 0 else hourRaw
+                    }
+                    "PM" -> {
+                        if (hourRaw !in 1..12) return null
+                        if (hourRaw < 12) hourRaw + 12 else hourRaw
+                    }
+                    else -> {
+                        if (hourRaw !in 0..23) return null
+                        hourRaw
+                    }
                 }
             adjustedHour to minuteRaw
         } else {
             12 to 0
         }
-        val dateTime = LocalDateTime.of(year, month, day, hour, minute)
-        return dateTime.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
+        val dateTime =
+            runCatching { LocalDateTime.of(year, month, day, hour, minute) }
+                .getOrNull()
+                ?: return null
+        return runCatching {
+            dateTime.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
+        }.getOrNull()
     }
 }

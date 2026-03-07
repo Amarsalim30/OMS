@@ -953,11 +953,6 @@
     <string name="auth_sign_in_title">Sign in required</string>
     <string name="auth_sign_in_subtitle">Use your approved account to continue.</string>
     <string name="auth_sign_in_google_button">Sign in with Google</string>
-    <string name="auth_sign_in_method_or">or</string>
-    <string name="auth_email_label">Email</string>
-    <string name="auth_password_label">Password</string>
-    <string name="auth_sign_in_email_button">Sign in with Email</string>
-    <string name="auth_create_account_button">Create account</string>
     <string name="auth_access_blocked_title">Access blocked</string>
     <string name="auth_retry_validation">Retry validation</string>
     <string name="auth_sign_out_button">Sign out</string>
@@ -973,10 +968,6 @@
     <string name="auth_error_google_invalid_credential">Received an invalid Google credential. Try again.</string>
     <string name="auth_error_google_request_failed">Could not start Google sign-in. Check setup and try again.</string>
     <string name="auth_error_google_firebase_failed">Google sign-in failed in Firebase. Try again.</string>
-    <string name="auth_error_email_account_not_found">No email account found for these credentials.</string>
-    <string name="auth_error_email_invalid_credentials">Invalid email or password.</string>
-    <string name="auth_error_email_account_exists">Email already registered. Try signing in.</string>
-    <string name="auth_error_email_generic">Email sign-in failed. Check your details and try again.</string>
     <string-array name="update_notes_latest">
         <item>Share M-PESA messages from Messages directly into the app.</item>
         <item>Oldest-order allocation is now the default when applying payments.</item>

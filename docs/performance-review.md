@@ -1,28 +1,21 @@
 # Performance Review
 
-Date: 2026-03-06 (refresh)
+Date: 2026-03-07
 
 ## Summary
-- No critical build-time or obvious algorithmic blockers were introduced in this pass.
-- Main performance risk remains maintainability-driven: oversized classes doing too much work and making targeted optimization harder.
+- The repo is not in immediate performance crisis, but there are several scale-sensitive paths where broad queries and oversized composition surfaces will become more expensive as bakery history grows.
+- This pass took one concrete, low-risk improvement in the payment-history move-target path.
 
 ## Findings
+| ID | Severity | Affected files | Production impact | Recommendation | Implement now vs later | Change risk | Status |
+|---|---|---|---|---|---|---|---|
+| PERF-1 | Medium | `accounting/ui/PaymentIntakeHistoryViewModel.kt`, `order/data/OrderDao.kt` | Move-target sheet was loading all customer orders and filtering/sorting in Kotlin. | Keep open-order filtering and ordering in SQL. | Implemented now. | Low | Fixed |
+| PERF-2 | High | `order/data/OrderDao.kt`, `order/ui/OrderViewModel.kt`, `core/widget/WidgetUpdater.kt` | Open-order queries still depend on broad scans and large limits in multiple hotspots. | Revisit indexes and query shape for open-order heavy features. | Later. | Medium | Open |
+| PERF-3 | Medium | `MainAppContent.kt` | Large root composable still collects and reacts to too much unrelated state. | Split route-scoped collection and state derivation. | Later. | Medium-High | Open |
+| PERF-4 | Medium | `core/notifications/NotificationScheduler.kt`, `ReminderWorker.kt`, `MainAppContent.kt` | `enqueueNow` and hourly reminder scheduling can create unnecessary churn during heavy use. | Add throttling/coalescing for immediate reminder refreshes. | Later. | Low-Medium | Open |
+| PERF-5 | Medium | `customer/data/CustomerDao.kt` | `%query%` contains-search patterns will not scale well on larger customer lists. | Move to prefix search or FTS when customer volume warrants it. | Later. | Medium | Open |
 
-### P1. Large orchestration classes inhibit targeted optimization
-- Severity: medium
-- Files: `core/backup/BackupManager.kt`, `core/helper/HelperOverlayService.kt`
-- Why it matters: difficult to profile/tune specific hotspots while responsibilities are tightly coupled.
-- Fix: decompose and benchmark critical paths post-extraction.
-- Implement: later
-- Risk: medium
-
-### P2. Device-level performance evidence still incomplete
-- Severity: medium
-- Areas: Compose rendering smoothness, service/background behavior on low-memory devices
-- Why it matters: desktop/unit checks do not replicate real-device pressure.
-- Fix: profile key flows on representative devices (startup, order entry, backup/restore).
-- Implement: later
-- Risk: low to code, medium to production experience
-
-## Verification run this pass
-- Planned baseline checks rerun (`testDebugUnitTest`, `lintDebug`) as release hygiene evidence.
+## Verification
+- `:app:testDebugUnitTest` passed after the SQL-side move-target change.
+- `:app:lintDebug` passed.
+- `:app:assembleRelease` passed.

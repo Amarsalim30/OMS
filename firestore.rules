@@ -9,17 +9,36 @@ service cloud.firestore {
       return isSignedIn() && request.auth.uid == uid;
     }
 
+    function registeredDeviceIds(data) {
+      return data.registeredDeviceIds is list ? data.registeredDeviceIds : [];
+    }
+
+    function entitlementFieldsUnchanged() {
+      return request.resource.data.allowed == resource.data.allowed
+        && request.resource.data.maxDevices == resource.data.maxDevices
+        && request.resource.data.expiresAt == resource.data.expiresAt;
+    }
+
     match /users/{uid} {
       // Users can read only their own entitlement.
       allow read: if isSelf(uid);
-      // Entitlements are admin-managed only (console/admin SDK).
-      allow create, update, delete: if false;
+      // Entitlement controls remain admin-managed. Clients may only append a claimed device ID.
+      allow update: if isSelf(uid)
+        && entitlementFieldsUnchanged()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['registeredDeviceIds'])
+        && request.resource.data.registeredDeviceIds is list
+        && request.resource.data.registeredDeviceIds.hasAll(registeredDeviceIds(resource.data))
+        && request.resource.data.registeredDeviceIds.size() >= registeredDeviceIds(resource.data).size()
+        && request.resource.data.registeredDeviceIds.size() <= registeredDeviceIds(resource.data).size() + 1
+        && request.resource.data.registeredDeviceIds.size() <= resource.data.maxDevices;
+
+      allow create, delete: if false;
 
       match /devices/{deviceId} {
         // Users can read only their own device docs.
         allow read: if isSelf(uid);
 
-        // A user can register a new device, but cannot mark it revoked.
+        // Device registration is only allowed when the user's entitlement doc atomically includes this device ID.
         allow create: if isSelf(uid)
           && request.resource.data.keys().hasOnly([
             'revoked',
@@ -28,6 +47,9 @@ service cloud.firestore {
             'model',
             'sdk'
           ])
+          && registeredDeviceIds(
+            getAfter(/databases/$(database)/documents/users/$(uid)).data
+          ).hasAny([deviceId])
           && request.resource.data.revoked == false
           && request.resource.data.registeredAt is int
           && request.resource.data.lastSeenAt is int
@@ -44,6 +66,7 @@ service cloud.firestore {
             'model',
             'sdk'
           ])
+          && resource.data.revoked == false
           && request.resource.data.revoked == resource.data.revoked
           && request.resource.data.registeredAt == resource.data.registeredAt
           && request.resource.data.lastSeenAt is int
