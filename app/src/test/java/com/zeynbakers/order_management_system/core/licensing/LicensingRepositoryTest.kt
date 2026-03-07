@@ -1,5 +1,6 @@
 package com.zeynbakers.order_management_system.core.licensing
 
+import com.google.firebase.firestore.FirebaseFirestoreException
 import java.io.IOException
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
@@ -85,6 +86,24 @@ class LicensingRepositoryTest {
     }
 
     @Test
+    fun `allows existing active device when heartbeat write fails`() = runBlocking {
+        val remote =
+            FakeLicensingRemoteStore(
+                entitlement = allowedEntitlement(),
+                device = LicensingDeviceRecord(revoked = false),
+                touchFailure = IllegalStateException("permission denied")
+            )
+        val cache = FakeLicensingCacheStore()
+        val repository = LicensingRepository(remote, cache) { NOW_MILLIS }
+
+        val result = repository.validateSignedInUser(USER_ID)
+
+        assertEquals(LicensingValidationResult.Allowed, result)
+        assertEquals(listOf(DeviceWrite(USER_ID, INSTALL_ID, NOW_MILLIS)), remote.touchCalls)
+        assertEquals(listOf(ValidationUpdate(USER_ID, NOW_MILLIS)), cache.validationUpdates)
+    }
+
+    @Test
     fun `registers new device when entitlement has capacity`() = runBlocking {
         val remote =
             FakeLicensingRemoteStore(
@@ -103,6 +122,73 @@ class LicensingRepositoryTest {
     }
 
     @Test
+    fun `falls back to legacy registration when transaction path is permission denied`() = runBlocking {
+        val remote =
+            FakeLicensingRemoteStore(
+                entitlement = allowedEntitlement(maxDevices = 2),
+                device = null,
+                registerFailure = LegacyDeviceRegistrationFallbackException(IllegalStateException("permission denied")),
+                legacyRegisterResult = LicensingDeviceRegistrationResult.Registered
+            )
+        val cache = FakeLicensingCacheStore()
+        val repository = LicensingRepository(remote, cache) { NOW_MILLIS }
+
+        val result = repository.validateSignedInUser(USER_ID)
+
+        assertEquals(LicensingValidationResult.Allowed, result)
+        assertEquals(listOf(DeviceWrite(USER_ID, INSTALL_ID, NOW_MILLIS)), remote.registerCalls)
+        assertEquals(listOf(DeviceWrite(USER_ID, INSTALL_ID, NOW_MILLIS)), remote.legacyRegisterCalls)
+        assertEquals(listOf(ValidationUpdate(USER_ID, NOW_MILLIS)), cache.validationUpdates)
+    }
+
+    @Test
+    fun `falls back to legacy registration when firestore compatibility error is nested`() = runBlocking {
+        val remote =
+            FakeLicensingRemoteStore(
+                entitlement = allowedEntitlement(maxDevices = 2),
+                device = null,
+                registerFailure =
+                    IllegalStateException(
+                        "transaction failed",
+                        FirebaseFirestoreException(
+                            "permission denied",
+                            FirebaseFirestoreException.Code.PERMISSION_DENIED
+                        )
+                    ),
+                legacyRegisterResult = LicensingDeviceRegistrationResult.Registered
+            )
+        val cache = FakeLicensingCacheStore()
+        val repository = LicensingRepository(remote, cache) { NOW_MILLIS }
+
+        val result = repository.validateSignedInUser(USER_ID)
+
+        assertEquals(LicensingValidationResult.Allowed, result)
+        assertEquals(listOf(DeviceWrite(USER_ID, INSTALL_ID, NOW_MILLIS)), remote.registerCalls)
+        assertEquals(listOf(DeviceWrite(USER_ID, INSTALL_ID, NOW_MILLIS)), remote.legacyRegisterCalls)
+        assertEquals(listOf(ValidationUpdate(USER_ID, NOW_MILLIS)), cache.validationUpdates)
+    }
+
+    @Test
+    fun `blocks with device limit when legacy compatibility registration has no capacity`() = runBlocking {
+        val remote =
+            FakeLicensingRemoteStore(
+                entitlement = allowedEntitlement(maxDevices = 1),
+                device = null,
+                registerFailure = LegacyDeviceRegistrationFallbackException(IllegalStateException("permission denied")),
+                legacyRegisterResult = LicensingDeviceRegistrationResult.DeviceLimitReached
+            )
+        val cache = FakeLicensingCacheStore()
+        val repository = LicensingRepository(remote, cache) { NOW_MILLIS }
+
+        val result = repository.validateSignedInUser(USER_ID)
+
+        assertBlocked(result, LicensingBlockReason.DeviceLimitReached)
+        assertEquals(listOf(DeviceWrite(USER_ID, INSTALL_ID, NOW_MILLIS)), remote.registerCalls)
+        assertEquals(listOf(DeviceWrite(USER_ID, INSTALL_ID, NOW_MILLIS)), remote.legacyRegisterCalls)
+        assertTrue(cache.validationUpdates.isEmpty())
+    }
+
+    @Test
     fun `blocks when max devices has been reached`() = runBlocking {
         val remote =
             FakeLicensingRemoteStore(
@@ -117,6 +203,25 @@ class LicensingRepositoryTest {
 
         assertBlocked(result, LicensingBlockReason.DeviceLimitReached)
         assertEquals(listOf(DeviceWrite(USER_ID, INSTALL_ID, NOW_MILLIS)), remote.registerCalls)
+        assertTrue(cache.validationUpdates.isEmpty())
+    }
+
+    @Test
+    fun `blocks validation failure when registration fails for non compatibility reason`() = runBlocking {
+        val remote =
+            FakeLicensingRemoteStore(
+                entitlement = allowedEntitlement(maxDevices = 2),
+                device = null,
+                registerFailure = IllegalStateException("unexpected")
+            )
+        val cache = FakeLicensingCacheStore()
+        val repository = LicensingRepository(remote, cache) { NOW_MILLIS }
+
+        val result = repository.validateSignedInUser(USER_ID)
+
+        assertBlocked(result, LicensingBlockReason.ValidationFailed)
+        assertEquals(listOf(DeviceWrite(USER_ID, INSTALL_ID, NOW_MILLIS)), remote.registerCalls)
+        assertTrue(remote.legacyRegisterCalls.isEmpty())
         assertTrue(cache.validationUpdates.isEmpty())
     }
 
@@ -192,10 +297,15 @@ class LicensingRepositoryTest {
         private val entitlement: LicensingEntitlement?,
         private val device: LicensingDeviceRecord? = null,
         private val registerResult: LicensingDeviceRegistrationResult = LicensingDeviceRegistrationResult.Registered,
-        private val failure: Exception? = null
+        private val legacyRegisterResult: LicensingDeviceRegistrationResult = LicensingDeviceRegistrationResult.Registered,
+        private val failure: Exception? = null,
+        private val touchFailure: Exception? = null,
+        private val registerFailure: Exception? = null,
+        private val legacyRegisterFailure: Exception? = null
     ) : LicensingRemoteStore {
         val touchCalls = mutableListOf<DeviceWrite>()
         val registerCalls = mutableListOf<DeviceWrite>()
+        val legacyRegisterCalls = mutableListOf<DeviceWrite>()
 
         override suspend fun getEntitlement(uid: String): LicensingEntitlement? {
             maybeThrow()
@@ -210,6 +320,7 @@ class LicensingRepositoryTest {
         override suspend fun touchDevice(uid: String, deviceId: String, nowMillis: Long) {
             maybeThrow()
             touchCalls += DeviceWrite(uid, deviceId, nowMillis)
+            maybeThrow(touchFailure)
         }
 
         override suspend fun registerDevice(
@@ -217,12 +328,24 @@ class LicensingRepositoryTest {
             deviceId: String,
             nowMillis: Long
         ): LicensingDeviceRegistrationResult {
-            maybeThrow()
             registerCalls += DeviceWrite(uid, deviceId, nowMillis)
+            maybeThrow(registerFailure)
             return registerResult
         }
 
-        private fun maybeThrow() {
+        override suspend fun registerDeviceLegacy(
+            uid: String,
+            deviceId: String,
+            nowMillis: Long,
+            maxDevices: Int
+        ): LicensingDeviceRegistrationResult {
+            legacyRegisterCalls += DeviceWrite(uid, deviceId, nowMillis)
+            maybeThrow(legacyRegisterFailure)
+            return legacyRegisterResult
+        }
+
+        private fun maybeThrow(specificFailure: Exception? = null) {
+            specificFailure?.let { throw it }
             failure?.let { throw it }
         }
     }

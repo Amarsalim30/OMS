@@ -953,6 +953,8 @@
     <string name="auth_sign_in_title">Sign in required</string>
     <string name="auth_sign_in_subtitle">Use your approved account to continue.</string>
     <string name="auth_sign_in_google_button">Sign in with Google</string>
+    <string name="auth_sign_in_google_fallback_button">Try another Google sign-in method</string>
+    <string name="auth_sign_in_google_fallback_hint">If the default prompt fails, this opens Google account selection directly.</string>
     <string name="auth_access_blocked_title">Access blocked</string>
     <string name="auth_retry_validation">Retry validation</string>
     <string name="auth_sign_out_button">Sign out</string>

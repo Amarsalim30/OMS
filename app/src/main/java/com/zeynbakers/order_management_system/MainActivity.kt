@@ -27,9 +27,12 @@ class MainActivity : ComponentActivity() {
         lifecycleScope.launch {
             val startDestination =
                 runCatching {
-                    val onboardingCompleted =
-                        OnboardingPreferences(this@MainActivity).readState().onboardingCompleted
-                    if (onboardingCompleted) AppRoutes.Calendar else AppRoutes.Intro
+                    val onboardingState = OnboardingPreferences(this@MainActivity).readState()
+                    when {
+                        onboardingState.onboardingCompleted -> AppRoutes.Calendar
+                        onboardingState.introCompleted -> AppRoutes.SetupChecklist
+                        else -> AppRoutes.Intro
+                    }
                 }
                     .onFailure { error ->
                         Log.e(TAG, "Failed to read onboarding state; falling back to intro route", error)

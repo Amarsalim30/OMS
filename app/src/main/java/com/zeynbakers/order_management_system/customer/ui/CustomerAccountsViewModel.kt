@@ -495,7 +495,11 @@ class CustomerAccountsViewModel(
         val processor = PaymentReceiptProcessor(database)
         val order = orderId?.let { id -> orderDao.getOrderById(id) }
         if (orderId != null && order == null) return
-        val resolvedCustomerId = customerId ?: order?.customerId
+        val resolvedCustomerId =
+            when {
+                order != null -> order.customerId
+                else -> customerId
+            }
         val now = Clock.System.now().toEpochMilliseconds()
         val receipt =
             processor.createReceipt(

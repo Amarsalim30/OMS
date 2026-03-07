@@ -42,6 +42,7 @@ import com.google.firebase.auth.GoogleAuthProvider
 import com.google.firebase.firestore.FirebaseFirestore
 import com.google.android.libraries.identity.googleid.GetGoogleIdOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
+import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenParsingException
 import com.zeynbakers.order_management_system.R
 import com.zeynbakers.order_management_system.core.ui.theme.Order_management_systemTheme
@@ -124,39 +125,40 @@ internal fun AuthGate(
                     errorMessage = authErrorResId.takeIf { it != 0 }?.let { stringResource(it) },
                     onSignInWithGoogle = {
                         scope.launch {
-                            authInFlight = true
-                            authErrorResId = 0
-                            val hostActivity = context.findActivity()
-                            if (hostActivity == null) {
-                                authInFlight = false
-                                authErrorResId = R.string.auth_error_google_request_failed
-                                return@launch
-                            }
-                            try {
-                                val idToken =
-                                    requestGoogleIdToken(
-                                        activity = hostActivity,
-                                        credentialManager = credentialManager
-                                    )
-                                val firebaseCredential = GoogleAuthProvider.getCredential(idToken, null)
-                                auth.signInWithCredential(firebaseCredential).await()
-                                validateCurrentUser()
-                            } catch (error: NoCredentialException) {
-                                authInFlight = false
-                                authErrorResId = R.string.auth_error_google_no_account
-                            } catch (error: GetCredentialCancellationException) {
-                                authInFlight = false
-                                authErrorResId = R.string.auth_error_google_cancelled
-                            } catch (error: GetCredentialException) {
-                                authInFlight = false
-                                authErrorResId = R.string.auth_error_google_request_failed
-                            } catch (error: GoogleIdTokenParsingException) {
-                                authInFlight = false
-                                authErrorResId = R.string.auth_error_google_invalid_credential
-                            } catch (error: Exception) {
-                                authInFlight = false
-                                authErrorResId = R.string.auth_error_google_firebase_failed
-                            }
+                            performGoogleSignIn(
+                                mode = GoogleSignInMode.Default,
+                                context = context,
+                                auth = auth,
+                                credentialManager = credentialManager,
+                                onAuthStart = {
+                                    authInFlight = true
+                                    authErrorResId = 0
+                                },
+                                onAuthError = { errorResId ->
+                                    authInFlight = false
+                                    authErrorResId = errorResId
+                                },
+                                onAuthSuccess = { validateCurrentUser() }
+                            )
+                        }
+                    },
+                    onSignInWithGoogleFallback = {
+                        scope.launch {
+                            performGoogleSignIn(
+                                mode = GoogleSignInMode.ExplicitGoogleButton,
+                                context = context,
+                                auth = auth,
+                                credentialManager = credentialManager,
+                                onAuthStart = {
+                                    authInFlight = true
+                                    authErrorResId = 0
+                                },
+                                onAuthError = { errorResId ->
+                                    authInFlight = false
+                                    authErrorResId = errorResId
+                                },
+                                onAuthSuccess = { validateCurrentUser() }
+                            )
                         }
                     }
                 )
@@ -199,7 +201,8 @@ private sealed interface GateUiState {
 private fun LoginScreen(
     inFlight: Boolean,
     errorMessage: String?,
-    onSignInWithGoogle: () -> Unit
+    onSignInWithGoogle: () -> Unit,
+    onSignInWithGoogleFallback: () -> Unit
 ) {
     Surface(modifier = Modifier.fillMaxSize()) {
         Column(
@@ -237,6 +240,21 @@ private fun LoginScreen(
             ) {
                 Text(text = stringResource(R.string.auth_sign_in_google_button))
             }
+            TextButton(
+                onClick = onSignInWithGoogleFallback,
+                enabled = !inFlight,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 8.dp)
+            ) {
+                Text(text = stringResource(R.string.auth_sign_in_google_fallback_button))
+            }
+            Text(
+                text = stringResource(R.string.auth_sign_in_google_fallback_hint),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 4.dp)
+            )
             if (inFlight) {
                 CircularProgressIndicator(modifier = Modifier.padding(top = 8.dp))
             }
@@ -322,6 +340,57 @@ private fun blockedReasonMessageRes(reason: LicensingBlockReason): Int {
     }
 }
 
+private enum class GoogleSignInMode {
+    Default,
+    ExplicitGoogleButton
+}
+
+private suspend fun performGoogleSignIn(
+    mode: GoogleSignInMode,
+    context: Context,
+    auth: FirebaseAuth,
+    credentialManager: CredentialManager,
+    onAuthStart: () -> Unit,
+    onAuthError: (Int) -> Unit,
+    onAuthSuccess: suspend () -> Unit
+) {
+    onAuthStart()
+    val hostActivity = context.findActivity()
+    if (hostActivity == null) {
+        onAuthError(R.string.auth_error_google_request_failed)
+        return
+    }
+
+    try {
+        val idToken =
+            when (mode) {
+                GoogleSignInMode.Default ->
+                    requestGoogleIdToken(
+                        activity = hostActivity,
+                        credentialManager = credentialManager
+                    )
+                GoogleSignInMode.ExplicitGoogleButton ->
+                    requestGoogleIdTokenWithGoogleButton(
+                        activity = hostActivity,
+                        credentialManager = credentialManager
+                    )
+            }
+        val firebaseCredential = GoogleAuthProvider.getCredential(idToken, null)
+        auth.signInWithCredential(firebaseCredential).await()
+        onAuthSuccess()
+    } catch (error: NoCredentialException) {
+        onAuthError(R.string.auth_error_google_no_account)
+    } catch (error: GetCredentialCancellationException) {
+        onAuthError(R.string.auth_error_google_cancelled)
+    } catch (error: GetCredentialException) {
+        onAuthError(R.string.auth_error_google_request_failed)
+    } catch (error: GoogleIdTokenParsingException) {
+        onAuthError(R.string.auth_error_google_invalid_credential)
+    } catch (error: Exception) {
+        onAuthError(R.string.auth_error_google_firebase_failed)
+    }
+}
+
 private suspend fun requestGoogleIdToken(
     activity: Activity,
     credentialManager: CredentialManager
@@ -344,6 +413,25 @@ private suspend fun requestGoogleIdToken(
         credentialManager = credentialManager,
         filterByAuthorizedAccounts = false
     ) ?: throw NoCredentialException("No Google account credential available")
+}
+
+private suspend fun requestGoogleIdTokenWithGoogleButton(
+    activity: Activity,
+    credentialManager: CredentialManager
+): String {
+    val option =
+        GetSignInWithGoogleOption.Builder(activity.getString(R.string.default_web_client_id))
+            .build()
+    val request =
+        GetCredentialRequest.Builder()
+            .addCredentialOption(option)
+            .build()
+    val response = credentialManager.getCredential(
+        context = activity,
+        request = request
+    )
+    return credentialToGoogleIdToken(response.credential)
+        ?: throw NoCredentialException("No Google account credential available")
 }
 
 private suspend fun tryRequestGoogleIdToken(

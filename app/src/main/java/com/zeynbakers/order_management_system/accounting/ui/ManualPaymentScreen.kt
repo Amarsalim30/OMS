@@ -245,6 +245,7 @@ fun ManualPaymentScreen(
                                     TextButton(
                                         onClick = {
                                             selectedCustomerId = summary.customerId
+                                            selectedOrderId = null
                                             customerQuery = ""
                                         }
                                     ) {

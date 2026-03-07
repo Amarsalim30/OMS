@@ -22,13 +22,12 @@ service cloud.firestore {
     match /users/{uid} {
       // Users can read only their own entitlement.
       allow read: if isSelf(uid);
-      // Entitlement controls remain admin-managed. Clients may only append a claimed device ID.
+      // Entitlement controls remain admin-managed. Clients may repair the claimed-device list
+      // by pruning stale/revoked IDs and adding at most one current device ID in the same update.
       allow update: if isSelf(uid)
         && entitlementFieldsUnchanged()
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['registeredDeviceIds'])
         && request.resource.data.registeredDeviceIds is list
-        && request.resource.data.registeredDeviceIds.hasAll(registeredDeviceIds(resource.data))
-        && request.resource.data.registeredDeviceIds.size() >= registeredDeviceIds(resource.data).size()
         && request.resource.data.registeredDeviceIds.size() <= registeredDeviceIds(resource.data).size() + 1
         && request.resource.data.registeredDeviceIds.size() <= resource.data.maxDevices;
 

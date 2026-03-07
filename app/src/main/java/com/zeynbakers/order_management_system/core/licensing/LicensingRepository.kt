@@ -26,11 +26,41 @@ private const val FIELD_REGISTERED_DEVICE_IDS = "registeredDeviceIds"
 private const val DEFAULT_MAX_DEVICES = 1L
 private const val OFFLINE_GRACE_WINDOW_MS = 3L * 24L * 60L * 60L * 1000L
 
+internal class LegacyDeviceRegistrationFallbackException(cause: Throwable) : Exception(cause)
+
 private fun com.google.firebase.firestore.DocumentSnapshot.getRegisteredDeviceIds(): Set<String> {
     val values = get(FIELD_REGISTERED_DEVICE_IDS) as? List<*> ?: emptyList<Any>()
     return values.mapNotNull { it as? String }
         .filter { it.isNotBlank() }
         .toSet()
+}
+
+internal fun exceedsActiveDeviceLimit(
+    activeDeviceIds: Set<String>,
+    currentDeviceId: String,
+    maxDevices: Int
+): Boolean {
+    return !activeDeviceIds.contains(currentDeviceId) && activeDeviceIds.size >= maxDevices
+}
+
+internal fun reconcileRegisteredDeviceIds(
+    existingRegisteredDeviceIds: Set<String>,
+    activeRegisteredDeviceIds: Set<String>,
+    currentDeviceId: String
+): Set<String> {
+    val reconciled = LinkedHashSet<String>()
+    existingRegisteredDeviceIds.forEach { deviceId ->
+        if (activeRegisteredDeviceIds.contains(deviceId) && deviceId != currentDeviceId) {
+            reconciled += deviceId
+        }
+    }
+    activeRegisteredDeviceIds.forEach { deviceId ->
+        if (deviceId != currentDeviceId) {
+            reconciled += deviceId
+        }
+    }
+    reconciled += currentDeviceId
+    return reconciled
 }
 
 internal enum class LicensingBlockReason {
@@ -75,6 +105,12 @@ internal interface LicensingRemoteStore {
     suspend fun getDevice(uid: String, deviceId: String): LicensingDeviceRecord?
     suspend fun touchDevice(uid: String, deviceId: String, nowMillis: Long)
     suspend fun registerDevice(uid: String, deviceId: String, nowMillis: Long): LicensingDeviceRegistrationResult
+    suspend fun registerDeviceLegacy(
+        uid: String,
+        deviceId: String,
+        nowMillis: Long,
+        maxDevices: Int
+    ): LicensingDeviceRegistrationResult
 }
 
 internal class FirestoreLicensingRemoteStore(
@@ -120,51 +156,120 @@ internal class FirestoreLicensingRemoteStore(
     ): LicensingDeviceRegistrationResult {
         val userRef = firestore.collection(COLLECTION_USERS).document(uid)
         val deviceRef = deviceRef(uid, deviceId)
-        return firestore.runTransaction { transaction ->
-            val entitlementSnapshot = transaction.get(userRef)
-            if (!entitlementSnapshot.exists()) {
-                return@runTransaction LicensingDeviceRegistrationResult.EntitlementMissing
-            }
-
-            val allowed = entitlementSnapshot.getBoolean(FIELD_ALLOWED) ?: false
-            if (!allowed) {
-                return@runTransaction LicensingDeviceRegistrationResult.AccessDenied
-            }
-
-            val maxDevices =
-                (entitlementSnapshot.getLong(FIELD_MAX_DEVICES) ?: DEFAULT_MAX_DEVICES)
-                    .toInt()
-                    .coerceAtLeast(1)
-            val expiresAt = entitlementSnapshot.getLong(FIELD_EXPIRES_AT) ?: 0L
-            if (expiresAt > 0L && nowMillis > expiresAt) {
-                return@runTransaction LicensingDeviceRegistrationResult.EntitlementExpired
-            }
-
-            val registeredDeviceIds = entitlementSnapshot.getRegisteredDeviceIds()
-            val deviceSnapshot = transaction.get(deviceRef)
-            if (deviceSnapshot.exists()) {
-                val revoked = deviceSnapshot.getBoolean(FIELD_REVOKED) ?: false
-                if (revoked) {
-                    return@runTransaction LicensingDeviceRegistrationResult.DeviceRevoked
+        return try {
+            firestore.runTransaction { transaction ->
+                val entitlementSnapshot = transaction.get(userRef)
+                if (!entitlementSnapshot.exists()) {
+                    return@runTransaction LicensingDeviceRegistrationResult.EntitlementMissing
                 }
-                transaction.set(deviceRef, deviceHeartbeatPayload(nowMillis), SetOptions.merge())
-                return@runTransaction LicensingDeviceRegistrationResult.AlreadyRegistered
-            }
 
-            if (!registeredDeviceIds.contains(deviceId) && registeredDeviceIds.size >= maxDevices) {
-                return@runTransaction LicensingDeviceRegistrationResult.DeviceLimitReached
-            }
+                val allowed = entitlementSnapshot.getBoolean(FIELD_ALLOWED) ?: false
+                if (!allowed) {
+                    return@runTransaction LicensingDeviceRegistrationResult.AccessDenied
+                }
 
-            if (!registeredDeviceIds.contains(deviceId)) {
-                val updatedDeviceIds =
-                    registeredDeviceIds.toMutableSet()
-                        .apply { add(deviceId) }
-                        .toList()
-                transaction.update(userRef, FIELD_REGISTERED_DEVICE_IDS, updatedDeviceIds)
+                val maxDevices =
+                    (entitlementSnapshot.getLong(FIELD_MAX_DEVICES) ?: DEFAULT_MAX_DEVICES)
+                        .toInt()
+                        .coerceAtLeast(1)
+                val expiresAt = entitlementSnapshot.getLong(FIELD_EXPIRES_AT) ?: 0L
+                if (expiresAt > 0L && nowMillis > expiresAt) {
+                    return@runTransaction LicensingDeviceRegistrationResult.EntitlementExpired
+                }
+
+                val registeredDeviceIds = entitlementSnapshot.getRegisteredDeviceIds()
+                val deviceSnapshot = transaction.get(deviceRef)
+                val activeRegisteredDeviceIds = LinkedHashSet<String>()
+                registeredDeviceIds.forEach { registeredDeviceId ->
+                    val registeredDeviceSnapshot =
+                        if (registeredDeviceId == deviceId) {
+                            deviceSnapshot
+                        } else {
+                            transaction.get(deviceRef(uid, registeredDeviceId))
+                        }
+                    if (!registeredDeviceSnapshot.exists()) {
+                        return@forEach
+                    }
+                    val revoked = registeredDeviceSnapshot.getBoolean(FIELD_REVOKED) ?: false
+                    if (!revoked) {
+                        activeRegisteredDeviceIds += registeredDeviceId
+                    }
+                }
+                if (deviceSnapshot.exists()) {
+                    val revoked = deviceSnapshot.getBoolean(FIELD_REVOKED) ?: false
+                    if (revoked) {
+                        return@runTransaction LicensingDeviceRegistrationResult.DeviceRevoked
+                    }
+                    val reconciledDeviceIds =
+                        reconcileRegisteredDeviceIds(
+                            existingRegisteredDeviceIds = registeredDeviceIds,
+                            activeRegisteredDeviceIds = activeRegisteredDeviceIds,
+                            currentDeviceId = deviceId
+                        )
+                    if (reconciledDeviceIds != registeredDeviceIds) {
+                        transaction.update(userRef, FIELD_REGISTERED_DEVICE_IDS, reconciledDeviceIds.toList())
+                    }
+                    transaction.set(deviceRef, deviceHeartbeatPayload(nowMillis), SetOptions.merge())
+                    return@runTransaction LicensingDeviceRegistrationResult.AlreadyRegistered
+                }
+
+                if (exceedsActiveDeviceLimit(activeRegisteredDeviceIds, deviceId, maxDevices)) {
+                    return@runTransaction LicensingDeviceRegistrationResult.DeviceLimitReached
+                }
+
+                val reconciledDeviceIds =
+                    reconcileRegisteredDeviceIds(
+                        existingRegisteredDeviceIds = registeredDeviceIds,
+                        activeRegisteredDeviceIds = activeRegisteredDeviceIds,
+                        currentDeviceId = deviceId
+                    )
+                if (reconciledDeviceIds != registeredDeviceIds) {
+                    transaction.update(userRef, FIELD_REGISTERED_DEVICE_IDS, reconciledDeviceIds.toList())
+                }
+                transaction.set(deviceRef, deviceRegistrationPayload(nowMillis))
+                LicensingDeviceRegistrationResult.Registered
+            }.await()
+        } catch (error: FirebaseFirestoreException) {
+            if (error.code == FirebaseFirestoreException.Code.PERMISSION_DENIED ||
+                error.code == FirebaseFirestoreException.Code.FAILED_PRECONDITION
+            ) {
+                throw LegacyDeviceRegistrationFallbackException(error)
             }
-            transaction.set(deviceRef, deviceRegistrationPayload(nowMillis))
-            LicensingDeviceRegistrationResult.Registered
-        }.await()
+            throw error
+        }
+    }
+
+    override suspend fun registerDeviceLegacy(
+        uid: String,
+        deviceId: String,
+        nowMillis: Long,
+        maxDevices: Int
+    ): LicensingDeviceRegistrationResult {
+        val deviceRef = deviceRef(uid, deviceId)
+        val deviceSnapshot = deviceRef.get(Source.SERVER).await()
+        if (deviceSnapshot.exists()) {
+            val revoked = deviceSnapshot.getBoolean(FIELD_REVOKED) ?: false
+            if (revoked) {
+                return LicensingDeviceRegistrationResult.DeviceRevoked
+            }
+            deviceRef.set(deviceHeartbeatPayload(nowMillis), SetOptions.merge()).await()
+            return LicensingDeviceRegistrationResult.AlreadyRegistered
+        }
+
+        val activeDevicesCount =
+            firestore.collection(COLLECTION_USERS)
+                .document(uid)
+                .collection(COLLECTION_DEVICES)
+                .whereEqualTo(FIELD_REVOKED, false)
+                .get(Source.SERVER)
+                .await()
+                .size()
+        if (activeDevicesCount >= maxDevices) {
+            return LicensingDeviceRegistrationResult.DeviceLimitReached
+        }
+
+        deviceRef.set(deviceRegistrationPayload(nowMillis)).await()
+        return LicensingDeviceRegistrationResult.Registered
     }
 
     private fun deviceRef(uid: String, deviceId: String): DocumentReference {
@@ -242,12 +347,22 @@ internal class LicensingRepository(
                 if (device.revoked) {
                     return blocked(LicensingBlockReason.DeviceRevoked)
                 }
-                remoteStore.touchDevice(uid, installId, nowMillis)
+                try {
+                    remoteStore.touchDevice(uid, installId, nowMillis)
+                } catch (error: Exception) {
+                    logWarn("Heartbeat refresh failed for validated device; allowing access", error)
+                }
                 localStore.updateLastValidated(uid, nowMillis)
                 return allowed("existing_device")
             }
 
-            val registrationResult = remoteStore.registerDevice(uid, installId, nowMillis)
+            val registrationResult =
+                registerDeviceWithCompatibilityFallback(
+                    uid = uid,
+                    deviceId = installId,
+                    nowMillis = nowMillis,
+                    maxDevices = entitlement.maxDevices
+                )
             return when (registrationResult) {
                 LicensingDeviceRegistrationResult.Registered -> {
                     localStore.updateLastValidated(uid, nowMillis)
@@ -296,6 +411,47 @@ internal class LicensingRepository(
                 }
             }
         }
+    }
+
+    private suspend fun registerDeviceWithCompatibilityFallback(
+        uid: String,
+        deviceId: String,
+        nowMillis: Long,
+        maxDevices: Int
+    ): LicensingDeviceRegistrationResult {
+        return try {
+            remoteStore.registerDevice(uid, deviceId, nowMillis)
+        } catch (error: Exception) {
+            if (!shouldRetryLegacyRegistration(error)) {
+                throw error
+            }
+            logWarn("Device registration transaction denied; retrying legacy compatibility path", error)
+            remoteStore.registerDeviceLegacy(
+                uid = uid,
+                deviceId = deviceId,
+                nowMillis = nowMillis,
+                maxDevices = maxDevices
+            )
+        }
+    }
+
+    private fun shouldRetryLegacyRegistration(error: Throwable): Boolean {
+        var current: Throwable? = error
+        while (current != null) {
+            when (current) {
+                is LegacyDeviceRegistrationFallbackException -> {
+                    current = current.cause ?: return false
+                    continue
+                }
+
+                is FirebaseFirestoreException -> {
+                    return current.code == FirebaseFirestoreException.Code.PERMISSION_DENIED ||
+                        current.code == FirebaseFirestoreException.Code.FAILED_PRECONDITION
+                }
+            }
+            current = current.cause
+        }
+        return false
     }
 
     private fun shouldTreatAsOffline(error: Exception): Boolean {

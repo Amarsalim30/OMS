@@ -27,12 +27,17 @@ internal class LicensingLocalStore(context: Context) : LicensingCacheStore {
 
     override
     fun getOrCreateInstallId(): String {
-        val existing = prefs.getString(KEY_INSTALL_ID, null)
+        val existing =
+            resolveStoredInstallId(
+                secureInstallId = readSecureString(KEY_INSTALL_ID),
+                legacyInstallId = legacyPrefs.getString(KEY_INSTALL_ID, null)
+            )
         if (!existing.isNullOrBlank()) {
+            persistInstallId(existing)
             return existing
         }
         val generated = UUID.randomUUID().toString()
-        prefs.edit { putString(KEY_INSTALL_ID, generated) }
+        persistInstallId(generated)
         return generated
     }
 
@@ -74,10 +79,21 @@ internal class LicensingLocalStore(context: Context) : LicensingCacheStore {
             }
         }
         legacyPrefs.edit(commit = true) {
-            remove(KEY_INSTALL_ID)
             remove(KEY_LAST_VALIDATED_UID)
             remove(KEY_LAST_VALIDATED_AT)
         }
+    }
+
+    private fun persistInstallId(installId: String) {
+        runCatching {
+            securePrefs?.edit(commit = true) { putString(KEY_INSTALL_ID, installId) }
+        }
+        // Keep a backup copy so device binding survives secure-store failures on later launches.
+        legacyPrefs.edit(commit = true) { putString(KEY_INSTALL_ID, installId) }
+    }
+
+    private fun readSecureString(key: String): String? {
+        return runCatching { securePrefs?.getString(key, null) }.getOrNull()
     }
 
     private fun createSecurePreferences(context: Context): SharedPreferences? {
@@ -103,6 +119,14 @@ internal class LicensingLocalStore(context: Context) : LicensingCacheStore {
         const val KEY_LAST_VALIDATED_UID = "last_validated_uid"
         const val KEY_LAST_VALIDATED_AT = "last_validated_at"
     }
+}
+
+internal fun resolveStoredInstallId(
+    secureInstallId: String?,
+    legacyInstallId: String?
+): String? {
+    return secureInstallId?.takeIf { it.isNotBlank() }
+        ?: legacyInstallId?.takeIf { it.isNotBlank() }
 }
 
 internal fun isWithinOfflineGraceWindow(
