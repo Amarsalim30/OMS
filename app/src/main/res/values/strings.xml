@@ -598,6 +598,13 @@
     <string name="import_contacts_no_matches">No matches for \"%1$s\".</string>
     <string name="import_contacts_select_contact">Select %1$s</string>
     <string name="import_contacts_action_with_count">Import (%1$d)</string>
+    <string name="import_contacts_importing">Importing...</string>
+    <string name="import_contacts_status_new">New</string>
+    <string name="import_contacts_status_update">Update</string>
+    <string name="import_contacts_status_existing">Exists</string>
+    <string name="import_contacts_done_summary">Imported: %1$d added, %2$d updated.</string>
+    <string name="import_contacts_done_summary_with_existing">Imported: %1$d added, %2$d updated, %3$d unchanged.</string>
+    <string name="import_contacts_import_failed">Could not import contacts right now. Try again.</string>
     <plurals name="import_contacts_selected_count">
         <item quantity="one">%1$d selected</item>
         <item quantity="other">%1$d selected</item>

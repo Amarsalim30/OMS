@@ -22,7 +22,9 @@ import com.zeynbakers.order_management_system.core.db.AppDatabase
 import com.zeynbakers.order_management_system.core.util.formatOrderLabel
 import com.zeynbakers.order_management_system.core.util.normalizePhoneNumberE164
 import com.zeynbakers.order_management_system.core.util.expandPhoneCandidates
+import com.zeynbakers.order_management_system.customer.domain.ContactImportPreviewStatus
 import com.zeynbakers.order_management_system.customer.domain.ContactsSyncResult
+import com.zeynbakers.order_management_system.customer.domain.previewContactImportStatuses
 import com.zeynbakers.order_management_system.customer.domain.syncContactsIntoCustomers
 import com.zeynbakers.order_management_system.customer.data.CustomerEntity
 import com.zeynbakers.order_management_system.order.data.OrderEntity
@@ -92,19 +94,6 @@ class CustomerAccountsViewModel(
         }
     }
 
-    fun importCustomer(name: String, phone: String) {
-        viewModelScope.launch {
-            importContactsBulk(
-                listOf(
-                    ImportContact(
-                        name = name,
-                        phone = phone
-                    )
-                )
-            )
-        }
-    }
-
     suspend fun importContactsBulk(contacts: List<ImportContact>): ContactsSyncResult {
         val result = withContext(Dispatchers.IO) {
             syncContactsIntoCustomers(
@@ -114,6 +103,17 @@ class CustomerAccountsViewModel(
         }
         refreshSummaries()
         return result
+    }
+
+    suspend fun previewContactImports(
+        contacts: List<ImportContact>
+    ): Map<String, ContactImportPreviewStatus> {
+        return withContext(Dispatchers.IO) {
+            previewContactImportStatuses(
+                existingCustomers = customerDao.getAllCustomers(),
+                contacts = contacts
+            )
+        }
     }
 
     fun archiveCustomer(customerId: Long) {

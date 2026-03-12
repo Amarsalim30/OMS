@@ -501,3 +501,26 @@ git diff -- app/src/main/java/com/zeynbakers/order_management_system/core/onboar
   - Reused the workspace-local `GRADLE_USER_HOME` override so the wrapper cache stays inside the writable repo.
 - Next best action:
   - Re-run `./gradlew :app:assembleDebug --console=plain --no-daemon` in a network-enabled environment or on a machine with the Google Services plugin already cached locally.
+
+
+## Phase 22 - Import Contacts Batch UX Refinement (Current Pass)
+- Reworked import contacts from fire-and-forget per-row launches into one awaited batch import so the screen only exits after the selected contacts finish processing.
+- Added inline preview badges for each contact row so users can see `New`, `Update`, and `Exists` status in the existing list without any extra modal, review screen, or confirmation tap.
+- Added an in-place importing state that disables back/search/toggles during the batch, then shows an automatic result summary snackbar before leaving the screen.
+- Extended the sync result and added a pure preview helper so the UI can surface unchanged existing matches and the new behavior has focused unit coverage.
+
+## Verification Commands And Outcomes (Current Pass Addendum S)
+```text
+rg -n --hidden -S "ContactImportPreviewStatus|previewContactImportStatuses|import_contacts_done_summary|import_contacts_importing|isImporting|unchanged: Int" app/src/main/java app/src/main/res -> PASS
+rg -n --hidden -S "importCustomer\(" app/src/main/java -> PASS (no matches remain; exit code 1)
+$env:GRADLE_USER_HOME='C:\\Users\\USER\\Documents\\CODING\\OMS\\.gradle_user_home'; ./gradlew :app:testDebugUnitTest --tests com.zeynbakers.order_management_system.customer.domain.ContactsSyncEngineTest --console=plain --no-daemon -> FAIL (plugin resolution blocked before test task creation: `com.google.gms.google-services` 4.4.4 could not be resolved from configured repositories in this sandbox)
+$env:GRADLE_USER_HOME='C:\\Users\\USER\\Documents\\CODING\\OMS\\.gradle_user_home'; ./gradlew :app:assembleDebug --console=plain --no-daemon -> FAIL (plugin resolution blocked: `com.google.gms.google-services` 4.4.4 could not be resolved from configured repositories in this sandbox)
+git diff -- app/src/main/java/com/zeynbakers/order_management_system/customer/domain/ContactsSyncEngine.kt app/src/main/java/com/zeynbakers/order_management_system/customer/ui/CustomerAccountsViewModel.kt app/src/main/java/com/zeynbakers/order_management_system/customer/ui/ImportContactsScreen.kt app/src/main/java/com/zeynbakers/order_management_system/core/navigation/graphs/CustomersGraph.kt app/src/main/res/values/strings.xml app/src/test/java/com/zeynbakers/order_management_system/customer/domain/ContactsSyncEngineTest.kt plans.md implementation-log.md -> PASS
+```
+
+- Blocker:
+  - Focused import-contacts verification remains blocked in this sandbox by Gradle plugin resolution for `com.google.gms.google-services`.
+- Attempted fixes:
+  - Reused the workspace-local `GRADLE_USER_HOME` override so wrapper state stays inside the writable repo and retried both the targeted unit-test invocation and `:app:assembleDebug`.
+- Next best action:
+  - Re-run `./gradlew :app:testDebugUnitTest --tests com.zeynbakers.order_management_system.customer.domain.ContactsSyncEngineTest --console=plain --no-daemon` and `./gradlew :app:assembleDebug --console=plain --no-daemon` on a machine with the Google Services plugin already cached or with network access enabled for dependency resolution.

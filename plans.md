@@ -271,3 +271,16 @@ Date: 2026-03-07
   - `rg -n --hidden -S "setup_item_backup_body|setup_backup_open_existing_action|setup_backup_create_action|setup_backup_relink_needed|setup_backup_unavailable|setup_backup_reconnect_action" app/src/main/java app/src/main/res`
   - `./gradlew :app:assembleDebug --console=plain --no-daemon`
   - `git diff -- app/src/main/java/com/zeynbakers/order_management_system/core/onboarding/OnboardingScreens.kt app/src/main/res/values/strings.xml plans.md implementation-log.md`
+
+
+## Milestone 22 - Import Contacts Batch UX Refinement (Current Pass)
+- Acceptance criteria:
+  - Contact import runs as one awaited batch so the screen only exits after the import work completes.
+  - The import list shows inline `New`, `Update`, and `Exists` status badges without adding any confirmation dialog or extra step.
+  - Import progress and completion feedback stay on the same screen through a disabled importing state and automatic summary message.
+- Verification commands:
+  - `rg -n --hidden -S "ContactImportPreviewStatus|previewContactImportStatuses|import_contacts_done_summary|import_contacts_importing|isImporting|unchanged: Int" app/src/main/java app/src/main/res`
+  - `rg -n --hidden -S "importCustomer\(" app/src/main/java`
+  - `./gradlew :app:testDebugUnitTest --tests com.zeynbakers.order_management_system.customer.domain.ContactsSyncEngineTest --console=plain --no-daemon`
+  - `./gradlew :app:assembleDebug --console=plain --no-daemon`
+  - `git diff -- app/src/main/java/com/zeynbakers/order_management_system/customer/domain/ContactsSyncEngine.kt app/src/main/java/com/zeynbakers/order_management_system/customer/ui/CustomerAccountsViewModel.kt app/src/main/java/com/zeynbakers/order_management_system/customer/ui/ImportContactsScreen.kt app/src/main/java/com/zeynbakers/order_management_system/core/navigation/graphs/CustomersGraph.kt app/src/main/res/values/strings.xml app/src/test/java/com/zeynbakers/order_management_system/customer/domain/ContactsSyncEngineTest.kt plans.md implementation-log.md`

@@ -42,13 +42,16 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.zeynbakers.order_management_system.R
+import com.zeynbakers.order_management_system.customer.domain.ContactImportPreviewStatus
 
 @Composable
 @OptIn(ExperimentalMaterial3Api::class)
 fun ImportContactsScreen(
     contacts: List<ImportContact>,
     selectedPhones: Set<String>,
+    previewStatuses: Map<String, ContactImportPreviewStatus>,
     isLoading: Boolean,
+    isImporting: Boolean,
     hasPermission: Boolean,
     isPermissionPermanentlyDenied: Boolean,
     errorMessage: String?,
@@ -85,7 +88,7 @@ fun ImportContactsScreen(
             CenterAlignedTopAppBar(
                 title = { Text(text = stringResource(R.string.import_contacts_title)) },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
+                    IconButton(onClick = onBack, enabled = !isImporting) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = stringResource(R.string.action_back)
@@ -111,14 +114,23 @@ fun ImportContactsScreen(
                         )
                         Button(
                             onClick = onImport,
-                            enabled = selectedCount > 0
+                            enabled = selectedCount > 0 && !isImporting
                         ) {
-                            Text(
-                                text = stringResource(
-                                    R.string.import_contacts_action_with_count,
-                                    selectedCount
+                            if (isImporting) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(16.dp),
+                                    strokeWidth = 2.dp
                                 )
-                            )
+                                Spacer(Modifier.size(8.dp))
+                                Text(stringResource(R.string.import_contacts_importing))
+                            } else {
+                                Text(
+                                    text = stringResource(
+                                        R.string.import_contacts_action_with_count,
+                                        selectedCount
+                                    )
+                                )
+                            }
                         }
                     }
                 }
@@ -170,6 +182,7 @@ fun ImportContactsScreen(
                 onValueChange = { query = it },
                 label = { Text(stringResource(R.string.import_contacts_search_label)) },
                 placeholder = { Text(stringResource(R.string.import_contacts_search_placeholder)) },
+                enabled = !isImporting,
                 modifier = Modifier.fillMaxWidth()
             )
 
@@ -191,6 +204,7 @@ fun ImportContactsScreen(
                         stringResource(R.string.import_contacts_select_all)
                     },
                 selected = allVisibleSelected,
+                enabled = !isImporting,
                 onToggle = { onToggleSelectAll(visiblePhones) }
             )
 
@@ -212,7 +226,9 @@ fun ImportContactsScreen(
                 items(filteredContacts, key = { it.phone }) { contact ->
                     ContactRow(
                         contact = contact,
+                        status = previewStatuses[contact.phone],
                         selected = selectedPhones.contains(contact.phone),
+                        enabled = !isImporting,
                         onToggle = { onToggleSelect(contact.phone) }
                     )
                 }
@@ -300,12 +316,13 @@ private fun LoadErrorCard(
 private fun SelectAllRow(
     label: String,
     selected: Boolean,
+    enabled: Boolean,
     onToggle: () -> Unit
 ) {
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { onToggle() },
+            .clickable(enabled = enabled) { onToggle() },
         tonalElevation = 1.dp,
         shape = MaterialTheme.shapes.medium
     ) {
@@ -315,6 +332,7 @@ private fun SelectAllRow(
         ) {
             RoundCheckToggle(
                 selected = selected,
+                enabled = enabled,
                 onToggle = onToggle,
                 contentDescription = stringResource(R.string.import_contacts_select_all)
             )
@@ -327,13 +345,15 @@ private fun SelectAllRow(
 @Composable
 private fun ContactRow(
     contact: ImportContact,
+    status: ContactImportPreviewStatus?,
     selected: Boolean,
+    enabled: Boolean,
     onToggle: () -> Unit
 ) {
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .clickable { onToggle() },
+            .clickable(enabled = enabled) { onToggle() },
         tonalElevation = 1.dp,
         shape = MaterialTheme.shapes.medium
     ) {
@@ -343,6 +363,7 @@ private fun ContactRow(
         ) {
             RoundCheckToggle(
                 selected = selected,
+                enabled = enabled,
                 onToggle = onToggle,
                 contentDescription =
                     stringResource(R.string.import_contacts_select_contact, contact.name)
@@ -363,6 +384,10 @@ private fun ContactRow(
                     overflow = TextOverflow.Ellipsis
                 )
             }
+            if (status != null) {
+                Spacer(Modifier.size(8.dp))
+                ImportStatusBadge(status = status)
+            }
         }
     }
 }
@@ -370,16 +395,55 @@ private fun ContactRow(
 @Composable
 private fun RoundCheckToggle(
     selected: Boolean,
+    enabled: Boolean,
     onToggle: () -> Unit,
     contentDescription: String
 ) {
     IconToggleButton(
         checked = selected,
+        enabled = enabled,
         onCheckedChange = { onToggle() }
     ) {
         val icon =
             if (selected) Icons.Filled.CheckCircle else Icons.Outlined.RadioButtonUnchecked
         Icon(imageVector = icon, contentDescription = contentDescription)
+    }
+}
+
+@Composable
+private fun ImportStatusBadge(status: ContactImportPreviewStatus) {
+    val (label, containerColor, contentColor) =
+        when (status) {
+            ContactImportPreviewStatus.New ->
+                Triple(
+                    stringResource(R.string.import_contacts_status_new),
+                    MaterialTheme.colorScheme.tertiaryContainer,
+                    MaterialTheme.colorScheme.onTertiaryContainer
+                )
+            ContactImportPreviewStatus.Update ->
+                Triple(
+                    stringResource(R.string.import_contacts_status_update),
+                    MaterialTheme.colorScheme.secondaryContainer,
+                    MaterialTheme.colorScheme.onSecondaryContainer
+                )
+            ContactImportPreviewStatus.Existing ->
+                Triple(
+                    stringResource(R.string.import_contacts_status_existing),
+                    MaterialTheme.colorScheme.surfaceVariant,
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                )
+        }
+
+    Surface(
+        color = containerColor,
+        contentColor = contentColor,
+        shape = MaterialTheme.shapes.small
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+        )
     }
 }
 
