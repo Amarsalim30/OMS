@@ -222,3 +222,52 @@ Date: 2026-03-07
 - Verification commands:
   - `./gradlew :app:assembleDebug --console=plain --no-daemon`
   - `git diff -- app/src/main/java/com/zeynbakers/order_management_system/core/onboarding/OnboardingScreens.kt app/src/main/res/values/strings.xml plans.md implementation-log.md`
+
+
+## Milestone 18 - Setup Flow UX Refinement (Current Pass)
+- Acceptance criteria:
+  - The quick-setup checklist no longer auto-advances when a step becomes complete.
+  - Users can leave optional setup immediately after the required business profile is finished.
+  - Setup copy makes it explicit that the final action continues into the walkthrough, not directly into the app.
+- Verification commands:
+  - `rg -n --hidden -S "setup_subtitle_ready|setup_action_finish_later|setup_action_continue_walkthrough" app/src/main/java app/src/main/res`
+  - `rg -n --hidden -S "LaunchedEffect\(steps\.map \{ it\.done \}" app/src/main/java/com/zeynbakers/order_management_system/core/onboarding/OnboardingScreens.kt`
+  - `rg -n --hidden -F ' | ' app/src/main/java/com/zeynbakers/order_management_system/core/onboarding/OnboardingScreens.kt`
+  - `./gradlew :app:assembleDebug --console=plain --no-daemon`
+  - `git diff -- app/src/main/java/com/zeynbakers/order_management_system/core/onboarding/OnboardingScreens.kt app/src/main/res/values/strings.xml plans.md implementation-log.md`
+
+
+## Milestone 19 - Returning-User Backup UX Refinement (Current Pass)
+- Acceptance criteria:
+  - Quick setup treats backup as complete only when the remembered single-file target is still healthy.
+  - Returning users with a stale remembered backup target see reconnect-oriented copy and action instead of being treated as fully configured.
+  - The backup step copy makes it clear that one backup file is remembered and reused across launches.
+- Verification commands:
+  - `rg -n --hidden -S "backupTargetHealth|onReconnectBackupFile|OpenWritableBackupDocumentContract|setup_backup_relink_needed|setup_backup_unavailable|setup_backup_reconnect_action" app/src/main/java app/src/main/res`
+  - `rg -n --hidden -S "backupConfigured = hasBackupFile && backupTargetHealth == BackupTargetHealth\.Healthy|updateBackupTarget\(|relinkBackupFileLauncher|setup_item_backup_body" app/src/main/java app/src/main/res`
+  - `./gradlew :app:assembleDebug --console=plain --no-daemon`
+  - `git diff -- app/src/main/java/com/zeynbakers/order_management_system/core/navigation/graphs/OnboardingGraph.kt app/src/main/java/com/zeynbakers/order_management_system/core/onboarding/OnboardingScreens.kt app/src/main/res/values/strings.xml plans.md implementation-log.md`
+
+
+## Milestone 20 - Reinstall Backup Single-Source UX (Current Pass)
+- Acceptance criteria:
+  - Fresh-install quick setup prefers reopening an existing canonical backup file before creating a new one.
+  - Creating a new onboarding backup file uses the same canonical `backup_latest.oms` suggestion as the backup settings screen.
+  - The backup step explicitly explains the reinstall path so users do not create duplicate backup files by default.
+- Verification commands:
+  - `rg -n --hidden -S "onOpenExistingBackupFile|setup_backup_open_existing_action|setup_backup_create_action|setup_backup_single_source_hint|backup_latest\.oms" app/src/main/java app/src/main/res`
+  - `rg -n --hidden -S "onReconnectBackupFile|setup_backup_choose_folder_action|intialsetupbackupsave\.oms" app/src/main/java app/src/main/res`
+  - `./gradlew :app:assembleDebug --console=plain --no-daemon`
+  - `git diff -- app/src/main/java/com/zeynbakers/order_management_system/core/navigation/graphs/OnboardingGraph.kt app/src/main/java/com/zeynbakers/order_management_system/core/onboarding/OnboardingScreens.kt app/src/main/res/values/strings.xml plans.md implementation-log.md`
+
+
+## Milestone 21 - Backup Copy Simplification (Current Pass)
+- Acceptance criteria:
+  - The onboarding backup card removes the extra explanatory hint text and keeps only essential state and actions.
+  - Backup labels and status copy are shorter and easier to scan.
+  - Removed backup-only strings are not referenced anywhere in the app.
+- Verification commands:
+  - `rg -n --hidden -S "setup_backup_auto_enable_hint|setup_backup_saved_hint|setup_backup_single_source_hint|setup_backup_relink_hint|setup_backup_unavailable_hint" app/src/main/java app/src/main/res`
+  - `rg -n --hidden -S "setup_item_backup_body|setup_backup_open_existing_action|setup_backup_create_action|setup_backup_relink_needed|setup_backup_unavailable|setup_backup_reconnect_action" app/src/main/java app/src/main/res`
+  - `./gradlew :app:assembleDebug --console=plain --no-daemon`
+  - `git diff -- app/src/main/java/com/zeynbakers/order_management_system/core/onboarding/OnboardingScreens.kt app/src/main/res/values/strings.xml plans.md implementation-log.md`

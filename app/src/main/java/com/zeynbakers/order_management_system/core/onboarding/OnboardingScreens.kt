@@ -54,6 +54,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.zeynbakers.order_management_system.R
+import com.zeynbakers.order_management_system.core.backup.BackupTargetHealth
 import com.zeynbakers.order_management_system.core.ui.components.AppCard
 import kotlinx.coroutines.launch
 import kotlinx.datetime.TimeZone
@@ -214,6 +215,7 @@ fun SetupChecklistScreen(
     onboardingState: OnboardingState,
     backupConfigured: Boolean,
     backupTargetLabel: String?,
+    backupTargetHealth: BackupTargetHealth?,
     contactsConfigured: Boolean,
     contactsPermissionGranted: Boolean,
     contactsPermissionPermanentlyDenied: Boolean,
@@ -224,6 +226,7 @@ fun SetupChecklistScreen(
     helperOverlayGranted: Boolean,
     onSaveBusinessProfile: (name: String, currency: String, timezone: String) -> Unit,
     onChooseBackupFile: () -> Unit,
+    onOpenExistingBackupFile: () -> Unit,
     onRequestContactsPermission: () -> Unit,
     onOpenContactsImport: () -> Unit,
     onEnableNotifications: () -> Unit,
@@ -311,7 +314,6 @@ fun SetupChecklistScreen(
         }
     val completedCount = steps.count { it.done }
     val progress = (completedCount.toFloat() / steps.size.coerceAtLeast(1)).coerceIn(0f, 1f)
-    var doneSnapshot by remember { mutableStateOf(steps.map { it.done }) }
     var isTransitioning by remember { mutableStateOf(false) }
     val moveToPage: (Int) -> Unit = { targetPage ->
         val boundedTarget = targetPage.coerceIn(0, steps.lastIndex)
@@ -326,14 +328,6 @@ fun SetupChecklistScreen(
         }
     }
 
-    LaunchedEffect(steps.map { it.done }, pagerState.currentPage) {
-        val currentDone = steps[pagerState.currentPage].done
-        val previousDone = doneSnapshot.getOrNull(pagerState.currentPage) ?: false
-        if (!previousDone && currentDone && pagerState.currentPage < steps.lastIndex) {
-            moveToPage(pagerState.currentPage + 1)
-        }
-        doneSnapshot = steps.map { it.done }
-    }
     LaunchedEffect(pagerState.currentPage) {
         persistedPage = pagerState.currentPage
     }
@@ -355,7 +349,14 @@ fun SetupChecklistScreen(
         ) {
             AppCard {
                 Text(
-                    text = stringResource(R.string.setup_subtitle),
+                    text =
+                        stringResource(
+                            if (onboardingState.businessProfileCompleted) {
+                                R.string.setup_subtitle_ready
+                            } else {
+                                R.string.setup_subtitle
+                            }
+                        ),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -450,28 +451,60 @@ fun SetupChecklistScreen(
                             }
 
                             SetupStepType.Backup -> {
+                                val backupStatusText =
+                                    when (backupTargetHealth) {
+                                        BackupTargetHealth.Healthy ->
+                                            stringResource(
+                                                R.string.setup_backup_selected,
+                                                backupTargetLabel.orEmpty()
+                                            )
+                                        BackupTargetHealth.NeedsRelink ->
+                                            stringResource(
+                                                R.string.setup_backup_relink_needed,
+                                                backupTargetLabel.orEmpty()
+                                            )
+                                        BackupTargetHealth.Unavailable ->
+                                            stringResource(
+                                                R.string.setup_backup_unavailable,
+                                                backupTargetLabel.orEmpty()
+                                            )
+                                        null -> stringResource(R.string.setup_backup_not_selected)
+                                    }
+                                val backupActionLabel =
+                                    when (backupTargetHealth) {
+                                        BackupTargetHealth.Healthy -> stringResource(R.string.backup_change_file)
+                                        BackupTargetHealth.NeedsRelink,
+                                        BackupTargetHealth.Unavailable ->
+                                            stringResource(R.string.setup_backup_reconnect_action)
+                                        null -> stringResource(R.string.setup_backup_open_existing_action)
+                                    }
                                 Text(
-                                    text =
-                                        if (backupTargetLabel.isNullOrBlank()) {
-                                            stringResource(R.string.setup_backup_not_selected)
-                                        } else {
-                                            stringResource(R.string.setup_backup_selected, backupTargetLabel)
-                                        },
+                                    text = backupStatusText,
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     modifier = Modifier.padding(top = 8.dp)
                                 )
                                 Button(
-                                    onClick = onChooseBackupFile,
+                                    onClick = {
+                                        when (backupTargetHealth) {
+                                            BackupTargetHealth.NeedsRelink,
+                                            BackupTargetHealth.Unavailable,
+                                            null -> onOpenExistingBackupFile()
+                                            BackupTargetHealth.Healthy -> onChooseBackupFile()
+                                        }
+                                    },
                                     modifier = Modifier.fillMaxWidth().padding(top = 8.dp)
                                 ) {
-                                    Text(stringResource(R.string.setup_backup_choose_folder_action))
+                                    Text(backupActionLabel)
                                 }
-                                Text(
-                                    text = stringResource(R.string.setup_backup_auto_enable_hint),
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
+                                if (backupTargetHealth != BackupTargetHealth.Healthy) {
+                                    OutlinedButton(
+                                        onClick = onChooseBackupFile,
+                                        modifier = Modifier.fillMaxWidth()
+                                    ) {
+                                        Text(stringResource(R.string.setup_backup_create_action))
+                                    }
+                                }
                             }
 
                             SetupStepType.Contacts -> {
@@ -574,7 +607,7 @@ fun SetupChecklistScreen(
                                                     stringResource(R.string.setup_helper_status_mic_missing)
                                                 }
                                             )
-                                            append(" • ")
+                                            append(" | ")
                                             append(
                                                 if (helperOverlayGranted) {
                                                     stringResource(R.string.setup_helper_status_overlay_granted)
@@ -612,42 +645,57 @@ fun SetupChecklistScreen(
                 }
             }
 
-            Row(
+            Column(
                 modifier = Modifier.fillMaxWidth().navigationBarsPadding(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                OutlinedButton(
-                    onClick = {
-                        if (pagerState.currentPage > 0) {
-                            moveToPage(pagerState.currentPage - 1)
-                        }
-                    },
-                    enabled = pagerState.currentPage > 0 && !isTransitioning,
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Text(stringResource(R.string.setup_step_previous))
+                if (onboardingState.businessProfileCompleted && pagerState.currentPage < steps.lastIndex) {
+                    TextButton(
+                        onClick = onStartUsingApp,
+                        enabled = !isTransitioning,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(stringResource(R.string.setup_action_finish_later))
+                    }
                 }
 
-                if (pagerState.currentPage < steps.lastIndex) {
-                    Button(
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    OutlinedButton(
                         onClick = {
-                            if (currentStep.type == SetupStepType.Business) {
-                                onSaveBusinessProfile(businessName, currency, timezone)
+                            if (pagerState.currentPage > 0) {
+                                moveToPage(pagerState.currentPage - 1)
                             }
-                            moveToPage(pagerState.currentPage + 1)
                         },
-                        enabled = canAdvance && !isTransitioning,
+                        enabled = pagerState.currentPage > 0 && !isTransitioning,
                         modifier = Modifier.weight(1f)
                     ) {
-                        Text(stringResource(R.string.setup_step_next))
+                        Text(stringResource(R.string.setup_step_previous))
                     }
-                } else {
-                    Button(
-                        onClick = onStartUsingApp,
-                        enabled = onboardingState.businessProfileCompleted && !isTransitioning,
-                        modifier = Modifier.weight(1f)
-                    ) {
-                        Text(stringResource(R.string.setup_action_start))
+
+                    if (pagerState.currentPage < steps.lastIndex) {
+                        Button(
+                            onClick = {
+                                if (currentStep.type == SetupStepType.Business) {
+                                    onSaveBusinessProfile(businessName, currency, timezone)
+                                }
+                                moveToPage(pagerState.currentPage + 1)
+                            },
+                            enabled = canAdvance && !isTransitioning,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text(stringResource(R.string.setup_step_next))
+                        }
+                    } else {
+                        Button(
+                            onClick = onStartUsingApp,
+                            enabled = onboardingState.businessProfileCompleted && !isTransitioning,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text(stringResource(R.string.setup_action_continue_walkthrough))
+                        }
                     }
                 }
             }

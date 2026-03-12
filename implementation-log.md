@@ -413,3 +413,91 @@ git diff -- app/src/main/java/com/zeynbakers/order_management_system/core/onboar
   - Reused the workspace-local `GRADLE_USER_HOME` override so the wrapper cache stays inside the writable repo.
 - Next best action:
   - Re-run `./gradlew :app:assembleDebug --console=plain --no-daemon` in a network-enabled environment or on a machine with the Google Services plugin already cached locally.
+
+
+## Phase 18 - Setup Flow UX Refinement (Current Pass)
+- Removed the quick-setup auto-advance behavior so step completion no longer throws users forward unexpectedly after a permission grant, backup-file return, or helper setup completion.
+- Added a `Finish setup later` exit path as soon as the required business profile is complete, allowing optional setup to remain optional in practice instead of only in copy.
+- Updated the progress-card and final CTA copy so the screen now tells users they are continuing into the walkthrough rather than dropping straight into the live app.
+- Normalized the helper status separator to ASCII so the setup screen no longer renders the mojibake bullet sequence in that summary line.
+
+## Verification Commands And Outcomes (Current Pass Addendum O)
+```text
+rg -n --hidden -S "setup_subtitle_ready|setup_action_finish_later|setup_action_continue_walkthrough" app/src/main/java app/src/main/res -> PASS
+rg -n --hidden -S "LaunchedEffect\(steps\.map \{ it\.done \}" app/src/main/java/com/zeynbakers/order_management_system/core/onboarding/OnboardingScreens.kt -> PASS (no matches remain; exit code 1)
+rg -n --hidden -F ' | ' app/src/main/java/com/zeynbakers/order_management_system/core/onboarding/OnboardingScreens.kt -> PASS
+$env:GRADLE_USER_HOME='C:\\Users\\USER\\Documents\\CODING\\OMS\\.gradle_user_home'; ./gradlew :app:assembleDebug --console=plain --no-daemon -> FAIL (plugin resolution blocked: `com.google.gms.google-services` 4.4.4 could not be resolved from configured repositories in this sandbox)
+git diff -- app/src/main/java/com/zeynbakers/order_management_system/core/onboarding/OnboardingScreens.kt app/src/main/res/values/strings.xml plans.md implementation-log.md -> PASS
+```
+
+- Blocker:
+  - Focused setup-flow build verification remains blocked in this sandbox by Gradle plugin resolution for `com.google.gms.google-services`.
+- Attempted fixes:
+  - Reused the workspace-local `GRADLE_USER_HOME` override so the wrapper cache stays inside the writable repo.
+- Next best action:
+  - Re-run `./gradlew :app:assembleDebug --console=plain --no-daemon` in a network-enabled environment or on a machine with the Google Services plugin already cached locally.
+
+
+## Phase 19 - Returning-User Backup UX Refinement (Current Pass)
+- Made quick setup backup completion health-aware so a remembered file counts only when its persisted SAF access is still healthy, not merely when a URI string exists.
+- Added a reconnect path for returning users by opening an existing writable document when the saved backup file needs relinking or is unavailable, instead of pushing them straight into creating a brand-new file.
+- Updated the backup step copy so the onboarding flow now explicitly explains the single-file model: one backup file is remembered and reused on later launches.
+- Kept the stored-target model unchanged under the hood, so changing or reconnecting the file still replaces the single canonical backup target in preferences.
+
+## Verification Commands And Outcomes (Current Pass Addendum P)
+```text
+rg -n --hidden -S "backupTargetHealth|onReconnectBackupFile|OpenWritableBackupDocumentContract|setup_backup_relink_needed|setup_backup_unavailable|setup_backup_reconnect_action" app/src/main/java app/src/main/res -> PASS
+rg -n --hidden -S "backupConfigured = hasBackupFile && backupTargetHealth == BackupTargetHealth\.Healthy|updateBackupTarget\(|relinkBackupFileLauncher|setup_item_backup_body" app/src/main/java app/src/main/res -> PASS
+$env:GRADLE_USER_HOME='C:\\Users\\USER\\Documents\\CODING\\OMS\\.gradle_user_home'; ./gradlew :app:assembleDebug --console=plain --no-daemon -> FAIL (plugin resolution blocked: `com.google.gms.google-services` 4.4.4 could not be resolved from configured repositories in this sandbox)
+git diff -- app/src/main/java/com/zeynbakers/order_management_system/core/navigation/graphs/OnboardingGraph.kt app/src/main/java/com/zeynbakers/order_management_system/core/onboarding/OnboardingScreens.kt app/src/main/res/values/strings.xml plans.md implementation-log.md -> PASS
+```
+
+- Blocker:
+  - Focused backup-setup build verification remains blocked in this sandbox by Gradle plugin resolution for `com.google.gms.google-services`.
+- Attempted fixes:
+  - Reused the workspace-local `GRADLE_USER_HOME` override so the wrapper cache stays inside the writable repo.
+- Next best action:
+  - Re-run `./gradlew :app:assembleDebug --console=plain --no-daemon` in a network-enabled environment or on a machine with the Google Services plugin already cached locally.
+
+
+## Phase 20 - Reinstall Backup Single-Source UX (Current Pass)
+- Changed the onboarding backup step so a fresh install now prefers `Use existing backup file` as the primary action, which matches the reinstall case where the user should reconnect the old canonical backup instead of creating another SAF document.
+- Added an explicit `Create backup file` secondary action for genuine first-time setup, keeping new-file creation available but no longer making it the default path after reinstall.
+- Switched the onboarding create-document suggestion from the old `intialsetupbackupsave.oms` filename to the canonical `backup_latest.oms`, matching backup settings and reinforcing the single-source-of-truth model.
+- Updated the helper copy so the step now tells users exactly what to do after reinstall: select the same backup file again, otherwise create one once and keep reusing it.
+
+## Verification Commands And Outcomes (Current Pass Addendum Q)
+```text
+rg -n --hidden -S "onOpenExistingBackupFile|setup_backup_open_existing_action|setup_backup_create_action|setup_backup_single_source_hint|backup_latest\.oms" app/src/main/java app/src/main/res -> PASS
+rg -n --hidden -S "onReconnectBackupFile|setup_backup_choose_folder_action|intialsetupbackupsave\.oms" app/src/main/java app/src/main/res -> PASS (no matches remain; exit code 1)
+$env:GRADLE_USER_HOME='C:\\Users\\USER\\Documents\\CODING\\OMS\\.gradle_user_home'; ./gradlew :app:assembleDebug --console=plain --no-daemon -> FAIL (plugin resolution blocked: `com.google.gms.google-services` 4.4.4 could not be resolved from configured repositories in this sandbox)
+git diff -- app/src/main/java/com/zeynbakers/order_management_system/core/navigation/graphs/OnboardingGraph.kt app/src/main/java/com/zeynbakers/order_management_system/core/onboarding/OnboardingScreens.kt app/src/main/res/values/strings.xml plans.md implementation-log.md -> PASS
+```
+
+- Blocker:
+  - Focused backup onboarding build verification remains blocked in this sandbox by Gradle plugin resolution for `com.google.gms.google-services`.
+- Attempted fixes:
+  - Reused the workspace-local `GRADLE_USER_HOME` override so the wrapper cache stays inside the writable repo.
+- Next best action:
+  - Re-run `./gradlew :app:assembleDebug --console=plain --no-daemon` in a network-enabled environment or on a machine with the Google Services plugin already cached locally.
+
+
+## Phase 21 - Backup Copy Simplification (Current Pass)
+- Removed the extra backup hint text block from the onboarding card so the client-facing UI now stays lean: state line, primary action, and optional secondary create action only.
+- Shortened the backup body, action labels, and stale-file status messages to reduce reading load without changing the single-file behavior.
+- Deleted the now-unused backup hint strings from resources so the backup copy surface is simpler both in UI and in the string table.
+
+## Verification Commands And Outcomes (Current Pass Addendum R)
+```text
+rg -n --hidden -S "setup_backup_auto_enable_hint|setup_backup_saved_hint|setup_backup_single_source_hint|setup_backup_relink_hint|setup_backup_unavailable_hint" app/src/main/java app/src/main/res -> PASS (no matches remain; exit code 1)
+rg -n --hidden -S "setup_item_backup_body|setup_backup_open_existing_action|setup_backup_create_action|setup_backup_relink_needed|setup_backup_unavailable|setup_backup_reconnect_action" app/src/main/java app/src/main/res -> PASS
+$env:GRADLE_USER_HOME='C:\\Users\\USER\\Documents\\CODING\\OMS\\.gradle_user_home'; ./gradlew :app:assembleDebug --console=plain --no-daemon -> FAIL (plugin resolution blocked: `com.google.gms.google-services` 4.4.4 could not be resolved from configured repositories in this sandbox)
+git diff -- app/src/main/java/com/zeynbakers/order_management_system/core/onboarding/OnboardingScreens.kt app/src/main/res/values/strings.xml plans.md implementation-log.md -> PASS
+```
+
+- Blocker:
+  - Focused backup copy build verification remains blocked in this sandbox by Gradle plugin resolution for `com.google.gms.google-services`.
+- Attempted fixes:
+  - Reused the workspace-local `GRADLE_USER_HOME` override so the wrapper cache stays inside the writable repo.
+- Next best action:
+  - Re-run `./gradlew :app:assembleDebug --console=plain --no-daemon` in a network-enabled environment or on a machine with the Google Services plugin already cached locally.
