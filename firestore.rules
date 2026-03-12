@@ -13,23 +13,26 @@ service cloud.firestore {
       return data.registeredDeviceIds is list ? data.registeredDeviceIds : [];
     }
 
-    function entitlementFieldsUnchanged() {
-      return request.resource.data.allowed == resource.data.allowed
-        && request.resource.data.maxDevices == resource.data.maxDevices
-        && request.resource.data.expiresAt == resource.data.expiresAt;
+    function maxDevicesOrDefault(data) {
+      return data.maxDevices is int && data.maxDevices > 0 ? data.maxDevices : 1;
+    }
+
+    function claimedDeviceIdsUpdateIsValid() {
+      return request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'registeredDeviceIds'
+        ])
+        && request.resource.data.registeredDeviceIds is list
+        && request.resource.data.registeredDeviceIds.size() <= registeredDeviceIds(resource.data).size() + 1
+        // Older entitlement docs may still be missing maxDevices; keep the client/rules default aligned at 1.
+        && request.resource.data.registeredDeviceIds.size() <= maxDevicesOrDefault(resource.data);
     }
 
     match /users/{uid} {
       // Users can read only their own entitlement.
       allow read: if isSelf(uid);
-      // Entitlement controls remain admin-managed. Clients may repair the claimed-device list
+      // Entitlement controls remain admin-managed. Clients may only repair the claimed-device list
       // by pruning stale/revoked IDs and adding at most one current device ID in the same update.
-      allow update: if isSelf(uid)
-        && entitlementFieldsUnchanged()
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['registeredDeviceIds'])
-        && request.resource.data.registeredDeviceIds is list
-        && request.resource.data.registeredDeviceIds.size() <= registeredDeviceIds(resource.data).size() + 1
-        && request.resource.data.registeredDeviceIds.size() <= resource.data.maxDevices;
+      allow update: if isSelf(uid) && claimedDeviceIdsUpdateIsValid();
 
       allow create, delete: if false;
 

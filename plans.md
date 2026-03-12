@@ -133,3 +133,92 @@ Date: 2026-03-07
 - Verification commands:
   - `./gradlew :app:testDebugUnitTest --tests com.zeynbakers.order_management_system.core.licensing.LicensingLocalStoreTest --console=plain --no-daemon`
   - `git diff -- app/src/main/java/com/zeynbakers/order_management_system/core/licensing/LicensingLocalStore.kt app/src/test/java/com/zeynbakers/order_management_system/core/licensing/LicensingLocalStoreTest.kt plans.md implementation-log.md`
+
+
+## Milestone 10 - Licensing Rule Alignment Recovery
+- Acceptance criteria:
+  - Current Firestore rules allow first-device registration for existing entitlement docs that still rely on the documented default `maxDevices=1`.
+  - The Android licensing flow remains compatible with older deployed Firestore rulesets by falling back to the legacy device-doc registration path only when the transaction write is denied for compatibility reasons.
+  - Licensing verification records the exact commands run after the rules/code compatibility recovery.
+- Verification commands:
+  - `./gradlew :app:testDebugUnitTest --tests com.zeynbakers.order_management_system.core.licensing.LicensingRepositoryTest --console=plain --no-daemon`
+  - `./gradlew :app:testDebugUnitTest --console=plain --no-daemon`
+  - `git diff -- app/src/main/java/com/zeynbakers/order_management_system/core/licensing/LicensingRepository.kt app/src/test/java/com/zeynbakers/order_management_system/core/licensing/LicensingRepositoryTest.kt docs/requirements/licensing.md firestore.rules plans.md implementation-log.md`
+
+
+## Milestone 11 - Live Licensing Recovery
+- Acceptance criteria:
+  - The currently affected signed-in device can pass licensing validation against the live Firebase project without `Validation fatal failure`.
+  - The exact live-firestore evidence is documented, including whether the recovery is a general code/rules fix or an admin-side entitlement/device repair.
+  - Any remaining gap in generic first-device self-registration is called out explicitly instead of being marked complete.
+- Verification commands:
+  - `./gradlew :app:assembleDebug --console=plain --no-daemon`
+  - `adb -s 192.168.0.192:34559 install -r app\\build\\outputs\\apk\\debug\\app-debug.apk`
+  - `cmd /c firebase deploy --only firestore:rules --project ordermanagementsystem-36b41 --non-interactive --force`
+  - `adb -s 192.168.0.192:34559 logcat -d | Select-String -Pattern "LicensingRepository|Validation success|Validation fatal failure|PERMISSION_DENIED"`
+
+
+## Milestone 12 - First-Device Registration Repair (Current Pass)
+- Acceptance criteria:
+  - First-device registration no longer rewrites entitlement controls on `users/{uid}` and instead updates only `registeredDeviceIds`.
+  - Firestore rules validate only the `registeredDeviceIds` diff so older entitlement docs and extra admin metadata do not break allowed self-registration.
+  - Verification includes focused JVM coverage plus live rules deployment and a real device registration retry.
+  - If the attached device cannot reach Firestore cleanly, the exact transport blocker is documented instead of claiming a live green result.
+- Verification commands:
+  - `./gradlew :app:testDebugUnitTest --tests com.zeynbakers.order_management_system.core.licensing.LicensingRepositoryTest --tests com.zeynbakers.order_management_system.core.licensing.LicensingRegistrationHelpersTest --console=plain --no-daemon`
+  - `./gradlew :app:assembleDebug --console=plain --no-daemon`
+  - `cmd /c firebase deploy --only firestore:rules --project ordermanagementsystem-36b41 --non-interactive --force`
+  - `adb -s 192.168.0.192:34559 install -r app\\build\\outputs\\apk\\debug\\app-debug.apk`
+  - `adb -s 192.168.0.192:34559 logcat -c`
+  - `adb -s 192.168.0.192:34559 logcat -d | Select-String -Pattern "LicensingRepository|Validation success|Validation fatal failure|PERMISSION_DENIED|UNAVAILABLE|GoogleApiManager"`
+
+
+## Milestone 13 - Entitlement-First Sign-In Policy (Current Pass)
+- Acceptance criteria:
+  - `allowed=true` is the only runtime access gate after entitlement fetch succeeds.
+  - Device lookup, revoke state, device-limit results, and registration write failures never surface `Validation fatal failure` for an entitled user.
+  - Licensing tests and docs reflect the entitlement-first policy clearly.
+- Verification commands:
+  - `./gradlew :app:testDebugUnitTest --tests com.zeynbakers.order_management_system.core.licensing.LicensingRepositoryTest --console=plain --no-daemon`
+  - `./gradlew :app:testDebugUnitTest --console=plain --no-daemon`
+  - `./gradlew :app:assembleDebug --console=plain --no-daemon`
+
+
+## Milestone 14 - Auth Picker UX Refinement (Current Pass)
+- Acceptance criteria:
+  - The signed-out gate makes the direct Google account chooser the primary CTA.
+  - The alternate Credential Manager Google flow remains available as a secondary fallback action.
+  - Login copy makes it explicit that the app is Google-only and does not support email/password auth.
+- Verification commands:
+  - `./gradlew :app:assembleDebug --console=plain --no-daemon`
+  - `git diff -- app/src/main/java/com/zeynbakers/order_management_system/core/licensing/AuthGate.kt app/src/main/res/values/strings.xml plans.md implementation-log.md`
+
+
+## Milestone 15 - Dual-Mode Auth UX Refinement (Current Pass)
+- Acceptance criteria:
+  - The redundant secondary Google fallback action is removed from the signed-out gate.
+  - Google account selection remains the primary sign-in CTA.
+  - Inline email/password sign-in is available as the alternate authentication path without changing the licensing gate after sign-in.
+- Verification commands:
+  - `./gradlew :app:assembleDebug --console=plain --no-daemon`
+  - `git diff -- app/src/main/java/com/zeynbakers/order_management_system/core/licensing/AuthGate.kt app/src/main/res/values/strings.xml docs/requirements/licensing.md plans.md implementation-log.md`
+
+
+## Milestone 16 - Intro Overview UX Refinement (Current Pass)
+- Acceptance criteria:
+  - The intro route reads as an overview screen instead of implying a hidden pager model.
+  - The duplicate skip action is removed and the primary CTA clearly signals that quick setup comes next.
+  - The intro includes a concrete mini workspace preview instead of relying only on generic value bullets.
+- Verification commands:
+  - `./gradlew :app:assembleDebug --console=plain --no-daemon`
+  - `git diff -- app/src/main/java/com/zeynbakers/order_management_system/core/navigation/graphs/OnboardingGraph.kt app/src/main/java/com/zeynbakers/order_management_system/core/onboarding/OnboardingScreens.kt app/src/main/res/values/strings.xml plans.md implementation-log.md`
+
+
+## Milestone 17 - Intro Screen Weight Reduction (Current Pass)
+- Acceptance criteria:
+  - The intro keeps the clearer overview structure but removes the heavy workspace preview block.
+  - The booking/dashboard value returns as a lightweight value row so the first-run message stays complete.
+  - Unused preview-only strings and composables are removed.
+- Verification commands:
+  - `./gradlew :app:assembleDebug --console=plain --no-daemon`
+  - `git diff -- app/src/main/java/com/zeynbakers/order_management_system/core/onboarding/OnboardingScreens.kt app/src/main/res/values/strings.xml plans.md implementation-log.md`

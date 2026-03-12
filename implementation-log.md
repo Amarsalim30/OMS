@@ -228,3 +228,188 @@ git diff -- app/src/main/java/com/zeynbakers/order_management_system/core/licens
 $env:GRADLE_USER_HOME='C:\\Users\\USER\\Documents\\CODING\\OMS\\.gradle_user_home'; ./gradlew :app:testDebugUnitTest --tests com.zeynbakers.order_management_system.core.licensing.LicensingLocalStoreTest --console=plain --no-daemon --offline -> FAIL (offline plugin resolution: `com.google.gms.google-services` 4.4.4 marker could not be resolved from repositories in this sandbox)
 git diff -- app/src/main/java/com/zeynbakers/order_management_system/core/licensing/LicensingLocalStore.kt app/src/test/java/com/zeynbakers/order_management_system/core/licensing/LicensingLocalStoreTest.kt plans.md implementation-log.md -> PASS
 ```
+
+
+## Phase 10 - Licensing Rule Alignment Recovery (Current Pass)
+- Root-caused the latest `Validation fatal failure` to a compatibility regression in `LicensingRepository`: the transaction-backed registration flow no longer had the legacy fallback that older deployed Firestore rulesets still require, so `PERMISSION_DENIED` during first-device registration surfaced as a fatal validation block instead of retrying through the legacy device-doc path.
+- Confirmed the repo also carries a rules-side compatibility fix: `firestore.rules` now applies the same `maxDevices=1` default the Android client already uses, so older entitlement docs that omit `maxDevices` can still pass the transaction-backed registration flow after the updated rules are deployed.
+- Restored the compatibility fallback in `LicensingRepository` / `FirestoreLicensingRemoteStore`, keeping the transaction-backed path as primary while retrying the legacy registration flow only for compatibility-class Firestore denials and explicit compatibility-wrapper errors.
+- Updated `LicensingRepositoryTest` to cover direct and nested compatibility-wrapper fallback cases without constructing Android-bound `FirebaseFirestoreException` objects in the JVM test environment.
+
+## Verification Commands And Outcomes (Current Pass Addendum G)
+```text
+./gradlew :app:testDebugUnitTest --tests com.zeynbakers.order_management_system.core.licensing.LicensingRepositoryTest --console=plain --no-daemon -> PASS
+./gradlew :app:testDebugUnitTest --console=plain --no-daemon                                                                        -> PASS
+git status --short                                                                                                                 -> PASS (expected touched files only)
+git diff -- app/src/main/java/com/zeynbakers/order_management_system/core/licensing/LicensingRepository.kt app/src/test/java/com/zeynbakers/order_management_system/core/licensing/LicensingRepositoryTest.kt docs/requirements/licensing.md firestore.rules plans.md implementation-log.md -> PASS
+```
+
+
+## Phase 11 - Live Licensing Recovery (Current Pass)
+- Built and reinstalled the updated debug APK on the attached device (`192.168.0.192:34559`) to rule out stale local binaries.
+- Verified via fresh `logcat` that the new compatibility logging is live: the app now clearly shows the transaction registration denial first, then the legacy device-doc fallback denial on `users/UfQrLz8apoV4E72hKbORYG8oPqi2/devices/d87b9cb6-811c-407b-850c-caf83fd0d9df`.
+- Deployed the checked-in `firestore.rules` to Firebase project `ordermanagementsystem-36b41` using Firebase CLI from this machine.
+- Queried the live entitlement doc via the Firestore REST API and confirmed the affected user already had `allowed=true`, `expiresAt=0`, and `maxDevices=100`, so the live denial was not caused by a missing `maxDevices` field on this UID.
+- Applied an admin-side recovery for the affected account/device by writing `registeredDeviceIds=["d87b9cb6-811c-407b-850c-caf83fd0d9df"]` to `users/UfQrLz8apoV4E72hKbORYG8oPqi2` and creating `users/UfQrLz8apoV4E72hKbORYG8oPqi2/devices/d87b9cb6-811c-407b-850c-caf83fd0d9df`.
+- Relaunched the app after the admin-side write and verified `LicensingRepository: Validation success: existing_device` in live `logcat`.
+- I am not marking generic first-device self-registration as solved globally from this pass: the transaction-backed self-registration path is still being denied live for new device claims, and the current verified unblock is the admin-side device registration for this specific UID/install pair.
+
+## Verification Commands And Outcomes (Current Pass Addendum H)
+```text
+./gradlew :app:assembleDebug --console=plain --no-daemon                                                                           -> PASS
+./gradlew :app:testDebugUnitTest --console=plain --no-daemon                                                                      -> PASS
+adb devices                                                                                                                        -> PASS (192.168.0.192:34559 attached)
+adb -s 192.168.0.192:34559 install -r app\\build\\outputs\\apk\\debug\\app-debug.apk                                             -> PASS
+cmd /c firebase login:list --json                                                                                                 -> PASS
+cmd /c firebase projects:list --json                                                                                              -> PASS
+cmd /c firebase deploy --only firestore:rules --project ordermanagementsystem-36b41 --non-interactive --force                   -> PASS
+Invoke-RestMethod GET https://firestore.googleapis.com/v1/projects/ordermanagementsystem-36b41/databases/(default)/documents/users/UfQrLz8apoV4E72hKbORYG8oPqi2 -> PASS
+Invoke-RestMethod POST https://firestore.googleapis.com/v1/projects/ordermanagementsystem-36b41/databases/(default)/documents:commit -> PASS (user/device admin recovery)
+adb -s 192.168.0.192:34559 logcat -d | Select-String -Pattern "LicensingRepository|Validation success|Validation fatal failure|PERMISSION_DENIED" -> PASS (`Validation success: existing_device` after admin recovery)
+```
+
+
+## Phase 12 - First-Device Registration Repair (Current Pass)
+- Confirmed the live denied UID `Zxpy9frULORSaCnRrnLbwMqeRHj1` has a minimal entitlement doc in Firestore: `allowed=true`, `maxDevices=1`, `expiresAt=0`, no `registeredDeviceIds`, and no device docs. That ruled out both the extra-field theory and the missing-`maxDevices` theory for this specific failure.
+- Pulled the deployed `cloud.firestore` ruleset via the Firebase Rules API and verified the live release matches the checked-in `firestore.rules`, so the attached project is definitely running the narrowed `registeredDeviceIds` rule logic from this repo.
+- Narrowed the client registration write shape further:
+  - claim payloads now update only `registeredDeviceIds`
+  - the transaction and batch claim writes now use `update(...)` on `users/{uid}` instead of merge `set(...)`, so the rules engine sees an explicit user-doc update alongside the device-doc write
+- Added a focused JVM regression test to pin that registration claim payload only rewrites `registeredDeviceIds`.
+- Rebuilt, reran focused licensing JVM tests, reran the full JVM suite, redeployed Firestore rules, and reinstalled the debug APK on the attached device.
+- Live end-to-end verification is currently blocked by a device/runtime issue that replaced the earlier permission failure:
+  - Firestore now times out with `WatchStream` `UNAVAILABLE` / `Failed to get document from server`
+  - logcat also shows `GoogleApiManager` `DEVELOPER_ERROR` with `SecurityException: Unknown calling package name 'com.google.android.gms'`
+  - because of that transport-layer failure, the app falls into the offline-grace branch before it can prove or disprove the updated first-device registration write path against live Firebase
+- I am therefore marking the repo/code/rules change as implemented and locally verified, but not claiming a clean live first-device registration proof from this device until the Play-services / Firestore transport issue is cleared.
+
+## Verification Commands And Outcomes (Current Pass Addendum I)
+```text
+Get-Content $env:USERPROFILE\\.config\\configstore\\firebase-tools.json                                                           -> PASS (located Firebase CLI access token source)
+Invoke-RestMethod GET https://firestore.googleapis.com/v1/projects/ordermanagementsystem-36b41/databases/(default)/documents/users/Zxpy9frULORSaCnRrnLbwMqeRHj1 -> PASS (`allowed`, `maxDevices`, `expiresAt` only)
+Invoke-RestMethod GET https://firestore.googleapis.com/v1/projects/ordermanagementsystem-36b41/databases/(default)/documents/users/Zxpy9frULORSaCnRrnLbwMqeRHj1/devices -> PASS (empty)
+Invoke-RestMethod GET https://firebaserules.googleapis.com/v1/projects/ordermanagementsystem-36b41/releases/cloud.firestore      -> PASS
+Invoke-RestMethod GET https://firebaserules.googleapis.com/v1/projects/ordermanagementsystem-36b41/rulesets/f5f8efaf-0c54-4931-9d7e-a09468a23e0a -> PASS (live rules content matches repo)
+./gradlew :app:testDebugUnitTest --tests com.zeynbakers.order_management_system.core.licensing.LicensingRepositoryTest --tests com.zeynbakers.order_management_system.core.licensing.LicensingRegistrationHelpersTest --console=plain --no-daemon -> PASS
+./gradlew :app:testDebugUnitTest --console=plain --no-daemon                                                                      -> PASS
+./gradlew :app:assembleDebug --console=plain --no-daemon                                                                          -> PASS
+cmd /c firebase deploy --only firestore:rules --project ordermanagementsystem-36b41 --non-interactive --force                   -> PASS
+adb -s 192.168.0.192:34559 install -r app\\build\\outputs\\apk\\debug\\app-debug.apk                                             -> PASS
+adb -s 192.168.0.192:34559 logcat -d | Select-String -Pattern "LicensingRepository|Firestore|GoogleApiManager|PERMISSION_DENIED|UNAVAILABLE" -> MIXED (latest run blocked by `UNAVAILABLE` + Play-services `DEVELOPER_ERROR`, not `PERMISSION_DENIED`)
+```
+
+
+## Phase 13 - Entitlement-First Sign-In Policy (Current Pass)
+- Simplified the runtime gate in `LicensingRepository`: once Firestore entitlement fetch succeeds and `allowed=true` (and the entitlement is not expired), the user is allowed into the app.
+- Device handling is now best-effort only for entitled users:
+  - revoked device docs are logged but do not block access
+  - device-limit results are logged but do not block access
+  - registration and heartbeat write failures are logged but do not escalate to `Validation fatal failure`
+- Kept the existing hard blocks for:
+  - missing entitlement doc
+  - `allowed=false`
+  - expired entitlement
+  - offline beyond grace when entitlement cannot be fetched
+- Updated licensing tests to pin the new behavior so entitled users stay allowed even when device enforcement paths fail.
+- Updated the licensing requirements doc to reflect the new entitlement-first runtime policy.
+
+## Verification Commands And Outcomes (Current Pass Addendum J)
+```text
+./gradlew --stop                                                                                                                   -> PASS
+./gradlew :app:testDebugUnitTest --tests com.zeynbakers.order_management_system.core.licensing.LicensingRepositoryTest --console=plain --no-daemon -> PASS
+./gradlew :app:testDebugUnitTest --console=plain --no-daemon                                                                      -> PASS
+./gradlew :app:assembleDebug --console=plain --no-daemon                                                                          -> PASS
+adb -s 192.168.0.192:34559 install -r app\\build\\outputs\\apk\\debug\\app-debug.apk                                             -> PASS
+adb -s 192.168.0.192:34559 logcat -c                                                                                              -> PASS
+adb -s 192.168.0.192:34559 shell am force-stop com.zeynbakers.order_management_system                                            -> PASS
+adb -s 192.168.0.192:34559 shell monkey -p com.zeynbakers.order_management_system -c android.intent.category.LAUNCHER 1         -> PASS
+adb -s 192.168.0.192:34559 logcat -d | Select-String -Pattern "LicensingRepository|Validation success|Validation fatal failure|Validation blocked" -> PASS (`Validation success: existing_device`; no fatal validation log)
+```
+
+
+## Phase 14 - Auth Picker UX Refinement (Current Pass)
+- Refined the signed-out auth surface so the direct Google account chooser is now the primary CTA, matching the preference for a broader visible account list up front.
+- Kept the alternate Google path as a secondary fallback instead of reintroducing any email/password option.
+- Tightened the login copy so the screen now explicitly tells users the app is Google-only and that email/password sign-in is not supported.
+
+## Verification Commands And Outcomes (Current Pass Addendum K)
+```text
+./gradlew :app:assembleDebug --console=plain --no-daemon                                                                           -> FAIL (`GradleWrapperMain` could not create wrapper lock under `C:\Users\CodexSandboxOffline\.gradle\wrapper\dists\...`)
+$env:GRADLE_USER_HOME='C:\\Users\\USER\\Documents\\CODING\\OMS\\.gradle_user_home'; ./gradlew :app:assembleDebug --console=plain --no-daemon -> FAIL (plugin resolution blocked: `com.google.gms.google-services` 4.4.4 could not be resolved from configured repositories in this sandbox)
+git diff -- app/src/main/java/com/zeynbakers/order_management_system/core/licensing/AuthGate.kt app/src/main/res/values/strings.xml plans.md implementation-log.md -> PASS
+```
+
+- Blocker:
+  - Gradle verification is currently blocked in this sandbox because the default wrapper home points at a non-writable profile path, and the writable workspace-local retry still cannot resolve the Google Services Gradle plugin from the configured repositories.
+- Affected files:
+  - `app/src/main/java/com/zeynbakers/order_management_system/core/licensing/AuthGate.kt`
+  - `app/src/main/res/values/strings.xml`
+  - `plans.md`
+  - `implementation-log.md`
+- Attempted fixes:
+  - Retried the build with `GRADLE_USER_HOME` redirected into the writable repo workspace.
+- Next best action:
+  - Re-run `./gradlew :app:assembleDebug --console=plain --no-daemon` in a network-enabled environment with normal Gradle plugin access, or from a machine that already has the required plugin cached locally.
+
+
+## Phase 15 - Dual-Mode Auth UX Refinement (Current Pass)
+- Removed the redundant secondary Google fallback action from the signed-out auth gate and kept the direct Google account chooser as the primary CTA.
+- Added an inline email/password sign-in form to the same auth screen, backed by Firebase Auth `signInWithEmailAndPassword(...)`.
+- Kept the existing entitlement/device validation flow unchanged after either sign-in method succeeds, so authorization still happens in `LicensingRepository`.
+- Updated the copy and licensing requirements doc so the repo now reflects Google-primary plus explicit email/password alternate sign-in.
+
+## Verification Commands And Outcomes (Current Pass Addendum L)
+```text
+rg -n --hidden -S "auth_sign_in_google_fallback|onSignInWithGoogleFallback|GoogleSignInMode|tryRequestGoogleIdToken|auth_sign_in_email_section_title|auth_error_email_password" app/src/main/java app/src/main/res docs -> PASS
+$env:GRADLE_USER_HOME='C:\\Users\\USER\\Documents\\CODING\\OMS\\.gradle_user_home'; ./gradlew :app:assembleDebug --console=plain --no-daemon -> FAIL (plugin resolution blocked: `com.google.gms.google-services` 4.4.4 could not be resolved from configured repositories in this sandbox)
+git diff -- app/src/main/java/com/zeynbakers/order_management_system/core/licensing/AuthGate.kt app/src/main/res/values/strings.xml docs/requirements/licensing.md plans.md implementation-log.md -> PASS
+```
+
+- Blocker:
+  - Focused build verification remains blocked in this sandbox by Gradle plugin resolution for `com.google.gms.google-services`.
+- Attempted fixes:
+  - Reused the workspace-local `GRADLE_USER_HOME` override that avoids the non-writable default wrapper cache path.
+- Next best action:
+  - Re-run `./gradlew :app:assembleDebug --console=plain --no-daemon` on a machine with normal network/plugin access or with the plugin already cached locally.
+
+
+## Phase 16 - Intro Overview UX Refinement (Current Pass)
+- Renamed the intro composable from a pager-oriented name to an overview-oriented one so the code now matches the actual screen model.
+- Removed the duplicate top-app-bar skip action and kept a single bottom secondary action, making the short intro easier to scan.
+- Changed the primary CTA copy so the next step is explicit: the user is continuing into quick setup, not directly into the full app.
+- Added a compact workspace preview card so the intro shows a concrete "Calendar as dashboard" concept before setup begins.
+- Removed leftover unused intro pager helpers and slide-position copy that no longer matched the implemented UX.
+
+## Verification Commands And Outcomes (Current Pass Addendum M)
+```text
+rg -n --hidden -S "IntroOverviewScreen|IntroPagerScreen|intro_next_step_hint|intro_preview_label|intro_slide_position|IntroSlideCard|IntroProgressDots" app/src/main/java app/src/main/res -> PASS
+$env:GRADLE_USER_HOME='C:\\Users\\USER\\Documents\\CODING\\OMS\\.gradle_user_home'; ./gradlew :app:assembleDebug --console=plain --no-daemon -> FAIL (plugin resolution blocked: `com.google.gms.google-services` 4.4.4 could not be resolved from configured repositories in this sandbox)
+git diff -- app/src/main/java/com/zeynbakers/order_management_system/core/navigation/graphs/OnboardingGraph.kt app/src/main/java/com/zeynbakers/order_management_system/core/onboarding/OnboardingScreens.kt app/src/main/res/values/strings.xml plans.md implementation-log.md -> PASS
+```
+
+- Blocker:
+  - Focused intro-screen build verification remains blocked in this sandbox by Gradle plugin resolution for `com.google.gms.google-services`.
+- Attempted fixes:
+  - Reused the workspace-local `GRADLE_USER_HOME` override so the wrapper cache stays inside the writable repo.
+- Next best action:
+  - Re-run `./gradlew :app:assembleDebug --console=plain --no-daemon` in a network-enabled environment or on a machine with the Google Services plugin already cached locally.
+
+
+## Phase 17 - Intro Screen Weight Reduction (Current Pass)
+- Removed the workspace preview card after the heavier composition made the intro feel too dense.
+- Restored the bookings/calendar value as a simple value row so the first-run message still covers the app's main home screen.
+- Kept the useful earlier improvements: single skip action, setup-oriented CTA, and overview-style composable naming.
+
+## Verification Commands And Outcomes (Current Pass Addendum N)
+```text
+rg -n --hidden -S "IntroWorkspacePreviewCard|IntroPreviewChip|IntroPreviewMetricRow|intro_preview_" app/src/main/java app/src/main/res -> PASS (no matches remain)
+$env:GRADLE_USER_HOME='C:\\Users\\USER\\Documents\\CODING\\OMS\\.gradle_user_home'; ./gradlew :app:assembleDebug --console=plain --no-daemon -> FAIL (plugin resolution blocked: `com.google.gms.google-services` 4.4.4 could not be resolved from configured repositories in this sandbox)
+git diff -- app/src/main/java/com/zeynbakers/order_management_system/core/onboarding/OnboardingScreens.kt app/src/main/res/values/strings.xml plans.md implementation-log.md -> PASS
+```
+
+- Blocker:
+  - Focused intro-screen build verification remains blocked in this sandbox by Gradle plugin resolution for `com.google.gms.google-services`.
+- Attempted fixes:
+  - Reused the workspace-local `GRADLE_USER_HOME` override so the wrapper cache stays inside the writable repo.
+- Next best action:
+  - Re-run `./gradlew :app:assembleDebug --console=plain --no-daemon` in a network-enabled environment or on a machine with the Google Services plugin already cached locally.

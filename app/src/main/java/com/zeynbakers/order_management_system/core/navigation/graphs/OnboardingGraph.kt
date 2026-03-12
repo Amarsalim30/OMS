@@ -45,7 +45,7 @@ import com.zeynbakers.order_management_system.core.helper.HelperPermissions
 import com.zeynbakers.order_management_system.core.helper.HelperPreferences
 import com.zeynbakers.order_management_system.core.navigation.AppRoutes
 import com.zeynbakers.order_management_system.core.onboarding.BusinessProfileScreen
-import com.zeynbakers.order_management_system.core.onboarding.IntroPagerScreen
+import com.zeynbakers.order_management_system.core.onboarding.IntroOverviewScreen
 import com.zeynbakers.order_management_system.core.onboarding.OnboardingState
 import com.zeynbakers.order_management_system.core.onboarding.OnboardingPreferences
 import com.zeynbakers.order_management_system.core.onboarding.PermissionPrimerScreen
@@ -61,7 +61,7 @@ internal fun NavGraphBuilder.onboardingGraph(
     composable(AppRoutes.Intro) {
         val prefs = remember { OnboardingPreferences(navController.context) }
         val scope = rememberCoroutineScope()
-        IntroPagerScreen(
+        IntroOverviewScreen(
             onSkip = {
                 scope.launch { prefs.setIntroCompleted(true) }
                 navController.navigate(AppRoutes.SetupChecklist) {

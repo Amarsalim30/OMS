@@ -4,21 +4,30 @@ import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
 import androidx.annotation.StringRes
-import androidx.credentials.Credential
 import androidx.credentials.CredentialManager
-import androidx.credentials.CustomCredential
 import androidx.credentials.GetCredentialRequest
 import androidx.credentials.exceptions.GetCredentialCancellationException
 import androidx.credentials.exceptions.GetCredentialException
 import androidx.credentials.exceptions.NoCredentialException
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Visibility
+import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -31,19 +40,24 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
+import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption
+import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
+import com.google.android.libraries.identity.googleid.GoogleIdTokenParsingException
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.FirebaseAuthException
+import com.google.firebase.auth.FirebaseAuthInvalidCredentialsException
+import com.google.firebase.auth.FirebaseAuthInvalidUserException
 import com.google.firebase.auth.GoogleAuthProvider
 import com.google.firebase.firestore.FirebaseFirestore
-import com.google.android.libraries.identity.googleid.GetGoogleIdOption
-import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
-import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption
-import com.google.android.libraries.identity.googleid.GoogleIdTokenParsingException
 import com.zeynbakers.order_management_system.R
 import com.zeynbakers.order_management_system.core.ui.theme.Order_management_systemTheme
 import androidx.lifecycle.Lifecycle
@@ -126,7 +140,6 @@ internal fun AuthGate(
                     onSignInWithGoogle = {
                         scope.launch {
                             performGoogleSignIn(
-                                mode = GoogleSignInMode.Default,
                                 context = context,
                                 auth = auth,
                                 credentialManager = credentialManager,
@@ -142,13 +155,12 @@ internal fun AuthGate(
                             )
                         }
                     },
-                    onSignInWithGoogleFallback = {
+                    onSignInWithEmailPassword = { email, password ->
                         scope.launch {
-                            performGoogleSignIn(
-                                mode = GoogleSignInMode.ExplicitGoogleButton,
-                                context = context,
+                            performEmailPasswordSignIn(
                                 auth = auth,
-                                credentialManager = credentialManager,
+                                email = email,
+                                password = password,
                                 onAuthStart = {
                                     authInFlight = true
                                     authErrorResId = 0
@@ -202,12 +214,18 @@ private fun LoginScreen(
     inFlight: Boolean,
     errorMessage: String?,
     onSignInWithGoogle: () -> Unit,
-    onSignInWithGoogleFallback: () -> Unit
+    onSignInWithEmailPassword: (String, String) -> Unit
 ) {
+    var email by rememberSaveable { mutableStateOf("") }
+    var password by rememberSaveable { mutableStateOf("") }
+    var passwordVisible by rememberSaveable { mutableStateOf(false) }
+
     Surface(modifier = Modifier.fillMaxSize()) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .imePadding()
                 .padding(horizontal = 24.dp, vertical = 20.dp),
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally
@@ -240,23 +258,84 @@ private fun LoginScreen(
             ) {
                 Text(text = stringResource(R.string.auth_sign_in_google_button))
             }
-            TextButton(
-                onClick = onSignInWithGoogleFallback,
+            Text(
+                text = stringResource(R.string.auth_sign_in_email_section_title),
+                style = MaterialTheme.typography.labelLarge,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 20.dp)
+            )
+            Text(
+                text = stringResource(R.string.auth_sign_in_email_section_hint),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 4.dp)
+            )
+            OutlinedTextField(
+                value = email,
+                onValueChange = { email = it },
+                enabled = !inFlight,
+                label = { Text(text = stringResource(R.string.auth_email_label)) },
+                singleLine = true,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 12.dp)
+            )
+            OutlinedTextField(
+                value = password,
+                onValueChange = { password = it },
+                enabled = !inFlight,
+                label = { Text(text = stringResource(R.string.auth_password_label)) },
+                singleLine = true,
+                visualTransformation = if (passwordVisible) {
+                    VisualTransformation.None
+                } else {
+                    PasswordVisualTransformation()
+                },
+                trailingIcon = {
+                    IconButton(
+                        onClick = { passwordVisible = !passwordVisible },
+                        enabled = !inFlight
+                    ) {
+                        Icon(
+                            imageVector = if (passwordVisible) {
+                                Icons.Filled.VisibilityOff
+                            } else {
+                                Icons.Filled.Visibility
+                            },
+                            contentDescription = stringResource(
+                                if (passwordVisible) {
+                                    R.string.auth_hide_password
+                                } else {
+                                    R.string.auth_show_password
+                                }
+                            )
+                        )
+                    }
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 12.dp)
+            )
+            Button(
+                onClick = {
+                    onSignInWithEmailPassword(
+                        email.trim(),
+                        password
+                    )
+                },
                 enabled = !inFlight,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 8.dp)
+                    .padding(top = 16.dp)
             ) {
-                Text(text = stringResource(R.string.auth_sign_in_google_fallback_button))
+                Text(text = stringResource(R.string.auth_sign_in_email_button))
             }
-            Text(
-                text = stringResource(R.string.auth_sign_in_google_fallback_hint),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 4.dp)
-            )
             if (inFlight) {
-                CircularProgressIndicator(modifier = Modifier.padding(top = 8.dp))
+                Spacer(modifier = Modifier.height(8.dp))
+                CircularProgressIndicator()
             }
         }
     }
@@ -340,13 +419,7 @@ private fun blockedReasonMessageRes(reason: LicensingBlockReason): Int {
     }
 }
 
-private enum class GoogleSignInMode {
-    Default,
-    ExplicitGoogleButton
-}
-
 private suspend fun performGoogleSignIn(
-    mode: GoogleSignInMode,
     context: Context,
     auth: FirebaseAuth,
     credentialManager: CredentialManager,
@@ -363,18 +436,10 @@ private suspend fun performGoogleSignIn(
 
     try {
         val idToken =
-            when (mode) {
-                GoogleSignInMode.Default ->
-                    requestGoogleIdToken(
-                        activity = hostActivity,
-                        credentialManager = credentialManager
-                    )
-                GoogleSignInMode.ExplicitGoogleButton ->
-                    requestGoogleIdTokenWithGoogleButton(
-                        activity = hostActivity,
-                        credentialManager = credentialManager
-                    )
-            }
+            requestGoogleIdTokenWithGoogleButton(
+                activity = hostActivity,
+                credentialManager = credentialManager
+            )
         val firebaseCredential = GoogleAuthProvider.getCredential(idToken, null)
         auth.signInWithCredential(firebaseCredential).await()
         onAuthSuccess()
@@ -389,30 +454,6 @@ private suspend fun performGoogleSignIn(
     } catch (error: Exception) {
         onAuthError(R.string.auth_error_google_firebase_failed)
     }
-}
-
-private suspend fun requestGoogleIdToken(
-    activity: Activity,
-    credentialManager: CredentialManager
-): String {
-    val authorizedAccountToken =
-        try {
-            tryRequestGoogleIdToken(
-                activity = activity,
-                credentialManager = credentialManager,
-                filterByAuthorizedAccounts = true
-            )
-        } catch (_: NoCredentialException) {
-            null
-        }
-    if (!authorizedAccountToken.isNullOrBlank()) {
-        return authorizedAccountToken
-    }
-    return tryRequestGoogleIdToken(
-        activity = activity,
-        credentialManager = credentialManager,
-        filterByAuthorizedAccounts = false
-    ) ?: throw NoCredentialException("No Google account credential available")
 }
 
 private suspend fun requestGoogleIdTokenWithGoogleButton(
@@ -434,29 +475,43 @@ private suspend fun requestGoogleIdTokenWithGoogleButton(
         ?: throw NoCredentialException("No Google account credential available")
 }
 
-private suspend fun tryRequestGoogleIdToken(
-    activity: Activity,
-    credentialManager: CredentialManager,
-    filterByAuthorizedAccounts: Boolean
-): String? {
-    val googleIdOption =
-        GetGoogleIdOption.Builder()
-            .setServerClientId(activity.getString(R.string.default_web_client_id))
-            .setFilterByAuthorizedAccounts(filterByAuthorizedAccounts)
-            .build()
-    val request =
-        GetCredentialRequest.Builder()
-            .addCredentialOption(googleIdOption)
-            .build()
-    val response = credentialManager.getCredential(
-        context = activity,
-        request = request
-    )
-    return credentialToGoogleIdToken(response.credential)
+private suspend fun performEmailPasswordSignIn(
+    auth: FirebaseAuth,
+    email: String,
+    password: String,
+    onAuthStart: () -> Unit,
+    onAuthError: (Int) -> Unit,
+    onAuthSuccess: suspend () -> Unit
+) {
+    onAuthStart()
+
+    if (email.isBlank()) {
+        onAuthError(R.string.auth_error_email_required)
+        return
+    }
+    if (password.isBlank()) {
+        onAuthError(R.string.auth_error_password_required)
+        return
+    }
+
+    try {
+        auth.signInWithEmailAndPassword(email, password).await()
+        onAuthSuccess()
+    } catch (_: FirebaseAuthInvalidCredentialsException) {
+        onAuthError(R.string.auth_error_email_password_invalid)
+    } catch (_: FirebaseAuthInvalidUserException) {
+        onAuthError(R.string.auth_error_email_password_invalid)
+    } catch (_: FirebaseAuthException) {
+        onAuthError(R.string.auth_error_email_password_failed)
+    } catch (_: Exception) {
+        onAuthError(R.string.auth_error_email_password_failed)
+    }
 }
 
-private fun credentialToGoogleIdToken(credential: Credential): String? {
-    if (credential !is CustomCredential) {
+private fun credentialToGoogleIdToken(
+    credential: androidx.credentials.Credential
+): String? {
+    if (credential !is androidx.credentials.CustomCredential) {
         return null
     }
     if (credential.type != GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL) {

@@ -198,9 +198,9 @@
     <string name="intro_title">Welcome</string>
     <string name="intro_one_page_title">Run bookings and payments from one place</string>
     <string name="intro_one_page_body">Set up once, then use Calendar as your daily dashboard for orders, customers, and balances.</string>
-    <string name="intro_skip">Skip</string>
-    <string name="intro_get_started">Get started</string>
-    <string name="intro_slide_position">Slide %1$d of %2$d</string>
+    <string name="intro_skip">Skip intro</string>
+    <string name="intro_get_started">Continue to setup</string>
+    <string name="intro_next_step_hint">Next: quick setup. Required setup comes first; optional steps can wait.</string>
     <string name="intro_slide1_title">See your bookings at a glance</string>
     <string name="intro_slide1_body">Calendar is your home. Open any day and manage work quickly.</string>
     <string name="intro_slide2_title">Track payments per customer</string>
@@ -951,10 +951,15 @@
     <string name="widget_action_note">Voice note</string>
     <string name="licensing_validating">Validating access&#8230;</string>
     <string name="auth_sign_in_title">Sign in required</string>
-    <string name="auth_sign_in_subtitle">Use your approved account to continue.</string>
-    <string name="auth_sign_in_google_button">Sign in with Google</string>
-    <string name="auth_sign_in_google_fallback_button">Try another Google sign-in method</string>
-    <string name="auth_sign_in_google_fallback_hint">If the default prompt fails, this opens Google account selection directly.</string>
+    <string name="auth_sign_in_subtitle">Use your approved Google account or approved email/password to continue.</string>
+    <string name="auth_sign_in_google_button">Choose Google account</string>
+    <string name="auth_sign_in_email_section_title">Or sign in with email</string>
+    <string name="auth_sign_in_email_section_hint">Use the approved email/password credentials issued for your account.</string>
+    <string name="auth_email_label">Email address</string>
+    <string name="auth_password_label">Password</string>
+    <string name="auth_sign_in_email_button">Sign in with email</string>
+    <string name="auth_show_password">Show password</string>
+    <string name="auth_hide_password">Hide password</string>
     <string name="auth_access_blocked_title">Access blocked</string>
     <string name="auth_retry_validation">Retry validation</string>
     <string name="auth_sign_out_button">Sign out</string>
@@ -970,6 +975,10 @@
     <string name="auth_error_google_invalid_credential">Received an invalid Google credential. Try again.</string>
     <string name="auth_error_google_request_failed">Could not start Google sign-in. Check setup and try again.</string>
     <string name="auth_error_google_firebase_failed">Google sign-in failed in Firebase. Try again.</string>
+    <string name="auth_error_email_required">Enter your email address.</string>
+    <string name="auth_error_password_required">Enter your password.</string>
+    <string name="auth_error_email_password_invalid">Invalid email or password.</string>
+    <string name="auth_error_email_password_failed">Email/password sign-in failed. Check your connection and Firebase Auth setup.</string>
     <string-array name="update_notes_latest">
         <item>Share M-PESA messages from Messages directly into the app.</item>
         <item>Oldest-order allocation is now the default when applying payments.</item>

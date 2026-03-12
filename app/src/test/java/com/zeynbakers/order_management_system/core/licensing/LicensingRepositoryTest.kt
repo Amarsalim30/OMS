@@ -1,6 +1,5 @@
 package com.zeynbakers.order_management_system.core.licensing
 
-import com.google.firebase.firestore.FirebaseFirestoreException
 import java.io.IOException
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
@@ -52,7 +51,7 @@ class LicensingRepositoryTest {
     }
 
     @Test
-    fun `blocks when current device is revoked`() = runBlocking {
+    fun `allows when current device is revoked but entitlement is allowed`() = runBlocking {
         val remote =
             FakeLicensingRemoteStore(
                 entitlement = allowedEntitlement(),
@@ -63,9 +62,10 @@ class LicensingRepositoryTest {
 
         val result = repository.validateSignedInUser(USER_ID)
 
-        assertBlocked(result, LicensingBlockReason.DeviceRevoked)
+        assertEquals(LicensingValidationResult.Allowed, result)
         assertTrue(remote.touchCalls.isEmpty())
         assertTrue(remote.registerCalls.isEmpty())
+        assertEquals(listOf(ValidationUpdate(USER_ID, NOW_MILLIS)), cache.validationUpdates)
     }
 
     @Test
@@ -122,13 +122,13 @@ class LicensingRepositoryTest {
     }
 
     @Test
-    fun `falls back to legacy registration when transaction path is permission denied`() = runBlocking {
+    fun `falls back to batched claim registration when transaction path is permission denied`() = runBlocking {
         val remote =
             FakeLicensingRemoteStore(
                 entitlement = allowedEntitlement(maxDevices = 2),
                 device = null,
                 registerFailure = LegacyDeviceRegistrationFallbackException(IllegalStateException("permission denied")),
-                legacyRegisterResult = LicensingDeviceRegistrationResult.Registered
+                batchRegisterResult = LicensingDeviceRegistrationResult.Registered
             )
         val cache = FakeLicensingCacheStore()
         val repository = LicensingRepository(remote, cache) { NOW_MILLIS }
@@ -137,12 +137,13 @@ class LicensingRepositoryTest {
 
         assertEquals(LicensingValidationResult.Allowed, result)
         assertEquals(listOf(DeviceWrite(USER_ID, INSTALL_ID, NOW_MILLIS)), remote.registerCalls)
-        assertEquals(listOf(DeviceWrite(USER_ID, INSTALL_ID, NOW_MILLIS)), remote.legacyRegisterCalls)
+        assertEquals(listOf(DeviceWrite(USER_ID, INSTALL_ID, NOW_MILLIS)), remote.batchRegisterCalls)
+        assertTrue(remote.legacyRegisterCalls.isEmpty())
         assertEquals(listOf(ValidationUpdate(USER_ID, NOW_MILLIS)), cache.validationUpdates)
     }
 
     @Test
-    fun `falls back to legacy registration when firestore compatibility error is nested`() = runBlocking {
+    fun `falls back to batched claim registration when compatibility wrapper is nested`() = runBlocking {
         val remote =
             FakeLicensingRemoteStore(
                 entitlement = allowedEntitlement(maxDevices = 2),
@@ -150,11 +151,32 @@ class LicensingRepositoryTest {
                 registerFailure =
                     IllegalStateException(
                         "transaction failed",
-                        FirebaseFirestoreException(
-                            "permission denied",
-                            FirebaseFirestoreException.Code.PERMISSION_DENIED
+                        LegacyDeviceRegistrationFallbackException(
+                            IllegalStateException("permission denied")
                         )
                     ),
+                batchRegisterResult = LicensingDeviceRegistrationResult.Registered
+            )
+        val cache = FakeLicensingCacheStore()
+        val repository = LicensingRepository(remote, cache) { NOW_MILLIS }
+
+        val result = repository.validateSignedInUser(USER_ID)
+
+        assertEquals(LicensingValidationResult.Allowed, result)
+        assertEquals(listOf(DeviceWrite(USER_ID, INSTALL_ID, NOW_MILLIS)), remote.registerCalls)
+        assertEquals(listOf(DeviceWrite(USER_ID, INSTALL_ID, NOW_MILLIS)), remote.batchRegisterCalls)
+        assertTrue(remote.legacyRegisterCalls.isEmpty())
+        assertEquals(listOf(ValidationUpdate(USER_ID, NOW_MILLIS)), cache.validationUpdates)
+    }
+
+    @Test
+    fun `falls back to legacy registration when batched claim path is also denied`() = runBlocking {
+        val remote =
+            FakeLicensingRemoteStore(
+                entitlement = allowedEntitlement(maxDevices = 2),
+                device = null,
+                registerFailure = LegacyDeviceRegistrationFallbackException(IllegalStateException("permission denied")),
+                batchRegisterFailure = LegacyDeviceRegistrationFallbackException(IllegalStateException("permission denied")),
                 legacyRegisterResult = LicensingDeviceRegistrationResult.Registered
             )
         val cache = FakeLicensingCacheStore()
@@ -164,32 +186,34 @@ class LicensingRepositoryTest {
 
         assertEquals(LicensingValidationResult.Allowed, result)
         assertEquals(listOf(DeviceWrite(USER_ID, INSTALL_ID, NOW_MILLIS)), remote.registerCalls)
+        assertEquals(listOf(DeviceWrite(USER_ID, INSTALL_ID, NOW_MILLIS)), remote.batchRegisterCalls)
         assertEquals(listOf(DeviceWrite(USER_ID, INSTALL_ID, NOW_MILLIS)), remote.legacyRegisterCalls)
         assertEquals(listOf(ValidationUpdate(USER_ID, NOW_MILLIS)), cache.validationUpdates)
     }
 
     @Test
-    fun `blocks with device limit when legacy compatibility registration has no capacity`() = runBlocking {
+    fun `allows when batched claim registration has no capacity but entitlement is allowed`() = runBlocking {
         val remote =
             FakeLicensingRemoteStore(
                 entitlement = allowedEntitlement(maxDevices = 1),
                 device = null,
                 registerFailure = LegacyDeviceRegistrationFallbackException(IllegalStateException("permission denied")),
-                legacyRegisterResult = LicensingDeviceRegistrationResult.DeviceLimitReached
+                batchRegisterResult = LicensingDeviceRegistrationResult.DeviceLimitReached
             )
         val cache = FakeLicensingCacheStore()
         val repository = LicensingRepository(remote, cache) { NOW_MILLIS }
 
         val result = repository.validateSignedInUser(USER_ID)
 
-        assertBlocked(result, LicensingBlockReason.DeviceLimitReached)
+        assertEquals(LicensingValidationResult.Allowed, result)
         assertEquals(listOf(DeviceWrite(USER_ID, INSTALL_ID, NOW_MILLIS)), remote.registerCalls)
-        assertEquals(listOf(DeviceWrite(USER_ID, INSTALL_ID, NOW_MILLIS)), remote.legacyRegisterCalls)
-        assertTrue(cache.validationUpdates.isEmpty())
+        assertEquals(listOf(DeviceWrite(USER_ID, INSTALL_ID, NOW_MILLIS)), remote.batchRegisterCalls)
+        assertTrue(remote.legacyRegisterCalls.isEmpty())
+        assertEquals(listOf(ValidationUpdate(USER_ID, NOW_MILLIS)), cache.validationUpdates)
     }
 
     @Test
-    fun `blocks when max devices has been reached`() = runBlocking {
+    fun `allows when max devices has been reached but entitlement is allowed`() = runBlocking {
         val remote =
             FakeLicensingRemoteStore(
                 entitlement = allowedEntitlement(maxDevices = 1),
@@ -201,13 +225,13 @@ class LicensingRepositoryTest {
 
         val result = repository.validateSignedInUser(USER_ID)
 
-        assertBlocked(result, LicensingBlockReason.DeviceLimitReached)
+        assertEquals(LicensingValidationResult.Allowed, result)
         assertEquals(listOf(DeviceWrite(USER_ID, INSTALL_ID, NOW_MILLIS)), remote.registerCalls)
-        assertTrue(cache.validationUpdates.isEmpty())
+        assertEquals(listOf(ValidationUpdate(USER_ID, NOW_MILLIS)), cache.validationUpdates)
     }
 
     @Test
-    fun `blocks validation failure when registration fails for non compatibility reason`() = runBlocking {
+    fun `allows when registration fails for non compatibility reason after entitlement validation`() = runBlocking {
         val remote =
             FakeLicensingRemoteStore(
                 entitlement = allowedEntitlement(maxDevices = 2),
@@ -219,10 +243,32 @@ class LicensingRepositoryTest {
 
         val result = repository.validateSignedInUser(USER_ID)
 
-        assertBlocked(result, LicensingBlockReason.ValidationFailed)
+        assertEquals(LicensingValidationResult.Allowed, result)
         assertEquals(listOf(DeviceWrite(USER_ID, INSTALL_ID, NOW_MILLIS)), remote.registerCalls)
+        assertTrue(remote.batchRegisterCalls.isEmpty())
         assertTrue(remote.legacyRegisterCalls.isEmpty())
-        assertTrue(cache.validationUpdates.isEmpty())
+        assertEquals(listOf(ValidationUpdate(USER_ID, NOW_MILLIS)), cache.validationUpdates)
+    }
+
+    @Test
+    fun `allows when batched claim fallback fails for non compatibility reason after entitlement validation`() = runBlocking {
+        val remote =
+            FakeLicensingRemoteStore(
+                entitlement = allowedEntitlement(maxDevices = 2),
+                device = null,
+                registerFailure = LegacyDeviceRegistrationFallbackException(IllegalStateException("permission denied")),
+                batchRegisterFailure = IllegalStateException("unexpected batch failure")
+            )
+        val cache = FakeLicensingCacheStore()
+        val repository = LicensingRepository(remote, cache) { NOW_MILLIS }
+
+        val result = repository.validateSignedInUser(USER_ID)
+
+        assertEquals(LicensingValidationResult.Allowed, result)
+        assertEquals(listOf(DeviceWrite(USER_ID, INSTALL_ID, NOW_MILLIS)), remote.registerCalls)
+        assertEquals(listOf(DeviceWrite(USER_ID, INSTALL_ID, NOW_MILLIS)), remote.batchRegisterCalls)
+        assertTrue(remote.legacyRegisterCalls.isEmpty())
+        assertEquals(listOf(ValidationUpdate(USER_ID, NOW_MILLIS)), cache.validationUpdates)
     }
 
     @Test
@@ -297,14 +343,17 @@ class LicensingRepositoryTest {
         private val entitlement: LicensingEntitlement?,
         private val device: LicensingDeviceRecord? = null,
         private val registerResult: LicensingDeviceRegistrationResult = LicensingDeviceRegistrationResult.Registered,
+        private val batchRegisterResult: LicensingDeviceRegistrationResult = LicensingDeviceRegistrationResult.Registered,
         private val legacyRegisterResult: LicensingDeviceRegistrationResult = LicensingDeviceRegistrationResult.Registered,
         private val failure: Exception? = null,
         private val touchFailure: Exception? = null,
         private val registerFailure: Exception? = null,
+        private val batchRegisterFailure: Exception? = null,
         private val legacyRegisterFailure: Exception? = null
     ) : LicensingRemoteStore {
         val touchCalls = mutableListOf<DeviceWrite>()
         val registerCalls = mutableListOf<DeviceWrite>()
+        val batchRegisterCalls = mutableListOf<DeviceWrite>()
         val legacyRegisterCalls = mutableListOf<DeviceWrite>()
 
         override suspend fun getEntitlement(uid: String): LicensingEntitlement? {
@@ -331,6 +380,17 @@ class LicensingRepositoryTest {
             registerCalls += DeviceWrite(uid, deviceId, nowMillis)
             maybeThrow(registerFailure)
             return registerResult
+        }
+
+        override suspend fun registerDeviceClaimBatch(
+            uid: String,
+            deviceId: String,
+            nowMillis: Long,
+            entitlement: LicensingEntitlement
+        ): LicensingDeviceRegistrationResult {
+            batchRegisterCalls += DeviceWrite(uid, deviceId, nowMillis)
+            maybeThrow(batchRegisterFailure)
+            return batchRegisterResult
         }
 
         override suspend fun registerDeviceLegacy(

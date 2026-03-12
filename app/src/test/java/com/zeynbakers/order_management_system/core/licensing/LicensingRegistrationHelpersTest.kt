@@ -8,6 +8,14 @@ import org.junit.Test
 class LicensingRegistrationHelpersTest {
 
     @Test
+    fun `registeredDeviceClaimPayload only rewrites claimed device ids`() {
+        assertEquals(
+            mapOf("registeredDeviceIds" to listOf("device-a", "device-b")),
+            registeredDeviceClaimPayload(linkedSetOf("device-a", "device-b"))
+        )
+    }
+
+    @Test
     fun `exceedsActiveDeviceLimit ignores stale claimed device ids`() {
         val activeDeviceIds = linkedSetOf("active-device")
 

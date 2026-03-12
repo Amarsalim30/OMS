@@ -120,7 +120,7 @@ fun SplashScreen(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun IntroPagerScreen(
+fun IntroOverviewScreen(
     onSkip: () -> Unit,
     onFinish: () -> Unit
 ) {
@@ -146,12 +146,7 @@ fun IntroPagerScreen(
         contentWindowInsets = WindowInsets.safeDrawing,
         topBar = {
             CenterAlignedTopAppBar(
-                title = { Text(stringResource(R.string.intro_title)) },
-                actions = {
-                    TextButton(onClick = onSkip) {
-                        Text(stringResource(R.string.intro_skip))
-                    }
-                }
+                title = { Text(stringResource(R.string.intro_title)) }
             )
         }
     ) { padding ->
@@ -184,6 +179,13 @@ fun IntroPagerScreen(
                     IntroValueRow(item = item)
                 }
             }
+
+            Text(
+                text = stringResource(R.string.intro_next_step_hint),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.fillMaxWidth()
+            )
 
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -842,27 +844,6 @@ fun BusinessProfileScreen(
 }
 
 @Composable
-private fun IntroSlideCard(slide: IntroSlide, index: Int, total: Int) {
-    AppCard(modifier = Modifier.fillMaxWidth()) {
-        Text(
-            text = stringResource(R.string.intro_slide_position, index, total),
-            style = MaterialTheme.typography.labelMedium,
-            color = MaterialTheme.colorScheme.primary
-        )
-        Text(
-            text = slide.title,
-            style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.SemiBold
-        )
-        Text(
-            text = slide.body,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-    }
-}
-
-@Composable
 private fun IntroValueRow(item: IntroValueItem) {
     AppCard {
         Row(
@@ -983,35 +964,3 @@ private data class IntroValueItem(
     val title: String,
     val body: String
 )
-
-private data class IntroSlide(
-    val title: String,
-    val body: String
-)
-
-@Composable
-private fun IntroProgressDots(
-    current: Int,
-    total: Int,
-    modifier: Modifier = Modifier
-) {
-    Row(
-        modifier = modifier,
-        horizontalArrangement = Arrangement.Center
-    ) {
-        repeat(total) { index ->
-            Box(
-                modifier =
-                    Modifier
-                        .padding(horizontal = 4.dp)
-                        .size(if (index == current) 10.dp else 8.dp)
-                        .background(
-                            color =
-                                if (index == current) MaterialTheme.colorScheme.primary
-                                else MaterialTheme.colorScheme.outline.copy(alpha = 0.45f),
-                            shape = CircleShape
-                        )
-            )
-        }
-    }
-}
