@@ -7,8 +7,10 @@ import android.content.ContextWrapper
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
+import android.provider.DocumentsContract
 import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContract
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -38,6 +40,7 @@ import androidx.navigation.compose.composable
 import com.zeynbakers.order_management_system.R
 import com.zeynbakers.order_management_system.core.backup.BackupPreferences
 import com.zeynbakers.order_management_system.core.backup.BackupScheduler
+import com.zeynbakers.order_management_system.core.backup.BackupTargetHealth
 import com.zeynbakers.order_management_system.core.backup.BackupTargetType
 import com.zeynbakers.order_management_system.core.backup.persistSafUriPermission
 import com.zeynbakers.order_management_system.core.helper.HelperOverlayController
@@ -98,6 +101,33 @@ internal fun NavGraphBuilder.onboardingGraph(
         val helperState by helperPrefs.state.collectAsState(initial = com.zeynbakers.order_management_system.core.helper.HelperSettingsState())
         var helperMicPermissionGranted by remember { mutableStateOf(hasRecordPermission(context)) }
         var helperOverlayPermissionGranted by remember { mutableStateOf(HelperPermissions.hasOverlayPermission(context)) }
+        val persistFlags =
+            Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+        val updateBackupTarget: (android.net.Uri, Int) -> Unit = backupTarget@{ uri, resultFlags ->
+            val persisted =
+                persistSafUriPermission(
+                    context = context,
+                    uri = uri,
+                    resultFlags = resultFlags,
+                    requiredFlags = persistFlags
+                )
+            if (!persisted) {
+                return@backupTarget
+            }
+
+            val displayName =
+                runCatching { DocumentFile.fromSingleUri(context, uri)?.name?.takeIf { it.isNotBlank() } }
+                    .getOrNull()
+            backupPrefs.setFileTargetSelection(
+                uri = uri.toString(),
+                displayName = displayName,
+                authority = uri.authority
+            )
+            backupPrefs.setAutoEnabled(true)
+            BackupScheduler.ensureScheduled(context)
+            backupState = backupPrefs.readState()
+            scope.launch { prefs.setBackupSetupDone(true) }
+        }
 
         val contactsPermissionPermanentlyDenied =
             !contactsPermissionGranted &&
@@ -144,29 +174,12 @@ internal fun NavGraphBuilder.onboardingGraph(
                 ActivityResultContracts.CreateDocument("application/octet-stream")
             ) { uri ->
                 if (uri == null) return@rememberLauncherForActivityResult
-                val persistFlags =
-                    Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
-                val persisted =
-                    persistSafUriPermission(
-                        context = context,
-                        uri = uri,
-                        resultFlags = 0,
-                        requiredFlags = persistFlags
-                    )
-                if (!persisted) return@rememberLauncherForActivityResult
-
-                val displayName =
-                    runCatching { DocumentFile.fromSingleUri(context, uri)?.name?.takeIf { it.isNotBlank() } }
-                        .getOrNull()
-                backupPrefs.setFileTargetSelection(
-                    uri = uri.toString(),
-                    displayName = displayName,
-                    authority = uri.authority
-                )
-                backupPrefs.setAutoEnabled(true)
-                BackupScheduler.ensureScheduled(context)
-                backupState = backupPrefs.readState()
-                scope.launch { prefs.setBackupSetupDone(true) }
+                updateBackupTarget(uri, 0)
+            }
+        val relinkBackupFileLauncher =
+            rememberLauncherForActivityResult(OpenWritableBackupDocumentContract()) { result ->
+                val uri = result.uri ?: return@rememberLauncherForActivityResult
+                updateBackupTarget(uri, result.flags)
             }
 
         DisposableEffect(lifecycleOwner) {
@@ -188,7 +201,13 @@ internal fun NavGraphBuilder.onboardingGraph(
 
         val hasBackupFile =
             backupState.targetType == BackupTargetType.SafFile && backupState.targetUri?.isNotBlank() == true
-        val backupConfigured = hasBackupFile
+        val backupTargetHealth =
+            if (hasBackupFile) {
+                backupState.targetHealth
+            } else {
+                null
+            }
+        val backupConfigured = hasBackupFile && backupTargetHealth == BackupTargetHealth.Healthy
         val contactsConfigured = state.contactsSetupDone
         val helperConfigured = state.helperSetupDone || helperState.enabled
         val backupTargetLabel =
@@ -203,6 +222,7 @@ internal fun NavGraphBuilder.onboardingGraph(
             onboardingState = state,
             backupConfigured = backupConfigured,
             backupTargetLabel = backupTargetLabel,
+            backupTargetHealth = backupTargetHealth,
             contactsConfigured = contactsConfigured,
             contactsPermissionGranted = contactsPermissionGranted,
             contactsPermissionPermanentlyDenied = contactsPermissionPermanentlyDenied,
@@ -221,7 +241,10 @@ internal fun NavGraphBuilder.onboardingGraph(
                 }
             },
             onChooseBackupFile = {
-                backupFileLauncher.launch("intialsetupbackupsave.oms")
+                backupFileLauncher.launch("backup_latest.oms")
+            },
+            onOpenExistingBackupFile = {
+                relinkBackupFileLauncher.launch(Unit)
             },
             onRequestContactsPermission = {
                 if (contactsPermissionGranted) {
@@ -529,4 +552,29 @@ private fun openAppSettings(context: Context) {
             android.net.Uri.fromParts("package", context.packageName, null)
         ).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
     context.startActivity(intent)
+}
+
+private data class BackupPickerResult(
+    val uri: android.net.Uri?,
+    val flags: Int
+)
+
+private class OpenWritableBackupDocumentContract : ActivityResultContract<Unit, BackupPickerResult>() {
+    override fun createIntent(context: Context, input: Unit): Intent {
+        return Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+            addCategory(Intent.CATEGORY_OPENABLE)
+            type = "*/*"
+            addFlags(
+                Intent.FLAG_GRANT_READ_URI_PERMISSION or
+                    Intent.FLAG_GRANT_WRITE_URI_PERMISSION or
+                    Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION
+            )
+            putExtra(DocumentsContract.EXTRA_PROMPT, context.getString(R.string.backup_choose_file))
+        }
+    }
+
+    override fun parseResult(resultCode: Int, intent: Intent?): BackupPickerResult {
+        if (resultCode != Activity.RESULT_OK) return BackupPickerResult(null, 0)
+        return BackupPickerResult(uri = intent?.data, flags = intent?.flags ?: 0)
+    }
 }
