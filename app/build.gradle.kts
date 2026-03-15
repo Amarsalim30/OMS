@@ -4,8 +4,12 @@ plugins {
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.ksp)
+    alias(libs.plugins.paparazzi)
+    alias(libs.plugins.detekt)
     id("com.google.gms.google-services")
 }
+
+apply(plugin = "shot")
 
 android {
     namespace = "com.zeynbakers.order_management_system"
@@ -18,7 +22,7 @@ android {
         versionCode = 8
         versionName = "3.0"
 
-        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        testInstrumentationRunner = "com.zeynbakers.order_management_system.core.testing.UiTestRunner"
     }
 
     buildTypes {
@@ -43,6 +47,9 @@ android {
         compose = true
         buildConfig = true
     }
+    testOptions {
+        unitTests.isIncludeAndroidResources = true
+    }
     sourceSets {
         getByName("androidTest") {
             assets.srcDir("$projectDir/schemas")
@@ -51,6 +58,11 @@ android {
     composeOptions {
         kotlinCompilerExtensionVersion = "1.5.4"
     }
+}
+
+detekt {
+    buildUponDefaultConfig = true
+    config = files("$rootDir/config/detekt/detekt.yml")
 }
 
 ksp {
@@ -117,12 +129,16 @@ dependencies {
 
     // Testing
     testImplementation(libs.junit)
+    testImplementation(libs.paparazzi)
+    detektPlugins(libs.detekt.compose.rules)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.ui.test.junit4)
     androidTestImplementation(libs.androidx.test.core)
     androidTestImplementation(libs.androidx.room.testing)
+    androidTestImplementation(libs.accessibility.test.framework)
+    lintChecks(libs.compose.lint.checks)
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)
     coreLibraryDesugaring(libs.desugar.jdk.libs)

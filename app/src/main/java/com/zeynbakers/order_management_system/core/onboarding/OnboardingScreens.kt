@@ -1,4 +1,4 @@
-package com.zeynbakers.order_management_system.core.onboarding
+    package com.zeynbakers.order_management_system.core.onboarding
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box

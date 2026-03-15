@@ -1,0 +1,27 @@
+build:
+  maxIssues: 0
+
+config:
+  validation: true
+
+complexity:
+  LongMethod:
+    active: true
+    threshold: 60
+  NestedBlockDepth:
+    active: true
+    threshold: 4
+
+style:
+  MagicNumber:
+    active: false
+
+Compose:
+  MutableParams:
+    active: true
+  MutableStateParam:
+    active: true
+  RememberMissing:
+    active: true
+  RememberContentMissing:
+    active: true

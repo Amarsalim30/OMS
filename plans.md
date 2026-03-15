@@ -284,3 +284,26 @@ Date: 2026-03-07
   - `./gradlew :app:testDebugUnitTest --tests com.zeynbakers.order_management_system.customer.domain.ContactsSyncEngineTest --console=plain --no-daemon`
   - `./gradlew :app:assembleDebug --console=plain --no-daemon`
   - `git diff -- app/src/main/java/com/zeynbakers/order_management_system/customer/domain/ContactsSyncEngine.kt app/src/main/java/com/zeynbakers/order_management_system/customer/ui/CustomerAccountsViewModel.kt app/src/main/java/com/zeynbakers/order_management_system/customer/ui/ImportContactsScreen.kt app/src/main/java/com/zeynbakers/order_management_system/core/navigation/graphs/CustomersGraph.kt app/src/main/res/values/strings.xml app/src/test/java/com/zeynbakers/order_management_system/customer/domain/ContactsSyncEngineTest.kt plans.md implementation-log.md`
+
+
+## Milestone 23 - UI/UX Automation Tooling Setup (Current Pass)
+- Acceptance criteria:
+  - Accessibility checks run automatically in instrumentation tests via a custom runner.
+  - Paparazzi plugin + dependency are wired for local screenshot tests.
+  - Shot plugin is enabled for screenshot regression testing.
+  - Compose lint checks run as part of `lintDebug`.
+- Verification commands:
+  - `./gradlew :app:lintDebug --console=plain --no-daemon`
+  - `./gradlew :app:testDebugUnitTest --console=plain --no-daemon`
+  - `./gradlew :app:assembleDebug --console=plain --no-daemon`
+
+
+## Milestone 24 - Compose Lints + Detekt Static Analysis (Current Pass)
+- Acceptance criteria:
+  - Compose lint checks use `compose-lint-checks:1.3.0` and stay wired into `lintDebug`.
+  - Detekt plugin is enabled for the app module with a shared config at `config/detekt/detekt.yml`.
+  - Detekt config enforces max function length and nesting depth thresholds to catch large composables.
+  - Compose-specific Detekt rules are enabled via `io.nlopez.compose.rules:detekt`.
+- Verification commands:
+  - `./gradlew :app:detekt --console=plain --no-daemon`
+  - `./gradlew :app:lintDebug --console=plain --no-daemon`

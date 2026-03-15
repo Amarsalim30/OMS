@@ -524,3 +524,54 @@ git diff -- app/src/main/java/com/zeynbakers/order_management_system/customer/do
   - Reused the workspace-local `GRADLE_USER_HOME` override so wrapper state stays inside the writable repo and retried both the targeted unit-test invocation and `:app:assembleDebug`.
 - Next best action:
   - Re-run `./gradlew :app:testDebugUnitTest --tests com.zeynbakers.order_management_system.customer.domain.ContactsSyncEngineTest --console=plain --no-daemon` and `./gradlew :app:assembleDebug --console=plain --no-daemon` on a machine with the Google Services plugin already cached or with network access enabled for dependency resolution.
+
+
+## Phase 23 - UI/UX Automation Tooling Setup (Current Pass)
+- Added the Accessibility Test Framework to instrumentation tests and wired a custom runner that enables accessibility checks while extending Shot's runner.
+- Added the Paparazzi plugin and test dependency, plus enabled Android resources in unit tests for screenshot rendering.
+- Added the Shot Gradle plugin classpath and applied the plugin in the app module.
+- Added Compose lint checks through `lintChecks` to surface Compose-specific issues during lint.
+
+## Verification Commands And Outcomes (Current Pass Addendum T)
+```text
+$env:GRADLE_USER_HOME='C:\\Users\\USER\\Documents\\CODING\\OMS\\.gradle_user_home'; ./gradlew :app:lintDebug --console=plain --no-daemon -> FAIL (command timed out after 120s; no Gradle output captured in this sandbox)
+```
+
+- Blocker:
+  - `lintDebug` did not complete within the sandbox timeout, and Gradle output was not captured by the runner.
+- Attempted fixes:
+  - Retried with the workspace-local `GRADLE_USER_HOME` override to keep caches inside the repo.
+- Next best action:
+  - Re-run `./gradlew :app:lintDebug --console=plain --no-daemon` in a network-enabled environment or with a longer timeout to confirm plugin resolution and lint results.
+
+
+## Phase 24 - Compose Lints + Detekt Static Analysis (Current Pass)
+- Pinned Compose lints to `compose-lint-checks:1.3.0` and kept them wired through `lintChecks` for lintDebug.
+- Updated Detekt to `1.23.8` to align with Kotlin 2.0.21 compatibility in the Compose rules matrix.
+- Added the Detekt plugin to the app module with a shared config at `config/detekt/detekt.yml`.
+- Added baseline Detekt thresholds for long composables (`LongMethod`) and deep nesting (`NestedBlockDepth`).
+- Added Compose-specific Detekt rules via `io.nlopez.compose.rules:detekt` for state-hoisting and remember misuse checks.
+
+## Verification Commands And Outcomes (Current Pass Addendum U)
+```text
+$env:GRADLE_USER_HOME='C:\\Users\\USER\\Documents\\CODING\\OMS\\.gradle_user_home'; ./gradlew :app:detekt --console=plain --no-daemon -> FAIL (command timed out after 120s; no Gradle output captured in this sandbox)
+```
+
+- Blocker:
+  - `detekt` did not complete within the sandbox timeout, and Gradle output was not captured by the runner.
+- Attempted fixes:
+  - Retried with the workspace-local `GRADLE_USER_HOME` override to keep caches inside the repo.
+- Next best action:
+  - Re-run `./gradlew :app:detekt --console=plain --no-daemon` in a network-enabled environment or with a longer timeout to confirm plugin resolution and Detekt results.
+
+## Verification Commands And Outcomes (Current Pass Addendum V)
+```text
+$env:GRADLE_USER_HOME='C:\\Users\\USER\\Documents\\CODING\\OMS\\.gradle_user_home'; ./gradlew :app:detekt --console=plain --no-daemon -> FAIL (command timed out after 120s; no Gradle output captured in this sandbox)
+```
+
+- Blocker:
+  - Detekt still timed out in this sandbox after adding Compose rules.
+- Attempted fixes:
+  - Retried with the workspace-local `GRADLE_USER_HOME` override to keep caches inside the repo.
+- Next best action:
+  - Re-run `./gradlew :app:detekt --console=plain --no-daemon` with a longer timeout or on a machine with Gradle dependencies already cached.
