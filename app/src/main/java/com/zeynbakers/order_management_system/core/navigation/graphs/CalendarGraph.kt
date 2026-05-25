@@ -1,6 +1,12 @@
 package com.zeynbakers.order_management_system.core.navigation.graphs
 
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
@@ -13,7 +19,9 @@ import com.zeynbakers.order_management_system.AppFeatureSupportActions
 import com.zeynbakers.order_management_system.MoneyRecordContext
 import com.zeynbakers.order_management_system.navigateTopLevel
 import com.zeynbakers.order_management_system.accounting.ui.PaymentHistoryFilter
+import com.zeynbakers.order_management_system.R
 import com.zeynbakers.order_management_system.core.navigation.AppRoutes
+import com.zeynbakers.order_management_system.core.onboarding.OnboardingPreferences
 import com.zeynbakers.order_management_system.core.notifications.NotificationScheduler
 import com.zeynbakers.order_management_system.core.widget.WidgetUpdater
 import com.zeynbakers.order_management_system.order.ui.CalendarScreen
@@ -134,6 +142,13 @@ internal fun NavGraphBuilder.calendarGraph(
             calendarCallbacks.onSelectedDateChange(date)
             orderViewModel.loadOrdersForDate(date)
         }
+        val context = LocalContext.current
+        val appName = stringResource(R.string.app_name)
+        var storeName by remember { mutableStateOf(appName) }
+        LaunchedEffect(Unit) {
+            val businessName = OnboardingPreferences(context).readState().businessName.trim()
+            storeName = businessName.ifBlank { appName }
+        }
         DayDetailScreen(
             date = date,
             orders = calendarState.ordersForDate,
@@ -205,7 +220,8 @@ internal fun NavGraphBuilder.calendarGraph(
                 } else {
                     calendarState.dayDrafts[date] = updated
                 }
-            }
+            },
+            storeName = storeName
         )
     }
 

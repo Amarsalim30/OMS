@@ -73,7 +73,8 @@ internal fun DayOrderEditorDialog(
     onSetNotesError: (String?) -> Unit,
     onSetTotalError: (String?) -> Unit,
     onSetCustomerError: (String?) -> Unit,
-    onSetEditorOpen: (Boolean) -> Unit
+    onSetEditorOpen: (Boolean) -> Unit,
+    onPrintReceipt: (() -> Unit)? = null
 ) {
     if (!isEditorOpen) return
 
@@ -228,6 +229,7 @@ internal fun DayOrderEditorDialog(
             onDraftChange(null)
         },
         onCancel = { onSetEditorOpen(false) },
+        onPrintReceipt = onPrintReceipt,
         onNotesFocused = { voiceRouter.onFocusTarget(VoiceTarget.Notes) },
         onTotalFocused = { setter ->
             amountRegistry.update(setter)

@@ -127,6 +127,8 @@ dependencies {
     implementation(libs.androidx.compose.material.icons.extended)
     implementation(libs.androidx.compose.runtime.livedata)
 
+    implementation("com.github.DantSu:ESCPOS-ThermalPrinter-Android:3.3.0")
+
     // Testing
     testImplementation(libs.junit)
     testImplementation(libs.paparazzi)

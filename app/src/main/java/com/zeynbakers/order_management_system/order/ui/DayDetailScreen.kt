@@ -1,6 +1,8 @@
 package com.zeynbakers.order_management_system.order.ui
 
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -33,6 +35,8 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.SwipeToDismissBox
 import androidx.compose.material3.SwipeToDismissBoxState
@@ -49,10 +53,12 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -65,10 +71,16 @@ import com.zeynbakers.order_management_system.core.ui.LocalVoiceOverlaySuppresse
 import com.zeynbakers.order_management_system.core.ui.components.AppFilterRow
 import com.zeynbakers.order_management_system.customer.data.CustomerEntity
 import com.zeynbakers.order_management_system.order.data.OrderEntity
+import com.zeynbakers.order_management_system.order.printing.BluetoothPrintPermissions
+import com.zeynbakers.order_management_system.order.printing.BluetoothPrinterManager
+import com.zeynbakers.order_management_system.order.printing.PairedBluetoothPrinter
+import com.zeynbakers.order_management_system.order.printing.PrinterPreferences
+import com.zeynbakers.order_management_system.order.printing.ReceiptFormatter
 import java.math.BigDecimal
 import java.text.NumberFormat
 import java.util.Locale
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.datetime.LocalDate
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
@@ -98,7 +110,8 @@ fun DayDetailScreen(
         searchCustomers: suspend (String) -> List<CustomerEntity>,
         initialFocusOrderId: Long? = null,
         draft: OrderDraft?,
-        onDraftChange: (OrderDraft?) -> Unit
+        onDraftChange: (OrderDraft?) -> Unit,
+        storeName: String = ""
 ) {
     val dateKey = remember(date) { date.toString() }
     var notes by rememberSaveable(dateKey) { mutableStateOf(draft?.notes ?: "") }
@@ -123,9 +136,78 @@ fun DayDetailScreen(
     var deleteMoveOrderOptions by remember { mutableStateOf<List<OrderMoveOption>>(emptyList()) }
     var deleteSelectedOrderId by remember { mutableStateOf<Long?>(null) }
     var deleteMoveFullReceipts by remember { mutableStateOf(true) }
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val snackbarHostState = remember { SnackbarHostState() }
+    val printerPrefs = remember { PrinterPreferences(context) }
+    val printerManager = remember(context) { BluetoothPrinterManager(context) }
+    var showPrinterPicker by remember { mutableStateOf(false) }
+    var pairedPrinters by remember { mutableStateOf<List<PairedBluetoothPrinter>>(emptyList()) }
+    var pendingPrintOrderId by remember { mutableStateOf<Long?>(null) }
+    var forcePrinterPicker by remember { mutableStateOf(false) }
+    val printSuccessMessage = stringResource(R.string.order_print_success)
+    val printFailedMessage = stringResource(R.string.order_print_failed)
+    val permissionDeniedMessage = stringResource(R.string.order_print_permission_denied)
     val amountRegistry = LocalAmountFieldRegistry.current
     val overlaySuppressed = LocalVoiceOverlaySuppressed.current
     val voiceRouter = LocalVoiceInputRouter.current
+
+    suspend fun printOrder(order: OrderEntity, macAddress: String, printerName: String) {
+        val customerLabel = order.customerId?.let { customerNames[it] }
+        val receiptText = ReceiptFormatter.formatOrder(storeName, order, customerLabel)
+        val result = printerManager.printReceipt(macAddress, receiptText)
+        if (result.isSuccess) {
+            printerPrefs.savePrinter(macAddress, printerName)
+            snackbarHostState.showSnackbar(printSuccessMessage)
+        } else {
+            val detail =
+                result.exceptionOrNull()?.localizedMessage?.takeIf { it.isNotBlank() }
+                    ?: "Printer error"
+            snackbarHostState.showSnackbar(printFailedMessage.format(detail))
+        }
+    }
+
+    suspend fun proceedToPrint(order: OrderEntity) {
+        val savedMac = if (forcePrinterPicker) null else printerPrefs.getPrinterMac()
+        forcePrinterPicker = false
+        if (savedMac != null) {
+            printOrder(
+                order = order,
+                macAddress = savedMac,
+                printerName = printerPrefs.getPrinterName() ?: savedMac
+            )
+        } else {
+            pairedPrinters = printerManager.getPairedPrinters()
+            showPrinterPicker = true
+        }
+    }
+
+    val bluetoothPermissionLauncher =
+        rememberLauncherForActivityResult(
+            ActivityResultContracts.RequestMultiplePermissions()
+        ) { grants ->
+            val allGranted = grants.values.all { it }
+            val orderId = pendingPrintOrderId
+            pendingPrintOrderId = null
+            if (!allGranted || orderId == null) {
+                scope.launch { snackbarHostState.showSnackbar(permissionDeniedMessage) }
+                return@rememberLauncherForActivityResult
+            }
+            val order = orders.firstOrNull { it.id == orderId } ?: return@rememberLauncherForActivityResult
+            scope.launch { proceedToPrint(order) }
+        }
+
+    fun requestPrintReceipt(changePrinter: Boolean = false) {
+        val orderId = editingOrderId ?: return
+        val order = orders.firstOrNull { it.id == orderId } ?: return
+        forcePrinterPicker = changePrinter
+        if (!BluetoothPrintPermissions.hasAll(context)) {
+            pendingPrintOrderId = orderId
+            bluetoothPermissionLauncher.launch(BluetoothPrintPermissions.requiredPermissions())
+            return
+        }
+        scope.launch { proceedToPrint(order) }
+    }
     var orderFilter by rememberSaveable(dateKey) { mutableStateOf(DayOrderFilter.All) }
     var searchQuery by rememberSaveable(dateKey) { mutableStateOf("") }
     var isSearchExpanded by rememberSaveable(dateKey) { mutableStateOf(false) }
@@ -318,6 +400,7 @@ fun DayDetailScreen(
     val emptySubtitleRes = emptyStateRes.second
     Scaffold(
             contentWindowInsets = WindowInsets(0),
+            snackbarHost = { SnackbarHost(snackbarHostState) },
             topBar = {
                 TopAppBar(
                         title = {
@@ -619,8 +702,39 @@ fun DayDetailScreen(
             onSetNotesError = { notesError = it },
             onSetTotalError = { totalError = it },
             onSetCustomerError = { customerError = it },
-            onSetEditorOpen = { isEditorOpen = it }
+            onSetEditorOpen = { isEditorOpen = it },
+            onPrintReceipt =
+                if (editingOrderId != null) {
+                    { requestPrintReceipt() }
+                } else {
+                    null
+                }
     )
+    if (showPrinterPicker) {
+        val orderId = editingOrderId
+        BluetoothPrinterPickerDialog(
+            printers = pairedPrinters,
+            onDismiss = { showPrinterPicker = false },
+            onPrinterSelected = { printer ->
+                showPrinterPicker = false
+                val order = orderId?.let { id -> orders.firstOrNull { it.id == id } }
+                if (order != null) {
+                    scope.launch {
+                        printOrder(order, printer.macAddress, printer.name)
+                    }
+                }
+            },
+            onChangePrinter =
+                if (printerPrefs.getPrinterMac() != null) {
+                    {
+                        showPrinterPicker = false
+                        requestPrintReceipt(changePrinter = true)
+                    }
+                } else {
+                    null
+                }
+        )
+    }
     DayDeleteOrderDialog(
             pendingDeleteOrder = pendingDeleteOrder,
             customerNames = customerNames,
