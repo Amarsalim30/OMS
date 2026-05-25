@@ -9,8 +9,10 @@ import com.zeynbakers.order_management_system.core.helper.data.HelperNoteEntity
 import com.zeynbakers.order_management_system.customer.data.CustomerDao
 import com.zeynbakers.order_management_system.customer.data.CustomerEntity
 import com.zeynbakers.order_management_system.order.data.*
+import com.zeynbakers.order_management_system.product.data.ProductDao
+import com.zeynbakers.order_management_system.product.data.ProductEntity
 
-const val APP_DATABASE_SCHEMA_VERSION = 14
+const val APP_DATABASE_SCHEMA_VERSION = 15
 
 @Database(
         entities =
@@ -22,7 +24,8 @@ const val APP_DATABASE_SCHEMA_VERSION = 14
                         AccountEntryEntity::class,
                         PaymentReceiptEntity::class,
                         PaymentAllocationEntity::class,
-                        HelperNoteEntity::class],
+                        HelperNoteEntity::class,
+                        ProductEntity::class],
         version = APP_DATABASE_SCHEMA_VERSION,
         exportSchema = true
 )
@@ -35,4 +38,5 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun paymentReceiptDao(): PaymentReceiptDao
     abstract fun paymentAllocationDao(): PaymentAllocationDao
     abstract fun helperNoteDao(): HelperNoteDao
+    abstract fun productDao(): ProductDao
 }

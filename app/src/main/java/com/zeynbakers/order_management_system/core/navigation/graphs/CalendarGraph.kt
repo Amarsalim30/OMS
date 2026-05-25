@@ -69,6 +69,8 @@ internal fun NavGraphBuilder.calendarGraph(
                 NotificationScheduler.enqueueNow(navController.context)
             },
             searchCustomers = { query -> orderViewModel.searchCustomers(query) },
+            searchProducts = { query -> orderViewModel.searchProducts(query) },
+            ensureProduct = { name, price, emoji -> orderViewModel.ensureProduct(name, price, emoji) },
             onSummaryClick = { navController.navigate(AppRoutes.Summary) },
             onOpenMore = navigationActions.onOpenMore,
             onMonthSettled = { year, month -> calendarCallbacks.onMonthSettled(year, month) },
@@ -108,6 +110,8 @@ internal fun NavGraphBuilder.calendarGraph(
                 NotificationScheduler.enqueueNow(navController.context)
             },
             searchCustomers = { query -> orderViewModel.searchCustomers(query) },
+            searchProducts = { query -> orderViewModel.searchProducts(query) },
+            ensureProduct = { name, price, emoji -> orderViewModel.ensureProduct(name, price, emoji) },
             onSummaryClick = { navController.navigate(AppRoutes.Summary) },
             onOpenMore = navigationActions.onOpenMore,
             onMonthSettled = { year, month -> calendarCallbacks.onMonthSettled(year, month) },
@@ -212,6 +216,8 @@ internal fun NavGraphBuilder.calendarGraph(
             },
             loadCustomerById = { id -> orderViewModel.getCustomerById(id) },
             searchCustomers = { query -> orderViewModel.searchCustomers(query) },
+            searchProducts = { query -> orderViewModel.searchProducts(query) },
+            ensureProduct = { name, price, emoji -> orderViewModel.ensureProduct(name, price, emoji) },
             initialFocusOrderId = focusOrderId,
             draft = calendarState.dayDrafts[date],
             onDraftChange = { updated ->

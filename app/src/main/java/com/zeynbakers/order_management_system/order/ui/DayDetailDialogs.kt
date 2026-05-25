@@ -20,6 +20,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
@@ -38,10 +39,11 @@ import com.zeynbakers.order_management_system.core.util.formatOrderLabelWithId
 import com.zeynbakers.order_management_system.core.util.normalizePickupTime
 import com.zeynbakers.order_management_system.customer.data.CustomerEntity
 import com.zeynbakers.order_management_system.order.data.OrderEntity
+import com.zeynbakers.order_management_system.product.data.ProductEntity
+import kotlinx.coroutines.launch
 import java.math.BigDecimal
 import java.math.RoundingMode
 import java.text.NumberFormat
-import kotlinx.coroutines.launch
 import kotlinx.datetime.LocalDate
 
 @Composable
@@ -55,6 +57,11 @@ internal fun DayOrderEditorDialog(
     customerName: String,
     customerPhone: String,
     suggestions: List<CustomerEntity>,
+    customerConfirmed: Boolean,
+    onSetCustomerConfirmed: (Boolean) -> Unit,
+    productMatches: List<ProductEntity>,
+    onProductQueryChange: (String) -> Unit,
+    onEnsureProduct: suspend (String, BigDecimal, String) -> ProductEntity,
     notesError: String?,
     totalError: String?,
     customerError: String?,
@@ -100,13 +107,21 @@ internal fun DayOrderEditorDialog(
         } else {
             ""
         }
-    val notesRequiredText = stringResource(R.string.day_editor_notes_required)
+    val cartRequiredText = stringResource(R.string.day_editor_cart_required)
     val validTotalRequiredText = stringResource(R.string.day_editor_valid_total_required)
+    val cartItems = OrderCartParser.parseNotesToCart(notes)
     val canSave =
-        notes.trim().isNotEmpty() &&
+        cartItems.isNotEmpty() &&
             parsedTotal != null &&
             parsedTotal > BigDecimal.ZERO &&
             !isPickupTimeInvalid
+
+    LaunchedEffect(notes) {
+        val total = OrderCartParser.cartTotal(OrderCartParser.parseNotesToCart(notes))
+        if (total > BigDecimal.ZERO) {
+            onSetTotalText(total.stripTrailingZeros().toPlainString())
+        }
+    }
 
     val notesState by rememberUpdatedState(notes)
     val setNotes by rememberUpdatedState<(String) -> Unit>(onSetNotes)
@@ -120,8 +135,8 @@ internal fun DayOrderEditorDialog(
         val finalTotal = trimmedTotal.toBigDecimalOrNull()?.setScale(2, RoundingMode.HALF_UP)
 
         when {
-            trimmedNotes.isEmpty() -> {
-                onSetNotesError(notesRequiredText)
+            cartItems.isEmpty() -> {
+                onSetNotesError(cartRequiredText)
                 onSetTotalError(null)
                 onSetCustomerError(null)
             }
@@ -206,11 +221,22 @@ internal fun DayOrderEditorDialog(
         },
         suggestions = suggestions,
         onSuggestionSelected = { customer ->
-            onSetNotes(stripTrailingCustomerQueryFromNotes(notes))
             onSetCustomerName(customer.name)
             onSetCustomerPhone(customer.phone)
             onSetSuggestions(emptyList())
+            onSetCustomerConfirmed(true)
         },
+        customerConfirmed = customerConfirmed,
+        onCustomerConfirmedChange = onSetCustomerConfirmed,
+        onCreateCustomerFromQuery = { query ->
+            onSetCustomerName(query)
+            onSetCustomerPhone("")
+            onSetSuggestions(emptyList())
+            onSetCustomerConfirmed(true)
+        },
+        productMatches = productMatches,
+        onProductQueryChange = onProductQueryChange,
+        onEnsureProduct = onEnsureProduct,
         customerError = customerError,
         canSave = canSave,
         onSave = ::submitOrder,

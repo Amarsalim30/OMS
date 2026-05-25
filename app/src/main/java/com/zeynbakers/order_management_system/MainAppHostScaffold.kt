@@ -15,6 +15,7 @@ import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.School
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.windowsizeclass.ExperimentalMaterial3WindowSizeClassApi
@@ -177,6 +178,15 @@ internal fun MainAppHostScaffold(
             ) {
                 onShowMoreSheetChange(false)
                 navController.navigate(AppRoutes.Backup)
+            },
+            MoreAction(
+                label = stringResource(R.string.more_products),
+                groupLabel = moreSystemGroup,
+                icon = Icons.Filled.ShoppingCart,
+                supportingText = stringResource(R.string.more_products_support)
+            ) {
+                onShowMoreSheetChange(false)
+                navController.navigate(AppRoutes.Products)
             },
             MoreAction(
                 label = stringResource(R.string.more_tutorial),

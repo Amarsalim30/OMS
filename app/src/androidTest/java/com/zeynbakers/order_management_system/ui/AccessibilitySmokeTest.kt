@@ -137,6 +137,14 @@ class AccessibilitySmokeTest {
                         onReceivePayment = {},
                         loadCustomerById = { null },
                         searchCustomers = { emptyList() },
+                        searchProducts = { emptyList() },
+                        ensureProduct = { name, price, emoji ->
+                            com.zeynbakers.order_management_system.product.data.ProductEntity(
+                                name = name,
+                                defaultPrice = price,
+                                emoji = emoji
+                            )
+                        },
                         draft = null,
                         onDraftChange = {}
                     )

@@ -71,6 +71,7 @@ import com.zeynbakers.order_management_system.core.ui.LocalVoiceOverlaySuppresse
 import com.zeynbakers.order_management_system.core.ui.components.AppFilterRow
 import com.zeynbakers.order_management_system.customer.data.CustomerEntity
 import com.zeynbakers.order_management_system.order.data.OrderEntity
+import com.zeynbakers.order_management_system.product.data.ProductEntity
 import com.zeynbakers.order_management_system.order.printing.BluetoothPrintPermissions
 import com.zeynbakers.order_management_system.order.printing.BluetoothPrinterManager
 import com.zeynbakers.order_management_system.order.printing.PairedBluetoothPrinter
@@ -108,6 +109,8 @@ fun DayDetailScreen(
         onReceivePayment: (OrderEntity) -> Unit,
         loadCustomerById: suspend (Long) -> CustomerEntity?,
         searchCustomers: suspend (String) -> List<CustomerEntity>,
+        searchProducts: suspend (String) -> List<ProductEntity>,
+        ensureProduct: suspend (String, BigDecimal, String) -> ProductEntity,
         initialFocusOrderId: Long? = null,
         draft: OrderDraft?,
         onDraftChange: (OrderDraft?) -> Unit,
@@ -124,6 +127,11 @@ fun DayDetailScreen(
     var notesError by remember { mutableStateOf<String?>(null) }
     var totalError by remember { mutableStateOf<String?>(null) }
     var customerError by remember { mutableStateOf<String?>(null) }
+    var customerConfirmed by rememberSaveable(dateKey) {
+        mutableStateOf((draft?.customerPhone ?: "").isNotBlank())
+    }
+    var productQuery by remember { mutableStateOf("") }
+    var productMatches by remember { mutableStateOf<List<ProductEntity>>(emptyList()) }
     var suggestions by remember { mutableStateOf<List<CustomerEntity>>(emptyList()) }
     var suppressedNoMatchQuery by rememberSaveable(dateKey) { mutableStateOf("") }
     var pendingDeleteOrder by remember { mutableStateOf<OrderEntity?>(null) }
@@ -268,18 +276,18 @@ fun DayDetailScreen(
         val customer = loadCustomerById(customerId) ?: return@LaunchedEffect
         customerName = customer.name
         customerPhone = customer.phone
+        customerConfirmed = true
     }
     LaunchedEffect(isEditorOpen) { overlaySuppressed.value = isEditorOpen }
     DisposableEffect(Unit) { onDispose { overlaySuppressed.value = false } }
-    LaunchedEffect(notes, customerPhone) {
-        val query = extractCustomerQueryFromNotes(notes)
-        val normalizedQuery = query.trim().lowercase()
-        val selectedPhone = customerPhone.trim()
-        if (selectedPhone.isNotBlank()) {
+    LaunchedEffect(customerName, customerPhone, customerConfirmed) {
+        if (customerConfirmed) {
             suggestions = emptyList()
             suppressedNoMatchQuery = ""
             return@LaunchedEffect
         }
+        val query = customerName.trim()
+        val normalizedQuery = query.lowercase()
         if (normalizedQuery.isBlank()) {
             suggestions = emptyList()
             suppressedNoMatchQuery = ""
@@ -296,6 +304,15 @@ fun DayDetailScreen(
         val matches = searchCustomers(query)
         suggestions = matches
         suppressedNoMatchQuery = if (matches.isEmpty()) normalizedQuery else ""
+    }
+    LaunchedEffect(productQuery) {
+        delay(250)
+        productMatches =
+            if (productQuery.isBlank()) {
+                emptyList()
+            } else {
+                searchProducts(productQuery)
+            }
     }
     LaunchedEffect(searchQuery) {
         if (searchQuery.isNotBlank()) {
@@ -704,7 +721,12 @@ fun DayDetailScreen(
             onSetNotesError = { notesError = it },
             onSetTotalError = { totalError = it },
             onSetCustomerError = { customerError = it },
-            onSetEditorOpen = { isEditorOpen = it }
+            onSetEditorOpen = { isEditorOpen = it },
+            customerConfirmed = customerConfirmed,
+            onSetCustomerConfirmed = { customerConfirmed = it },
+            productMatches = productMatches,
+            onProductQueryChange = { productQuery = it },
+            onEnsureProduct = ensureProduct
     )
     if (showPrinterPicker) {
         val orderId = printTargetOrderId

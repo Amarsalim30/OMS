@@ -27,7 +27,7 @@ class ReceiptFormatterTest {
         assertTrue(receipt.contains("Jane Doe"))
         assertTrue(receipt.contains("Bread x2"))
         assertTrue(receipt.contains("Scones x3"))
-        assertTrue(receipt.contains("TOTAL: KES 500"))
+        assertTrue(receipt.contains("TOTAL: KSh 500"))
         assertTrue(receipt.contains("Thank you"))
     }
 
@@ -44,6 +44,6 @@ class ReceiptFormatterTest {
         val receipt = ReceiptFormatter.formatOrder("Store", order, null)
 
         assertTrue(receipt.contains("Custom cake order"))
-        assertTrue(receipt.contains("TOTAL: KES 1,200") || receipt.contains("TOTAL: KES 1200"))
+        assertTrue(receipt.contains("TOTAL: KSh 1,200") || receipt.contains("TOTAL: KSh 1200"))
     }
 }

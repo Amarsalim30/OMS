@@ -17,6 +17,7 @@ import com.zeynbakers.order_management_system.order.data.OrderDao
 import com.zeynbakers.order_management_system.order.data.OrderEntity
 import com.zeynbakers.order_management_system.order.data.OrderStatus
 import com.zeynbakers.order_management_system.order.data.OrderStatusOverride
+import com.zeynbakers.order_management_system.product.data.ProductEntity
 import java.math.BigDecimal
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -46,6 +47,7 @@ class OrderViewModel(private val database: AppDatabase) : ViewModel() {
     private val orderDao: OrderDao = database.orderDao()
     private val accountingDao: AccountingDao = database.accountingDao()
     private val customerDao = database.customerDao()
+    private val productDao = database.productDao()
     private val allocationDao = database.paymentAllocationDao()
     private val receiptDao = database.paymentReceiptDao()
     private val receiptProcessor = PaymentReceiptProcessor(database)
@@ -587,6 +589,33 @@ class OrderViewModel(private val database: AppDatabase) : ViewModel() {
         if (trimmed.isEmpty()) return emptyList()
         val pattern = "%$trimmed%"
         return customerDao.searchCustomers(pattern)
+    }
+
+    suspend fun searchProducts(query: String): List<ProductEntity> {
+        val trimmed = query.trim()
+        if (trimmed.isEmpty()) return emptyList()
+        return productDao.searchActiveProducts("%$trimmed%")
+    }
+
+    suspend fun ensureProduct(
+        name: String,
+        defaultPrice: BigDecimal,
+        emoji: String
+    ): ProductEntity {
+        val cleanName = name.trim()
+        val matches = productDao.searchActiveProducts(cleanName)
+        val existing = matches.firstOrNull { it.name.equals(cleanName, ignoreCase = true) }
+        if (existing != null) return existing
+        val id =
+            productDao.insertProduct(
+                ProductEntity(
+                    name = cleanName,
+                    defaultPrice = defaultPrice,
+                    emoji = emoji.trim().ifBlank { "📦" }
+                )
+            )
+        return productDao.getProductById(id)
+            ?: ProductEntity(name = cleanName, defaultPrice = defaultPrice, emoji = emoji)
     }
 
     private suspend fun resolveCustomerId(name: String, phone: String): Long? {

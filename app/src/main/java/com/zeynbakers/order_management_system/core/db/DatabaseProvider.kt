@@ -625,6 +625,34 @@ object DatabaseProvider {
         }
     }
 
+    internal val migration14To15 = object : Migration(14, 15) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS products (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                    name TEXT NOT NULL,
+                    default_price TEXT NOT NULL,
+                    emoji TEXT NOT NULL,
+                    archived INTEGER NOT NULL DEFAULT 0
+                )
+                """.trimIndent()
+            )
+            db.execSQL("INSERT INTO products (name, default_price, emoji, archived) VALUES ('Croissant', '5000', '🥐', 0)")
+            db.execSQL("INSERT INTO products (name, default_price, emoji, archived) VALUES ('Meatpie', '5000', '🥧', 0)")
+            db.execSQL("INSERT INTO products (name, default_price, emoji, archived) VALUES ('Melon Cake', '10000', '🧁', 0)")
+            db.execSQL("INSERT INTO products (name, default_price, emoji, archived) VALUES ('Donut', '4000', '🍩', 0)")
+            db.execSQL("INSERT INTO products (name, default_price, emoji, archived) VALUES ('Birthday Cake', '150000', '🎂', 0)")
+            db.execSQL("INSERT INTO products (name, default_price, emoji, archived) VALUES ('Swiss Roll', '8000', '🍰', 0)")
+            db.execSQL("INSERT INTO products (name, default_price, emoji, archived) VALUES ('Bread', '6000', '🍞', 0)")
+            db.execSQL("INSERT INTO products (name, default_price, emoji, archived) VALUES ('Cookies', '3000', '🍪', 0)")
+            db.execSQL("INSERT INTO products (name, default_price, emoji, archived) VALUES ('Burger', '15000', '🍔', 0)")
+            db.execSQL("INSERT INTO products (name, default_price, emoji, archived) VALUES ('Hot Dog', '10000', '🌭', 0)")
+            db.execSQL("INSERT INTO products (name, default_price, emoji, archived) VALUES ('Coffee', '8000', '☕', 0)")
+            db.execSQL("INSERT INTO products (name, default_price, emoji, archived) VALUES ('Juice', '6000', '🧃', 0)")
+        }
+    }
+
     internal val ALL_MIGRATIONS = arrayOf(
         migration1To2,
         migration2To3,
@@ -638,7 +666,8 @@ object DatabaseProvider {
         migration10To11,
         migration11To12,
         migration12To13,
-        migration13To14
+        migration13To14,
+        migration14To15
     )
 
     fun getDatabase(context: Context): AppDatabase {

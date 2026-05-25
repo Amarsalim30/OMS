@@ -32,6 +32,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AttachMoney
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.EditNote
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -73,6 +74,7 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.input.KeyboardType
@@ -81,7 +83,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.zeynbakers.order_management_system.R
+import com.zeynbakers.order_management_system.core.util.formatKes
 import com.zeynbakers.order_management_system.customer.data.CustomerEntity
+import com.zeynbakers.order_management_system.product.data.ProductEntity
 import java.math.BigDecimal
 import java.text.NumberFormat
 import java.util.Calendar
@@ -128,6 +132,12 @@ internal fun OrderEditorSheet(
     onCustomerPhoneChange: (String) -> Unit,
     suggestions: List<CustomerEntity>,
     onSuggestionSelected: (CustomerEntity) -> Unit,
+    customerConfirmed: Boolean,
+    onCustomerConfirmedChange: (Boolean) -> Unit,
+    onCreateCustomerFromQuery: (String) -> Unit,
+    productMatches: List<ProductEntity>,
+    onProductQueryChange: (String) -> Unit,
+    onEnsureProduct: suspend (String, BigDecimal, String) -> ProductEntity,
     customerError: String?,
     canSave: Boolean,
     onSave: () -> Unit,
@@ -156,12 +166,15 @@ internal fun OrderEditorSheet(
     val setTotalText by rememberUpdatedState<(String) -> Unit>({ onTotalTextChange(it) })
     val formScrollState = rememberScrollState()
 
+    val cartItems = remember(notes) { OrderCartParser.parseNotesToCart(notes) }
+    val cartTotal = remember(cartItems) { OrderCartParser.cartTotal(cartItems) }
+
     val hasAnyInput =
-        notes.isNotBlank() ||
-            totalText.isNotBlank() ||
+        cartItems.isNotEmpty() ||
             pickupTimeText.isNotBlank() ||
             customerName.isNotBlank() ||
-            customerPhone.isNotBlank()
+            customerPhone.isNotBlank() ||
+            customerConfirmed
 
     val quickAmountAdds = remember { listOf(100, 500, 1000) }
     val quickAmountFormatter = remember { NumberFormat.getIntegerInstance() }
@@ -259,33 +272,26 @@ internal fun OrderEditorSheet(
                         HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                     }
 
-                    InlineEditorRow(
-                        icon = Icons.Filled.EditNote,
-                        value = notes,
-                        placeholder = stringResource(R.string.order_editor_notes_placeholder),
-                        onValueChange = { onNotesChange(sanitizeOrderNotesInput(it)) },
-                        focusRequester = notesRequester,
-                        keyboardOptions = KeyboardOptions(
-                            capitalization = KeyboardCapitalization.Sentences,
-                            imeAction = ImeAction.Next
-                        ),
-                        keyboardActions = KeyboardActions(
-                            onNext = {
-                                editingRow = EditingRow.TOTAL
-                                scope.launch { delay(40); totalRequester.requestFocus() }
-                            }
-                        ),
-                        onFocused = onNotesFocused,
-                        onClear = if (editingRow == EditingRow.NOTES) ({ onNotesChange("") }) else null,
-                        readOnly = editingRow != EditingRow.NOTES,
-                        onRowClick = {
-                            if (editingRow != EditingRow.NOTES) {
-                                editingRow = EditingRow.NOTES
-                                scope.launch { delay(40); notesRequester.requestFocus() }
-                            }
-                        },
-                        textMaxLines = 5,
-                        modifier = notesFieldModifier.then(customerFieldModifier)
+                    OrderEditorCustomerSection(
+                        customerName = customerName,
+                        onCustomerNameChange = onCustomerNameChange,
+                        customerPhone = customerPhone,
+                        onCustomerPhoneChange = onCustomerPhoneChange,
+                        customerConfirmed = customerConfirmed,
+                        onCustomerConfirmedChange = onCustomerConfirmedChange,
+                        suggestions = suggestions,
+                        onSuggestionSelected = onSuggestionSelected,
+                        onCreateCustomerFromQuery = onCreateCustomerFromQuery,
+                        modifier = customerFieldModifier
+                    )
+
+                    OrderCartEditor(
+                        notes = notes,
+                        onNotesChange = onNotesChange,
+                        productMatches = productMatches,
+                        onProductQueryChange = onProductQueryChange,
+                        onEnsureProduct = onEnsureProduct,
+                        modifier = notesFieldModifier
                     )
 
                     notesError?.let {
@@ -293,114 +299,10 @@ internal fun OrderEditorSheet(
                             text = it,
                             color = MaterialTheme.colorScheme.error,
                             style = MaterialTheme.typography.bodySmall,
-                            modifier = Modifier.padding(start = 52.dp, end = 16.dp, bottom = 8.dp)
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
                         )
                     }
 
-                    if (customerPhone.isNotBlank()) {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(start = 52.dp, end = 16.dp, bottom = 12.dp)
-                                .then(customerFieldModifier),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            InputChip(
-                                selected = true,
-                                onClick = {},
-                                colors =
-                                    InputChipDefaults.inputChipColors(
-                                        selectedContainerColor = Color(0xFF1E88E5),
-                                        selectedLabelColor = Color.White,
-                                        selectedTrailingIconColor = Color.White
-                                    ),
-                                label = {
-                                    val label = customerName.ifBlank { customerPhone }
-                                    Text(
-                                        text = label,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis
-                                    )
-                                },
-                                trailingIcon = {
-                                    IconButton(
-                                        onClick = {
-                                            onCustomerNameChange("")
-                                            onCustomerPhoneChange("")
-                                        }
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Filled.Close,
-                                            contentDescription = stringResource(R.string.action_clear),
-                                            modifier = Modifier.size(18.dp)
-                                        )
-                                    }
-                                }
-                            )
-                        }
-                    }
-
-                    if (customerPhone.isBlank() && suggestions.isNotEmpty()) {
-                        Text(
-                            text = stringResource(R.string.order_editor_suggestions_label),
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(start = 52.dp, end = 16.dp, bottom = 6.dp)
-                        )
-                        Surface(
-                            shape = RoundedCornerShape(12.dp),
-                            tonalElevation = 4.dp,
-                            shadowElevation = 2.dp,
-                            color = MaterialTheme.colorScheme.surfaceContainer,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(start = 52.dp, end = 16.dp, bottom = 12.dp)
-                                .then(customerFieldModifier)
-                        ) {
-                            Column(
-                                modifier = Modifier.fillMaxWidth(),
-                                verticalArrangement = Arrangement.spacedBy(4.dp)
-                            ) {
-                                suggestions.take(5).forEachIndexed { index, customer ->
-                                    Surface(
-                                        onClick = {
-                                            onSuggestionSelected(customer)
-                                            editingRow = EditingRow.NOTES
-                                            scope.launch {
-                                                delay(40)
-                                                notesRequester.requestFocus()
-                                            }
-                                        },
-                                        color = MaterialTheme.colorScheme.surfaceContainer
-                                    ) {
-                                        Row(
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .sizeIn(minHeight = 48.dp)
-                                                .padding(horizontal = 12.dp, vertical = 12.dp),
-                                            verticalAlignment = Alignment.CenterVertically
-                                        ) {
-                                            Text(
-                                                text = customer.name,
-                                                style = MaterialTheme.typography.bodyMedium,
-                                                modifier = Modifier.weight(1f)
-                                            )
-                                            if (customer.phone.isNotBlank()) {
-                                                Text(
-                                                    text = customer.phone,
-                                                    style = MaterialTheme.typography.bodySmall,
-                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                                )
-                                            }
-                                        }
-                                    }
-                                    if (index < suggestions.take(5).lastIndex) {
-                                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                                    }
-                                }
-                            }
-                        }
-                    }
                     customerError?.let {
                         Text(
                             text = it,
@@ -425,101 +327,19 @@ internal fun OrderEditorSheet(
                         }
                     }
 
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-
-                    val totalDisplay =
-                        when {
-                            normalizedTotal != null -> "$currencyPrefix ${totalSummaryFormatter.format(normalizedTotal)}"
-                            totalText.isNotBlank() -> "$currencyPrefix $totalText"
-                            else -> ""
-                        }
-
-                    if (editingRow == EditingRow.TOTAL) {
-                        InlineEditorRow(
-                            icon = Icons.Filled.AttachMoney,
-                            value = totalText,
-                            placeholder = stringResource(R.string.order_editor_total_placeholder),
-                            onValueChange = onTotalTextChange,
-                            focusRequester = totalRequester,
-                            keyboardOptions = KeyboardOptions(
-                                keyboardType = KeyboardType.Decimal,
-                                imeAction = ImeAction.Done
-                            ),
-                            keyboardActions = KeyboardActions(
-                                onDone = {
-                                    focusManager.clearFocus()
-                                    editingRow = EditingRow.NONE
-                                    if (canSave) onSave()
-                                }
-                            ),
-                            onFocused = { onTotalFocused(setTotalText) },
-                            onClear = { onTotalTextChange("") },
-                            leadingText = currencyPrefix,
-                            modifier = totalFieldModifier
-                        )
-                    } else {
-                        ValueRow(
-                            icon = Icons.Filled.AttachMoney,
-                            value = totalDisplay,
-                            placeholder = stringResource(R.string.order_editor_total_placeholder),
-                            onClick = {
-                                editingRow = EditingRow.TOTAL
-                                scope.launch { delay(40); totalRequester.requestFocus() }
-                            },
-                            modifier = totalFieldModifier
-                        )
-                    }
-
-                    totalSupportingText?.let {
-                        Text(
-                            text = it,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            style = MaterialTheme.typography.bodySmall,
-                            modifier = Modifier.padding(start = 52.dp, end = 16.dp, bottom = 4.dp)
-                        )
-                    }
-
                     totalError?.let {
                         Text(
                             text = it,
                             color = MaterialTheme.colorScheme.error,
                             style = MaterialTheme.typography.bodySmall,
-                            modifier = Modifier.padding(start = 52.dp, end = 16.dp, bottom = 8.dp)
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
                         )
                     }
 
-                    FlowRow(
-                        modifier = Modifier.padding(start = 52.dp, end = 16.dp, bottom = 12.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        quickAmountAdds.forEach { amount ->
-                            FilterChip(
-                                selected = false,
-                                onClick = {
-                                    val updated = (normalizedTotal ?: BigDecimal.ZERO)
-                                        .add(amount.toBigDecimal())
-                                        .stripTrailingZeros()
-                                        .toPlainString()
-                                    onTotalTextChange(updated)
-                                    editingRow = EditingRow.TOTAL
-                                    scope.launch { delay(40); totalRequester.requestFocus() }
-                                },
-                                label = {
-                                    Text(
-                                        stringResource(
-                                            R.string.order_editor_quick_amount_chip,
-                                            quickAmountFormatter.format(amount)
-                                        )
-                                    )
-                                },
-                                border = quickChipBorder,
-                                colors = quickChipColors
-                            )
-                        }
-                    }
-
-                    HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                    HorizontalDivider(
+                        color = MaterialTheme.colorScheme.outlineVariant,
+                        modifier = Modifier.padding(vertical = 4.dp)
+                    )
 
                     ValueRow(
                         icon = Icons.Filled.Schedule,
@@ -564,27 +384,41 @@ internal fun OrderEditorSheet(
                 }
 
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .navigationBarsPadding()
-                        .padding(horizontal = 12.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                Column(
+                    modifier =
+                        Modifier
+                            .fillMaxWidth()
+                            .navigationBarsPadding()
+                            .padding(horizontal = 16.dp, vertical = 8.dp)
                 ) {
-                    TextButton(onClick = onCancel) {
-                        Text(stringResource(R.string.action_cancel))
+                    if (cartTotal > BigDecimal.ZERO) {
+                        Text(
+                            text = stringResource(R.string.order_editor_footer_total, formatKes(cartTotal)),
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.padding(bottom = 8.dp)
+                        )
                     }
-                    Spacer(Modifier.weight(1f))
-                    Button(
-                        onClick = onSave,
-                        enabled = canSave,
-                        shape = RoundedCornerShape(24.dp),
-                        colors = ButtonDefaults.buttonColors(),
-                        modifier =
-                            saveButtonModifier
-                                .sizeIn(minWidth = 104.dp, minHeight = 50.dp)
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(stringResource(R.string.action_save))
+                        TextButton(onClick = onCancel) {
+                            Text(stringResource(R.string.action_cancel))
+                        }
+                        Spacer(Modifier.weight(1f))
+                        Button(
+                            onClick = onSave,
+                            enabled = canSave,
+                            shape = RoundedCornerShape(24.dp),
+                            colors = ButtonDefaults.buttonColors(),
+                            modifier =
+                                saveButtonModifier
+                                    .fillMaxWidth(0.55f)
+                                    .sizeIn(minHeight = 50.dp)
+                        ) {
+                            Text(stringResource(R.string.order_editor_save_order))
+                        }
                     }
                 }
             }

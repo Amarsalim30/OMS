@@ -25,6 +25,7 @@ object AppRoutes {
     const val TutorialAfterCalendar = "tutorial_after_calendar"
     const val FirstRunTutorial = "first_run_tutorial"
     const val ImportContacts = "import_contacts"
+    const val Products = "products"
 
     const val Day = "day/{date}?orderId={orderId}"
     const val CustomerDetail = "customer/{customerId}"
