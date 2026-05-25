@@ -1,7 +1,6 @@
 package com.zeynbakers.order_management_system.order.ui
 
 import androidx.compose.foundation.border
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -17,6 +16,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.Payments
+import androidx.compose.material.icons.outlined.Print
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -134,7 +134,8 @@ internal fun OrderListItem(
         isFocused: Boolean,
         onEdit: () -> Unit,
         onPaymentHistory: () -> Unit,
-        onReceivePayment: () -> Unit
+        onReceivePayment: () -> Unit,
+        onPrintReceipt: () -> Unit
 ) {
     val stateColor = paymentStateColor(paymentState)
     val statusLabel = paymentStateLabel(paymentState)
@@ -285,7 +286,11 @@ internal fun OrderListItem(
                             modifier = Modifier.weight(1f)
                     )
                 }
-                Box(modifier = Modifier.fillMaxWidth()) {
+                Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)
+                ) {
                     if (showReceive) {
                         AssistChip(
                                 onClick = onReceivePayment,
@@ -298,13 +303,20 @@ internal fun OrderListItem(
                                             contentDescription = null,
                                             modifier = Modifier.size(16.dp)
                                     )
-                                },
-                                modifier = Modifier.align(Alignment.CenterEnd)
+                                }
                         )
-                    } else {
-                        // Keep row heights visually consistent regardless of payment state.
-                        Spacer(modifier = Modifier.heightIn(min = 32.dp))
                     }
+                    AssistChip(
+                            onClick = onPrintReceipt,
+                            label = { Text(stringResource(R.string.order_print_receipt)) },
+                            leadingIcon = {
+                                Icon(
+                                        imageVector = Icons.Outlined.Print,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(16.dp)
+                                )
+                            }
+                    )
                 }
             }
         }

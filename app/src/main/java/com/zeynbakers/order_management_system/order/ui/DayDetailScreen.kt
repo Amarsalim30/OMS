@@ -144,6 +144,7 @@ fun DayDetailScreen(
     var showPrinterPicker by remember { mutableStateOf(false) }
     var pairedPrinters by remember { mutableStateOf<List<PairedBluetoothPrinter>>(emptyList()) }
     var pendingPrintOrderId by remember { mutableStateOf<Long?>(null) }
+    var printTargetOrderId by remember { mutableStateOf<Long?>(null) }
     var forcePrinterPicker by remember { mutableStateOf(false) }
     val printSuccessMessage = stringResource(R.string.order_print_success)
     val printFailedMessage = stringResource(R.string.order_print_failed)
@@ -168,6 +169,7 @@ fun DayDetailScreen(
     }
 
     suspend fun proceedToPrint(order: OrderEntity) {
+        printTargetOrderId = order.id
         val savedMac = if (forcePrinterPicker) null else printerPrefs.getPrinterMac()
         forcePrinterPicker = false
         if (savedMac != null) {
@@ -197,12 +199,11 @@ fun DayDetailScreen(
             scope.launch { proceedToPrint(order) }
         }
 
-    fun requestPrintReceipt(changePrinter: Boolean = false) {
-        val orderId = editingOrderId ?: return
-        val order = orders.firstOrNull { it.id == orderId } ?: return
+    fun requestPrintReceipt(order: OrderEntity, changePrinter: Boolean = false) {
+        printTargetOrderId = order.id
         forcePrinterPicker = changePrinter
         if (!BluetoothPrintPermissions.hasAll(context)) {
-            pendingPrintOrderId = orderId
+            pendingPrintOrderId = order.id
             bluetoothPermissionLauncher.launch(BluetoothPrintPermissions.requiredPermissions())
             return
         }
@@ -666,7 +667,8 @@ fun DayDetailScreen(
                                     isEditorOpen = true
                                 },
                                 onPaymentHistory = { onOrderPaymentHistory(order.id) },
-                                onReceivePayment = { onReceivePayment(order) }
+                                onReceivePayment = { onReceivePayment(order) },
+                                onPrintReceipt = { requestPrintReceipt(order) }
                         )
                     }
                 }
@@ -702,19 +704,16 @@ fun DayDetailScreen(
             onSetNotesError = { notesError = it },
             onSetTotalError = { totalError = it },
             onSetCustomerError = { customerError = it },
-            onSetEditorOpen = { isEditorOpen = it },
-            onPrintReceipt =
-                if (editingOrderId != null) {
-                    { requestPrintReceipt() }
-                } else {
-                    null
-                }
+            onSetEditorOpen = { isEditorOpen = it }
     )
     if (showPrinterPicker) {
-        val orderId = editingOrderId
+        val orderId = printTargetOrderId
         BluetoothPrinterPickerDialog(
             printers = pairedPrinters,
-            onDismiss = { showPrinterPicker = false },
+            onDismiss = {
+                showPrinterPicker = false
+                printTargetOrderId = null
+            },
             onPrinterSelected = { printer ->
                 showPrinterPicker = false
                 val order = orderId?.let { id -> orders.firstOrNull { it.id == id } }
@@ -728,7 +727,10 @@ fun DayDetailScreen(
                 if (printerPrefs.getPrinterMac() != null) {
                     {
                         showPrinterPicker = false
-                        requestPrintReceipt(changePrinter = true)
+                        val order = orderId?.let { id -> orders.firstOrNull { it.id == id } }
+                        if (order != null) {
+                            requestPrintReceipt(order, changePrinter = true)
+                        }
                     }
                 } else {
                     null

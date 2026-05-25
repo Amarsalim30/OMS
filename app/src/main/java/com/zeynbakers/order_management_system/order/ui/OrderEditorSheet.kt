@@ -36,7 +36,6 @@ import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
@@ -135,7 +134,6 @@ internal fun OrderEditorSheet(
     focusNotesInitially: Boolean,
     onClear: () -> Unit,
     onCancel: () -> Unit,
-    onPrintReceipt: (() -> Unit)? = null,
     onNotesFocused: () -> Unit,
     onTotalFocused: ((String) -> Unit) -> Unit,
     modifier: Modifier = Modifier,
@@ -566,17 +564,6 @@ internal fun OrderEditorSheet(
                 }
 
                 HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-                if (onPrintReceipt != null) {
-                    OutlinedButton(
-                        onClick = onPrintReceipt,
-                        modifier =
-                            Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 16.dp, vertical = 8.dp)
-                    ) {
-                        Text(stringResource(R.string.order_print_receipt))
-                    }
-                }
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()

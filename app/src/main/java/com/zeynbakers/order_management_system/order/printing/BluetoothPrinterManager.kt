@@ -1,5 +1,6 @@
 package com.zeynbakers.order_management_system.order.printing
 
+import android.annotation.SuppressLint
 import android.bluetooth.BluetoothAdapter
 import android.bluetooth.BluetoothManager
 import android.content.Context
@@ -21,6 +22,9 @@ class BluetoothPrinterManager(private val context: Context) {
 
     suspend fun getPairedPrinters(): List<PairedBluetoothPrinter> =
         withContext(Dispatchers.IO) {
+            if (!BluetoothPrintPermissions.hasAll(context)) {
+                return@withContext emptyList()
+            }
             runCatching {
                 BluetoothPrintersConnections()
                     .list
@@ -28,7 +32,7 @@ class BluetoothPrinterManager(private val context: Context) {
                         val device = connection.device ?: return@mapNotNull null
                         PairedBluetoothPrinter(
                             macAddress = device.address,
-                            name = device.name?.takeIf { it.isNotBlank() } ?: device.address
+                            name = displayName(connection)
                         )
                     }
                     .orEmpty()
@@ -37,6 +41,11 @@ class BluetoothPrinterManager(private val context: Context) {
 
     suspend fun printReceipt(macAddress: String, text: String): Result<Unit> =
         withContext(Dispatchers.IO) {
+            if (!BluetoothPrintPermissions.hasAll(context)) {
+                return@withContext Result.failure(
+                    SecurityException("Bluetooth permission is required to print")
+                )
+            }
             var connection: BluetoothConnection? = null
             try {
                 connection = connect(macAddress)
@@ -52,6 +61,7 @@ class BluetoothPrinterManager(private val context: Context) {
             }
         }
 
+    @SuppressLint("MissingPermission")
     private fun bluetoothDeviceForMac(macAddress: String) =
         BluetoothPrintersConnections()
             .list
@@ -64,6 +74,7 @@ class BluetoothPrinterManager(private val context: Context) {
                 adapter?.getRemoteDevice(macAddress)
             }
 
+    @SuppressLint("MissingPermission")
     private suspend fun connect(macAddress: String): BluetoothConnection? {
         val device = bluetoothDeviceForMac(macAddress) ?: return null
         var lastError: Throwable? = null
@@ -79,6 +90,12 @@ class BluetoothPrinterManager(private val context: Context) {
         }
         lastError?.let { throw it }
         return null
+    }
+
+    @SuppressLint("MissingPermission")
+    private fun displayName(connection: BluetoothConnection): String {
+        val device = connection.device ?: return ""
+        return device.name?.takeIf { it.isNotBlank() } ?: device.address
     }
 
     private fun print(connection: BluetoothConnection, text: String) {
