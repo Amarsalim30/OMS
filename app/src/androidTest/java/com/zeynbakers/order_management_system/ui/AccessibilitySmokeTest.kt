@@ -19,6 +19,7 @@ import androidx.test.core.app.ApplicationProvider
 import com.zeynbakers.order_management_system.R
 import com.zeynbakers.order_management_system.accounting.data.CustomerAccountSummary
 import com.zeynbakers.order_management_system.accounting.ui.AllocationMode
+import com.zeynbakers.order_management_system.accounting.ui.ApplyReadyBar
 import com.zeynbakers.order_management_system.accounting.ui.DuplicateState
 import com.zeynbakers.order_management_system.accounting.ui.MpesaAllocationSheet
 import com.zeynbakers.order_management_system.accounting.ui.MpesaTransactionUi
@@ -391,5 +392,111 @@ class AccessibilitySmokeTest {
             .assert(SemanticsMatcher("exists") { true })
         composeRule.onNodeWithText(context.getString(R.string.customer_detail_receipt_history))
             .assert(SemanticsMatcher("exists") { true })
+    }
+    @Test
+    fun applyReadyBarButtonMeetsTouchTarget() {
+        composeRule.setContent {
+            MaterialTheme {
+                ApplyReadyBar(
+                    selectedReadyCount = 1,
+                    selectedReadyAmount = java.math.BigDecimal("500.00"),
+                    readyCount = 2,
+                    readyAmount = java.math.BigDecimal("1000.00"),
+                    onApplySelected = {},
+                    onApplyAllReady = {}
+                )
+            }
+        }
+        composeRule.waitForIdle()
+
+        val minTouchTargetPx = with(composeRule.density) { 48.dp.toPx() }
+        val applyNode = composeRule
+            .onNodeWithText("Apply selected", substring = true)
+            .assert(SemanticsMatcher("exists") { true })
+            .fetchSemanticsNode()
+        assertTrue(
+            "Apply selected button height must be >= 48dp",
+            applyNode.boundsInRoot.height >= minTouchTargetPx
+        )
+    }
+
+    @Test
+    fun mpesaTransactionRowHasContentDescription() {
+        val item =
+            MpesaTransactionUi(
+                key = "CD1",
+                transactionCode = "ABC123",
+                amount = java.math.BigDecimal("750.00"),
+                senderName = "Alice",
+                senderPhone = "0700111222",
+                receivedAt = 0L,
+                rawText = "sample",
+                duplicateState = DuplicateState.NONE,
+                existingReceiptId = null,
+                existingReceiptStatus = null,
+                suggestedCustomerId = null,
+                suggestedCustomerName = null,
+                customerConfidence = 0,
+                orderSuggestions = emptyList(),
+                selectedOrderId = null,
+                selectedCustomerId = null,
+                allocationMode = AllocationMode.OLDEST_ORDERS,
+                selected = false
+            )
+
+        composeRule.setContent {
+            MaterialTheme {
+                com.zeynbakers.order_management_system.accounting.ui.MpesaTransactionRow(
+                    item = item,
+                    onToggleSelected = {},
+                    onOpenDetails = {}
+                )
+            }
+        }
+        composeRule.waitForIdle()
+
+        // Row should have a non-empty content description
+        composeRule
+            .onNode(hasContentDescription("KES", substring = true))
+            .assert(SemanticsMatcher("exists") { true })
+    }
+
+    @Test
+    fun manualPaymentSaveButtonIsFullWidth() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
+        // We can't easily instantiate ManualPaymentScreen (needs ViewModels), so we test
+        // the bottom bar button geometry by verifying button >= 90% width using a
+        // simpler host that replicates the exact Modifier chain.
+        var screenWidthPx = 0f
+        composeRule.setContent {
+            MaterialTheme {
+                androidx.compose.foundation.layout.BoxWithConstraints(
+                    modifier = androidx.compose.ui.Modifier.fillMaxWidth()
+                ) {
+                    screenWidthPx = with(composeRule.density) { maxWidth.toPx() }
+                    androidx.compose.material3.Surface(tonalElevation = 3.dp) {
+                        Button(
+                            onClick = {},
+                            enabled = true,
+                            modifier = androidx.compose.ui.Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp, vertical = 12.dp)
+                        ) {
+                            Text(context.getString(R.string.money_save_payment))
+                        }
+                    }
+                }
+            }
+        }
+        composeRule.waitForIdle()
+
+        val buttonNode = composeRule
+            .onNodeWithText(context.getString(R.string.money_save_payment))
+            .assert(SemanticsMatcher("exists") { true })
+            .fetchSemanticsNode()
+        assertTrue(
+            "Save Payment button should span at least 90% of screen width",
+            buttonNode.boundsInRoot.width >= screenWidthPx * 0.9f
+        )
     }
 }

@@ -1,4 +1,4 @@
-﻿<resources>
+<resources>
     <string name="app_name">OrderBook</string>
     <string name="nav_calendar">Calendar</string>
     <string name="nav_orders">Orders</string>
@@ -21,8 +21,27 @@
     <string name="more_backup_restore_support">Choose where backups are stored and restore safely.</string>
     <string name="more_tutorial_support">Replay the guided tour of core tasks.</string>
     <string name="contacts_permission_required_for_import">Contacts permission is required to import customers</string>
-    <string name="money_tab_collect">Collect</string>
-    <string name="money_tab_record">Record</string>
+    <string name="money_tab_collect">M-Pesa</string>
+    <string name="money_tab_record">Manual</string>
+    <!-- Collect tab empty state -->
+    <string name="money_empty_state_title">Paste M-Pesa messages here</string>
+    <string name="money_empty_state_step1">1. Open Messages and find an M-Pesa SMS</string>
+    <string name="money_empty_state_step2">2. Copy the text (or Share → OrderBook)</string>
+    <string name="money_empty_state_step3">3. Tap Paste below to import and match payments</string>
+    <!-- MpesaTransactionRow status labels -->
+    <string name="money_status_already_recorded_voided">Already recorded (voided)</string>
+    <string name="money_status_already_recorded_unused">Already recorded (not used)</string>
+    <string name="money_status_already_recorded_partial">Already recorded (part used)</string>
+    <string name="money_status_already_recorded_used">Already recorded (used)</string>
+    <string name="money_status_already_recorded">Already recorded</string>
+    <string name="money_status_duplicate">Duplicate</string>
+    <string name="money_status_needs_match">Needs match</string>
+    <string name="money_status_selected">Selected</string>
+    <string name="money_status_ready">Ready</string>
+    <string name="money_sender_from">From %1$s</string>
+    <string name="money_sender_unknown">Unknown sender</string>
+    <string name="money_transaction_row_cd">%1$s from %2$s, %3$s</string>
+    <string name="money_transaction_checkbox_cd">Select payment %1$s</string>
     <string name="money_collect_title">M-PESA Import</string>
     <string name="money_record_title">Record payment</string>
     <string name="money_statement_title">Customer statements</string>
@@ -414,8 +433,8 @@
     <string name="money_duplicates">Duplicates</string>
     <string name="money_selected_total">Selected %1$d - Total %2$s</string>
     <string name="money_ready_total">Ready %1$d - Total %2$s</string>
-    <string name="money_apply_selected">Apply selected</string>
-    <string name="money_apply_all_ready">Apply all ready</string>
+    <string name="money_apply_selected_count">Apply selected (%1$d)</string>
+    <string name="money_apply_ready_count">Apply ready (%1$d)</string>
     <string name="money_select_matched">Select matched</string>
     <string name="money_due_value">Due %1$s</string>
     <string name="money_credit_value">Credit %1$s</string>

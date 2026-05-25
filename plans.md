@@ -307,3 +307,15 @@ Date: 2026-03-07
 - Verification commands:
   - `./gradlew :app:detekt --console=plain --no-daemon`
   - `./gradlew :app:lintDebug --console=plain --no-daemon`
+
+
+## Milestone 25 - Money/Payment Screen UX Improvements (Current Pass)
+- Acceptance criteria:
+  - Apply-ready bar uses a single primary "Apply ready" CTA with a secondary "Apply selected" option only when needed.
+  - Collect tab padding aligns to 16dp horizontal and filter chips meet 48dp touch targets.
+  - M-Pesa transaction row accessibility uses an "Unknown sender" fallback when sender data is missing.
+- Verification commands:
+  - `./gradlew assembleDebug`
+  - `./gradlew testDebugUnitTest`
+  - `./gradlew lintDebug`
+  - `git status --short`
