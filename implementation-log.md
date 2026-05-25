@@ -575,3 +575,24 @@ $env:GRADLE_USER_HOME='C:\\Users\\USER\\Documents\\CODING\\OMS\\.gradle_user_hom
   - Retried with the workspace-local `GRADLE_USER_HOME` override to keep caches inside the repo.
 - Next best action:
   - Re-run `./gradlew :app:detekt --console=plain --no-daemon` with a longer timeout or on a machine with Gradle dependencies already cached.
+
+
+## Phase 26 - Gradle Sync Recovery (Current Pass)
+- Reproduced project evaluation with `./gradlew.bat help --stacktrace`; root project configuration completed successfully, so the sync issue was not basic settings syntax.
+- Reproduced the build failure with `./gradlew.bat assembleDebug --stacktrace`; `:app:compileDebugKotlin` failed with Kotlin Gradle plugin `NoSuchMethodError` for `IncrementalCompilationFeatures`.
+- Inspected `./gradlew.bat buildEnvironment`; Paparazzi `2.0.0-alpha02` was bringing Kotlin compiler artifacts at `2.1.21` while the project Kotlin/KSP toolchain was pinned to `2.0.21`.
+- Aligned Kotlin and KSP to `2.1.21`, then resolved the follow-up Room KSP failure (`unexpected jvm signature V`) by upgrading Room from `2.6.1` to `2.8.4`.
+- Reviewed the Android Studio stack trace reported during this pass: `MainToolbar` repeatedly recreating `com.google.gct.login2.ui.GoogleLoginAction` is an IDE/Google plugin toolbar action problem, not a Gradle script or app source issue.
+
+## Verification Commands And Outcomes (Current Pass Addendum W)
+```text
+./gradlew.bat help --stacktrace -> PASS
+./gradlew.bat buildEnvironment -> PASS (confirmed mixed Kotlin compiler classpath before fix)
+./gradlew.bat assembleDebug --stacktrace -> FAIL before fix (`IncrementalCompilationFeatures` NoSuchMethodError)
+./gradlew.bat assembleDebug --stacktrace --no-daemon -> FAIL after Kotlin/KSP alignment only (Room 2.6.1 KSP `unexpected jvm signature V`)
+./gradlew.bat assembleDebug --stacktrace --no-daemon -> PASS after Room 2.8.4 alignment
+```
+
+- Residual notes:
+  - Build still emits existing deprecation warnings for Compose `LocalClipboardManager` and AndroidX Security `EncryptedSharedPreferences` / `MasterKey`; those are source modernization warnings, not Gradle sync blockers.
+  - If Android Studio continues showing the `GoogleLoginAction` toolbar throwable, update/restart Android Studio or disable/update the Google Cloud Tools / Google login IDE plugin. No repository file change can directly fix that IDE action instance lifecycle error.

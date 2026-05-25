@@ -319,3 +319,14 @@ Date: 2026-03-07
   - `./gradlew testDebugUnitTest`
   - `./gradlew lintDebug`
   - `git status --short`
+
+
+## Milestone 26 - Gradle Sync Recovery (Current Pass)
+- Acceptance criteria:
+  - Gradle sync/build no longer fails with Kotlin Gradle plugin `IncrementalCompilationFeatures` `NoSuchMethodError`.
+  - Room KSP processing works with the aligned Kotlin/KSP toolchain.
+  - Android Studio `MainToolbar` / `GoogleLoginAction` throwable is documented as an IDE/plugin issue, not a repository Gradle configuration failure.
+- Verification commands:
+  - `./gradlew.bat help --stacktrace`
+  - `./gradlew.bat buildEnvironment`
+  - `./gradlew.bat assembleDebug --stacktrace --no-daemon`
