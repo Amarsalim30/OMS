@@ -207,9 +207,9 @@ fun SummaryScreen(
                 state = pickerState,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(max = 320.dp)
-                    .padding(horizontal = 4.dp, vertical = 4.dp)
-            )
+                    .heightIn(max = 450.dp)
+                    .padding(horizontal = 8.dp))
+
         }
     }
 
