@@ -22,6 +22,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
@@ -44,10 +45,14 @@ import kotlinx.coroutines.launch
 import java.math.BigDecimal
 import java.math.RoundingMode
 import java.text.NumberFormat
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 import kotlinx.datetime.LocalDate
+import kotlinx.datetime.toJavaLocalDate
 
 @Composable
 internal fun DayOrderEditorDialog(
+    orderDate: LocalDate,
     isEditorOpen: Boolean,
     editingOrderId: Long?,
     orderPaidAmounts: Map<Long, BigDecimal>,
@@ -84,6 +89,10 @@ internal fun DayOrderEditorDialog(
 ) {
     if (!isEditorOpen) return
 
+    val orderDateLabel =
+        remember(orderDate) {
+            DateTimeFormatter.ofPattern("d MMM", Locale.getDefault()).format(orderDate.toJavaLocalDate())
+        }
     val paidAmount = editingOrderId?.let { orderPaidAmounts[it] } ?: BigDecimal.ZERO
     val trimmedTotal = totalText.trim()
     val parsedTotal = trimmedTotal.toBigDecimalOrNull()
@@ -176,11 +185,12 @@ internal fun DayOrderEditorDialog(
     }
 
     OrderEditorSheet(
-        title = if (editingOrderId == null) {
-            stringResource(R.string.day_new_order)
-        } else {
-            stringResource(R.string.day_edit_order)
-        },
+        title =
+            if (editingOrderId == null) {
+                stringResource(R.string.calendar_order_add_title, orderDateLabel)
+            } else {
+                stringResource(R.string.day_edit_order)
+            },
         notes = notes,
         onNotesChange = {
             onSetNotes(it)
@@ -240,7 +250,7 @@ internal fun DayOrderEditorDialog(
         customerError = customerError,
         canSave = canSave,
         onSave = ::submitOrder,
-        focusNotesInitially = true,
+        focusNotesInitially = false,
         onClear = {
             onSetNotes("")
             onSetTotalText("")

@@ -168,6 +168,7 @@ internal fun OrderEditorSheet(
 
     val cartItems = remember(notes) { OrderCartParser.parseNotesToCart(notes) }
     val cartTotal = remember(cartItems) { OrderCartParser.cartTotal(cartItems) }
+    var showAddProductSheet by remember { mutableStateOf(false) }
 
     val hasAnyInput =
         cartItems.isNotEmpty() ||
@@ -209,11 +210,12 @@ internal fun OrderEditorSheet(
     }
 
     val handleBackPress: () -> Unit = {
-        if (imeVisibleState) {
-            keyboardControllerState?.hide()
-            focusManagerState.clearFocus(force = true)
-        } else {
-            onCancel()
+        when {
+            imeVisibleState -> {
+                keyboardControllerState?.hide()
+                focusManagerState.clearFocus(force = true)
+            }
+            else -> onCancel()
         }
     }
 
@@ -285,12 +287,10 @@ internal fun OrderEditorSheet(
                         modifier = customerFieldModifier
                     )
 
-                    OrderCartEditor(
+                    OrderCartSummary(
                         notes = notes,
                         onNotesChange = onNotesChange,
-                        productMatches = productMatches,
-                        onProductQueryChange = onProductQueryChange,
-                        onEnsureProduct = onEnsureProduct,
+                        onAddProductClick = { showAddProductSheet = true },
                         modifier = notesFieldModifier
                     )
 
@@ -391,14 +391,12 @@ internal fun OrderEditorSheet(
                             .navigationBarsPadding()
                             .padding(horizontal = 16.dp, vertical = 8.dp)
                 ) {
-                    if (cartTotal > BigDecimal.ZERO) {
-                        Text(
-                            text = stringResource(R.string.order_editor_footer_total, formatKes(cartTotal)),
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.SemiBold,
-                            modifier = Modifier.padding(bottom = 8.dp)
-                        )
-                    }
+                    Text(
+                        text = stringResource(R.string.order_editor_footer_total, formatKes(cartTotal)),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.padding(bottom = 8.dp)
+                    )
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically
@@ -422,6 +420,16 @@ internal fun OrderEditorSheet(
                     }
                 }
             }
+
+            AddProductBottomSheet(
+                visible = showAddProductSheet,
+                cartNotes = notes,
+                onCartNotesChange = onNotesChange,
+                productMatches = productMatches,
+                onProductQueryChange = onProductQueryChange,
+                onEnsureProduct = onEnsureProduct,
+                onDismiss = { showAddProductSheet = false }
+            )
 
             if (showTimePicker) {
                 val timePickerState = rememberTimePickerState(
