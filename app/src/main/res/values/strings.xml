@@ -1040,6 +1040,35 @@
     <string name="auth_error_password_required">Enter your password.</string>
     <string name="auth_error_email_password_invalid">Invalid email or password.</string>
     <string name="auth_error_email_password_failed">Email/password sign-in failed. Check your connection and Firebase Auth setup.</string>
+    <!-- Order Import/Export -->
+    <string name="day_export_orders">Export orders</string>
+    <string name="day_import_orders">Import orders</string>
+    <string name="day_export_title">Export Orders</string>
+    <string name="day_export_message">Export %1$d orders for %2$s</string>
+    <string name="day_export_format_json">JSON</string>
+    <string name="day_export_format_csv">CSV</string>
+    <string name="day_export_success">Orders exported successfully</string>
+    <string name="day_export_failed">Export failed: %1$s</string>
+    <string name="day_import_title">Import Orders</string>
+    <string name="day_import_message">Import orders from a JSON or CSV file? This will add orders to the current day.</string>
+    <string name="day_import_pick_file">Pick File</string>
+    <string name="day_import_failed">Import failed: %1$s</string>
+    <string name="day_import_file_error">Failed to read file</string>
+    <string name="day_import_parsing_error">Error reading file: %1$s</string>
+    <string name="day_import_preview_title">Import Orders</string>
+    <string name="day_import_preview_cross_day">Import Orders (Date Adjustment)</string>
+    <string name="day_import_date_adjustment_required">Date Adjustment Required</string>
+    <string name="day_import_date_adjustment_message">Import date: %1$s\nTarget date: %2$s\nOrders will be adjusted to current day.</string>
+    <string name="day_import_orders_count">%1$d orders to import</string>
+    <string name="day_import_items_label">Items:</string>
+    <string name="day_import_more_items">+ %1$d more</string>
+    <string name="day_import_pickup_label">Pickup: %1$s</string>
+    <string name="day_import_merge">Merge</string>
+    <string name="day_import_keep_separate">Keep Separate</string>
+    <string name="day_import_match_customer">Match Customer</string>
+    <string name="day_import_create_customer">Create New</string>
+    <string name="day_import_confirm">Import %1$d Orders</string>
+    <string name="day_importing_orders">Importing %1$d orders...</string>
     <string-array name="update_notes_latest">
         <item>Share M-PESA messages from Messages directly into the app.</item>
         <item>Oldest-order allocation is now the default when applying payments.</item>

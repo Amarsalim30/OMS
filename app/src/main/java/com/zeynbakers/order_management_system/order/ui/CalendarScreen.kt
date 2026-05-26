@@ -237,7 +237,7 @@ fun CalendarScreen(
     }
 
     val activeDate = selectedDate
-    val baseIndex = remember { 10_000 }
+    val baseIndex = remember { 2_400 }
     val pageCount = remember { baseIndex * 2 }
     val pagerState = rememberPagerState(initialPage = baseIndex, pageCount = { pageCount })
     val today = rememberCurrentDate()

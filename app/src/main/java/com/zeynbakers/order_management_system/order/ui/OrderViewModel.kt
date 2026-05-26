@@ -17,6 +17,7 @@ import com.zeynbakers.order_management_system.order.data.OrderDao
 import com.zeynbakers.order_management_system.order.data.OrderEntity
 import com.zeynbakers.order_management_system.order.data.OrderStatus
 import com.zeynbakers.order_management_system.order.data.OrderStatusOverride
+import com.zeynbakers.order_management_system.order.data.OrderExportItem
 import com.zeynbakers.order_management_system.product.data.ProductEntity
 import java.math.BigDecimal
 import kotlinx.coroutines.Dispatchers
@@ -130,6 +131,82 @@ class OrderViewModel(private val database: AppDatabase) : ViewModel() {
             loadOrdersForDate(result.date)
             refreshMonthSnapshots(result.affectedMonths)
         }
+    }
+
+    fun importOrders(
+        actions: List<OrderImportAction>,
+        targetDate: LocalDate
+    ) {
+        viewModelScope.launch {
+            database.withTransaction {
+                actions.forEach { action ->
+                    val item = action.importItem
+                    val orderDate = targetDate
+                    val totalAmount = BigDecimal(item.totalAmount)
+                    val customerName = item.customerName ?: ""
+                    val customerPhone = item.customerPhone ?: ""
+                    val pickupTime = item.pickupTime
+                    
+                    when (action.action) {
+                        ImportAction.CREATE -> {
+                            saveOrderTransactional(
+                                date = orderDate,
+                                notes = item.notes,
+                                totalAmount = totalAmount,
+                                customerName = customerName,
+                                customerPhone = customerPhone,
+                                pickupTime = pickupTime,
+                                existingOrderId = null
+                            )
+                        }
+                        ImportAction.MERGE -> {
+                            val duplicateOrderId = action.duplicateOrderId
+                            if (duplicateOrderId != null) {
+                                val existingOrder = orderDao.getOrderById(duplicateOrderId)
+                                if (existingOrder != null) {
+                                    val mergedNotes = mergeOrderNotes(existingOrder.notes, item.notes, item.cartItems)
+                                    saveOrderTransactional(
+                                        date = orderDate,
+                                        notes = mergedNotes,
+                                        totalAmount = existingOrder.totalAmount.add(totalAmount),
+                                        customerName = customerName,
+                                        customerPhone = customerPhone,
+                                        pickupTime = pickupTime,
+                                        existingOrderId = duplicateOrderId
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            loadOrdersForDate(targetDate)
+            refreshMonthSnapshots(setOf(MonthKey(targetDate.year, targetDate.monthNumber)))
+        }
+    }
+
+    private fun mergeOrderNotes(existingNotes: String, importNotes: String, cartItems: List<com.zeynbakers.order_management_system.order.data.CartItemExport>): String {
+        val existingCart = OrderCartParser.parseNotesToCart(existingNotes)
+        val importCart = cartItems.map { 
+            com.zeynbakers.order_management_system.order.ui.CartItem(
+                emoji = it.emoji,
+                name = it.name,
+                quantity = it.quantity,
+                unitPrice = BigDecimal(it.unitPrice)
+            )
+        }
+        
+        val mergedCart = existingCart.toMutableList()
+        importCart.forEach { importItem ->
+            val existing = mergedCart.find { it.name == importItem.name }
+            if (existing != null) {
+                mergedCart[mergedCart.indexOf(existing)] = existing.copy(quantity = existing.quantity + importItem.quantity)
+            } else {
+                mergedCart.add(importItem)
+            }
+        }
+        
+        return OrderCartParser.serializeCartToNotes(mergedCart)
     }
 
     private suspend fun saveOrderTransactional(
@@ -580,7 +657,15 @@ class OrderViewModel(private val database: AppDatabase) : ViewModel() {
                 total = monthData.monthTotal,
                 badgeCount = monthData.badgeCount
             )
-        _monthSnapshots.value = _monthSnapshots.value + (key to snapshot)
+        val updatedSnapshots = _monthSnapshots.value + (key to snapshot)
+        _monthSnapshots.value =
+            if (updatedSnapshots.size > MAX_CACHED_SNAPSHOTS) {
+                updatedSnapshots.entries
+                    .drop(updatedSnapshots.size - MAX_CACHED_SNAPSHOTS)
+                    .associate { it.key to it.value }
+            } else {
+                updatedSnapshots
+            }
 
         if (setAsCurrent) {
             _calendarDays.value = monthData.calendarDays
@@ -718,6 +803,7 @@ class OrderViewModel(private val database: AppDatabase) : ViewModel() {
     companion object {
         private const val MOVE_TARGET_MAX_ORDERS = 1_500
         private const val UNPAID_SCREEN_MAX_ORDERS = 2_000
+        private const val MAX_CACHED_SNAPSHOTS = 36
     }
 
     private fun isLeapYear(year: Int): Boolean {

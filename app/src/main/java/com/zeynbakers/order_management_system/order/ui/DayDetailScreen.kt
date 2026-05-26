@@ -8,6 +8,7 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.Row
@@ -32,6 +33,8 @@ import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.FileUpload
 import android.content.Intent
 import android.net.Uri
+import com.zeynbakers.order_management_system.order.data.OrderImportParser
+import com.zeynbakers.order_management_system.order.data.ImportResult
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
@@ -117,6 +120,7 @@ fun DayDetailScreen(
         searchCustomers: suspend (String) -> List<CustomerEntity>,
         searchProducts: suspend (String) -> List<ProductEntity>,
         ensureProduct: suspend (String, BigDecimal, String) -> ProductEntity,
+        onImportOrders: (List<OrderImportAction>) -> Unit = {},
         initialFocusOrderId: Long? = null,
         draft: OrderDraft?,
         onDraftChange: (OrderDraft?) -> Unit,
@@ -165,6 +169,9 @@ fun DayDetailScreen(
     val permissionDeniedMessage = stringResource(R.string.order_print_permission_denied)
     var isExportDialogOpen by remember { mutableStateOf(false) }
     var isImportDialogOpen by remember { mutableStateOf(false) }
+    var importData by remember { mutableStateOf<com.zeynbakers.order_management_system.order.data.OrderExportData?>(null) }
+    var showImportPreview by remember { mutableStateOf(false) }
+    var exportFormat by remember { mutableStateOf("json") }
     val amountRegistry = LocalAmountFieldRegistry.current
     val overlaySuppressed = LocalVoiceOverlaySuppressed.current
     val voiceRouter = LocalVoiceInputRouter.current
@@ -215,6 +222,33 @@ fun DayDetailScreen(
             val order = orders.firstOrNull { it.id == orderId } ?: return@rememberLauncherForActivityResult
             scope.launch { proceedToPrint(order) }
         }
+
+    val filePickerLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            scope.launch {
+                try {
+                    val content = context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
+                    if (content != null) {
+                        when (val result = OrderImportParser.parse(content)) {
+                            is ImportResult.Success -> {
+                                importData = result.data
+                                showImportPreview = true
+                            }
+                            is ImportResult.Error -> {
+                                snackbarHostState.showSnackbar("Import failed: ${result.message}")
+                            }
+                        }
+                    } else {
+                        snackbarHostState.showSnackbar("Failed to read file")
+                    }
+                } catch (e: Exception) {
+                    snackbarHostState.showSnackbar("Error reading file: ${e.message}")
+                }
+            }
+        }
+    }
 
     fun requestPrintReceipt(order: OrderEntity, changePrinter: Boolean = false) {
         printTargetOrderId = order.id
@@ -456,13 +490,13 @@ fun DayDetailScreen(
                             IconButton(onClick = { isExportDialogOpen = true }) {
                                 Icon(
                                     imageVector = Icons.Filled.IosShare,
-                                    contentDescription = "Export orders"
+                                    contentDescription = stringResource(R.string.day_export_orders)
                                 )
                             }
                             IconButton(onClick = { isImportDialogOpen = true }) {
                                 Icon(
                                     imageVector = Icons.Outlined.FileUpload,
-                                    contentDescription = "Import orders"
+                                    contentDescription = stringResource(R.string.day_import_orders)
                                 )
                             }
                         },
@@ -806,36 +840,68 @@ fun DayDetailScreen(
 
     // Export Dialog
     if (isExportDialogOpen) {
+        val exportSuccessMessage = stringResource(R.string.day_export_success)
+        val exportFailedMessage = stringResource(R.string.day_export_failed, "")
+        
         androidx.compose.material3.AlertDialog(
             onDismissRequest = { isExportDialogOpen = false },
-            title = { Text("Export Orders") },
-            text = { Text("Export ${orders.size} orders for $date as JSON?") },
+            title = { Text(stringResource(R.string.day_export_title)) },
+            text = {
+                Column {
+                    Text(stringResource(R.string.day_export_message, orders.size, date))
+                    Spacer(Modifier.height(8.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        androidx.compose.material3.FilterChip(
+                            selected = exportFormat == "json",
+                            onClick = { exportFormat = "json" },
+                            label = { Text(stringResource(R.string.day_export_format_json)) }
+                        )
+                        androidx.compose.material3.FilterChip(
+                            selected = exportFormat == "csv",
+                            onClick = { exportFormat = "csv" },
+                            label = { Text(stringResource(R.string.day_export_format_csv)) }
+                        )
+                    }
+                }
+            },
             confirmButton = {
                 TextButton(
                     onClick = {
                         isExportDialogOpen = false
                         scope.launch {
+                            val (data, mimeType, fileName) = if (exportFormat == "json") {
+                                Triple(
+                                    OrderExporter.exportOrders(orders, customerNames, customerPhones),
+                                    "application/json",
+                                    "orders_$date.json"
+                                )
+                            } else {
+                                Triple(
+                                    OrderExporter.exportOrdersToCsv(orders, customerNames, customerPhones),
+                                    "text/csv",
+                                    "orders_$date.csv"
+                                )
+                            }
+                            val intent = Intent(Intent.ACTION_SEND).apply {
+                                type = mimeType
+                                putExtra(Intent.EXTRA_TEXT, data)
+                                putExtra(Intent.EXTRA_SUBJECT, "Orders for $date")
+                            }
                             try {
-                                val jsonData = OrderExporter.exportOrders(orders, customerNames, customerPhones)
-                                val intent = Intent(Intent.ACTION_SEND).apply {
-                                    type = "application/json"
-                                    putExtra(Intent.EXTRA_TEXT, jsonData)
-                                    putExtra(Intent.EXTRA_SUBJECT, "Orders for $date")
-                                }
                                 context.startActivity(Intent.createChooser(intent, "Export orders"))
-                                snackbarHostState.showSnackbar("Orders exported successfully")
+                                snackbarHostState.showSnackbar(exportSuccessMessage)
                             } catch (e: Exception) {
-                                snackbarHostState.showSnackbar("Export failed: ${e.message}")
+                                snackbarHostState.showSnackbar(exportFailedMessage.format(e.message ?: ""))
                             }
                         }
                     }
                 ) {
-                    Text("Export")
+                    Text(stringResource(R.string.day_export_orders))
                 }
             },
             dismissButton = {
                 TextButton(onClick = { isExportDialogOpen = false }) {
-                    Text("Cancel")
+                    Text(stringResource(R.string.action_cancel))
                 }
             }
         )
@@ -845,29 +911,47 @@ fun DayDetailScreen(
     if (isImportDialogOpen) {
         androidx.compose.material3.AlertDialog(
             onDismissRequest = { isImportDialogOpen = false },
-            title = { Text("Import Orders") },
-            text = { Text("Import orders from a shared JSON file? This will add orders to the current day.") },
+            title = { Text(stringResource(R.string.day_import_title)) },
+            text = { Text(stringResource(R.string.day_import_message)) },
             confirmButton = {
                 TextButton(
                     onClick = {
                         isImportDialogOpen = false
-                        scope.launch {
-                            // Note: For a full implementation, you'd need to handle file picking
-                            // This is a simplified version that shows the concept
-                            snackbarHostState.showSnackbar("Import via file picker - to be implemented")
-                        }
+                        filePickerLauncher.launch("*/*")
                     }
                 ) {
-                    Text("Import")
+                    Text(stringResource(R.string.day_import_pick_file))
                 }
             },
             dismissButton = {
                 TextButton(onClick = { isImportDialogOpen = false }) {
-                    Text("Cancel")
+                    Text(stringResource(R.string.action_cancel))
                 }
             }
         )
     }
+
+    // Import Preview Dialog
+    val importingMessage = stringResource(R.string.day_importing_orders, 0)
+    
+    DayImportPreviewDialog(
+        isOpen = showImportPreview,
+        importData = importData,
+        existingOrders = orders,
+        currentDate = date,
+        onDismiss = { 
+            showImportPreview = false
+            importData = null
+        },
+        onConfirmImport = { actions ->
+            onImportOrders(actions)
+            showImportPreview = false
+            importData = null
+            scope.launch {
+                snackbarHostState.showSnackbar(importingMessage.format(actions.size))
+            }
+        }
+    )
 }
 
 @OptIn(ExperimentalMaterial3Api::class)

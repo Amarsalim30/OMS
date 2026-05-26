@@ -219,6 +219,11 @@ internal fun NavGraphBuilder.calendarGraph(
             searchCustomers = { query -> orderViewModel.searchCustomers(query) },
             searchProducts = { query -> orderViewModel.searchProducts(query) },
             ensureProduct = { name, price, emoji -> orderViewModel.ensureProduct(name, price, emoji) },
+            onImportOrders = { actions ->
+                orderViewModel.importOrders(actions, date)
+                WidgetUpdater.enqueue(navController.context)
+                NotificationScheduler.enqueueNow(navController.context)
+            },
             initialFocusOrderId = focusOrderId,
             draft = calendarState.dayDrafts[date],
             onDraftChange = { updated ->
