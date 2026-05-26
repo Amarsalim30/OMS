@@ -5,10 +5,12 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.sizeIn
@@ -48,6 +50,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
@@ -95,7 +98,9 @@ internal fun AddProductBottomSheet(
         productQuery.isNotBlank() || selectedProduct != null || unitPriceText.isNotBlank() || quantity != 1
     }
     var showDismissConfirm by remember { mutableStateOf(false) }
-    var isAnyFieldFocused by remember { mutableStateOf(false) }
+
+    val density = LocalDensity.current
+    val isKeyboardVisible = WindowInsets.ime.getBottom(density) > 0
 
     val sheetState = rememberModalBottomSheetState(
         skipPartiallyExpanded = true,
@@ -143,7 +148,7 @@ internal fun AddProductBottomSheet(
         sheetState = sheetState,
         dragHandle = { androidx.compose.material3.BottomSheetDefaults.DragHandle() }
     ) {
-        BackHandler(enabled = isDirty && !isAnyFieldFocused) {
+        BackHandler(enabled = isDirty && !isKeyboardVisible) {
             showDismissConfirm = true
         }
         Column(
@@ -233,7 +238,6 @@ internal fun AddProductBottomSheet(
                             .focusRequester(searchFocusRequester)
                             .bringIntoViewRequester(searchBringIntoView)
                             .onFocusChanged {
-                                isAnyFieldFocused = it.isFocused
                                 if (it.isFocused) {
                                     scope.launch { searchBringIntoView.bringIntoView() }
                                 }
@@ -347,7 +351,6 @@ internal fun AddProductBottomSheet(
                                         .fillMaxWidth()
                                         .bringIntoViewRequester(priceBringIntoView)
                                         .onFocusChanged {
-                                            isAnyFieldFocused = it.isFocused
                                             if (it.isFocused) {
                                                 scope.launch { priceBringIntoView.bringIntoView() }
                                             }
@@ -413,8 +416,10 @@ internal fun AddProductBottomSheet(
                     confirmButton = {
                         Button(
                             onClick = {
-                                showDismissConfirm = false
-                                doDismiss()
+                                scope.launch { sheetState.hide() }.invokeOnCompletion {
+                                    showDismissConfirm = false
+                                    doDismiss()
+                                }
                             }
                         ) {
                             Text(stringResource(R.string.order_editor_discard_confirm))
