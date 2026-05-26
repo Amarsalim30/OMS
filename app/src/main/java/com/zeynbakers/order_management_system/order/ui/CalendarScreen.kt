@@ -437,7 +437,7 @@ fun CalendarScreen(
                 HorizontalPager(
                     modifier = Modifier.fillMaxSize(),
                     state = pagerState,
-                    beyondViewportPageCount = 1
+                    beyondViewportPageCount = 0
                 ) { page ->
                     val (pageYear, pageMonth) =
                         remember(page, anchorYear, anchorMonth) {

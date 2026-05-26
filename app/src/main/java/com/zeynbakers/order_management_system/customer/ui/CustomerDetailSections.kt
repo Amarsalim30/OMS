@@ -186,55 +186,54 @@ internal fun BalanceCard(
                 Text(stringResource(R.string.customer_action_view_statement))
             }
             Spacer(Modifier.height(6.dp))
-            BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
-                val stackActions = fontScale > 1.3f || maxWidth < 360.dp
-                if (stackActions) {
-                    Column(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
+            // Use simple layout instead of BoxWithConstraints to avoid memory issues
+            val stackActions = fontScale > 1.3f
+            if (stackActions) {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    OutlinedButton(
+                        onClick = onReceivePayment,
+                        enabled = canReceive,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(48.dp)
                     ) {
-                        OutlinedButton(
-                            onClick = onReceivePayment,
-                            enabled = canReceive,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(48.dp)
-                        ) {
-                            Text(stringResource(R.string.customer_action_record_payment))
-                        }
-                        TextButton(
-                            onClick = onViewPaymentHistory,
-                            enabled = canReceive,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(48.dp)
-                        ) {
-                            Text(stringResource(R.string.customer_detail_receipt_history))
-                        }
+                        Text(stringResource(R.string.customer_action_record_payment))
                     }
-                } else {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    TextButton(
+                        onClick = onViewPaymentHistory,
+                        enabled = canReceive,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(48.dp)
                     ) {
-                        OutlinedButton(
-                            onClick = onReceivePayment,
-                            enabled = canReceive,
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(48.dp)
-                        ) {
-                            Text(stringResource(R.string.customer_action_record_payment))
-                        }
-                        TextButton(
-                            onClick = onViewPaymentHistory,
-                            enabled = canReceive,
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(48.dp)
-                        ) {
-                            Text(stringResource(R.string.customer_detail_receipt_history))
-                        }
+                        Text(stringResource(R.string.customer_detail_receipt_history))
+                    }
+                }
+            } else {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    OutlinedButton(
+                        onClick = onReceivePayment,
+                        enabled = canReceive,
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(48.dp)
+                    ) {
+                        Text(stringResource(R.string.customer_action_record_payment))
+                    }
+                    TextButton(
+                        onClick = onViewPaymentHistory,
+                        enabled = canReceive,
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(48.dp)
+                    ) {
+                        Text(stringResource(R.string.customer_detail_receipt_history))
                     }
                 }
             }

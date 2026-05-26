@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.relocation.BringIntoViewRequester
@@ -21,6 +22,8 @@ import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
@@ -34,6 +37,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SheetValue
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -57,7 +61,6 @@ import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.zeynbakers.order_management_system.R
 import com.zeynbakers.order_management_system.core.util.formatKes
@@ -83,7 +86,7 @@ internal fun AddProductBottomSheet(
     var productQuery by remember { mutableStateOf("") }
     var isProductDropdownExpanded by remember { mutableStateOf(false) }
     var selectedProduct by remember { mutableStateOf<SelectedProductDraft?>(null) }
-    var quantity by remember { mutableIntStateOf(1) }
+    var quantity by remember { mutableStateOf("1") }
     var unitPriceText by remember { mutableStateOf("") }
     val scope = rememberCoroutineScope()
     val currencyPrefix = stringResource(R.string.order_editor_currency_prefix)
@@ -91,12 +94,13 @@ internal fun AddProductBottomSheet(
     val showSuggestions = isProductDropdownExpanded && selectedProduct == null && productQuery.isNotBlank()
 
     val unitPrice = unitPriceText.toBigDecimalOrNull() ?: BigDecimal.ZERO
-    val lineTotal = unitPrice.multiply(BigDecimal.valueOf(quantity.toLong()))
+    val quantityValue = quantity.toLongOrNull() ?: 1L
+    val lineTotal = unitPrice.multiply(BigDecimal.valueOf(quantityValue))
     val productName = selectedProduct?.name?.trim().orEmpty().ifBlank { productQuery.trim() }
-    val canAddItem = productName.isNotBlank() && unitPrice > BigDecimal.ZERO
+    val canAddItem = productName.isNotBlank() && unitPrice > BigDecimal.ZERO && quantityValue > 0
 
     val isDirty = remember(productQuery, selectedProduct, unitPriceText, quantity) {
-        productQuery.isNotBlank() || selectedProduct != null || unitPriceText.isNotBlank() || quantity != 1
+        productQuery.isNotBlank() || selectedProduct != null || unitPriceText.isNotBlank() || quantity != "1"
     }
     var showDismissConfirm by remember { mutableStateOf(false) }
 
@@ -127,7 +131,7 @@ internal fun AddProductBottomSheet(
         productQuery = ""
         onProductQueryChange("")
         selectedProduct = null
-        quantity = 1
+        quantity = "1"
         unitPriceText = ""
         isProductDropdownExpanded = false
     }
@@ -294,7 +298,7 @@ internal fun AddProductBottomSheet(
                                 )
                             productQuery = name
                             unitPriceText = ""
-                            quantity = 1
+                            quantity = "1"
                             isProductDropdownExpanded = false
                         },
                         onProductSelected = { product ->
@@ -312,7 +316,7 @@ internal fun AddProductBottomSheet(
                                     .setScale(0, RoundingMode.HALF_UP)
                                     .stripTrailingZeros()
                                     .toPlainString()
-                            quantity = 1
+                            quantity = "1"
                             isProductDropdownExpanded = false
                         }
                     )
@@ -330,36 +334,22 @@ internal fun AddProductBottomSheet(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                             Spacer(Modifier.height(6.dp))
-                            Row(
+                            OutlinedTextField(
+                                value = quantity,
+                                onValueChange = { newValue ->
+                                    // Only allow positive numbers
+                                    if (newValue.isEmpty() || newValue.all { it.isDigit() }) {
+                                        quantity = newValue
+                                    }
+                                },
                                 modifier = Modifier.fillMaxWidth(),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.SpaceEvenly
-                            ) {
-                                IconButton(
-                                    onClick = { if (quantity > 1) quantity-- },
-                                    modifier = Modifier.sizeIn(minWidth = 48.dp, minHeight = 48.dp)
-                                ) {
-                                    Icon(
-                                        Icons.Filled.Remove,
-                                        contentDescription =
-                                            stringResource(R.string.order_editor_decrease_qty)
-                                    )
-                                }
-                                Text(
-                                    text = quantity.toString(),
-                                    style = MaterialTheme.typography.titleLarge
-                                )
-                                IconButton(
-                                    onClick = { quantity++ },
-                                    modifier = Modifier.sizeIn(minWidth = 48.dp, minHeight = 48.dp)
-                                ) {
-                                    Icon(
-                                        Icons.Filled.Add,
-                                        contentDescription =
-                                            stringResource(R.string.order_editor_increase_qty)
-                                    )
-                                }
-                            }
+                                keyboardOptions = KeyboardOptions(
+                                    keyboardType = KeyboardType.Number,
+                                    imeAction = ImeAction.Next
+                                ),
+                                singleLine = true,
+                                placeholder = { Text("1") }
+                            )
                         }
 
                         Column(modifier = Modifier.weight(0.45f)) {
@@ -432,7 +422,7 @@ internal fun AddProductBottomSheet(
                             CartItem(
                                 emoji = draft.emoji,
                                 name = draft.name,
-                                quantity = quantity.coerceAtLeast(1),
+                                quantity = quantityValue.coerceAtLeast(1).toInt(),
                                 unitPrice = finalPrice
                             )
                         onCartNotesChange(OrderCartParser.serializeCartToNotes(cartItems + newItem))

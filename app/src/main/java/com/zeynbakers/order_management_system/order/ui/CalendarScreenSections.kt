@@ -511,45 +511,39 @@ internal fun MonthGrid(
     val horizontalPadding = 10.dp
     val spacing = 3.dp
     val weeks = remember(days) { days.chunked(7) }
-    BoxWithConstraints(modifier = modifier) {
-        val rows = (days.size / 7).coerceAtLeast(1)
-        val availableHeight = maxHeight - (verticalPadding * 2) - (spacing * (rows - 1))
-        val sixRowHeight = (maxHeight - (verticalPadding * 2) - (spacing * 5)) / 6
-        val cellHeight = (availableHeight / rows)
-            .coerceAtMost(sixRowHeight)
-            .coerceAtLeast(48.dp)
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = horizontalPadding, vertical = verticalPadding),
-            verticalArrangement = Arrangement.spacedBy(spacing)
-        ) {
-            weeks.forEach { week ->
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(spacing)
-                ) {
-                    week.forEach { day ->
-                        DayCell(
-                            day = day,
-                            isSelected = selectedDate == day.date,
-                            onSelectDate = onSelectDate,
-                            onOpenDay = onOpenDay,
-                            onQuickAdd = onQuickAdd,
-                            onBoundsChanged = { bounds -> onDayBoundsChanged?.invoke(day.date, bounds) },
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(cellHeight)
-                                .heightIn(min = 48.dp)
-                        )
-                    }
-                    repeat((7 - week.size).coerceAtLeast(0)) {
-                        Spacer(
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(cellHeight)
-                        )
-                    }
+    // Use fixed height instead of BoxWithConstraints to avoid memory issues
+    val rows = (days.size / 7).coerceAtLeast(1)
+    val cellHeight = 48.dp
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .padding(horizontal = horizontalPadding, vertical = verticalPadding),
+        verticalArrangement = Arrangement.spacedBy(spacing)
+    ) {
+        weeks.forEach { week ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(spacing)
+            ) {
+                week.forEach { day ->
+                    DayCell(
+                        day = day,
+                        isSelected = selectedDate == day.date,
+                        onSelectDate = onSelectDate,
+                        onOpenDay = onOpenDay,
+                        onQuickAdd = onQuickAdd,
+                        onBoundsChanged = { bounds -> onDayBoundsChanged?.invoke(day.date, bounds) },
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(cellHeight)
+                    )
+                }
+                repeat((7 - week.size).coerceAtLeast(0)) {
+                    Spacer(
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(cellHeight)
+                    )
                 }
             }
         }
