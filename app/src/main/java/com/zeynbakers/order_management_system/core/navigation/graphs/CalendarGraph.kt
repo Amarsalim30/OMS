@@ -158,6 +158,7 @@ internal fun NavGraphBuilder.calendarGraph(
             orders = calendarState.ordersForDate,
             dayTotal = calendarState.dayTotal,
             customerNames = calendarState.orderCustomerNames,
+            customerPhones = calendarState.orderCustomerPhones,
             orderPaidAmounts = calendarState.orderPaidAmounts,
             onBack = { navController.popBackStack() },
             onSaveOrder = { notes, total, name, phone, pickupTime, orderId ->

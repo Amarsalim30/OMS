@@ -13,7 +13,8 @@ object ReceiptFormatter {
     fun formatOrder(
         storeName: String,
         order: OrderEntity,
-        customerLabel: String? = null
+        customerLabel: String? = null,
+        customerPhone: String? = null
     ): String {
         val headerName = storeName.trim().ifBlank { "Store" }
         val parsed = parseOrderNotes(order.notes)
@@ -25,6 +26,9 @@ object ReceiptFormatter {
         lines += dateLine
         if (!customerLabel.isNullOrBlank()) {
             lines += customerLabel.trim()
+        }
+        if (!customerPhone.isNullOrBlank()) {
+            lines += customerPhone.trim()
         }
         lines += ""
         lines += SEPARATOR

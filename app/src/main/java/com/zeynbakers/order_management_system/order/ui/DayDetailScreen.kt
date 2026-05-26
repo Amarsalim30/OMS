@@ -91,6 +91,7 @@ fun DayDetailScreen(
         orders: List<OrderEntity>,
         dayTotal: BigDecimal,
         customerNames: Map<Long, String>,
+        customerPhones: Map<Long, String>,
         orderPaidAmounts: Map<Long, BigDecimal>,
         onBack: () -> Unit,
         onSaveOrder: (String, BigDecimal, String, String, String?, Long?) -> Unit,
@@ -163,7 +164,8 @@ fun DayDetailScreen(
 
     suspend fun printOrder(order: OrderEntity, macAddress: String, printerName: String) {
         val customerLabel = order.customerId?.let { customerNames[it] }
-        val receiptText = ReceiptFormatter.formatOrder(storeName, order, customerLabel)
+        val customerPhone = order.customerId?.let { customerPhones[it] }
+        val receiptText = ReceiptFormatter.formatOrder(storeName, order, customerLabel, customerPhone)
         val result = printerManager.printReceipt(macAddress, receiptText)
         if (result.isSuccess) {
             printerPrefs.savePrinter(macAddress, printerName)

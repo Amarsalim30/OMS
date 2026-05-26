@@ -1,9 +1,16 @@
 package com.zeynbakers.order_management_system.ui
 
 import android.content.Context
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Button
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assert
@@ -76,6 +83,8 @@ class AccessibilitySmokeTest {
                     onOpenDay = {},
                     onSaveOrder = { _, _, _, _, _, _ -> },
                     searchCustomers = { emptyList() },
+                    searchProducts = { emptyList() },
+                    ensureProduct = { _, _, _ -> com.zeynbakers.order_management_system.product.data.ProductEntity(name = "", defaultPrice = BigDecimal.ZERO, emoji = "") },
                     onSummaryClick = {},
                     onOpenMore = {},
                     onMonthSettled = { _, _ -> },
@@ -411,7 +420,7 @@ class AccessibilitySmokeTest {
                     readyCount = 2,
                     readyAmount = java.math.BigDecimal("1000.00"),
                     onApplySelected = {},
-                    onApplyAllReady = {}
+                    onApplyReady = {}
                 )
             }
         }
@@ -478,15 +487,15 @@ class AccessibilitySmokeTest {
         var screenWidthPx = 0f
         composeRule.setContent {
             MaterialTheme {
-                androidx.compose.foundation.layout.BoxWithConstraints(
-                    modifier = androidx.compose.ui.Modifier.fillMaxWidth()
+                BoxWithConstraints(
+                    modifier = Modifier.fillMaxWidth()
                 ) {
                     screenWidthPx = with(composeRule.density) { maxWidth.toPx() }
-                    androidx.compose.material3.Surface(tonalElevation = 3.dp) {
+                    Surface(tonalElevation = 3.dp) {
                         Button(
                             onClick = {},
                             enabled = true,
-                            modifier = androidx.compose.ui.Modifier
+                            modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(horizontal = 16.dp, vertical = 12.dp)
                         ) {

@@ -227,6 +227,7 @@ internal fun MainAppContent(
                 val ordersForDate by orderViewModel.ordersForDate.collectAsState()
                 val dayTotal by orderViewModel.dayTotal.collectAsState()
                 val orderCustomerNames by orderViewModel.orderCustomerNames.collectAsState()
+                val orderCustomerPhones by orderViewModel.orderCustomerPhones.collectAsState()
                 val orderPaidAmounts by orderViewModel.orderPaidAmounts.collectAsState()
                 val monthSnapshots by orderViewModel.monthSnapshots.collectAsState()
                 val summaryOrders by orderViewModel.summaryOrders.collectAsState()
@@ -427,6 +428,7 @@ internal fun MainAppContent(
                         ordersForDate = ordersForDate,
                         dayTotal = dayTotal,
                         orderCustomerNames = orderCustomerNames,
+                        orderCustomerPhones = orderCustomerPhones,
                         orderPaidAmounts = orderPaidAmounts,
                         summaryOrders = summaryOrders,
                         summaryTotal = summaryTotal,

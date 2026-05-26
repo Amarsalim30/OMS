@@ -82,6 +82,9 @@ class OrderViewModel(private val database: AppDatabase) : ViewModel() {
     private val _orderCustomerNames = MutableStateFlow<Map<Long, String>>(emptyMap())
     val orderCustomerNames = _orderCustomerNames.asStateFlow()
 
+    private val _orderCustomerPhones = MutableStateFlow<Map<Long, String>>(emptyMap())
+    val orderCustomerPhones = _orderCustomerPhones.asStateFlow()
+
     private val _orderPaidAmounts = MutableStateFlow<Map<Long, BigDecimal>>(emptyMap())
     val orderPaidAmounts = _orderPaidAmounts.asStateFlow()
 
@@ -308,6 +311,12 @@ class OrderViewModel(private val database: AppDatabase) : ViewModel() {
                     emptyMap()
                 } else {
                     customerDao.getByIds(customerIds).associate { it.id to it.name }
+                }
+            _orderCustomerPhones.value =
+                if (customerIds.isEmpty()) {
+                    emptyMap()
+                } else {
+                    customerDao.getByIds(customerIds).associate { it.id to it.phone }
                 }
 
             val orderIds = activeOrders.map { it.id }.filter { it != 0L }
