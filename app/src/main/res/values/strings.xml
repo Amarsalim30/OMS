@@ -1,7 +1,7 @@
 <resources>
     <string name="app_name">OrderBook</string>
     <string name="nav_calendar">Calendar</string>
-    <string name="nav_orders">Orders</string>
+    <string name="nav_orders">Unpaid</string>
     <string name="nav_customers">Customers</string>
     <string name="nav_money">Money</string>
     <string name="more_backup_restore">Backup and restore data</string>

@@ -3,6 +3,7 @@ package com.zeynbakers.order_management_system.order.ui
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.FileProvider
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -70,6 +71,8 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
+import android.os.Build
+import java.io.File
 import com.zeynbakers.order_management_system.R
 import com.zeynbakers.order_management_system.accounting.domain.ReceiptAllocation
 import com.zeynbakers.order_management_system.core.ui.LocalAmountFieldRegistry
@@ -882,12 +885,31 @@ fun DayDetailScreen(
                                     "orders_$date.csv"
                                 )
                             }
-                            val intent = Intent(Intent.ACTION_SEND).apply {
-                                type = mimeType
-                                putExtra(Intent.EXTRA_TEXT, data)
-                                putExtra(Intent.EXTRA_SUBJECT, "Orders for $date")
-                            }
+                            
                             try {
+                                val cacheDir = File(context.cacheDir, "exports")
+                                if (!cacheDir.exists()) {
+                                    cacheDir.mkdirs()
+                                }
+                                val file = File(cacheDir, fileName)
+                                file.writeText(data)
+                                
+                                val uri: Uri = FileProvider.getUriForFile(
+                                    context,
+                                    "${context.packageName}.fileprovider",
+                                    file
+                                )
+                                
+                                val intent = Intent(Intent.ACTION_SEND).apply {
+                                    type = mimeType
+                                    putExtra(Intent.EXTRA_STREAM, uri)
+                                    putExtra(Intent.EXTRA_SUBJECT, "Orders for $date")
+                                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                    }
+                                }
+                                
                                 context.startActivity(Intent.createChooser(intent, "Export orders"))
                                 snackbarHostState.showSnackbar(exportSuccessMessage)
                             } catch (e: Exception) {

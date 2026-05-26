@@ -11,11 +11,15 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import android.content.Context
+import android.content.Intent
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.Payments
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -24,6 +28,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -149,11 +154,13 @@ internal fun UnpaidOrderRow(
     modifier: Modifier = Modifier,
     order: OrderEntity,
     customerLabel: String?,
+    customerPhone: String?,
     paidAmount: BigDecimal,
     balance: BigDecimal,
     onOpenDay: () -> Unit,
     onReceivePayment: () -> Unit
 ) {
+    val context = LocalContext.current
     val haptic = LocalHapticFeedback.current
     val hasCustomer = !customerLabel.isNullOrBlank()
     val hasNotes = order.notes.isNotBlank()
@@ -296,6 +303,41 @@ internal fun UnpaidOrderRow(
                             color = MaterialTheme.colorScheme.onTertiaryContainer
                         )
                     }
+                }
+
+                Spacer(modifier = Modifier.width(8.dp))
+
+                IconButton(
+                    onClick = {
+                        val orderDate = order.orderDate.toString()
+                        val message = """*Order Reminder* 📋
+
+*Order:* ${order.notes}
+*Date:* $orderDate
+*Amount Due:* ${formatKes(balance)}
+*Total Order:* ${formatKes(order.totalAmount)}
+
+Please arrange payment at your earliest convenience. Thank you! 🙏"""
+                        val intent = if (!customerPhone.isNullOrBlank()) {
+                            Intent(Intent.ACTION_SENDTO).apply {
+                                data = android.net.Uri.parse("smsto:$customerPhone")
+                                putExtra("sms_body", message)
+                            }
+                        } else {
+                            Intent(Intent.ACTION_SEND).apply {
+                                type = "text/plain"
+                                putExtra(Intent.EXTRA_TEXT, message)
+                            }
+                        }
+                        context.startActivity(Intent.createChooser(intent, "Share order"))
+                    }
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Share,
+                        contentDescription = "Share order",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(18.dp)
+                    )
                 }
             }
         }

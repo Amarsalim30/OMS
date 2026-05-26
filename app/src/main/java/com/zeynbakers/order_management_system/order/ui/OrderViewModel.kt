@@ -98,6 +98,9 @@ class OrderViewModel(private val database: AppDatabase) : ViewModel() {
     private val _unpaidCustomerNames = MutableStateFlow<Map<Long, String>>(emptyMap())
     val unpaidCustomerNames = _unpaidCustomerNames.asStateFlow()
 
+    private val _unpaidCustomerPhones = MutableStateFlow<Map<Long, String>>(emptyMap())
+    val unpaidCustomerPhones = _unpaidCustomerPhones.asStateFlow()
+
     private val _creditPrompt = MutableStateFlow<OrderCreditPrompt?>(null)
     val creditPrompt = _creditPrompt.asStateFlow()
 
@@ -791,6 +794,12 @@ class OrderViewModel(private val database: AppDatabase) : ViewModel() {
                     emptyMap()
                 } else {
                     customerDao.getByIds(customerIds).associate { it.id to it.name }
+                }
+            _unpaidCustomerPhones.value =
+                if (customerIds.isEmpty()) {
+                    emptyMap()
+                } else {
+                    customerDao.getByIds(customerIds).associate { it.id to (it.phone ?: "") }
                 }
             _unpaidPaidAmounts.value = paidByOrder
             _unpaidOrders.value =

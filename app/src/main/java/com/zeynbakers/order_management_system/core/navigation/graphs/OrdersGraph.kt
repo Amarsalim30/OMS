@@ -28,6 +28,7 @@ internal fun NavGraphBuilder.ordersGraph(
             orders = ordersState.unpaidOrders,
             paidAmounts = ordersState.unpaidPaidAmounts,
             customerNames = ordersState.unpaidCustomerNames,
+            customerPhones = ordersState.unpaidCustomerPhones,
             onBack = { navController.popBackStack() },
             onOpenDay = { date, orderId ->
                 calendarCallbacks.onSelectedDateChange(date)

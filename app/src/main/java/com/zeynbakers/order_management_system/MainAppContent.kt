@@ -236,6 +236,7 @@ internal fun MainAppContent(
                 val unpaidOrders by orderViewModel.unpaidOrders.collectAsState()
                 val unpaidPaidAmounts by orderViewModel.unpaidPaidAmounts.collectAsState()
                 val unpaidCustomerNames by orderViewModel.unpaidCustomerNames.collectAsState()
+                val unpaidCustomerPhones by orderViewModel.unpaidCustomerPhones.collectAsState()
                 val creditPrompt by orderViewModel.creditPrompt.collectAsState()
                 val customerSummaries by customerViewModel.summaries.collectAsState()
                 val customerDetail by customerViewModel.customer.collectAsState()
@@ -438,7 +439,8 @@ internal fun MainAppContent(
                     val ordersState = AppOrdersState(
                         unpaidOrders = unpaidOrders,
                         unpaidPaidAmounts = unpaidPaidAmounts,
-                        unpaidCustomerNames = unpaidCustomerNames
+                        unpaidCustomerNames = unpaidCustomerNames,
+                        unpaidCustomerPhones = unpaidCustomerPhones
                     )
                     val customersState = AppCustomersState(
                         customerSummaries = customerSummaries,

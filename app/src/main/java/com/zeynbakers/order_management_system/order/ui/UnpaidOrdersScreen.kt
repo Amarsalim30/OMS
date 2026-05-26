@@ -23,6 +23,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CenterAlignedTopAppBar
@@ -76,6 +77,7 @@ fun UnpaidOrdersScreen(
         orders: List<OrderEntity>,
         paidAmounts: Map<Long, BigDecimal>,
         customerNames: Map<Long, String>,
+        customerPhones: Map<Long, String>,
         onBack: () -> Unit,
         onOpenDay: (LocalDate, Long?) -> Unit,
         onReceivePayment: (OrderEntity) -> Unit,
@@ -364,6 +366,8 @@ fun UnpaidOrdersScreen(
                                     order.customerId?.let { id -> customerNames[id] }?.takeIf {
                                         it.isNotBlank()
                                     }
+                            val customerPhone =
+                                    order.customerId?.let { id -> customerPhones[id] }
 
                             val dismissState =
                                     rememberSwipeToDismissBoxState(
@@ -389,6 +393,7 @@ fun UnpaidOrdersScreen(
                                         UnpaidOrderRow(
                                                 order = order,
                                                 customerLabel = customerLabel,
+                                                customerPhone = customerPhone,
                                                 paidAmount = paid,
                                                 balance = balance,
                                                 onOpenDay = {
@@ -408,6 +413,8 @@ fun UnpaidOrdersScreen(
                                 order.customerId?.let { id -> customerNames[id] }?.takeIf {
                                     it.isNotBlank()
                                 }
+                        val customerPhone =
+                                order.customerId?.let { id -> customerPhones[id] }
 
                         val dismissState =
                                 rememberSwipeToDismissBoxState(
@@ -433,6 +440,7 @@ fun UnpaidOrdersScreen(
                                     UnpaidOrderRow(
                                             order = order,
                                             customerLabel = customerLabel,
+                                            customerPhone = customerPhone,
                                             paidAmount = paid,
                                             balance = balance,
                                             onOpenDay = { onOpenDay(order.orderDate, order.id) },

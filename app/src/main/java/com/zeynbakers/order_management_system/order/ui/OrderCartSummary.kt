@@ -21,8 +21,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.zeynbakers.order_management_system.R
+import com.zeynbakers.order_management_system.core.util.formatKes
+import java.math.BigDecimal
 
 @Composable
 internal fun OrderCartSummary(
@@ -34,8 +37,8 @@ internal fun OrderCartSummary(
     val cartItems = remember(notes) { OrderCartParser.parseNotesToCart(notes) }
 
     Column(
-        modifier = modifier.fillMaxWidth().padding(horizontal = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
+        modifier = modifier.fillMaxWidth().padding(horizontal = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         if (cartItems.isNotEmpty()) {
             Text(
@@ -44,11 +47,6 @@ internal fun OrderCartSummary(
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             cartItems.forEachIndexed { index, item ->
-                val label =
-                    buildString {
-                        if (item.emoji.isNotBlank()) append("${item.emoji} ")
-                        append("${item.name} x ${item.quantity}")
-                    }
                 Surface(
                     modifier = Modifier.fillMaxWidth(),
                     shape = OrderEditorFieldShape,
@@ -59,20 +57,40 @@ internal fun OrderCartSummary(
                         modifier =
                             Modifier
                                 .fillMaxWidth()
-                                .padding(horizontal = 12.dp, vertical = 12.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                                .padding(horizontal = 8.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
                     ) {
                         Text(
-                            text = label,
+                            text = buildString {
+                                if (item.emoji.isNotBlank()) append("${item.emoji} ")
+                                append(item.name)
+                            },
                             style = MaterialTheme.typography.bodyLarge,
                             modifier = Modifier.weight(1f)
+                        )
+                        if (item.unitPrice > BigDecimal.ZERO) {
+                            Text(
+                                text = "@ ${formatKes(item.unitPrice)}",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        Text(
+                            text = "x${item.quantity}",
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                        Text(
+                            text = formatKes(item.lineTotal),
+                            style = MaterialTheme.typography.bodyLarge,
+                            fontWeight = FontWeight.SemiBold
                         )
                         IconButton(
                             onClick = {
                                 val updated = cartItems.toMutableList().apply { removeAt(index) }
                                 onNotesChange(OrderCartParser.serializeCartToNotes(updated))
                             },
-                            modifier = Modifier.sizeIn(minWidth = 48.dp, minHeight = 48.dp)
+                            modifier = Modifier.sizeIn(minWidth = 44.dp, minHeight = 44.dp)
                         ) {
                             Icon(
                                 imageVector = Icons.Filled.Delete,
