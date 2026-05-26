@@ -1,6 +1,7 @@
 package com.zeynbakers.order_management_system.order.ui
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -13,6 +14,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
@@ -44,13 +46,14 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
@@ -63,7 +66,6 @@ import java.math.BigDecimal
 import java.math.RoundingMode
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun AddProductBottomSheet(
@@ -84,7 +86,6 @@ internal fun AddProductBottomSheet(
     var quantity by remember { mutableIntStateOf(1) }
     var unitPriceText by remember { mutableStateOf("") }
     val scope = rememberCoroutineScope()
-    val searchFocusRequester = remember { FocusRequester() }
     val currencyPrefix = stringResource(R.string.order_editor_currency_prefix)
 
     val showSuggestions = isProductDropdownExpanded && selectedProduct == null && productQuery.isNotBlank()
@@ -99,13 +100,26 @@ internal fun AddProductBottomSheet(
     }
     var showDismissConfirm by remember { mutableStateOf(false) }
 
-    val density = LocalDensity.current
-    val isKeyboardVisible = WindowInsets.ime.getBottom(density) > 0
+    // TRACK FOCUS STATES INSTEAD OF WINDOW INSETS
+    var isSearchFocused by remember { mutableStateOf(false) }
+    var isPriceFocused by remember { mutableStateOf(false) }
+    val isAnyFieldFocused = isSearchFocused || isPriceFocused
+
+    val focusManager = LocalFocusManager.current
+    val keyboardController = LocalSoftwareKeyboardController.current
+
+    // Wrap isDirty in a reactive state pointer to prevent the stale lambda bug
+    val currentIsDirty by rememberUpdatedState(isDirty)
 
     val sheetState = rememberModalBottomSheetState(
         skipPartiallyExpanded = true,
         confirmValueChange = { newValue ->
-            !(newValue == SheetValue.Hidden && isDirty)
+            if (newValue == SheetValue.Hidden && currentIsDirty) {
+                showDismissConfirm = true // Trigger the dialog safely
+                false // Tell the sheet: "Nope, stay open!"
+            } else {
+                true // Allow closing if the form is pristine
+            }
         }
     )
 
@@ -127,14 +141,14 @@ internal fun AddProductBottomSheet(
         if (visible) {
             resetForm()
             delay(350)
-            searchFocusRequester.requestFocus()
         }
     }
 
+    // FIXED: Use a minimum height setup instead of dynamic max scaling 
+    // to avoid layout shifts when the keyboard collapses on submit.
     val contentModifier = when {
         showSuggestions && productMatches.isNotEmpty() -> Modifier.fillMaxSize()
-        selectedProduct != null || productName.isNotBlank() -> Modifier.fillMaxHeight(0.75f)
-        else -> Modifier.fillMaxHeight(0.5f)
+        else -> Modifier.fillMaxHeight(0.85f)
     }
 
     ModalBottomSheet(
@@ -148,8 +162,20 @@ internal fun AddProductBottomSheet(
         sheetState = sheetState,
         dragHandle = { androidx.compose.material3.BottomSheetDefaults.DragHandle() }
     ) {
-        BackHandler(enabled = isDirty && !isKeyboardVisible) {
-            showDismissConfirm = true
+        // INTERCEPT BACK PRESS BASED ON FOCUS
+        BackHandler {
+            when {
+                isAnyFieldFocused -> {
+                    keyboardController?.hide()
+                    focusManager.clearFocus(force = true)
+                }
+                isDirty -> {
+                    showDismissConfirm = true
+                }
+                else -> {
+                    doDismiss()
+                }
+            }
         }
         Column(
             modifier =
@@ -159,6 +185,15 @@ internal fun AddProductBottomSheet(
                     .imePadding()
                     .padding(horizontal = 16.dp)
                     .padding(bottom = 16.dp)
+                    // FIXED: Tap outside text input elements explicitly closes keyboard/focus safely
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClick = {
+                            keyboardController?.hide()
+                            focusManager.clearFocus()
+                        }
+                    )
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth().padding(bottom = 12.dp),
@@ -235,10 +270,11 @@ internal fun AddProductBottomSheet(
                     modifier =
                         Modifier
                             .fillMaxWidth()
-                            .focusRequester(searchFocusRequester)
                             .bringIntoViewRequester(searchBringIntoView)
-                            .onFocusChanged {
-                                if (it.isFocused) {
+                            .onFocusChanged { focusState ->
+                                // UPDATE SEARCH FOCUS STATE
+                                isSearchFocused = focusState.isFocused
+                                if (focusState.isFocused) {
                                     scope.launch { searchBringIntoView.bringIntoView() }
                                 }
                             }
@@ -350,8 +386,10 @@ internal fun AddProductBottomSheet(
                                     Modifier
                                         .fillMaxWidth()
                                         .bringIntoViewRequester(priceBringIntoView)
-                                        .onFocusChanged {
-                                            if (it.isFocused) {
+                                        .onFocusChanged { focusState ->
+                                            // UPDATE PRICE FOCUS STATE
+                                            isPriceFocused = focusState.isFocused
+                                            if (focusState.isFocused) {
                                                 scope.launch { priceBringIntoView.bringIntoView() }
                                             }
                                         }
@@ -383,6 +421,9 @@ internal fun AddProductBottomSheet(
                     val finalPrice =
                         unitPriceText.toBigDecimalOrNull()?.setScale(2, RoundingMode.HALF_UP)
                             ?: BigDecimal.ZERO
+                    // Safe sequencing: soft drop inputs first, run validation, modify notes upstream
+                    keyboardController?.hide()
+                    focusManager.clearFocus(force = true)
                     scope.launch {
                         if (draft.isNewProduct) {
                             onEnsureProduct(draft.name, finalPrice, draft.emoji)
@@ -416,9 +457,11 @@ internal fun AddProductBottomSheet(
                     confirmButton = {
                         Button(
                             onClick = {
+                                // RESET FIRST: Clears the dirty state so sheetState.hide() is permitted
+                                resetForm()
                                 scope.launch { sheetState.hide() }.invokeOnCompletion {
                                     showDismissConfirm = false
-                                    doDismiss()
+                                    onDismiss()
                                 }
                             }
                         ) {
@@ -435,7 +478,6 @@ internal fun AddProductBottomSheet(
         }
     }
 }
-
 @Composable
 private fun ProductSuggestionDropdown(
     query: String,
