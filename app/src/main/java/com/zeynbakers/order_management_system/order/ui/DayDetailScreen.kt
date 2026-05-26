@@ -26,8 +26,12 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.IosShare
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.outlined.Delete
+import androidx.compose.material.icons.outlined.FileUpload
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
@@ -71,6 +75,7 @@ import com.zeynbakers.order_management_system.core.ui.LocalVoiceOverlaySuppresse
 import com.zeynbakers.order_management_system.core.ui.components.AppFilterRow
 import com.zeynbakers.order_management_system.customer.data.CustomerEntity
 import com.zeynbakers.order_management_system.order.data.OrderEntity
+import com.zeynbakers.order_management_system.order.data.OrderExporter
 import com.zeynbakers.order_management_system.product.data.ProductEntity
 import com.zeynbakers.order_management_system.order.printing.BluetoothPrintPermissions
 import com.zeynbakers.order_management_system.order.printing.BluetoothPrinterManager
@@ -158,6 +163,8 @@ fun DayDetailScreen(
     val printSuccessMessage = stringResource(R.string.order_print_success)
     val printFailedMessage = stringResource(R.string.order_print_failed)
     val permissionDeniedMessage = stringResource(R.string.order_print_permission_denied)
+    var isExportDialogOpen by remember { mutableStateOf(false) }
+    var isImportDialogOpen by remember { mutableStateOf(false) }
     val amountRegistry = LocalAmountFieldRegistry.current
     val overlaySuppressed = LocalVoiceOverlaySuppressed.current
     val voiceRouter = LocalVoiceInputRouter.current
@@ -442,6 +449,20 @@ fun DayDetailScreen(
                                 Icon(
                                         imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                                         contentDescription = stringResource(R.string.action_back)
+                                )
+                            }
+                        },
+                        actions = {
+                            IconButton(onClick = { isExportDialogOpen = true }) {
+                                Icon(
+                                    imageVector = Icons.Filled.IosShare,
+                                    contentDescription = "Export orders"
+                                )
+                            }
+                            IconButton(onClick = { isImportDialogOpen = true }) {
+                                Icon(
+                                    imageVector = Icons.Outlined.FileUpload,
+                                    contentDescription = "Import orders"
                                 )
                             }
                         },
@@ -782,6 +803,71 @@ fun DayDetailScreen(
             onDeleteOrder = onDeleteOrder,
             onDeleteOrderWithPayments = onDeleteOrderWithPayments
     )
+
+    // Export Dialog
+    if (isExportDialogOpen) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { isExportDialogOpen = false },
+            title = { Text("Export Orders") },
+            text = { Text("Export ${orders.size} orders for $date as JSON?") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        isExportDialogOpen = false
+                        scope.launch {
+                            try {
+                                val jsonData = OrderExporter.exportOrders(orders, customerNames, customerPhones)
+                                val intent = Intent(Intent.ACTION_SEND).apply {
+                                    type = "application/json"
+                                    putExtra(Intent.EXTRA_TEXT, jsonData)
+                                    putExtra(Intent.EXTRA_SUBJECT, "Orders for $date")
+                                }
+                                context.startActivity(Intent.createChooser(intent, "Export orders"))
+                                snackbarHostState.showSnackbar("Orders exported successfully")
+                            } catch (e: Exception) {
+                                snackbarHostState.showSnackbar("Export failed: ${e.message}")
+                            }
+                        }
+                    }
+                ) {
+                    Text("Export")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { isExportDialogOpen = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+
+    // Import Dialog
+    if (isImportDialogOpen) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { isImportDialogOpen = false },
+            title = { Text("Import Orders") },
+            text = { Text("Import orders from a shared JSON file? This will add orders to the current day.") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        isImportDialogOpen = false
+                        scope.launch {
+                            // Note: For a full implementation, you'd need to handle file picking
+                            // This is a simplified version that shows the concept
+                            snackbarHostState.showSnackbar("Import via file picker - to be implemented")
+                        }
+                    }
+                ) {
+                    Text("Import")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { isImportDialogOpen = false }) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)

@@ -3,6 +3,7 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.ksp)
     alias(libs.plugins.paparazzi)
     alias(libs.plugins.detekt)
@@ -107,6 +108,9 @@ dependencies {
 
     // Kotlinx DateTime
     implementation(libs.kotlinx.datetime)
+
+    // Kotlinx Serialization
+    implementation(libs.kotlinx.serialization.json)
 
     // WorkManager
     implementation(libs.androidx.work.runtime.ktx)
