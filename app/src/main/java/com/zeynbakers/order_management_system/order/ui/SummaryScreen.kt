@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -29,6 +30,7 @@ import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.SelectableDates
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -170,10 +172,15 @@ fun SummaryScreen(
 
     if (isDatePickerOpen) {
         val initialMillis =
-            remember(anchorDate) {
+            remember(anchorDate, isDatePickerOpen) {
                 anchorDate.atStartOfDayIn(TimeZone.currentSystemDefault()).toEpochMilliseconds()
             }
-        val pickerState = rememberDatePickerState(initialSelectedDateMillis = initialMillis)
+        val pickerState = rememberDatePickerState(
+            initialSelectedDateMillis = initialMillis,
+            selectableDates = object : SelectableDates {
+                override fun isSelectableDate(utcTimeMillis: Long): Boolean = true
+            }
+        )
         DatePickerDialog(
             onDismissRequest = { isDatePickerOpen = false },
             confirmButton = {
@@ -196,7 +203,13 @@ fun SummaryScreen(
                 TextButton(onClick = { isDatePickerOpen = false }) { Text(stringResource(R.string.action_cancel)) }
             }
         ) {
-            DatePicker(state = pickerState)
+            DatePicker(
+                state = pickerState,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 320.dp)
+                    .padding(horizontal = 4.dp, vertical = 4.dp)
+            )
         }
     }
 
