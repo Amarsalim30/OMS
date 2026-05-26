@@ -8,6 +8,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.sizeIn
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
@@ -21,14 +23,18 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.launch
 import com.zeynbakers.order_management_system.R
 import com.zeynbakers.order_management_system.customer.data.CustomerEntity
 
@@ -95,6 +101,8 @@ internal fun OrderEditorCustomerSection(
                 modifier = Modifier.fillMaxWidth()
             )
         } else {
+            val customerFocusBringIntoView = remember { BringIntoViewRequester() }
+            val customerScope = rememberCoroutineScope()
             OrderEditorOutlinedField(
                 value = customerName,
                 onValueChange = onCustomerNameChange,
@@ -110,7 +118,15 @@ internal fun OrderEditorCustomerSection(
                         capitalization = KeyboardCapitalization.Words,
                         imeAction = ImeAction.Next
                     ),
-                modifier = Modifier.fillMaxWidth()
+                modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .bringIntoViewRequester(customerFocusBringIntoView)
+                        .onFocusChanged {
+                            if (it.isFocused) {
+                                customerScope.launch { customerFocusBringIntoView.bringIntoView() }
+                            }
+                        }
             )
 
             if (customerName.isNotBlank()) {
@@ -157,7 +173,7 @@ private fun CustomerSuggestionDropdown(
                         modifier =
                             Modifier
                                 .fillMaxWidth()
-                                .sizeIn(minHeight = 44.dp)
+                                .sizeIn(minHeight = 48.dp)
                                 .padding(horizontal = 12.dp, vertical = 10.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
@@ -185,7 +201,7 @@ private fun CustomerSuggestionDropdown(
                         modifier =
                             Modifier
                                 .fillMaxWidth()
-                                .sizeIn(minHeight = 44.dp)
+                                .sizeIn(minHeight = 48.dp)
                                 .padding(horizontal = 12.dp, vertical = 10.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
