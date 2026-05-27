@@ -351,10 +351,12 @@ fun SummaryScreen(
                         items(orders, key = { it.id }) { order ->
                             val customerLabel =
                                 order.customerId?.let { id -> customerNames[id] }?.takeIf { it.isNotBlank() }
+                            val pickupDisplay = com.zeynbakers.order_management_system.core.util.formatPickupTimeForDisplay(order.pickupTime)
                             OrderSummaryCard(
                                 customerLabel = customerLabel,
                                 notes = order.notes,
                                 total = order.totalAmount,
+                                pickupTime = pickupDisplay,
                                 onCopyNotes = { clipboardManager.setText(AnnotatedString(order.notes)) }
                             )
                         }
@@ -373,10 +375,12 @@ fun SummaryScreen(
                             items(ordersByDate[date].orEmpty(), key = { it.id }) { order ->
                                 val customerLabel =
                                     order.customerId?.let { id -> customerNames[id] }?.takeIf { it.isNotBlank() }
+                                val pickupDisplay = com.zeynbakers.order_management_system.core.util.formatPickupTimeForDisplay(order.pickupTime)
                                 OrderSummaryCard(
                                     customerLabel = customerLabel,
                                     notes = order.notes,
                                     total = order.totalAmount,
+                                    pickupTime = pickupDisplay,
                                     onCopyNotes = { clipboardManager.setText(AnnotatedString(order.notes)) }
                                 )
                             }

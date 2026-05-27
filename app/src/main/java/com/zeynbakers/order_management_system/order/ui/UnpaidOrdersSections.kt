@@ -171,6 +171,7 @@ internal fun UnpaidOrderRow(
             customerLabel?.takeIf { it.isNotBlank() }
                 ?: stringResource(R.string.unpaid_unnamed_order)
         }
+    val pickupDisplay = com.zeynbakers.order_management_system.core.util.formatPickupTimeForDisplay(order.pickupTime)
     AppCard(
         modifier =
             modifier
@@ -182,15 +183,15 @@ internal fun UnpaidOrderRow(
             Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
                 Surface(
                     shape = MaterialTheme.shapes.medium,
-                    color = MaterialTheme.colorScheme.primaryContainer,
+                    color = MaterialTheme.colorScheme.tertiaryContainer,
                     modifier = Modifier.size(36.dp)
                 ) {
                     Box(contentAlignment = Alignment.Center) {
                         Text(
-                            text = getInitials(primaryLabel),
+                            text = initials,
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                            color = MaterialTheme.colorScheme.onTertiaryContainer
                         )
                     }
                 }
@@ -215,6 +216,15 @@ internal fun UnpaidOrderRow(
                             if (hasCustomer && hasNotes) {
                                 Text(
                                     text = customerLabel.orEmpty(),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                            pickupDisplay?.let {
+                                Text(
+                                    text = stringResource(R.string.day_pickup_time_value, it),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     maxLines = 1,
@@ -344,14 +354,12 @@ Please arrange payment at your earliest convenience. Thank you! 🙏"""
     }
 }
 
-private fun getInitials(name: String): String {
-    return name
-        .split(" ")
-        .filter { it.isNotBlank() }
-        .take(2)
-        .mapNotNull { it.firstOrNull() }
-        .joinToString("")
-        .uppercase()
+private fun getInitialsForOrder(customerName: String?, notes: String): String {
+    val source = if (!customerName.isNullOrBlank()) customerName else notes
+    val firstLetter = source
+        .filter { it.isLetter() }
+        .firstOrNull()
+    return firstLetter?.uppercase() ?: "?"
 }
 
 @Composable

@@ -42,6 +42,7 @@ internal fun OrderSummaryCard(
     customerLabel: String?,
     notes: String,
     total: BigDecimal,
+    pickupTime: String?,
     onCopyNotes: () -> Unit
 ) {
     AppCard {
@@ -54,6 +55,13 @@ internal fun OrderSummaryCard(
             Column(modifier = Modifier.weight(1f)) {
                 customerLabel?.let {
                     Text(text = it, style = MaterialTheme.typography.bodyMedium)
+                }
+                pickupTime?.let {
+                    Text(
+                        text = stringResource(R.string.day_pickup_time_value, it),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
                 Text(text = formatKes(total), style = MaterialTheme.typography.bodyMedium)
             }
