@@ -19,6 +19,7 @@ import com.zeynbakers.order_management_system.order.data.OrderStatus
 import com.zeynbakers.order_management_system.order.data.OrderStatusOverride
 import com.zeynbakers.order_management_system.order.data.OrderExportItem
 import com.zeynbakers.order_management_system.product.data.ProductEntity
+import com.zeynbakers.order_management_system.order.domain.OrderRepository
 import java.math.BigDecimal
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -52,6 +53,7 @@ class OrderViewModel(private val database: AppDatabase) : ViewModel() {
     private val allocationDao = database.paymentAllocationDao()
     private val receiptDao = database.paymentReceiptDao()
     private val receiptProcessor = PaymentReceiptProcessor(database)
+    private val orderRepository = OrderRepository(orderDao, database.orderItemDao(), productDao)
 
     private val _calendarDays = MutableStateFlow<List<CalendarDayUi>>(emptyList())
     val calendarDays = _calendarDays.asStateFlow()
@@ -115,7 +117,8 @@ class OrderViewModel(private val database: AppDatabase) : ViewModel() {
         customerName: String,
         customerPhone: String,
         pickupTime: String?,
-        existingOrderId: Long?
+        existingOrderId: Long?,
+        cartItems: List<CartItem> = emptyList()
     ) {
         viewModelScope.launch {
             val result =
@@ -127,7 +130,8 @@ class OrderViewModel(private val database: AppDatabase) : ViewModel() {
                         customerName = customerName,
                         customerPhone = customerPhone,
                         pickupTime = pickupTime,
-                        existingOrderId = existingOrderId
+                        existingOrderId = existingOrderId,
+                        cartItems = cartItems
                     )
                 }
             result.creditPrompt?.let { _creditPrompt.value = it }
@@ -188,8 +192,8 @@ class OrderViewModel(private val database: AppDatabase) : ViewModel() {
         }
     }
 
-    private fun mergeOrderNotes(existingNotes: String, importNotes: String, cartItems: List<com.zeynbakers.order_management_system.order.data.CartItemExport>): String {
-        val existingCart = OrderCartParser.parseNotesToCart(existingNotes)
+    private fun mergeOrderNotes(existingNotes: String?, importNotes: String, cartItems: List<com.zeynbakers.order_management_system.order.data.CartItemExport>): String {
+        val existingCart = OrderCartParser.parseNotesToCart(existingNotes ?: "")
         val importCart = cartItems.map { 
             com.zeynbakers.order_management_system.order.ui.CartItem(
                 emoji = it.emoji,
@@ -219,10 +223,11 @@ class OrderViewModel(private val database: AppDatabase) : ViewModel() {
         customerName: String,
         customerPhone: String,
         pickupTime: String?,
-        existingOrderId: Long?
+        existingOrderId: Long?,
+        cartItems: List<CartItem> = emptyList()
     ): SaveOrderResult {
         val now = Clock.System.now().toEpochMilliseconds()
-        val cleanNotes = notes.trim()
+        val cleanNotes = notes.trim().takeIf { it.isNotBlank() }
         val normalizedPickupTime = pickupTime?.trim()?.takeIf { it.isNotBlank() }
         val existingOrder =
             if (existingOrderId != null && existingOrderId != 0L) {
@@ -264,6 +269,11 @@ class OrderViewModel(private val database: AppDatabase) : ViewModel() {
                 orderDao.update(updatedOrder)
                 updatedOrder.id
             }
+
+        // Save order items
+        if (cartItems.isNotEmpty()) {
+            orderRepository.saveOrderItemsForOrder(orderId, cartItems)
+        }
 
         if (existingOrder?.customerId != null && customerId != null && existingOrder.customerId != customerId) {
             accountingDao.updateCustomerIdForOrderEntries(orderId = orderId, customerId = customerId)
@@ -327,7 +337,7 @@ class OrderViewModel(private val database: AppDatabase) : ViewModel() {
                 orderId = orderId,
                 date = savedOrder.orderDate,
                 customerName = resolvedCustomerName,
-                notes = savedOrder.notes,
+                notes = savedOrder.notes ?: "",
                 totalAmount = savedOrder.totalAmount
             )
         return OrderCreditPrompt(
@@ -365,7 +375,7 @@ class OrderViewModel(private val database: AppDatabase) : ViewModel() {
                 orderId = order.id,
                 date = order.orderDate,
                 customerName = customerName,
-                notes = order.notes,
+                notes = order.notes ?: "",
                 totalAmount = order.totalAmount
             )
         accountingDao.upsertDebitForOrder(
@@ -493,7 +503,7 @@ class OrderViewModel(private val database: AppDatabase) : ViewModel() {
                         orderId = order.id,
                         date = order.orderDate,
                         customerName = order.customerId?.let { customerNames[it] },
-                        notes = order.notes,
+                        notes = order.notes ?: "",
                         totalAmount = order.totalAmount
                     )
                 OrderMoveOption(order.id, label)
@@ -525,7 +535,7 @@ class OrderViewModel(private val database: AppDatabase) : ViewModel() {
                         orderId = it.id,
                         date = it.orderDate,
                         customerName = customerName,
-                        notes = it.notes,
+                        notes = it.notes ?: "",
                         totalAmount = it.totalAmount
                     )
                 } ?: "Order ID $orderId"

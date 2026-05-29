@@ -73,7 +73,7 @@ internal fun DayOrderEditorDialog(
     formatter: NumberFormat,
     amountRegistry: AmountFieldRegistry,
     voiceRouter: VoiceInputRouter,
-    onSaveOrder: (String, BigDecimal, String, String, String?, Long?) -> Unit,
+    onSaveOrder: (String, BigDecimal, String, String, String?, Long?, List<CartItem>) -> Unit,
     onDraftChange: (OrderDraft?) -> Unit,
     onSetNotes: (String) -> Unit,
     onSetTotalText: (String) -> Unit,
@@ -160,13 +160,15 @@ internal fun DayOrderEditorDialog(
                 onSetCustomerError(null)
             }
             else -> {
+                val cartItems = OrderCartParser.parseNotesToCart(trimmedNotes)
                 onSaveOrder(
                     trimmedNotes,
                     finalTotal,
                     attachedCustomerName,
                     attachedCustomerPhone,
                     normalizedPickupTime,
-                    editingOrderId
+                    editingOrderId,
+                    cartItems
                 )
                 onSetNotes("")
                 onSetTotalText("")
@@ -374,7 +376,7 @@ internal fun DayDeleteOrderDialog(
                         orderId = order.id,
                         date = order.orderDate,
                         customerName = order.customerId?.let { customerNames[it] },
-                        notes = order.notes,
+                        notes = order.notes ?: "",
                         totalAmount = order.totalAmount
                     )
                 Text(stringResource(R.string.day_delete_order_message, label))

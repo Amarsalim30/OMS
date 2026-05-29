@@ -329,7 +329,7 @@ internal fun OrderRow(
     var pendingOverride by remember { mutableStateOf<OrderStatusOverride?>(null) }
     var confirmWriteOff by remember { mutableStateOf(false) }
     val today = rememberCurrentDate()
-    val notes = order.order.notes.trim().take(80)
+    val notes = (order.order.notes ?: "").trim().take(80)
     val dateLabel = formatShortDate(order.order.orderDate)
     val dueAmount = (order.order.totalAmount - order.paidAmount).max(BigDecimal.ZERO)
     val creditAmount = (order.paidAmount - order.order.totalAmount).max(BigDecimal.ZERO)

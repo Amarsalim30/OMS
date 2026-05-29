@@ -146,7 +146,7 @@ fun SummaryScreen(
     val analyses =
         remember(orders) {
             orders.map { order ->
-                val parsed = parseOrderNotes(order.notes)
+                val parsed = parseOrderNotes(order.notes ?: "")
                 OrderNoteAnalysis(order = order, items = parsed.items, unparsedLines = parsed.unparsed)
             }
         }
@@ -298,7 +298,7 @@ fun SummaryScreen(
 
             if (unparsedLines.isNotEmpty()) {
                 item {
-                    UnparsedLinesCard(unparsedLines = unparsedLines)
+                    UnparsedLinesCard(lines = unparsedLines)
                 }
             }
 
@@ -308,7 +308,7 @@ fun SummaryScreen(
 
                 item { SectionHeader(title = stringResource(R.string.summary_daily_view)) }
                 if (datesAsc.isEmpty()) {
-                    item { SummaryEmptyState(text = stringResource(R.string.summary_no_orders_in_range)) }
+                    item { SummaryEmptyState() }
                 } else {
                     items(datesAsc, key = { it.toString() }) { date ->
                         val dayAnalyses = analysesByDate[date].orEmpty()
@@ -326,14 +326,10 @@ fun SummaryScreen(
                                 unparsedHeader = messageUnparsed
                             )
                         DailySummaryCard(
-                            date = date.toJavaLocalDate().format(uiDateFormatter),
-                            orderCount = dayAnalyses.size,
-                            total = dayTotal,
-                            onOpenDay = {
-                                mode = SummaryRangeMode.DAY
-                                anchorDate = date
-                            },
-                            onCopy = {
+                            date = date,
+                            orders = dayAnalyses.map { it.order },
+                            customerNames = customerNames,
+                            onCopyNotes = {
                                 clipboardManager.setText(AnnotatedString(dayMessage))
                             }
                         )
@@ -344,7 +340,7 @@ fun SummaryScreen(
             item { SectionHeader(title = stringResource(R.string.summary_orders)) }
 
             if (orders.isEmpty()) {
-                item { SummaryEmptyState(text = stringResource(R.string.summary_no_orders_in_range)) }
+                item { SummaryEmptyState() }
             } else {
                 when (mode) {
                     SummaryRangeMode.DAY -> {
@@ -354,10 +350,10 @@ fun SummaryScreen(
                             val pickupDisplay = com.zeynbakers.order_management_system.core.util.formatPickupTimeForDisplay(order.pickupTime)
                             OrderSummaryCard(
                                 customerLabel = customerLabel,
-                                notes = order.notes,
+                                notes = order.notes ?: "",
                                 total = order.totalAmount,
                                 pickupTime = pickupDisplay,
-                                onCopyNotes = { clipboardManager.setText(AnnotatedString(order.notes)) }
+                                onCopyNotes = { clipboardManager.setText(AnnotatedString(order.notes ?: "")) }
                             )
                         }
                     }
@@ -378,10 +374,10 @@ fun SummaryScreen(
                                 val pickupDisplay = com.zeynbakers.order_management_system.core.util.formatPickupTimeForDisplay(order.pickupTime)
                                 OrderSummaryCard(
                                     customerLabel = customerLabel,
-                                    notes = order.notes,
+                                    notes = order.notes ?: "",
                                     total = order.totalAmount,
                                     pickupTime = pickupDisplay,
-                                    onCopyNotes = { clipboardManager.setText(AnnotatedString(order.notes)) }
+                                    onCopyNotes = { clipboardManager.setText(AnnotatedString(order.notes ?: "")) }
                                 )
                             }
                         }

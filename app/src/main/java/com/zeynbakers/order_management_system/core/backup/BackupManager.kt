@@ -2070,10 +2070,16 @@ object BackupManager {
             OrderItemEntity(
                 id = obj.getLong("id"),
                 orderId = obj.getLong("orderId"),
+                productId = if (obj.has("productId")) obj.optLong("productId").takeIf { it != 0L } else null,
+                productNameSnapshot = obj.getString("name"),
+                unitPriceSnapshot = parseRequiredDecimal(obj.optString("unitPrice", ""), "order_items.unitPrice", index),
+                categorySnapshot = ItemCategory.valueOf(obj.getString("category")),
+                quantity = obj.getInt("quantity"),
+                priceOverride = null,
+                // Legacy fields for backward compatibility
                 name = obj.getString("name"),
                 category = ItemCategory.valueOf(obj.getString("category")),
-                quantity = obj.getInt("quantity"),
-                unitPrice = unitPrice
+                unitPrice = parseRequiredDecimal(obj.optString("unitPrice", ""), "order_items.unitPrice", index)
             )
         }
     }

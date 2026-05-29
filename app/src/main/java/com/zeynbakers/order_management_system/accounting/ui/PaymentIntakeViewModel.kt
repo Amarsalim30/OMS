@@ -690,7 +690,7 @@ class PaymentIntakeViewModel(private val database: AppDatabase) : ViewModel() {
                     customerId = entry.order.customerId,
                     customerName = customer?.name,
                     orderDate = entry.order.orderDate,
-                    notes = entry.order.notes,
+                    notes = entry.order.notes ?: "",
                     outstanding = entry.outstanding,
                     confidence = confidence
                 )

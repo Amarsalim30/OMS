@@ -105,7 +105,7 @@ fun DayDetailScreen(
         customerPhones: Map<Long, String>,
         orderPaidAmounts: Map<Long, BigDecimal>,
         onBack: () -> Unit,
-        onSaveOrder: (String, BigDecimal, String, String, String?, Long?) -> Unit,
+        onSaveOrder: (String, BigDecimal, String, String, String?, Long?, List<CartItem>) -> Unit,
         onDeleteOrder: (Long) -> Unit,
         loadOrderPaymentAllocations: suspend (Long) -> List<OrderPaymentAllocationUi>,
         loadMoveOrderOptions: suspend (Long?, Long) -> List<OrderMoveOption>,
@@ -422,7 +422,7 @@ fun DayDetailScreen(
                         val amountLabel = order.totalAmount.stripTrailingZeros().toPlainString().lowercase()
                         val pickupLabel = plannerPickupDisplay(order.pickupTime).orEmpty().lowercase()
                         val pickupRaw = order.pickupTime.orEmpty().lowercase()
-                        order.notes.lowercase().contains(normalizedQuery) ||
+                        (order.notes?.lowercase()?.contains(normalizedQuery) == true) ||
                                 customerLabel.contains(normalizedQuery) ||
                                 amountLabel.contains(normalizedQuery) ||
                                 pickupLabel.contains(normalizedQuery) ||
@@ -735,7 +735,7 @@ fun DayDetailScreen(
                                 paymentState = paymentState,
                                 isFocused = highlightedOrderId == order.id,
                                 onEdit = {
-                                    notes = order.notes
+                                    notes = order.notes ?: ""
                                     totalText = order.totalAmount.toPlainString()
                                     editingOrderId = order.id
                                     notesError = null

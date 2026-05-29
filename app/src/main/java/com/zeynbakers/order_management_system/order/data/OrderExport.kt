@@ -49,7 +49,7 @@ object OrderExporter {
         val orderDate = orders.firstOrNull()?.orderDate?.toString() ?: ""
 
         val exportItems = orders.map { order ->
-            val cartItems = OrderCartParser.parseNotesToCart(order.notes).map { cartItem ->
+            val cartItems = OrderCartParser.parseNotesToCart(order.notes ?: "").map { cartItem ->
                 CartItemExport(
                     emoji = cartItem.emoji,
                     name = cartItem.name,
@@ -60,7 +60,7 @@ object OrderExporter {
             OrderExportItem(
                 id = order.id,
                 orderDate = order.orderDate.toString(),
-                notes = order.notes,
+                notes = order.notes ?: "",
                 totalAmount = order.totalAmount.toString(),
                 customerId = order.customerId,
                 customerName = order.customerId?.let { customerNames[it] },
@@ -90,9 +90,9 @@ object OrderExporter {
             val customerName = order.customerId?.let { customerNames[it] } ?: ""
             val customerPhone = order.customerId?.let { customerPhones[it] } ?: ""
             val pickupTime = order.pickupTime ?: ""
-            val cartItems = OrderCartParser.parseNotesToCart(order.notes)
+            val cartItems = OrderCartParser.parseNotesToCart(order.notes ?: "")
                 .joinToString("; ") { "${it.name} x${it.quantity}" }
-            val escapedNotes = order.notes.replace("\"", "\"\"")
+            val escapedNotes = (order.notes ?: "").replace("\"", "\"\"")
             val escapedCustomerName = customerName.replace("\"", "\"\"")
             val escapedCartItems = cartItems.replace("\"", "\"\"")
             "${order.id},${order.orderDate},\"$escapedNotes\",${order.totalAmount},\"$escapedCustomerName\",\"$customerPhone\",\"$pickupTime\",${order.status.name},\"$escapedCartItems\""

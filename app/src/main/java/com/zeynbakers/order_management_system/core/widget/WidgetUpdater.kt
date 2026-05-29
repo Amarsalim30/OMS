@@ -97,7 +97,7 @@ object WidgetUpdater {
 
         val lines = todayOrders.take(3).map { order ->
             val label =
-                order.notes
+                (order.notes ?: "")
                     .trim()
                     .take(28)
                     .ifBlank { appContext.getString(R.string.widget_order_fallback) }

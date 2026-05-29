@@ -5,6 +5,7 @@ import androidx.room.Room
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
+
 object DatabaseProvider {
     private var instance: AppDatabase? = null
     internal val SQL_CREATE_ORDERS_V10 =
@@ -667,7 +668,58 @@ object DatabaseProvider {
         migration11To12,
         migration12To13,
         migration13To14,
-        migration14To15
+        migration14To15,
+        Migration(15, 16) { db ->
+            // Add new columns to order_items table
+            db.execSQL(
+                """
+                ALTER TABLE order_items 
+                ADD COLUMN productId INTEGER REFERENCES products(id) ON DELETE RESTRICT
+                """.trimIndent()
+            )
+            
+            db.execSQL(
+                """
+                ALTER TABLE order_items 
+                ADD COLUMN productNameSnapshot TEXT NOT NULL DEFAULT ''
+                """.trimIndent()
+            )
+            
+            db.execSQL(
+                """
+                ALTER TABLE order_items 
+                ADD COLUMN unitPriceSnapshot TEXT NOT NULL DEFAULT '0'
+                """.trimIndent()
+            )
+            
+            db.execSQL(
+                """
+                ALTER TABLE order_items 
+                ADD COLUMN categorySnapshot TEXT NOT NULL DEFAULT 'OTHER'
+                """.trimIndent()
+            )
+            
+            db.execSQL(
+                """
+                ALTER TABLE order_items 
+                ADD COLUMN priceOverride TEXT
+                """.trimIndent()
+            )
+            
+            // Create index on productId for better query performance
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_order_items_productId ON order_items(productId)")
+            
+            // Backfill existing data: copy existing fields to snapshot fields
+            db.execSQL(
+                """
+                UPDATE order_items 
+                SET productNameSnapshot = name,
+                    unitPriceSnapshot = unitPrice,
+                    categorySnapshot = category
+                WHERE productNameSnapshot = ''
+                """.trimIndent()
+            )
+        }
     )
 
     fun getDatabase(context: Context): AppDatabase {

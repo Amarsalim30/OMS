@@ -26,9 +26,11 @@ import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.zeynbakers.order_management_system.R
@@ -36,6 +38,9 @@ import com.zeynbakers.order_management_system.core.ui.components.AppCard
 import com.zeynbakers.order_management_system.core.ui.components.AppEmptyState
 import com.zeynbakers.order_management_system.core.util.formatKes
 import java.math.BigDecimal
+import kotlinx.datetime.toJavaLocalDate
+import java.util.Locale
+import com.zeynbakers.order_management_system.order.data.OrderEntity
 
 @Composable
 internal fun OrderSummaryCard(
@@ -45,8 +50,38 @@ internal fun OrderSummaryCard(
     pickupTime: String?,
     onCopyNotes: () -> Unit
 ) {
+    val cartItems = remember(notes) { OrderCartParser.parseNotesToCart(notes) }
+    
     AppCard {
-        Text(text = notes, style = MaterialTheme.typography.bodyLarge)
+        Column {
+            // Display structured cart items with clear formatting
+            cartItems.forEach { item ->
+                val priceText = if (item.unitPrice > BigDecimal.ZERO) {
+                    " (@ ${formatKes(item.unitPrice)})"
+                } else {
+                    ""
+                }
+                
+                Text(
+                    text = buildString {
+                        if (item.emoji.isNotBlank()) {
+                            append(item.emoji).append(" ")
+                        }
+                        append(item.name)
+                        append(" × ")
+                        append(item.quantity)
+                        append(priceText)
+                    },
+                    style = MaterialTheme.typography.bodyMedium
+                )
+            }
+            
+            if (cartItems.isEmpty()) {
+                // Fallback to raw notes if parsing fails
+                Text(text = notes, style = MaterialTheme.typography.bodyLarge)
+            }
+        }
+        
         Spacer(Modifier.height(6.dp))
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -207,114 +242,81 @@ internal fun ChefPrepCard(
                 )
                 TextButton(onClick = onToday) { Text(stringResource(R.string.action_today)) }
             }
-
-            Spacer(Modifier.height(10.dp))
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                StatPill(label = stringResource(R.string.summary_orders), value = orderCount.toString())
-                StatPill(label = stringResource(R.string.summary_total), value = formatKes(rangeTotal))
-            }
-        }
-    }
-}
-
-@Composable
-private fun StatPill(label: String, value: String) {
-    Surface(
-        color = MaterialTheme.colorScheme.secondaryContainer,
-        contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-        shape = MaterialTheme.shapes.small
-    ) {
-        Row(modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)) {
-            Text(
-                text = stringResource(R.string.summary_stat_pill_value, label, value),
-                style = MaterialTheme.typography.labelMedium
-            )
         }
     }
 }
 
 @Composable
 internal fun SectionHeader(title: String) {
-    Text(text = title, style = MaterialTheme.typography.titleMedium)
+    Text(
+        text = title,
+        style = MaterialTheme.typography.titleSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.padding(vertical = 8.dp)
+    )
 }
 
 @Composable
 internal fun ProductRow(name: String, quantity: String) {
-    Surface(
-        tonalElevation = 1.dp,
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
-        shape = MaterialTheme.shapes.medium
-    ) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
+    Text(
+        text = "$name × $quantity",
+        style = MaterialTheme.typography.bodyMedium
+    )
+}
+
+@Composable
+internal fun UnparsedLinesCard(lines: List<String>) {
+    AppCard {
+        Column {
             Text(
-                text = name,
-                style = MaterialTheme.typography.bodyLarge,
-                modifier = Modifier.weight(1f),
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
+                text = stringResource(R.string.summary_message_unparsed),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
-            Spacer(Modifier.width(12.dp))
-            Text(text = quantity, style = MaterialTheme.typography.titleMedium)
+            lines.forEach { line ->
+                Text(text = "- $line", style = MaterialTheme.typography.bodySmall)
+            }
         }
     }
 }
 
 @Composable
-internal fun UnparsedLinesCard(unparsedLines: List<String>) {
-    Surface(
-        color = MaterialTheme.colorScheme.errorContainer,
-        contentColor = MaterialTheme.colorScheme.onErrorContainer,
-        shape = MaterialTheme.shapes.large
-    ) {
-        Column(modifier = Modifier.fillMaxWidth().padding(12.dp)) {
-            Text(
-                text = stringResource(R.string.summary_unparsed_lines_count, unparsedLines.size),
-                style = MaterialTheme.typography.titleSmall
-            )
-            Spacer(Modifier.height(8.dp))
-            unparsedLines.forEach { line ->
-                Text(text = "- $line", style = MaterialTheme.typography.bodyMedium)
-            }
-        }
-    }
+internal fun SummaryEmptyState() {
+    AppEmptyState(
+        title = "No Orders",
+        body = "There are no orders in the selected range"
+    )
 }
 
 @Composable
 internal fun DailySummaryCard(
-    date: String,
-    orderCount: Int,
-    total: BigDecimal,
-    onOpenDay: () -> Unit,
-    onCopy: () -> Unit
+    date: kotlinx.datetime.LocalDate,
+    orders: List<OrderEntity>,
+    customerNames: Map<Long, String>,
+    onCopyNotes: (String) -> Unit
 ) {
-    AppCard(modifier = Modifier.clickable(onClick = onOpenDay)) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(text = date, style = MaterialTheme.typography.bodyLarge)
-                Spacer(Modifier.height(2.dp))
-                Text(
-                    text = stringResource(R.string.summary_daily_orders_total, orderCount, formatKes(total)),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            IconButton(onClick = onCopy) {
-                Icon(
-                    imageVector = Icons.Filled.ContentCopy,
-                    contentDescription = stringResource(R.string.summary_copy_day_list)
+    val dateLabel = remember(date) {
+        date.toJavaLocalDate().format(java.time.format.DateTimeFormatter.ofPattern("d MMM", Locale.getDefault()))
+    }
+    
+    AppCard {
+        Column {
+            Text(
+                text = dateLabel,
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            orders.forEach { order ->
+                val customerLabel = order.customerId?.let { id -> customerNames[id] }?.takeIf { it.isNotBlank() }
+                val pickupDisplay = com.zeynbakers.order_management_system.core.util.formatPickupTimeForDisplay(order.pickupTime)
+                OrderSummaryCard(
+                    customerLabel = customerLabel,
+                    notes = order.notes ?: "",
+                    total = order.totalAmount,
+                    pickupTime = pickupDisplay,
+                    onCopyNotes = { onCopyNotes(order.notes ?: "") }
                 )
             }
         }
     }
-}
-
-@Composable
-internal fun SummaryEmptyState(text: String) {
-    AppEmptyState(title = stringResource(R.string.summary_title), body = text)
 }

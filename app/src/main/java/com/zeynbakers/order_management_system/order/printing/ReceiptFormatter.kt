@@ -17,7 +17,7 @@ object ReceiptFormatter {
         customerPhone: String? = null
     ): String {
         val headerName = storeName.trim().ifBlank { "Store" }
-        val parsed = parseOrderNotes(order.notes)
+        val parsed = parseOrderNotes(order.notes ?: "")
         val dateLine = buildDateLine(order)
         val lines = mutableListOf<String>()
 
@@ -38,7 +38,7 @@ object ReceiptFormatter {
                 val qty = formatQuantity(item.quantity)
                 lines += formatItemLine(item.name, qty)
             }
-        } else if (order.notes.isNotBlank()) {
+        } else if (!order.notes.isNullOrBlank()) {
             lines += order.notes.trim()
         }
 

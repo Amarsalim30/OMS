@@ -163,7 +163,7 @@ internal fun UnpaidOrderRow(
     val context = LocalContext.current
     val haptic = LocalHapticFeedback.current
     val hasCustomer = !customerLabel.isNullOrBlank()
-    val hasNotes = order.notes.isNotBlank()
+    val hasNotes = !order.notes.isNullOrBlank()
     val primaryLabel =
         if (hasNotes) {
             order.notes
@@ -172,6 +172,7 @@ internal fun UnpaidOrderRow(
                 ?: stringResource(R.string.unpaid_unnamed_order)
         }
     val pickupDisplay = com.zeynbakers.order_management_system.core.util.formatPickupTimeForDisplay(order.pickupTime)
+    val initials = getInitialsForOrder(customerLabel, order.notes ?: "")
     AppCard(
         modifier =
             modifier
@@ -322,7 +323,7 @@ internal fun UnpaidOrderRow(
                         val orderDate = order.orderDate.toString()
                         val message = """*Order Reminder* 📋
 
-*Order:* ${order.notes}
+*Order:* ${order.notes ?: ""}
 *Date:* $orderDate
 *Amount Due:* ${formatKes(balance)}
 *Total Order:* ${formatKes(order.totalAmount)}

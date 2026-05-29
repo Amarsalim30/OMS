@@ -72,7 +72,7 @@ fun CalendarScreen(
     selectedDate: LocalDate?,
     onSelectDate: (LocalDate) -> Unit,
     onOpenDay: (LocalDate) -> Unit,
-    onSaveOrder: (LocalDate, String, BigDecimal, String, String, String?) -> Unit,
+    onSaveOrder: (LocalDate, String, BigDecimal, String, String, String?, List<CartItem>) -> Unit,
     searchCustomers: suspend (String) -> List<CustomerEntity>,
     searchProducts: suspend (String) -> List<com.zeynbakers.order_management_system.product.data.ProductEntity>,
     ensureProduct: suspend (String, BigDecimal, String) -> com.zeynbakers.order_management_system.product.data.ProductEntity,
@@ -585,13 +585,15 @@ fun CalendarScreen(
                     customerError = null
                 }
                 else -> {
+                    val cartItems = OrderCartParser.parseNotesToCart(trimmedNotes)
                     onSaveOrder(
                         activeDate,
                         trimmedNotes,
                         parsedTotal,
                         attachedCustomerName,
                         attachedCustomerPhone,
-                        normalizedPickupTime
+                        normalizedPickupTime,
+                        cartItems
                     )
                     notes = ""
                     totalText = ""

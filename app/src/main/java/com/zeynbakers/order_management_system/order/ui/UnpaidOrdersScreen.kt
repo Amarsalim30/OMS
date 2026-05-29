@@ -146,7 +146,7 @@ fun UnpaidOrdersScreen(
                     sortedOrders.filter { order ->
                         val customer = customerNames[order.customerId]?.lowercase().orEmpty()
                         val total = order.totalAmount.toString()
-                        val notes = order.notes.lowercase()
+                        val notes = order.notes?.lowercase().orEmpty()
                         customer.contains(query) || total.contains(query) || notes.contains(query)
                     }
                 }
