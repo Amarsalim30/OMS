@@ -179,7 +179,7 @@ class CustomerAccountsViewModel(
                                 formatOrderLabel(
                                     date = order.orderDate,
                                     customerName = customerName,
-                                    notes = order.notes,
+                                    notes = "",
                                     totalAmount = order.totalAmount
                                 )
                         }
@@ -286,7 +286,7 @@ class CustomerAccountsViewModel(
                 formatOrderLabel(
                     date = order.orderDate,
                     customerName = customerName,
-                    notes = order.notes,
+                    notes = "",
                     totalAmount = order.totalAmount
                 )
             val note = text(R.string.customer_accounts_bad_debt_write_off, orderLabel)
@@ -683,7 +683,7 @@ class CustomerAccountsViewModel(
                             formatOrderLabel(
                                 date = order.orderDate,
                                 customerName = null,
-                                notes = order.notes,
+                                notes = "",
                                 totalAmount = null
                             )
                         },
@@ -711,7 +711,7 @@ class CustomerAccountsViewModel(
     private fun statementTitle(entry: AccountEntryEntity, ordersById: Map<Long, OrderEntity>): String {
         return when (entry.type) {
             EntryType.DEBIT -> {
-                val note = compactNote(ordersById[entry.orderId]?.notes)
+                val note = ""
                 if (note.isBlank()) {
                     text(R.string.customer_accounts_order_title)
                 } else {
@@ -742,7 +742,7 @@ class CustomerAccountsViewModel(
         return when (entry.type) {
             EntryType.DEBIT -> {
                 val order = ordersById[entry.orderId]
-                compactNote(order?.notes).takeIf { it.isNotBlank() }
+                null
             }
             EntryType.CREDIT -> compactNote(extractPaymentNote(entry.description)).takeIf { it.isNotBlank() }
             EntryType.WRITE_OFF -> compactNote(extractBadDebtNote(entry.description)).takeIf { it.isNotBlank() }

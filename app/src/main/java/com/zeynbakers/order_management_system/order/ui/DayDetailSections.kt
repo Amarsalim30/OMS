@@ -197,7 +197,7 @@ internal fun OrderListItem(
                             verticalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
                         Text(
-                                text = order.notes ?: "",
+                                text = "",
                                 style = MaterialTheme.typography.titleSmall,
                                 maxLines = 2,
                                 overflow = TextOverflow.Ellipsis

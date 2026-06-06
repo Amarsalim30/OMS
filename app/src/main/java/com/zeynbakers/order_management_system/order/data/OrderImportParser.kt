@@ -1,6 +1,5 @@
 package com.zeynbakers.order_management_system.order.data
 
-import com.zeynbakers.order_management_system.order.ui.OrderCartParser
 import kotlinx.datetime.Clock
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime

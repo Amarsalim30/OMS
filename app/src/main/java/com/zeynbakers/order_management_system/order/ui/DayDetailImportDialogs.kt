@@ -51,7 +51,6 @@ internal fun DayImportPreviewDialog(
     val importActions = remember(importData.orders, existingOrders) {
         importData.orders.map { importItem ->
             val duplicate = existingOrders.find { existing ->
-                existing.notes == importItem.notes &&
                 existing.totalAmount.toString() == importItem.totalAmount &&
                 (importItem.customerPhone == null || 
                  (existing.customerId != null && importItem.customerPhone == existing.customerId.toString()))
@@ -167,7 +166,7 @@ private fun ImportOrderItem(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = item.notes,
+                    text = item.cartItems.joinToString(", ") { it.name },
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.Medium,
                     modifier = Modifier.weight(1f)

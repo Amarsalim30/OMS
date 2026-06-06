@@ -29,13 +29,11 @@ import java.math.BigDecimal
 
 @Composable
 internal fun OrderCartSummary(
-    notes: String,
-    onNotesChange: (String) -> Unit,
+    cartItems: List<OrderItemDraft>,
+    onCartItemsChange: (List<OrderItemDraft>) -> Unit,
     onAddProductClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val cartItems = remember(notes) { OrderCartParser.parseNotesToCart(notes) }
-
     Column(
         modifier = modifier.fillMaxWidth().padding(horizontal = 12.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp)
@@ -88,7 +86,7 @@ internal fun OrderCartSummary(
                         IconButton(
                             onClick = {
                                 val updated = cartItems.toMutableList().apply { removeAt(index) }
-                                onNotesChange(OrderCartParser.serializeCartToNotes(updated))
+                                onCartItemsChange(updated)
                             },
                             modifier = Modifier.sizeIn(minWidth = 44.dp, minHeight = 44.dp)
                         ) {

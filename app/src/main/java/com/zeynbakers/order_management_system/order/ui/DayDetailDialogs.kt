@@ -57,7 +57,7 @@ internal fun DayOrderEditorDialog(
     editingOrderId: Long?,
     orderPaidAmounts: Map<Long, BigDecimal>,
     totalText: String,
-    notes: String,
+    cartItems: List<OrderItemDraft>,
     pickupTimeText: String,
     customerName: String,
     customerPhone: String,
@@ -73,9 +73,9 @@ internal fun DayOrderEditorDialog(
     formatter: NumberFormat,
     amountRegistry: AmountFieldRegistry,
     voiceRouter: VoiceInputRouter,
-    onSaveOrder: (String, BigDecimal, String, String, String?, Long?, List<CartItem>) -> Unit,
+    onSaveOrder: (List<OrderItemDraft>, String, String, String?, Long?) -> Unit,
     onDraftChange: (OrderDraft?) -> Unit,
-    onSetNotes: (String) -> Unit,
+    onSetCartItems: (List<OrderItemDraft>) -> Unit,
     onSetTotalText: (String) -> Unit,
     onSetCustomerName: (String) -> Unit,
     onSetCustomerPhone: (String) -> Unit,
@@ -118,29 +118,20 @@ internal fun DayOrderEditorDialog(
         }
     val cartRequiredText = stringResource(R.string.day_editor_cart_required)
     val validTotalRequiredText = stringResource(R.string.day_editor_valid_total_required)
-    val cartItems = OrderCartParser.parseNotesToCart(notes)
     val canSave =
         cartItems.isNotEmpty() &&
             parsedTotal != null &&
             parsedTotal > BigDecimal.ZERO &&
             !isPickupTimeInvalid
 
-    LaunchedEffect(notes) {
-        val total = OrderCartParser.cartTotal(OrderCartParser.parseNotesToCart(notes))
+    LaunchedEffect(cartItems) {
+        val total = cartItems.fold(BigDecimal.ZERO) { acc, item -> acc.add(item.lineTotal) }
         if (total > BigDecimal.ZERO) {
             onSetTotalText(total.stripTrailingZeros().toPlainString())
         }
     }
 
-    val notesState by rememberUpdatedState(notes)
-    val setNotes by rememberUpdatedState<(String) -> Unit>(onSetNotes)
-    DisposableEffect(Unit) {
-        voiceRouter.registerNotesTarget(getNotes = { notesState }, setNotes = setNotes)
-        onDispose { voiceRouter.clearNotesTarget() }
-    }
-
     fun submitOrder() {
-        val trimmedNotes = notes.trim()
         val finalTotal = trimmedTotal.toBigDecimalOrNull()?.setScale(2, RoundingMode.HALF_UP)
 
         when {
@@ -160,17 +151,14 @@ internal fun DayOrderEditorDialog(
                 onSetCustomerError(null)
             }
             else -> {
-                val cartItems = OrderCartParser.parseNotesToCart(trimmedNotes)
                 onSaveOrder(
-                    trimmedNotes,
-                    finalTotal,
+                    cartItems,
                     attachedCustomerName,
                     attachedCustomerPhone,
                     normalizedPickupTime,
-                    editingOrderId,
-                    cartItems
+                    editingOrderId
                 )
-                onSetNotes("")
+                onSetCartItems(emptyList())
                 onSetTotalText("")
                 onSetSuggestions(emptyList())
                 onSetCustomerName("")
@@ -193,9 +181,9 @@ internal fun DayOrderEditorDialog(
             } else {
                 stringResource(R.string.day_edit_order)
             },
-        notes = notes,
-        onNotesChange = {
-            onSetNotes(it)
+        cartItems = cartItems,
+        onCartItemsChange = {
+            onSetCartItems(it)
             onSetNotesError(null)
         },
         notesError = notesError,
@@ -254,7 +242,7 @@ internal fun DayOrderEditorDialog(
         onSave = ::submitOrder,
         focusNotesInitially = false,
         onClear = {
-            onSetNotes("")
+            onSetCartItems(emptyList())
             onSetTotalText("")
             onSetCustomerName("")
             onSetCustomerPhone("")
@@ -376,7 +364,7 @@ internal fun DayDeleteOrderDialog(
                         orderId = order.id,
                         date = order.orderDate,
                         customerName = order.customerId?.let { customerNames[it] },
-                        notes = order.notes ?: "",
+                        notes = "",
                         totalAmount = order.totalAmount
                     )
                 Text(stringResource(R.string.day_delete_order_message, label))

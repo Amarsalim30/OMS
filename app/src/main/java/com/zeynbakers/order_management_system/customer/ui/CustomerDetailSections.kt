@@ -329,7 +329,6 @@ internal fun OrderRow(
     var pendingOverride by remember { mutableStateOf<OrderStatusOverride?>(null) }
     var confirmWriteOff by remember { mutableStateOf(false) }
     val today = rememberCurrentDate()
-    val notes = (order.order.notes ?: "").trim().take(80)
     val dateLabel = formatShortDate(order.order.orderDate)
     val dueAmount = (order.order.totalAmount - order.paidAmount).max(BigDecimal.ZERO)
     val creditAmount = (order.paidAmount - order.order.totalAmount).max(BigDecimal.ZERO)
@@ -409,17 +408,6 @@ internal fun OrderRow(
                     text = accountStateLabel,
                     style = MaterialTheme.typography.labelLarge,
                     color = accountStateColor
-                )
-            }
-
-            if (notes.isNotBlank()) {
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    text = notes,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
                 )
             }
             Spacer(Modifier.height(8.dp))

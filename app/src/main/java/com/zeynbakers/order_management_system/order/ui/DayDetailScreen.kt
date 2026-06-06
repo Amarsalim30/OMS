@@ -82,6 +82,7 @@ import com.zeynbakers.order_management_system.core.ui.components.AppFilterRow
 import com.zeynbakers.order_management_system.customer.data.CustomerEntity
 import com.zeynbakers.order_management_system.order.data.OrderEntity
 import com.zeynbakers.order_management_system.order.data.OrderExporter
+import com.zeynbakers.order_management_system.order.data.OrderItemEntity
 import com.zeynbakers.order_management_system.product.data.ProductEntity
 import com.zeynbakers.order_management_system.order.printing.BluetoothPrintPermissions
 import com.zeynbakers.order_management_system.order.printing.BluetoothPrinterManager
@@ -105,7 +106,7 @@ fun DayDetailScreen(
         customerPhones: Map<Long, String>,
         orderPaidAmounts: Map<Long, BigDecimal>,
         onBack: () -> Unit,
-        onSaveOrder: (String, BigDecimal, String, String, String?, Long?, List<CartItem>) -> Unit,
+        onSaveOrder: (List<OrderItemDraft>, String, String, String?, Long?) -> Unit,
         onDeleteOrder: (Long) -> Unit,
         loadOrderPaymentAllocations: suspend (Long) -> List<OrderPaymentAllocationUi>,
         loadMoveOrderOptions: suspend (Long?, Long) -> List<OrderMoveOption>,
@@ -130,7 +131,7 @@ fun DayDetailScreen(
         storeName: String = ""
 ) {
     val dateKey = remember(date) { date.toString() }
-    var notes by rememberSaveable(dateKey) { mutableStateOf(draft?.notes ?: "") }
+    var cartItems by rememberSaveable(dateKey) { mutableStateOf(emptyList<OrderItemDraft>()) }
     var totalText by rememberSaveable(dateKey) { mutableStateOf(draft?.totalText ?: "") }
     var customerName by rememberSaveable(dateKey) { mutableStateOf(draft?.customerName ?: "") }
     var customerPhone by rememberSaveable(dateKey) { mutableStateOf(draft?.customerPhone ?: "") }
@@ -182,7 +183,8 @@ fun DayDetailScreen(
     suspend fun printOrder(order: OrderEntity, macAddress: String, printerName: String) {
         val customerLabel = order.customerId?.let { customerNames[it] }
         val customerPhone = order.customerId?.let { customerPhones[it] }
-        val receiptText = ReceiptFormatter.formatOrder(storeName, order, customerLabel, customerPhone)
+        val orderItems = emptyList<OrderItemEntity>()
+        val receiptText = ReceiptFormatter.formatOrder(storeName, order, orderItems, customerLabel, customerPhone)
         val result = printerManager.printReceipt(macAddress, receiptText)
         if (result.isSuccess) {
             printerPrefs.savePrinter(macAddress, printerName)
@@ -275,9 +277,9 @@ fun DayDetailScreen(
             maximumFractionDigits = 2
         }
     }
-    LaunchedEffect(notes, totalText, customerName, customerPhone, pickupTimeText, editingOrderId) {
+    LaunchedEffect(cartItems, totalText, customerName, customerPhone, pickupTimeText, editingOrderId) {
         val hasDraftContent =
-                notes.isNotBlank() ||
+                cartItems.isNotEmpty() ||
                         totalText.isNotBlank() ||
                         customerName.isNotBlank() ||
                         customerPhone.isNotBlank() ||
@@ -286,7 +288,7 @@ fun DayDetailScreen(
         if (hasDraftContent) {
             onDraftChange(
                     OrderDraft(
-                            notes = notes,
+                            cartItems = cartItems,
                             totalText = totalText,
                             customerName = customerName,
                             customerPhone = customerPhone,
@@ -422,8 +424,7 @@ fun DayDetailScreen(
                         val amountLabel = order.totalAmount.stripTrailingZeros().toPlainString().lowercase()
                         val pickupLabel = plannerPickupDisplay(order.pickupTime).orEmpty().lowercase()
                         val pickupRaw = order.pickupTime.orEmpty().lowercase()
-                        (order.notes?.lowercase()?.contains(normalizedQuery) == true) ||
-                                customerLabel.contains(normalizedQuery) ||
+                        customerLabel.contains(normalizedQuery) ||
                                 amountLabel.contains(normalizedQuery) ||
                                 pickupLabel.contains(normalizedQuery) ||
                                 pickupRaw.contains(normalizedQuery)
@@ -511,7 +512,7 @@ fun DayDetailScreen(
                 val canRestoreDraft =
                         existingDraft?.let { draftValue ->
                             draftValue.editingOrderId == null &&
-                                    (draftValue.notes.isNotBlank() ||
+                                    (draftValue.cartItems.isNotEmpty() ||
                                             draftValue.totalText.isNotBlank() ||
                                             draftValue.customerName.isNotBlank() ||
                                             draftValue.customerPhone.isNotBlank())
@@ -521,7 +522,7 @@ fun DayDetailScreen(
                         onClick = {
                             editingOrderId = null
                             if (!canRestoreDraft) {
-                                notes = ""
+                                cartItems = emptyList()
                                 totalText = ""
                                 customerName = ""
                                 customerPhone = ""
@@ -735,7 +736,7 @@ fun DayDetailScreen(
                                 paymentState = paymentState,
                                 isFocused = highlightedOrderId == order.id,
                                 onEdit = {
-                                    notes = order.notes ?: ""
+                                    cartItems = emptyList()
                                     totalText = order.totalAmount.toPlainString()
                                     editingOrderId = order.id
                                     notesError = null
@@ -759,7 +760,7 @@ fun DayDetailScreen(
         editingOrderId = editingOrderId,
         orderPaidAmounts = orderPaidAmounts,
         totalText = totalText,
-        notes = notes,
+        cartItems = cartItems,
         pickupTimeText = pickupTimeText,
         customerName = customerName,
         customerPhone = customerPhone,
@@ -772,7 +773,7 @@ fun DayDetailScreen(
         voiceRouter = voiceRouter,
         onSaveOrder = onSaveOrder,
         onDraftChange = onDraftChange,
-        onSetNotes = { notes = it },
+        onSetCartItems = { cartItems = it },
         onSetTotalText = { totalText = it },
         onSetCustomerName = { customerName = it },
         onSetCustomerPhone = { customerPhone = it },
@@ -874,13 +875,13 @@ fun DayDetailScreen(
                         scope.launch {
                             val (data, mimeType, fileName) = if (exportFormat == "json") {
                                 Triple(
-                                    OrderExporter.exportOrders(orders, customerNames, customerPhones),
+                                    OrderExporter.exportOrders(orders, emptyMap(), customerNames, customerPhones),
                                     "application/json",
                                     "orders_$date.json"
                                 )
                             } else {
                                 Triple(
-                                    OrderExporter.exportOrdersToCsv(orders, customerNames, customerPhones),
+                                    OrderExporter.exportOrdersToCsv(orders, emptyMap(), customerNames, customerPhones),
                                     "text/csv",
                                     "orders_$date.csv"
                                 )

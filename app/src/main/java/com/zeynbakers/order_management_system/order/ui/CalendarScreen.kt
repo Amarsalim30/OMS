@@ -72,7 +72,7 @@ fun CalendarScreen(
     selectedDate: LocalDate?,
     onSelectDate: (LocalDate) -> Unit,
     onOpenDay: (LocalDate) -> Unit,
-    onSaveOrder: (LocalDate, String, BigDecimal, String, String, String?, List<CartItem>) -> Unit,
+    onSaveOrder: (LocalDate, List<OrderItemDraft>, String, String, String?) -> Unit,
     searchCustomers: suspend (String) -> List<CustomerEntity>,
     searchProducts: suspend (String) -> List<com.zeynbakers.order_management_system.product.data.ProductEntity>,
     ensureProduct: suspend (String, BigDecimal, String) -> com.zeynbakers.order_management_system.product.data.ProductEntity,
@@ -85,7 +85,7 @@ fun CalendarScreen(
     onInteractiveTutorialFinished: () -> Unit = {}
 ) {
     var isQuickAddOpen by remember { mutableStateOf(false) }
-    var notes by remember { mutableStateOf("") }
+    var cartItems by remember { mutableStateOf(emptyList<OrderItemDraft>()) }
     var totalText by remember { mutableStateOf("") }
     var customerName by remember { mutableStateOf("") }
     var customerPhone by remember { mutableStateOf("") }
@@ -172,8 +172,8 @@ fun CalendarScreen(
             }
     }
 
-    LaunchedEffect(notes) {
-        val total = OrderCartParser.cartTotal(OrderCartParser.parseNotesToCart(notes))
+    LaunchedEffect(cartItems) {
+        val total = cartItems.fold(BigDecimal.ZERO) { acc, item -> acc.add(item.lineTotal) }
         if (total > BigDecimal.ZERO) {
             totalText = total.stripTrailingZeros().toPlainString()
         }
@@ -215,9 +215,9 @@ fun CalendarScreen(
         }
     }
 
-    LaunchedEffect(tutorialActive, tutorialStep, notes) {
+    LaunchedEffect(tutorialActive, tutorialStep, cartItems) {
         if (!tutorialActive) return@LaunchedEffect
-        if (tutorialStep == CalendarTutorialStep.Notes && notes.trim().isNotEmpty()) {
+        if (tutorialStep == CalendarTutorialStep.Notes && cartItems.isNotEmpty()) {
             tutorialStep = CalendarTutorialStep.Total
         }
     }
@@ -539,13 +539,6 @@ fun CalendarScreen(
         val addOrderDateLabel = remember(activeDate) {
             DateTimeFormatter.ofPattern("d MMM", Locale.getDefault()).format(activeDate.toJavaLocalDate())
         }
-        val notesState by rememberUpdatedState(notes)
-        val setNotes by rememberUpdatedState<(String) -> Unit>({ notes = it })
-        DisposableEffect(Unit) {
-            voiceRouter.registerNotesTarget(getNotes = { notesState }, setNotes = setNotes)
-            onDispose { voiceRouter.clearNotesTarget() }
-        }
-        val trimmedNotes = notes.trim()
         val parsedTotal = totalText.trim().takeIf { it.isNotEmpty() }?.let {
             runCatching { BigDecimal(it) }.getOrNull()
         }
@@ -560,7 +553,6 @@ fun CalendarScreen(
             } else {
                 ""
             }
-        val cartItems = OrderCartParser.parseNotesToCart(notes)
         val canSave =
             cartItems.isNotEmpty() &&
                 parsedTotal != null &&
@@ -585,17 +577,14 @@ fun CalendarScreen(
                     customerError = null
                 }
                 else -> {
-                    val cartItems = OrderCartParser.parseNotesToCart(trimmedNotes)
                     onSaveOrder(
                         activeDate,
-                        trimmedNotes,
-                        parsedTotal,
+                        cartItems,
                         attachedCustomerName,
                         attachedCustomerPhone,
-                        normalizedPickupTime,
-                        cartItems
+                        normalizedPickupTime
                     )
-                    notes = ""
+                    cartItems = emptyList()
                     totalText = ""
                     suggestions = emptyList()
                     customerName = ""
@@ -688,9 +677,9 @@ fun CalendarScreen(
 
         OrderEditorSheet(
             title = stringResource(R.string.calendar_order_add_title, addOrderDateLabel),
-            notes = notes,
-            onNotesChange = {
-                notes = it
+            cartItems = cartItems,
+            onCartItemsChange = {
+                cartItems = it
                 notesError = null
             },
             notesError = notesError,
@@ -744,7 +733,7 @@ fun CalendarScreen(
             onSave = ::submitOrder,
             focusNotesInitially = false,
             onClear = {
-                notes = ""
+                cartItems = emptyList()
                 totalText = ""
                 customerName = ""
                 customerPhone = ""

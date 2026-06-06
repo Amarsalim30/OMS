@@ -112,26 +112,22 @@ class OrderViewModel(private val database: AppDatabase) : ViewModel() {
 
     fun saveOrder(
         date: LocalDate,
-        notes: String,
-        totalAmount: BigDecimal,
+        cartItems: List<OrderItemDraft>,
         customerName: String,
         customerPhone: String,
         pickupTime: String?,
-        existingOrderId: Long?,
-        cartItems: List<CartItem> = emptyList()
+        existingOrderId: Long?
     ) {
         viewModelScope.launch {
             val result =
                 database.withTransaction {
                     saveOrderTransactional(
                         date = date,
-                        notes = notes,
-                        totalAmount = totalAmount,
+                        cartItems = cartItems,
                         customerName = customerName,
                         customerPhone = customerPhone,
                         pickupTime = pickupTime,
-                        existingOrderId = existingOrderId,
-                        cartItems = cartItems
+                        existingOrderId = existingOrderId
                     )
                 }
             result.creditPrompt?.let { _creditPrompt.value = it }
@@ -149,17 +145,25 @@ class OrderViewModel(private val database: AppDatabase) : ViewModel() {
                 actions.forEach { action ->
                     val item = action.importItem
                     val orderDate = targetDate
-                    val totalAmount = BigDecimal(item.totalAmount)
                     val customerName = item.customerName ?: ""
                     val customerPhone = item.customerPhone ?: ""
                     val pickupTime = item.pickupTime
-                    
+
                     when (action.action) {
                         ImportAction.CREATE -> {
+                            val cartItems = item.cartItems.map {
+                                OrderItemDraft(
+                                    productId = null,
+                                    emoji = it.emoji,
+                                    name = it.name,
+                                    quantity = it.quantity,
+                                    unitPrice = BigDecimal(it.unitPrice),
+                                    categorySnapshot = null
+                                )
+                            }
                             saveOrderTransactional(
                                 date = orderDate,
-                                notes = item.notes,
-                                totalAmount = totalAmount,
+                                cartItems = cartItems,
                                 customerName = customerName,
                                 customerPhone = customerPhone,
                                 pickupTime = pickupTime,
@@ -171,11 +175,21 @@ class OrderViewModel(private val database: AppDatabase) : ViewModel() {
                             if (duplicateOrderId != null) {
                                 val existingOrder = orderDao.getOrderById(duplicateOrderId)
                                 if (existingOrder != null) {
-                                    val mergedNotes = mergeOrderNotes(existingOrder.notes, item.notes, item.cartItems)
+                                    val existingItems = database.orderItemDao().getOrderItems(duplicateOrderId)
+                                    val importItems = item.cartItems.map {
+                                        OrderItemDraft(
+                                            productId = null,
+                                            emoji = it.emoji,
+                                            name = it.name,
+                                            quantity = it.quantity,
+                                            unitPrice = BigDecimal(it.unitPrice),
+                                            categorySnapshot = null
+                                        )
+                                    }
+                                    val mergedItems = mergeOrderItems(existingItems, importItems)
                                     saveOrderTransactional(
                                         date = orderDate,
-                                        notes = mergedNotes,
-                                        totalAmount = existingOrder.totalAmount.add(totalAmount),
+                                        cartItems = mergedItems,
                                         customerName = customerName,
                                         customerPhone = customerPhone,
                                         pickupTime = pickupTime,
@@ -192,42 +206,51 @@ class OrderViewModel(private val database: AppDatabase) : ViewModel() {
         }
     }
 
-    private fun mergeOrderNotes(existingNotes: String?, importNotes: String, cartItems: List<com.zeynbakers.order_management_system.order.data.CartItemExport>): String {
-        val existingCart = OrderCartParser.parseNotesToCart(existingNotes ?: "")
-        val importCart = cartItems.map { 
-            com.zeynbakers.order_management_system.order.ui.CartItem(
-                emoji = it.emoji,
-                name = it.name,
+    private fun mergeOrderItems(
+        existingItems: List<com.zeynbakers.order_management_system.order.data.OrderItemEntity>,
+        importItems: List<OrderItemDraft>
+    ): List<OrderItemDraft> {
+        val mergedItems = existingItems.map {
+            OrderItemDraft(
+                productId = it.productId,
+                emoji = "",
+                name = it.productNameSnapshot,
                 quantity = it.quantity,
-                unitPrice = BigDecimal(it.unitPrice)
+                unitPrice = it.effectivePrice,
+                categorySnapshot = it.categorySnapshot
             )
-        }
-        
-        val mergedCart = existingCart.toMutableList()
-        importCart.forEach { importItem ->
-            val existing = mergedCart.find { it.name == importItem.name }
+        }.toMutableList()
+
+        importItems.forEach { importItem ->
+            // Match by productId first, then by name as fallback
+            val existing = mergedItems.find {
+                (it.productId != null && it.productId == importItem.productId) ||
+                (it.productId == null && importItem.productId == null && it.name == importItem.name)
+            }
             if (existing != null) {
-                mergedCart[mergedCart.indexOf(existing)] = existing.copy(quantity = existing.quantity + importItem.quantity)
+                // Preserve productId from existing item if import has none
+                val finalProductId = existing.productId ?: importItem.productId
+                mergedItems[mergedItems.indexOf(existing)] = existing.copy(
+                    quantity = existing.quantity + importItem.quantity,
+                    productId = finalProductId
+                )
             } else {
-                mergedCart.add(importItem)
+                mergedItems.add(importItem)
             }
         }
-        
-        return OrderCartParser.serializeCartToNotes(mergedCart)
+
+        return mergedItems
     }
 
     private suspend fun saveOrderTransactional(
         date: LocalDate,
-        notes: String,
-        totalAmount: BigDecimal,
+        cartItems: List<OrderItemDraft>,
         customerName: String,
         customerPhone: String,
         pickupTime: String?,
-        existingOrderId: Long?,
-        cartItems: List<CartItem> = emptyList()
+        existingOrderId: Long?
     ): SaveOrderResult {
         val now = Clock.System.now().toEpochMilliseconds()
-        val cleanNotes = notes.trim().takeIf { it.isNotBlank() }
         val normalizedPickupTime = pickupTime?.trim()?.takeIf { it.isNotBlank() }
         val existingOrder =
             if (existingOrderId != null && existingOrderId != 0L) {
@@ -245,17 +268,18 @@ class OrderViewModel(private val database: AppDatabase) : ViewModel() {
                 resolvedCustomerId
             }
 
+        // Derive total from cartItems for single source of truth
+        val totalAmount = cartItems.sumOf { it.lineTotal }
+
         val updatedOrder =
             (existingOrder
                     ?: OrderEntity(
                         orderDate = date,
-                        notes = cleanNotes,
                         totalAmount = totalAmount,
                         customerId = customerId
                     ))
                 .copy(
                     orderDate = date,
-                    notes = cleanNotes,
                     totalAmount = totalAmount,
                     customerId = customerId,
                     pickupTime = normalizedPickupTime,
@@ -270,9 +294,25 @@ class OrderViewModel(private val database: AppDatabase) : ViewModel() {
                 updatedOrder.id
             }
 
-        // Save order items
+        // Save order items - direct conversion from OrderItemDraft to OrderItemEntity
         if (cartItems.isNotEmpty()) {
-            orderRepository.saveOrderItemsForOrder(orderId, cartItems)
+            val orderItemDao = database.orderItemDao()
+            // Delete existing items for this order if editing
+            if (existingOrder != null) {
+                orderItemDao.deleteOrderItems(orderId)
+            }
+            // Insert new items
+            val orderItemEntities = cartItems.map { draft ->
+                com.zeynbakers.order_management_system.order.data.OrderItemEntity(
+                    orderId = orderId,
+                    productId = draft.productId,
+                    productNameSnapshot = draft.name,
+                    unitPriceSnapshot = draft.unitPrice,
+                    categorySnapshot = draft.categorySnapshot ?: com.zeynbakers.order_management_system.order.data.ItemCategory.OTHER,
+                    quantity = draft.quantity
+                )
+            }
+            orderItemDao.insertAll(orderItemEntities)
         }
 
         if (existingOrder?.customerId != null && customerId != null && existingOrder.customerId != customerId) {
@@ -337,7 +377,7 @@ class OrderViewModel(private val database: AppDatabase) : ViewModel() {
                 orderId = orderId,
                 date = savedOrder.orderDate,
                 customerName = resolvedCustomerName,
-                notes = savedOrder.notes ?: "",
+                notes = "",
                 totalAmount = savedOrder.totalAmount
             )
         return OrderCreditPrompt(
@@ -375,7 +415,7 @@ class OrderViewModel(private val database: AppDatabase) : ViewModel() {
                 orderId = order.id,
                 date = order.orderDate,
                 customerName = customerName,
-                notes = order.notes ?: "",
+                notes = "",
                 totalAmount = order.totalAmount
             )
         accountingDao.upsertDebitForOrder(
@@ -503,7 +543,7 @@ class OrderViewModel(private val database: AppDatabase) : ViewModel() {
                         orderId = order.id,
                         date = order.orderDate,
                         customerName = order.customerId?.let { customerNames[it] },
-                        notes = order.notes ?: "",
+                        notes = "",
                         totalAmount = order.totalAmount
                     )
                 OrderMoveOption(order.id, label)
@@ -535,7 +575,7 @@ class OrderViewModel(private val database: AppDatabase) : ViewModel() {
                         orderId = it.id,
                         date = it.orderDate,
                         customerName = customerName,
-                        notes = it.notes ?: "",
+                        notes = "",
                         totalAmount = it.totalAmount
                     )
                 } ?: "Order ID $orderId"

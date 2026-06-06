@@ -41,33 +41,29 @@ import java.math.BigDecimal
 import kotlinx.datetime.toJavaLocalDate
 import java.util.Locale
 import com.zeynbakers.order_management_system.order.data.OrderEntity
+import com.zeynbakers.order_management_system.order.data.OrderItemEntity
 
 @Composable
 internal fun OrderSummaryCard(
     customerLabel: String?,
-    notes: String,
+    orderItems: List<OrderItemEntity>,
     total: BigDecimal,
     pickupTime: String?,
     onCopyNotes: () -> Unit
 ) {
-    val cartItems = remember(notes) { OrderCartParser.parseNotesToCart(notes) }
-    
     AppCard {
         Column {
             // Display structured cart items with clear formatting
-            cartItems.forEach { item ->
-                val priceText = if (item.unitPrice > BigDecimal.ZERO) {
-                    " (@ ${formatKes(item.unitPrice)})"
+            orderItems.forEach { item ->
+                val priceText = if (item.effectivePrice > BigDecimal.ZERO) {
+                    " (@ ${formatKes(item.effectivePrice)})"
                 } else {
                     ""
                 }
-                
+
                 Text(
                     text = buildString {
-                        if (item.emoji.isNotBlank()) {
-                            append(item.emoji).append(" ")
-                        }
-                        append(item.name)
+                        append(item.productNameSnapshot)
                         append(" × ")
                         append(item.quantity)
                         append(priceText)
@@ -75,10 +71,9 @@ internal fun OrderSummaryCard(
                     style = MaterialTheme.typography.bodyMedium
                 )
             }
-            
-            if (cartItems.isEmpty()) {
-                // Fallback to raw notes if parsing fails
-                Text(text = notes, style = MaterialTheme.typography.bodyLarge)
+
+            if (orderItems.isEmpty()) {
+                Text(text = "No items", style = MaterialTheme.typography.bodyLarge)
             }
         }
         
@@ -292,13 +287,14 @@ internal fun SummaryEmptyState() {
 internal fun DailySummaryCard(
     date: kotlinx.datetime.LocalDate,
     orders: List<OrderEntity>,
+    orderItemsMap: Map<Long, List<OrderItemEntity>>,
     customerNames: Map<Long, String>,
     onCopyNotes: (String) -> Unit
 ) {
     val dateLabel = remember(date) {
         date.toJavaLocalDate().format(java.time.format.DateTimeFormatter.ofPattern("d MMM", Locale.getDefault()))
     }
-    
+
     AppCard {
         Column {
             Text(
@@ -309,12 +305,13 @@ internal fun DailySummaryCard(
             orders.forEach { order ->
                 val customerLabel = order.customerId?.let { id -> customerNames[id] }?.takeIf { it.isNotBlank() }
                 val pickupDisplay = com.zeynbakers.order_management_system.core.util.formatPickupTimeForDisplay(order.pickupTime)
+                val items = orderItemsMap[order.id] ?: emptyList()
                 OrderSummaryCard(
                     customerLabel = customerLabel,
-                    notes = order.notes ?: "",
+                    orderItems = items,
                     total = order.totalAmount,
                     pickupTime = pickupDisplay,
-                    onCopyNotes = { onCopyNotes(order.notes ?: "") }
+                    onCopyNotes = { onCopyNotes("") }
                 )
             }
         }

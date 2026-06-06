@@ -2,11 +2,11 @@
   "formatVersion": 1,
   "database": {
     "version": 16,
-    "identityHash": "a92239f4bf07f8b55998edf0b0d9af9c",
+    "identityHash": "4f1ad983a946ec354b7a0632b672e1f8",
     "entities": [
       {
         "tableName": "orders",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `orderDate` TEXT NOT NULL, `createdAt` INTEGER NOT NULL, `updatedAt` INTEGER NOT NULL, `notes` TEXT, `pickupTime` TEXT, `status` TEXT NOT NULL, `statusOverride` TEXT, `totalAmount` TEXT NOT NULL, `customerId` INTEGER, FOREIGN KEY(`customerId`) REFERENCES `customers`(`id`) ON UPDATE NO ACTION ON DELETE SET NULL )",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `orderDate` TEXT NOT NULL, `createdAt` INTEGER NOT NULL, `updatedAt` INTEGER NOT NULL, `pickupTime` TEXT, `status` TEXT NOT NULL, `statusOverride` TEXT, `totalAmount` TEXT NOT NULL, `customerId` INTEGER, FOREIGN KEY(`customerId`) REFERENCES `customers`(`id`) ON UPDATE NO ACTION ON DELETE SET NULL )",
         "fields": [
           {
             "fieldPath": "id",
@@ -31,11 +31,6 @@
             "columnName": "updatedAt",
             "affinity": "INTEGER",
             "notNull": true
-          },
-          {
-            "fieldPath": "notes",
-            "columnName": "notes",
-            "affinity": "TEXT"
           },
           {
             "fieldPath": "pickupTime",
@@ -130,7 +125,7 @@
       },
       {
         "tableName": "order_items",
-        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `orderId` INTEGER NOT NULL, `productId` INTEGER, `productNameSnapshot` TEXT NOT NULL, `unitPriceSnapshot` TEXT NOT NULL, `categorySnapshot` TEXT NOT NULL, `quantity` INTEGER NOT NULL, `priceOverride` TEXT, `name` TEXT NOT NULL, `category` TEXT NOT NULL, `unitPrice` TEXT NOT NULL, FOREIGN KEY(`orderId`) REFERENCES `orders`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`productId`) REFERENCES `products`(`id`) ON UPDATE NO ACTION ON DELETE RESTRICT )",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `orderId` INTEGER NOT NULL, `productId` INTEGER, `productNameSnapshot` TEXT NOT NULL, `unitPriceSnapshot` TEXT NOT NULL, `categorySnapshot` TEXT NOT NULL, `quantity` INTEGER NOT NULL, `priceOverride` TEXT, FOREIGN KEY(`orderId`) REFERENCES `orders`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE , FOREIGN KEY(`productId`) REFERENCES `products`(`id`) ON UPDATE NO ACTION ON DELETE RESTRICT )",
         "fields": [
           {
             "fieldPath": "id",
@@ -177,24 +172,6 @@
             "fieldPath": "priceOverride",
             "columnName": "priceOverride",
             "affinity": "TEXT"
-          },
-          {
-            "fieldPath": "name",
-            "columnName": "name",
-            "affinity": "TEXT",
-            "notNull": true
-          },
-          {
-            "fieldPath": "category",
-            "columnName": "category",
-            "affinity": "TEXT",
-            "notNull": true
-          },
-          {
-            "fieldPath": "unitPrice",
-            "columnName": "unitPrice",
-            "affinity": "TEXT",
-            "notNull": true
           }
         ],
         "primaryKey": {
@@ -1040,7 +1017,7 @@
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'a92239f4bf07f8b55998edf0b0d9af9c')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '4f1ad983a946ec354b7a0632b672e1f8')"
     ]
   }
 }

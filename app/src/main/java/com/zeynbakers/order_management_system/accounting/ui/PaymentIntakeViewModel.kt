@@ -353,7 +353,7 @@ class PaymentIntakeViewModel(private val database: AppDatabase) : ViewModel() {
                             com.zeynbakers.order_management_system.core.util.formatOrderLabel(
                                 date = order.orderDate,
                                 customerName = customerName,
-                                notes = order.notes,
+                                notes = "",
                                 totalAmount = order.totalAmount
                             )
                         }
@@ -690,7 +690,7 @@ class PaymentIntakeViewModel(private val database: AppDatabase) : ViewModel() {
                     customerId = entry.order.customerId,
                     customerName = customer?.name,
                     orderDate = entry.order.orderDate,
-                    notes = entry.order.notes ?: "",
+                    notes = "",
                     outstanding = entry.outstanding,
                     confidence = confidence
                 )

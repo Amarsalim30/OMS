@@ -170,7 +170,7 @@ class PaymentIntakeHistoryViewModel(
                         orderId = order.id,
                         date = order.orderDate,
                         customerName = order.customerId?.let { customerNames[it] },
-                        notes = order.notes,
+                        notes = "",
                         totalAmount = order.totalAmount
                     )
                 MoveOrderOption(order.id, label)
@@ -266,7 +266,7 @@ class PaymentIntakeHistoryViewModel(
                                 allocationId = allocation.id,
                                 orderId = allocation.orderId,
                                 orderDate = order?.orderDate,
-                                orderNotes = order?.notes,
+                                orderNotes = "",
                                 amount = allocation.amount,
                                 type = allocation.type,
                                 status = allocation.status
@@ -342,7 +342,7 @@ class PaymentIntakeHistoryViewModel(
                             orderId = order.id,
                             date = order.orderDate,
                             customerName = order.customerId?.let { customerDao.getById(it)?.name },
-                            notes = order.notes,
+                            notes = "",
                             totalAmount = order.totalAmount
                         )
                     }

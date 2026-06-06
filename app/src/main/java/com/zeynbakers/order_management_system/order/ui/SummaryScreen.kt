@@ -70,7 +70,6 @@ import com.zeynbakers.order_management_system.order.domain.OrderLineItem
 import com.zeynbakers.order_management_system.order.domain.aggregateLineItems
 import com.zeynbakers.order_management_system.order.domain.aggregateOrderLineItems
 import com.zeynbakers.order_management_system.order.domain.formatQuantity
-import com.zeynbakers.order_management_system.order.domain.parseOrderNotes
 import java.math.BigDecimal
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -146,8 +145,7 @@ fun SummaryScreen(
     val analyses =
         remember(orders) {
             orders.map { order ->
-                val parsed = parseOrderNotes(order.notes ?: "")
-                OrderNoteAnalysis(order = order, items = parsed.items, unparsedLines = parsed.unparsed)
+                OrderNoteAnalysis(order = order, items = emptyList(), unparsedLines = emptyList())
             }
         }
     val aggregatedItems = remember(analyses) { aggregateOrderLineItems(analyses.flatMap { it.items }) }
@@ -328,6 +326,7 @@ fun SummaryScreen(
                         DailySummaryCard(
                             date = date,
                             orders = dayAnalyses.map { it.order },
+                            orderItemsMap = emptyMap(),
                             customerNames = customerNames,
                             onCopyNotes = {
                                 clipboardManager.setText(AnnotatedString(dayMessage))
@@ -350,10 +349,10 @@ fun SummaryScreen(
                             val pickupDisplay = com.zeynbakers.order_management_system.core.util.formatPickupTimeForDisplay(order.pickupTime)
                             OrderSummaryCard(
                                 customerLabel = customerLabel,
-                                notes = order.notes ?: "",
+                                orderItems = emptyList(),
                                 total = order.totalAmount,
                                 pickupTime = pickupDisplay,
-                                onCopyNotes = { clipboardManager.setText(AnnotatedString(order.notes ?: "")) }
+                                onCopyNotes = { clipboardManager.setText(AnnotatedString("")) }
                             )
                         }
                     }
@@ -374,10 +373,10 @@ fun SummaryScreen(
                                 val pickupDisplay = com.zeynbakers.order_management_system.core.util.formatPickupTimeForDisplay(order.pickupTime)
                                 OrderSummaryCard(
                                     customerLabel = customerLabel,
-                                    notes = order.notes ?: "",
+                                    orderItems = emptyList(),
                                     total = order.totalAmount,
                                     pickupTime = pickupDisplay,
-                                    onCopyNotes = { clipboardManager.setText(AnnotatedString(order.notes ?: "")) }
+                                    onCopyNotes = { clipboardManager.setText(AnnotatedString("")) }
                                 )
                             }
                         }

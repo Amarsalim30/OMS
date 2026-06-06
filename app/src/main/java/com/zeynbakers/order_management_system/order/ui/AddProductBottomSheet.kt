@@ -64,6 +64,7 @@ import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
 import com.zeynbakers.order_management_system.R
 import com.zeynbakers.order_management_system.core.util.formatKes
+import com.zeynbakers.order_management_system.order.data.ItemCategory
 import com.zeynbakers.order_management_system.product.data.ProductEntity
 import java.math.BigDecimal
 import java.math.RoundingMode
@@ -73,16 +74,14 @@ import kotlinx.coroutines.launch
 @Composable
 internal fun AddProductBottomSheet(
     visible: Boolean,
-    cartNotes: String,
-    onCartNotesChange: (String) -> Unit,
+    cartItems: List<OrderItemDraft>,
+    onCartItemsChange: (List<OrderItemDraft>) -> Unit,
     productMatches: List<ProductEntity>,
     onProductQueryChange: (String) -> Unit,
     onEnsureProduct: suspend (String, BigDecimal, String) -> ProductEntity,
     onDismiss: () -> Unit
 ) {
     if (!visible) return
-
-    val cartItems = remember(cartNotes) { OrderCartParser.parseNotesToCart(cartNotes) }
     var productQuery by remember { mutableStateOf("") }
     var isProductDropdownExpanded by remember { mutableStateOf(false) }
     var selectedProduct by remember { mutableStateOf<SelectedProductDraft?>(null) }
@@ -419,13 +418,15 @@ internal fun AddProductBottomSheet(
                             onEnsureProduct(draft.name, finalPrice, draft.emoji)
                         }
                         val newItem =
-                            CartItem(
+                            OrderItemDraft(
+                                productId = draft.catalogProductId,
                                 emoji = draft.emoji,
                                 name = draft.name,
                                 quantity = quantityValue.coerceAtLeast(1).toInt(),
-                                unitPrice = finalPrice
+                                unitPrice = finalPrice,
+                                categorySnapshot = ItemCategory.OTHER
                             )
-                        onCartNotesChange(OrderCartParser.serializeCartToNotes(cartItems + newItem))
+                        onCartItemsChange(cartItems + newItem)
                         resetForm()
                         sheetState.hide()
                     }.invokeOnCompletion {

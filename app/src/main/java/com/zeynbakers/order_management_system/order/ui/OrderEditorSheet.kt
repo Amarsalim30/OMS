@@ -114,8 +114,8 @@ private enum class EditingRow {
 @Composable
 internal fun OrderEditorSheet(
     title: String,
-    notes: String,
-    onNotesChange: (String) -> Unit,
+    cartItems: List<OrderItemDraft>,
+    onCartItemsChange: (List<OrderItemDraft>) -> Unit,
     notesError: String?,
     totalText: String,
     onTotalTextChange: (String) -> Unit,
@@ -166,8 +166,7 @@ internal fun OrderEditorSheet(
     val setTotalText by rememberUpdatedState<(String) -> Unit>({ onTotalTextChange(it) })
     val formScrollState = rememberScrollState()
 
-    val cartItems = remember(notes) { OrderCartParser.parseNotesToCart(notes) }
-    val cartTotal = remember(cartItems) { OrderCartParser.cartTotal(cartItems) }
+    val cartTotal = remember(cartItems) { cartItems.fold(BigDecimal.ZERO) { acc, item -> acc.add(item.lineTotal) } }
     var showAddProductSheet by remember { mutableStateOf(false) }
 
     val hasAnyInput =
@@ -288,8 +287,8 @@ internal fun OrderEditorSheet(
                     )
 
                     OrderCartSummary(
-                        notes = notes,
-                        onNotesChange = onNotesChange,
+                        cartItems = cartItems,
+                        onCartItemsChange = onCartItemsChange,
                         onAddProductClick = { showAddProductSheet = true },
                         modifier = notesFieldModifier
                     )
@@ -423,8 +422,8 @@ internal fun OrderEditorSheet(
 
             AddProductBottomSheet(
                 visible = showAddProductSheet,
-                cartNotes = notes,
-                onCartNotesChange = onNotesChange,
+                cartItems = cartItems,
+                onCartItemsChange = onCartItemsChange,
                 productMatches = productMatches,
                 onProductQueryChange = onProductQueryChange,
                 onEnsureProduct = onEnsureProduct,

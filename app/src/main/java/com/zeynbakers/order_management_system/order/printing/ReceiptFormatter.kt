@@ -3,8 +3,8 @@ package com.zeynbakers.order_management_system.order.printing
 import com.zeynbakers.order_management_system.core.util.formatKes
 import com.zeynbakers.order_management_system.core.util.formatPickupTimeForDisplay
 import com.zeynbakers.order_management_system.order.data.OrderEntity
+import com.zeynbakers.order_management_system.order.data.OrderItemEntity
 import com.zeynbakers.order_management_system.order.domain.formatQuantity
-import com.zeynbakers.order_management_system.order.domain.parseOrderNotes
 
 object ReceiptFormatter {
     private const val LINE_WIDTH = 32
@@ -13,11 +13,11 @@ object ReceiptFormatter {
     fun formatOrder(
         storeName: String,
         order: OrderEntity,
+        orderItems: List<OrderItemEntity> = emptyList(),
         customerLabel: String? = null,
         customerPhone: String? = null
     ): String {
         val headerName = storeName.trim().ifBlank { "Store" }
-        val parsed = parseOrderNotes(order.notes ?: "")
         val dateLine = buildDateLine(order)
         val lines = mutableListOf<String>()
 
@@ -33,18 +33,10 @@ object ReceiptFormatter {
         lines += ""
         lines += SEPARATOR
 
-        if (parsed.items.isNotEmpty()) {
-            parsed.items.forEach { item ->
-                val qty = formatQuantity(item.quantity)
-                lines += formatItemLine(item.name, qty)
-            }
-        } else if (!order.notes.isNullOrBlank()) {
-            lines += order.notes.trim()
-        }
-
-        parsed.unparsed.forEach { line ->
-            if (line.isNotBlank()) {
-                lines += line.trim()
+        if (orderItems.isNotEmpty()) {
+            orderItems.forEach { item ->
+                val qty = item.quantity.toString()
+                lines += formatItemLine(item.productNameSnapshot, qty)
             }
         }
 

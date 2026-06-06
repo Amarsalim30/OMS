@@ -1880,7 +1880,6 @@ object BackupManager {
                     .put("orderDate", order.orderDate.toString())
                     .put("createdAt", order.createdAt)
                     .put("updatedAt", order.updatedAt)
-                    .put("notes", order.notes)
                     .put("pickupTime", order.pickupTime ?: JSONObject.NULL)
                     .put("status", order.status.name)
                     .put("statusOverride", order.statusOverride?.name ?: JSONObject.NULL)
@@ -1898,10 +1897,12 @@ object BackupManager {
                 JSONObject()
                     .put("id", item.id)
                     .put("orderId", item.orderId)
-                    .put("name", item.name)
-                    .put("category", item.category.name)
+                    .put("productId", item.productId ?: JSONObject.NULL)
+                    .put("productNameSnapshot", item.productNameSnapshot)
+                    .put("unitPriceSnapshot", item.unitPriceSnapshot.toPlainString())
+                    .put("categorySnapshot", item.categorySnapshot.name)
                     .put("quantity", item.quantity)
-                    .put("unitPrice", item.unitPrice.toPlainString())
+                    .put("priceOverride", item.priceOverride?.toPlainString() ?: JSONObject.NULL)
             )
         }
         return array
@@ -2052,7 +2053,6 @@ object BackupManager {
                 orderDate = LocalDate.parse(obj.getString("orderDate")),
                 createdAt = obj.getLong("createdAt"),
                 updatedAt = obj.getLong("updatedAt"),
-                notes = obj.getString("notes"),
                 pickupTime = pickupTime,
                 status = status,
                 statusOverride = statusOverride,
@@ -2066,20 +2066,20 @@ object BackupManager {
         val array = parseArray(payload) ?: return emptyList()
         return (0 until array.length()).map { index ->
             val obj = array.getJSONObject(index)
-            val unitPrice = parseRequiredDecimal(obj.optString("unitPrice", ""), "order_items.unitPrice", index)
+            val productId = if (obj.has("productId") && !obj.isNull("productId")) obj.getLong("productId") else null
+            val productNameSnapshot = if (obj.has("productNameSnapshot")) obj.getString("productNameSnapshot") else obj.getString("name")
+            val unitPriceSnapshot = if (obj.has("unitPriceSnapshot")) parseRequiredDecimal(obj.optString("unitPriceSnapshot", ""), "order_items.unitPriceSnapshot", index) else parseRequiredDecimal(obj.optString("unitPrice", ""), "order_items.unitPrice", index)
+            val categorySnapshot = if (obj.has("categorySnapshot")) ItemCategory.valueOf(obj.getString("categorySnapshot")) else ItemCategory.OTHER
+            val priceOverride = if (obj.has("priceOverride") && !obj.isNull("priceOverride")) parseRequiredDecimal(obj.optString("priceOverride", ""), "order_items.priceOverride", index) else null
             OrderItemEntity(
                 id = obj.getLong("id"),
                 orderId = obj.getLong("orderId"),
-                productId = if (obj.has("productId")) obj.optLong("productId").takeIf { it != 0L } else null,
-                productNameSnapshot = obj.getString("name"),
-                unitPriceSnapshot = parseRequiredDecimal(obj.optString("unitPrice", ""), "order_items.unitPrice", index),
-                categorySnapshot = ItemCategory.valueOf(obj.getString("category")),
+                productId = productId,
+                productNameSnapshot = productNameSnapshot,
+                unitPriceSnapshot = unitPriceSnapshot,
+                categorySnapshot = categorySnapshot,
                 quantity = obj.getInt("quantity"),
-                priceOverride = null,
-                // Legacy fields for backward compatibility
-                name = obj.getString("name"),
-                category = ItemCategory.valueOf(obj.getString("category")),
-                unitPrice = parseRequiredDecimal(obj.optString("unitPrice", ""), "order_items.unitPrice", index)
+                priceOverride = priceOverride
             )
         }
     }

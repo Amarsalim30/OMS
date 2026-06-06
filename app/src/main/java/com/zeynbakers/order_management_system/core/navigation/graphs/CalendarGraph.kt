@@ -55,16 +55,14 @@ internal fun NavGraphBuilder.calendarGraph(
                 calendarCallbacks.onSelectedDateChange(date)
                 navController.navigate(AppRoutes.day(date))
             },
-            onSaveOrder = { date, notes, total, name, phone, pickupTime, cartItems ->
+            onSaveOrder = { date, cartItems, name, phone, pickupTime ->
                 orderViewModel.saveOrder(
                     date = date,
-                    notes = notes,
-                    totalAmount = total,
+                    cartItems = cartItems,
                     customerName = name,
                     customerPhone = phone,
                     pickupTime = pickupTime,
-                    existingOrderId = null,
-                    cartItems = cartItems
+                    existingOrderId = null
                 )
                 WidgetUpdater.enqueue(navController.context)
                 NotificationScheduler.enqueueNow(navController.context)
@@ -97,16 +95,14 @@ internal fun NavGraphBuilder.calendarGraph(
                 calendarCallbacks.onSelectedDateChange(date)
                 navController.navigate(AppRoutes.day(date))
             },
-            onSaveOrder = { date, notes, total, name, phone, pickupTime, cartItems ->
+            onSaveOrder = { date, cartItems, name, phone, pickupTime ->
                 orderViewModel.saveOrder(
                     date = date,
-                    notes = notes,
-                    totalAmount = total,
+                    cartItems = cartItems,
                     customerName = name,
                     customerPhone = phone,
                     pickupTime = pickupTime,
-                    existingOrderId = null,
-                    cartItems = cartItems
+                    existingOrderId = null
                 )
                 WidgetUpdater.enqueue(navController.context)
                 NotificationScheduler.enqueueNow(navController.context)
@@ -163,16 +159,14 @@ internal fun NavGraphBuilder.calendarGraph(
             customerPhones = calendarState.orderCustomerPhones,
             orderPaidAmounts = calendarState.orderPaidAmounts,
             onBack = { navController.popBackStack() },
-            onSaveOrder = { notes, total, name, phone, pickupTime, orderId, cartItems ->
+            onSaveOrder = { cartItems, name, phone, pickupTime, orderId ->
                 orderViewModel.saveOrder(
                     date = date,
-                    notes = notes,
-                    totalAmount = total,
+                    cartItems = cartItems,
                     customerName = name,
                     customerPhone = phone,
                     pickupTime = pickupTime,
-                    existingOrderId = orderId,
-                    cartItems = cartItems
+                    existingOrderId = orderId
                 )
                 WidgetUpdater.enqueue(navController.context)
                 NotificationScheduler.enqueueNow(navController.context)

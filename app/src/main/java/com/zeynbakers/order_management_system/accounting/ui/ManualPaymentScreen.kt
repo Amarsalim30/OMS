@@ -405,7 +405,7 @@ fun ManualPaymentScreen(
                                     formatOrderLabel(
                                         date = order.order.orderDate,
                                         customerName = customer?.name,
-                                        notes = order.order.notes,
+                                        notes = "",
                                         totalAmount = order.order.totalAmount
                                     )
                                 }
@@ -448,7 +448,7 @@ fun ManualPaymentScreen(
                                 formatOrderLabel(
                                     date = order.order.orderDate,
                                     customerName = customer?.name,
-                                    notes = order.order.notes,
+                                    notes = "",
                                     totalAmount = order.order.totalAmount
                                 )
                             val outstanding = order.order.totalAmount - order.paidAmount

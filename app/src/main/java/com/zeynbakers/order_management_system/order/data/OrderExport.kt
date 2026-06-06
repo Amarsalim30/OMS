@@ -1,6 +1,5 @@
 package com.zeynbakers.order_management_system.order.data
 
-import com.zeynbakers.order_management_system.order.ui.OrderCartParser
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -42,6 +41,7 @@ object OrderExporter {
 
     fun exportOrders(
         orders: List<OrderEntity>,
+        orderItemsMap: Map<Long, List<OrderItemEntity>>,
         customerNames: Map<Long, String>,
         customerPhones: Map<Long, String>
     ): String {
@@ -49,18 +49,19 @@ object OrderExporter {
         val orderDate = orders.firstOrNull()?.orderDate?.toString() ?: ""
 
         val exportItems = orders.map { order ->
-            val cartItems = OrderCartParser.parseNotesToCart(order.notes ?: "").map { cartItem ->
+            val items = orderItemsMap[order.id] ?: emptyList()
+            val cartItems = items.map { item ->
                 CartItemExport(
-                    emoji = cartItem.emoji,
-                    name = cartItem.name,
-                    quantity = cartItem.quantity,
-                    unitPrice = cartItem.unitPrice.toString()
+                    emoji = "",
+                    name = item.productNameSnapshot,
+                    quantity = item.quantity,
+                    unitPrice = item.effectivePrice.toString()
                 )
             }
             OrderExportItem(
                 id = order.id,
                 orderDate = order.orderDate.toString(),
-                notes = order.notes ?: "",
+                notes = "",
                 totalAmount = order.totalAmount.toString(),
                 customerId = order.customerId,
                 customerName = order.customerId?.let { customerNames[it] },
@@ -82,6 +83,7 @@ object OrderExporter {
 
     fun exportOrdersToCsv(
         orders: List<OrderEntity>,
+        orderItemsMap: Map<Long, List<OrderItemEntity>>,
         customerNames: Map<Long, String>,
         customerPhones: Map<Long, String>
     ): String {
@@ -90,12 +92,11 @@ object OrderExporter {
             val customerName = order.customerId?.let { customerNames[it] } ?: ""
             val customerPhone = order.customerId?.let { customerPhones[it] } ?: ""
             val pickupTime = order.pickupTime ?: ""
-            val cartItems = OrderCartParser.parseNotesToCart(order.notes ?: "")
-                .joinToString("; ") { "${it.name} x${it.quantity}" }
-            val escapedNotes = (order.notes ?: "").replace("\"", "\"\"")
+            val items = orderItemsMap[order.id] ?: emptyList()
+            val cartItems = items.joinToString("; ") { "${it.productNameSnapshot} x${it.quantity}" }
             val escapedCustomerName = customerName.replace("\"", "\"\"")
             val escapedCartItems = cartItems.replace("\"", "\"\"")
-            "${order.id},${order.orderDate},\"$escapedNotes\",${order.totalAmount},\"$escapedCustomerName\",\"$customerPhone\",\"$pickupTime\",${order.status.name},\"$escapedCartItems\""
+            "${order.id},${order.orderDate},\"\",${order.totalAmount},\"$escapedCustomerName\",\"$customerPhone\",\"$pickupTime\",${order.status.name},\"$escapedCartItems\""
         }
         return header + rows
     }

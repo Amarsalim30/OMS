@@ -29,11 +29,6 @@ data class OrderItemWithProduct(
     val quantity: Int,
     val priceOverride: java.math.BigDecimal?,
     
-    // Legacy fields
-    val name: String,
-    val category: ItemCategory,
-    val unitPrice: java.math.BigDecimal,
-    
     // Joined product information
     val productName: String?,
     val productEmoji: String?,
