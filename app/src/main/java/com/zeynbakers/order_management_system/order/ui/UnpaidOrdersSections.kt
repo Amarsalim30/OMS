@@ -1,5 +1,6 @@
 package com.zeynbakers.order_management_system.order.ui
 
+import android.content.Intent
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -11,8 +12,6 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import android.content.Context
-import android.content.Intent
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Share
@@ -28,9 +27,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
@@ -43,12 +42,12 @@ import com.zeynbakers.order_management_system.R
 import com.zeynbakers.order_management_system.core.ui.components.AppCard
 import com.zeynbakers.order_management_system.core.util.formatKes
 import com.zeynbakers.order_management_system.order.data.OrderEntity
-import java.math.BigDecimal
-import java.math.RoundingMode
-import java.time.format.DateTimeFormatter
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.minus
 import kotlinx.datetime.toJavaLocalDate
+import java.math.BigDecimal
+import java.math.RoundingMode
+import java.time.format.DateTimeFormatter
 
 @Composable
 internal fun SummaryCard(
@@ -63,7 +62,9 @@ internal fun SummaryCard(
                 .padding(horizontal = 16.dp, vertical = 8.dp)
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(4.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(4.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -125,7 +126,9 @@ internal fun StickyDateHeader(date: LocalDate, today: LocalDate) {
         tonalElevation = 0.dp
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 12.dp),
             horizontalArrangement = Arrangement.Start,
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -274,7 +277,9 @@ internal fun UnpaidOrderRow(
 
                 LinearProgressIndicator(
                     progress = { progress },
-                    modifier = Modifier.weight(1f).height(5.dp),
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(5.dp),
                     color = MaterialTheme.colorScheme.tertiary,
                     trackColor = MaterialTheme.colorScheme.surfaceVariant,
                     strokeCap = StrokeCap.Round
@@ -317,13 +322,12 @@ internal fun UnpaidOrderRow(
                     onClick = {
                         val orderDate = order.orderDate.toString()
                         val message = """*Order Reminder* 📋
-
-*Order:* #${order.id}
-*Date:* $orderDate
-*Amount Due:* ${formatKes(balance)}
-*Total Order:* ${formatKes(order.totalAmount)}
-
-Please arrange payment at your earliest convenience. Thank you! 🙏"""
+                                        *Order:* #${order.id}
+                                        *Date:* $orderDate
+                                        *Amount Due:* ${formatKes(balance)}
+                                        *Total Order:* ${formatKes(order.totalAmount)}
+                                        
+                                        Please arrange payment at your earliest convenience. Thank you! 🙏"""
                         val intent = if (!customerPhone.isNullOrBlank()) {
                             Intent(Intent.ACTION_SENDTO).apply {
                                 data = android.net.Uri.parse("smsto:$customerPhone")
@@ -361,7 +365,9 @@ private fun getInitialsForOrder(customerName: String?, notes: String): String {
 @Composable
 internal fun UnpaidEmptyState(text: String) {
     Column(
-        modifier = Modifier.fillMaxWidth().padding(32.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(32.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Icon(

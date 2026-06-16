@@ -1,10 +1,11 @@
 [versions]
-agp = "8.12.3"
+agp = "8.13.2"
 kotlin = "2.1.21"
 ksp = "2.1.21-2.0.2"
 coreKtx = "1.13.1"
 junit = "4.13.2"
 junitVersion = "1.3.0"
+repo = "Tag"
 testCore = "1.5.0"
 espressoCore = "3.7.0"
 lifecycleRuntimeKtx = "2.8.7"
@@ -74,6 +75,7 @@ compose-lint-checks = { group = "com.slack.lint.compose", name = "compose-lint-c
 detekt-compose-rules = { group = "io.nlopez.compose.rules", name = "detekt", version.ref = "composeRules" }
 androidx-foundation = { group = "androidx.compose.foundation", name = "foundation", version.ref = "foundationVersion" }
 androidx-compose-foundation-layout = { group = "androidx.compose.foundation", name = "foundation-layout", version.ref = "foundationLayout" }
+repo = { module = "com.github.User:Repo", version.ref = "repo" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
