@@ -23,6 +23,8 @@ import com.zeynbakers.order_management_system.core.helper.ui.NotesHistoryViewMod
 import com.zeynbakers.order_management_system.core.navigation.AppRoutes
 import com.zeynbakers.order_management_system.core.notifications.NotificationSettingsScreen
 import com.zeynbakers.order_management_system.core.ui.AppViewModelFactory
+import com.zeynbakers.order_management_system.product.ui.ProductCatalogScreen
+import com.zeynbakers.order_management_system.product.ui.ProductViewModel
 
 internal fun NavGraphBuilder.settingsGraph(
     navController: NavHostController,
@@ -59,6 +61,17 @@ internal fun NavGraphBuilder.settingsGraph(
                     launchSingleTop = true
                 }
             }
+        )
+    }
+
+    composable(AppRoutes.Products) {
+        val context = LocalContext.current
+        val database = remember { DatabaseProvider.getDatabase(context.applicationContext) }
+        val factory = remember(database) { AppViewModelFactory(database, context.applicationContext) }
+        val viewModel: ProductViewModel = viewModel(factory = factory)
+        ProductCatalogScreen(
+            viewModel = viewModel,
+            onBack = { navController.popBackStack() }
         )
     }
 

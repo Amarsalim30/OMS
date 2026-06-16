@@ -159,16 +159,7 @@ class PaymentIntakeHistoryViewModel(
     suspend fun loadMoveOrderOptions(customerId: Long): List<MoveOrderOption> {
         return withContext(Dispatchers.IO) {
             val orders =
-                orderDao.getOrdersByCustomer(customerId)
-                .filter {
-                    it.status != com.zeynbakers.order_management_system.order.data.OrderStatus.CANCELLED &&
-                        it.statusOverride != com.zeynbakers.order_management_system.order.data.OrderStatusOverride.CLOSED
-                }
-                .sortedWith(
-                    compareBy<OrderEntity> { it.orderDate }
-                        .thenBy { it.createdAt }
-                        .thenBy { it.id }
-                )
+                orderDao.getOpenOrdersByCustomer(customerId)
             val customerIds = orders.mapNotNull { it.customerId }.distinct()
             val customerNames =
                 if (customerIds.isEmpty()) emptyMap()
@@ -179,7 +170,7 @@ class PaymentIntakeHistoryViewModel(
                         orderId = order.id,
                         date = order.orderDate,
                         customerName = order.customerId?.let { customerNames[it] },
-                        notes = order.notes,
+                        notes = "",
                         totalAmount = order.totalAmount
                     )
                 MoveOrderOption(order.id, label)
@@ -275,7 +266,7 @@ class PaymentIntakeHistoryViewModel(
                                 allocationId = allocation.id,
                                 orderId = allocation.orderId,
                                 orderDate = order?.orderDate,
-                                orderNotes = order?.notes,
+                                orderNotes = "",
                                 amount = allocation.amount,
                                 type = allocation.type,
                                 status = allocation.status
@@ -351,7 +342,7 @@ class PaymentIntakeHistoryViewModel(
                             orderId = order.id,
                             date = order.orderDate,
                             customerName = order.customerId?.let { customerDao.getById(it)?.name },
-                            notes = order.notes,
+                            notes = "",
                             totalAmount = order.totalAmount
                         )
                     }

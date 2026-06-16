@@ -1,10 +1,44 @@
 package com.zeynbakers.order_management_system.core.licensing
 
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class LicensingLocalStoreTest {
+
+    @Test
+    fun `resolveStoredInstallId prefers secure value`() {
+        assertEquals(
+            "secure-id",
+            resolveStoredInstallId(
+                secureInstallId = "secure-id",
+                legacyInstallId = "legacy-id"
+            )
+        )
+    }
+
+    @Test
+    fun `resolveStoredInstallId falls back to legacy value`() {
+        assertEquals(
+            "legacy-id",
+            resolveStoredInstallId(
+                secureInstallId = null,
+                legacyInstallId = "legacy-id"
+            )
+        )
+    }
+
+    @Test
+    fun `resolveStoredInstallId ignores blank values`() {
+        assertNull(
+            resolveStoredInstallId(
+                secureInstallId = "  ",
+                legacyInstallId = ""
+            )
+        )
+    }
 
     @Test
     fun `isWithinOfflineGraceWindow returns true within grace window`() {

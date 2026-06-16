@@ -1,5 +1,6 @@
 package com.zeynbakers.order_management_system.order.ui
 
+import android.content.Intent
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -13,9 +14,11 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.outlined.CheckCircle
 import androidx.compose.material.icons.outlined.Payments
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -26,6 +29,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
@@ -38,12 +42,12 @@ import com.zeynbakers.order_management_system.R
 import com.zeynbakers.order_management_system.core.ui.components.AppCard
 import com.zeynbakers.order_management_system.core.util.formatKes
 import com.zeynbakers.order_management_system.order.data.OrderEntity
-import java.math.BigDecimal
-import java.math.RoundingMode
-import java.time.format.DateTimeFormatter
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.minus
 import kotlinx.datetime.toJavaLocalDate
+import java.math.BigDecimal
+import java.math.RoundingMode
+import java.time.format.DateTimeFormatter
 
 @Composable
 internal fun SummaryCard(
@@ -58,7 +62,9 @@ internal fun SummaryCard(
                 .padding(horizontal = 16.dp, vertical = 8.dp)
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(4.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(4.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -120,7 +126,9 @@ internal fun StickyDateHeader(date: LocalDate, today: LocalDate) {
         tonalElevation = 0.dp
     ) {
         Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 12.dp),
             horizontalArrangement = Arrangement.Start,
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -149,21 +157,20 @@ internal fun UnpaidOrderRow(
     modifier: Modifier = Modifier,
     order: OrderEntity,
     customerLabel: String?,
+    customerPhone: String?,
     paidAmount: BigDecimal,
     balance: BigDecimal,
     onOpenDay: () -> Unit,
     onReceivePayment: () -> Unit
 ) {
+    val context = LocalContext.current
     val haptic = LocalHapticFeedback.current
     val hasCustomer = !customerLabel.isNullOrBlank()
-    val hasNotes = order.notes.isNotBlank()
     val primaryLabel =
-        if (hasNotes) {
-            order.notes
-        } else {
-            customerLabel?.takeIf { it.isNotBlank() }
-                ?: stringResource(R.string.unpaid_unnamed_order)
-        }
+        customerLabel?.takeIf { it.isNotBlank() }
+            ?: stringResource(R.string.unpaid_unnamed_order)
+    val pickupDisplay = com.zeynbakers.order_management_system.core.util.formatPickupTimeForDisplay(order.pickupTime)
+    val initials = getInitialsForOrder(customerLabel, "")
     AppCard(
         modifier =
             modifier
@@ -175,15 +182,15 @@ internal fun UnpaidOrderRow(
             Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
                 Surface(
                     shape = MaterialTheme.shapes.medium,
-                    color = MaterialTheme.colorScheme.primaryContainer,
+                    color = MaterialTheme.colorScheme.tertiaryContainer,
                     modifier = Modifier.size(36.dp)
                 ) {
                     Box(contentAlignment = Alignment.Center) {
                         Text(
-                            text = getInitials(primaryLabel),
+                            text = initials,
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                            color = MaterialTheme.colorScheme.onTertiaryContainer
                         )
                     }
                 }
@@ -205,9 +212,18 @@ internal fun UnpaidOrderRow(
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis
                             )
-                            if (hasCustomer && hasNotes) {
+                            if (hasCustomer) {
                                 Text(
                                     text = customerLabel.orEmpty(),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                            }
+                            pickupDisplay?.let {
+                                Text(
+                                    text = stringResource(R.string.day_pickup_time_value, it),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     maxLines = 1,
@@ -261,7 +277,9 @@ internal fun UnpaidOrderRow(
 
                 LinearProgressIndicator(
                     progress = { progress },
-                    modifier = Modifier.weight(1f).height(5.dp),
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(5.dp),
                     color = MaterialTheme.colorScheme.tertiary,
                     trackColor = MaterialTheme.colorScheme.surfaceVariant,
                     strokeCap = StrokeCap.Round
@@ -297,25 +315,59 @@ internal fun UnpaidOrderRow(
                         )
                     }
                 }
+
+                Spacer(modifier = Modifier.width(8.dp))
+
+                IconButton(
+                    onClick = {
+                        val orderDate = order.orderDate.toString()
+                        val message = """*Order Reminder* 📋
+                                        *Order:* #${order.id}
+                                        *Date:* $orderDate
+                                        *Amount Due:* ${formatKes(balance)}
+                                        *Total Order:* ${formatKes(order.totalAmount)}
+                                        
+                                        Please arrange payment at your earliest convenience. Thank you! 🙏"""
+                        val intent = if (!customerPhone.isNullOrBlank()) {
+                            Intent(Intent.ACTION_SENDTO).apply {
+                                data = android.net.Uri.parse("smsto:$customerPhone")
+                                putExtra("sms_body", message)
+                            }
+                        } else {
+                            Intent(Intent.ACTION_SEND).apply {
+                                type = "text/plain"
+                                putExtra(Intent.EXTRA_TEXT, message)
+                            }
+                        }
+                        context.startActivity(Intent.createChooser(intent, "Share order"))
+                    }
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.Share,
+                        contentDescription = "Share order",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(18.dp)
+                    )
+                }
             }
         }
     }
 }
 
-private fun getInitials(name: String): String {
-    return name
-        .split(" ")
-        .filter { it.isNotBlank() }
-        .take(2)
-        .mapNotNull { it.firstOrNull() }
-        .joinToString("")
-        .uppercase()
+private fun getInitialsForOrder(customerName: String?, notes: String): String {
+    val source = if (!customerName.isNullOrBlank()) customerName else notes
+    val firstLetter = source
+        .filter { it.isLetter() }
+        .firstOrNull()
+    return firstLetter?.uppercase() ?: "?"
 }
 
 @Composable
 internal fun UnpaidEmptyState(text: String) {
     Column(
-        modifier = Modifier.fillMaxWidth().padding(32.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(32.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Icon(

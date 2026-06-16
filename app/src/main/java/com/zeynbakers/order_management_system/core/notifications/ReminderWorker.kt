@@ -139,7 +139,7 @@ class ReminderWorker(
         val lines =
             orders.take(5).map { (order, dueAtMillis) ->
                 val name = order.customerId?.let { customerNames[it] }?.takeIf { it.isNotBlank() }
-                val label = name ?: order.notes.take(40)
+                val label = name ?: "Order #${order.id}"
                 val dueTime = formatDueTime(dueAtMillis, timeZone)
                 appContext.getString(R.string.reminder_due_line_item, label, dueTime)
             }

@@ -7,15 +7,24 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.sizeIn
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.ContentCopy
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Button
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -23,7 +32,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.zeynbakers.order_management_system.R
 import com.zeynbakers.order_management_system.core.ui.components.AppCard
@@ -148,24 +159,28 @@ internal fun IntakeSummaryRow(
         SummaryPill(
             label = stringResource(R.string.money_detected),
             value = totalDetected,
+            icon = Icons.Filled.Info,
             container = MaterialTheme.colorScheme.surfaceVariant,
             content = MaterialTheme.colorScheme.onSurfaceVariant
         )
         SummaryPill(
             label = stringResource(R.string.money_ready),
             value = readyCount,
+            icon = Icons.Filled.CheckCircle,
             container = MaterialTheme.colorScheme.secondaryContainer,
             content = MaterialTheme.colorScheme.onSecondaryContainer
         )
         SummaryPill(
             label = stringResource(R.string.money_needs_match),
             value = needsMatchCount,
+            icon = Icons.Filled.Warning,
             container = MaterialTheme.colorScheme.tertiaryContainer,
             content = MaterialTheme.colorScheme.onTertiaryContainer
         )
         SummaryPill(
             label = stringResource(R.string.money_duplicates),
             value = duplicateCount,
+            icon = Icons.Filled.ContentCopy,
             container = MaterialTheme.colorScheme.errorContainer,
             content = MaterialTheme.colorScheme.onErrorContainer
         )
@@ -191,24 +206,28 @@ internal fun IntakeSummaryCard(
             SummaryPill(
                 label = stringResource(R.string.money_detected),
                 value = totalDetected,
+                icon = Icons.Filled.Info,
                 container = MaterialTheme.colorScheme.surfaceVariant,
                 content = MaterialTheme.colorScheme.onSurfaceVariant
             )
             SummaryPill(
                 label = stringResource(R.string.money_ready),
                 value = readyCount,
+                icon = Icons.Filled.CheckCircle,
                 container = MaterialTheme.colorScheme.secondaryContainer,
                 content = MaterialTheme.colorScheme.onSecondaryContainer
             )
             SummaryPill(
                 label = stringResource(R.string.money_needs_match),
                 value = needsMatchCount,
+                icon = Icons.Filled.Warning,
                 container = MaterialTheme.colorScheme.tertiaryContainer,
                 content = MaterialTheme.colorScheme.onTertiaryContainer
             )
             SummaryPill(
                 label = stringResource(R.string.money_duplicates),
                 value = duplicateCount,
+                icon = Icons.Filled.ContentCopy,
                 container = MaterialTheme.colorScheme.errorContainer,
                 content = MaterialTheme.colorScheme.onErrorContainer
             )
@@ -238,6 +257,7 @@ internal fun IntakeSummaryCard(
 private fun SummaryPill(
     label: String,
     value: Int,
+    icon: ImageVector,
     container: Color,
     content: Color
 ) {
@@ -246,57 +266,99 @@ private fun SummaryPill(
         contentColor = content,
         shape = MaterialTheme.shapes.small
     ) {
-        Text(
-            text = "$label $value",
-            style = MaterialTheme.typography.labelSmall,
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-        )
+        Row(
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                modifier = Modifier.size(12.dp)
+            )
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelSmall,
+                maxLines = 1
+            )
+            Text(
+                text = value.toString(),
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.SemiBold
+            )
+        }
     }
 }
 
+/**
+ * Bottom bar shown when there are ready payments to apply.
+ *
+ * Layout: [summary text (weight 1)] [Apply selected (secondary)] [Apply ready (primary)]
+ *
+ * Uses a Row to ensure the primary CTA never wraps to a new line on any screen width.
+ * Buttons enforce a 48dp minimum height for touch targets.
+ */
 @Composable
 internal fun ApplyReadyBar(
     selectedReadyCount: Int,
     selectedReadyAmount: BigDecimal,
     readyCount: Int,
     readyAmount: BigDecimal,
-    onApplySelected: () -> Unit,
-    onApplyAllReady: () -> Unit
+    onApplyReady: () -> Unit,
+    onApplySelected: () -> Unit
 ) {
-    Surface(tonalElevation = 3.dp) {
-        FlowRow(
-            modifier = Modifier.fillMaxWidth().padding(6.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-            itemVerticalAlignment = Alignment.CenterVertically
+    Surface(
+        color = MaterialTheme.colorScheme.surfaceContainerHigh,
+        tonalElevation = 2.dp
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(2.dp)
-            ) {
+            // Summary section - stretches to fill available width
+            Column(modifier = Modifier.weight(1f)) {
                 Text(
-                    text = stringResource(R.string.money_selected_total, selectedReadyCount, formatKes(selectedReadyAmount)),
+                    text = stringResource(
+                        R.string.money_ready_total,
+                        readyCount,
+                        formatKes(readyAmount)
+                    ),
                     style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = MaterialTheme.colorScheme.onSurface
                 )
-                Text(
-                    text = stringResource(R.string.money_ready_total, readyCount, formatKes(readyAmount)),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            Button(
-                onClick = onApplySelected,
-                enabled = selectedReadyCount > 0,
-                contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
-            ) {
-                Text(stringResource(R.string.money_apply_selected))
-            }
-            if (selectedReadyCount in 1 until readyCount) {
-                TextButton(onClick = onApplyAllReady) {
-                    Text(stringResource(R.string.money_apply_all_ready))
+                if (selectedReadyCount in 1 until readyCount) {
+                    Text(
+                        text = stringResource(
+                            R.string.money_selected_total,
+                            selectedReadyCount,
+                            formatKes(selectedReadyAmount)
+                        ),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
+            }
+            // Secondary: apply selected only when selection is a partial subset
+            if (selectedReadyCount in 1 until readyCount) {
+                OutlinedButton(
+                    onClick = onApplySelected,
+                    modifier = Modifier.sizeIn(minHeight = 48.dp)
+                ) {
+                    Text(stringResource(R.string.money_apply_selected_count, selectedReadyCount))
+                }
+            }
+            // Primary CTA - always apply ready payments
+            Button(
+                onClick = onApplyReady,
+                enabled = readyCount > 0,
+                modifier = Modifier.sizeIn(minHeight = 48.dp)
+            ) {
+                Text(stringResource(R.string.money_apply_ready_count, readyCount))
             }
         }
     }
 }
+

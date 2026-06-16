@@ -52,6 +52,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -98,7 +100,10 @@ internal fun CalendarTopAppBar(
             }
         },
         navigationIcon = {
-            IconButton(onClick = onSummaryClick) {
+            IconButton(
+                onClick = onSummaryClick,
+                modifier = Modifier.size(48.dp)
+            ) {
                 Icon(
                     imageVector = Icons.Filled.BarChart,
                     contentDescription = stringResource(R.string.calendar_summary)
@@ -106,11 +111,17 @@ internal fun CalendarTopAppBar(
             }
         },
         actions = {
-            IconButton(onClick = onToday) {
+            val todayLabel = stringResource(R.string.calendar_today)
+            IconButton(
+                onClick = onToday,
+                modifier = Modifier
+                    .size(48.dp)
+                    .semantics { contentDescription = todayLabel }
+            ) {
                 Box(modifier = Modifier.size(24.dp)) {
                     Icon(
                         imageVector = Icons.Filled.CalendarToday,
-                        contentDescription = stringResource(R.string.calendar_today),
+                        contentDescription = null,
                         modifier = Modifier.fillMaxSize()
                     )
                     Text(
@@ -126,7 +137,7 @@ internal fun CalendarTopAppBar(
             }
             IconButton(
                 onClick = onMoreClick,
-                modifier = moreButtonModifier
+                modifier = moreButtonModifier.size(48.dp)
             ) {
                 Icon(
                     imageVector = Icons.Filled.MoreVert,
@@ -500,45 +511,39 @@ internal fun MonthGrid(
     val horizontalPadding = 10.dp
     val spacing = 3.dp
     val weeks = remember(days) { days.chunked(7) }
-    BoxWithConstraints(modifier = modifier) {
-        val rows = (days.size / 7).coerceAtLeast(1)
-        val availableHeight = maxHeight - (verticalPadding * 2) - (spacing * (rows - 1))
-        val sixRowHeight = (maxHeight - (verticalPadding * 2) - (spacing * 5)) / 6
-        val cellHeight = (availableHeight / rows)
-            .coerceAtMost(sixRowHeight)
-            .coerceAtLeast(48.dp)
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = horizontalPadding, vertical = verticalPadding),
-            verticalArrangement = Arrangement.spacedBy(spacing)
-        ) {
-            weeks.forEach { week ->
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(spacing)
-                ) {
-                    week.forEach { day ->
-                        DayCell(
-                            day = day,
-                            isSelected = selectedDate == day.date,
-                            onSelectDate = onSelectDate,
-                            onOpenDay = onOpenDay,
-                            onQuickAdd = onQuickAdd,
-                            onBoundsChanged = { bounds -> onDayBoundsChanged?.invoke(day.date, bounds) },
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(cellHeight)
-                                .heightIn(min = 48.dp)
-                        )
-                    }
-                    repeat((7 - week.size).coerceAtLeast(0)) {
-                        Spacer(
-                            modifier = Modifier
-                                .weight(1f)
-                                .height(cellHeight)
-                        )
-                    }
+    // Use fixed height instead of BoxWithConstraints to avoid memory issues
+    val rows = (days.size / 7).coerceAtLeast(1)
+    val cellHeight = 48.dp
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .padding(horizontal = horizontalPadding, vertical = verticalPadding),
+        verticalArrangement = Arrangement.spacedBy(spacing)
+    ) {
+        weeks.forEach { week ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(spacing)
+            ) {
+                week.forEach { day ->
+                    DayCell(
+                        day = day,
+                        isSelected = selectedDate == day.date,
+                        onSelectDate = onSelectDate,
+                        onOpenDay = onOpenDay,
+                        onQuickAdd = onQuickAdd,
+                        onBoundsChanged = { bounds -> onDayBoundsChanged?.invoke(day.date, bounds) },
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(cellHeight)
+                    )
+                }
+                repeat((7 - week.size).coerceAtLeast(0)) {
+                    Spacer(
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(cellHeight)
+                    )
                 }
             }
         }

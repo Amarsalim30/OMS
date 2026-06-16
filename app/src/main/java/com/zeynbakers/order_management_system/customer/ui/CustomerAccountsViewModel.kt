@@ -22,7 +22,9 @@ import com.zeynbakers.order_management_system.core.db.AppDatabase
 import com.zeynbakers.order_management_system.core.util.formatOrderLabel
 import com.zeynbakers.order_management_system.core.util.normalizePhoneNumberE164
 import com.zeynbakers.order_management_system.core.util.expandPhoneCandidates
+import com.zeynbakers.order_management_system.customer.domain.ContactImportPreviewStatus
 import com.zeynbakers.order_management_system.customer.domain.ContactsSyncResult
+import com.zeynbakers.order_management_system.customer.domain.previewContactImportStatuses
 import com.zeynbakers.order_management_system.customer.domain.syncContactsIntoCustomers
 import com.zeynbakers.order_management_system.customer.data.CustomerEntity
 import com.zeynbakers.order_management_system.order.data.OrderEntity
@@ -92,19 +94,6 @@ class CustomerAccountsViewModel(
         }
     }
 
-    fun importCustomer(name: String, phone: String) {
-        viewModelScope.launch {
-            importContactsBulk(
-                listOf(
-                    ImportContact(
-                        name = name,
-                        phone = phone
-                    )
-                )
-            )
-        }
-    }
-
     suspend fun importContactsBulk(contacts: List<ImportContact>): ContactsSyncResult {
         val result = withContext(Dispatchers.IO) {
             syncContactsIntoCustomers(
@@ -114,6 +103,17 @@ class CustomerAccountsViewModel(
         }
         refreshSummaries()
         return result
+    }
+
+    suspend fun previewContactImports(
+        contacts: List<ImportContact>
+    ): Map<String, ContactImportPreviewStatus> {
+        return withContext(Dispatchers.IO) {
+            previewContactImportStatuses(
+                existingCustomers = customerDao.getAllCustomers(),
+                contacts = contacts
+            )
+        }
     }
 
     fun archiveCustomer(customerId: Long) {
@@ -179,7 +179,7 @@ class CustomerAccountsViewModel(
                                 formatOrderLabel(
                                     date = order.orderDate,
                                     customerName = customerName,
-                                    notes = order.notes,
+                                    notes = "",
                                     totalAmount = order.totalAmount
                                 )
                         }
@@ -286,7 +286,7 @@ class CustomerAccountsViewModel(
                 formatOrderLabel(
                     date = order.orderDate,
                     customerName = customerName,
-                    notes = order.notes,
+                    notes = "",
                     totalAmount = order.totalAmount
                 )
             val note = text(R.string.customer_accounts_bad_debt_write_off, orderLabel)
@@ -495,7 +495,11 @@ class CustomerAccountsViewModel(
         val processor = PaymentReceiptProcessor(database)
         val order = orderId?.let { id -> orderDao.getOrderById(id) }
         if (orderId != null && order == null) return
-        val resolvedCustomerId = customerId ?: order?.customerId
+        val resolvedCustomerId =
+            when {
+                order != null -> order.customerId
+                else -> customerId
+            }
         val now = Clock.System.now().toEpochMilliseconds()
         val receipt =
             processor.createReceipt(
@@ -679,7 +683,7 @@ class CustomerAccountsViewModel(
                             formatOrderLabel(
                                 date = order.orderDate,
                                 customerName = null,
-                                notes = order.notes,
+                                notes = "",
                                 totalAmount = null
                             )
                         },
@@ -707,7 +711,7 @@ class CustomerAccountsViewModel(
     private fun statementTitle(entry: AccountEntryEntity, ordersById: Map<Long, OrderEntity>): String {
         return when (entry.type) {
             EntryType.DEBIT -> {
-                val note = compactNote(ordersById[entry.orderId]?.notes)
+                val note = ""
                 if (note.isBlank()) {
                     text(R.string.customer_accounts_order_title)
                 } else {
@@ -738,7 +742,7 @@ class CustomerAccountsViewModel(
         return when (entry.type) {
             EntryType.DEBIT -> {
                 val order = ordersById[entry.orderId]
-                compactNote(order?.notes).takeIf { it.isNotBlank() }
+                null
             }
             EntryType.CREDIT -> compactNote(extractPaymentNote(entry.description)).takeIf { it.isNotBlank() }
             EntryType.WRITE_OFF -> compactNote(extractBadDebtNote(entry.description)).takeIf { it.isNotBlank() }

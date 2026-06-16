@@ -64,6 +64,7 @@ internal data class AppCalendarState(
     val ordersForDate: List<OrderEntity>,
     val dayTotal: BigDecimal,
     val orderCustomerNames: Map<Long, String>,
+    val orderCustomerPhones: Map<Long, String>,
     val orderPaidAmounts: Map<Long, BigDecimal>,
     val summaryOrders: List<OrderEntity>,
     val summaryTotal: BigDecimal,
@@ -74,7 +75,8 @@ internal data class AppCalendarState(
 internal data class AppOrdersState(
     val unpaidOrders: List<OrderEntity>,
     val unpaidPaidAmounts: Map<Long, BigDecimal>,
-    val unpaidCustomerNames: Map<Long, String>
+    val unpaidCustomerNames: Map<Long, String>,
+    val unpaidCustomerPhones: Map<Long, String>
 )
 
 internal data class AppCustomersState(

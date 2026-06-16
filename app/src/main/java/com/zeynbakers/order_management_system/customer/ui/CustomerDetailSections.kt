@@ -18,6 +18,8 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
@@ -72,6 +74,7 @@ internal fun BalanceCard(
             }
         }
     val netAmount = netBalance.abs()
+    val fontScale = LocalDensity.current.fontScale
     Surface(
         tonalElevation = 1.dp,
         shape = MaterialTheme.shapes.medium,
@@ -175,28 +178,63 @@ internal fun BalanceCard(
             Button(
                 onClick = onViewStatement,
                 enabled = canReceive,
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier
+                    .testTag("customer-view-statement-button")
+                    .fillMaxWidth()
+                    .height(48.dp)
             ) {
                 Text(stringResource(R.string.customer_action_view_statement))
             }
             Spacer(Modifier.height(6.dp))
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                OutlinedButton(
-                    onClick = onReceivePayment,
-                    enabled = canReceive,
-                    modifier = Modifier.weight(1f)
+            // Use simple layout instead of BoxWithConstraints to avoid memory issues
+            val stackActions = fontScale > 1.3f
+            if (stackActions) {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Text(stringResource(R.string.customer_action_record_payment))
+                    OutlinedButton(
+                        onClick = onReceivePayment,
+                        enabled = canReceive,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(48.dp)
+                    ) {
+                        Text(stringResource(R.string.customer_action_record_payment))
+                    }
+                    TextButton(
+                        onClick = onViewPaymentHistory,
+                        enabled = canReceive,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(48.dp)
+                    ) {
+                        Text(stringResource(R.string.customer_detail_receipt_history))
+                    }
                 }
-                TextButton(
-                    onClick = onViewPaymentHistory,
-                    enabled = canReceive,
-                    modifier = Modifier.weight(1f)
+            } else {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Text(stringResource(R.string.customer_detail_receipt_history))
+                    OutlinedButton(
+                        onClick = onReceivePayment,
+                        enabled = canReceive,
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(48.dp)
+                    ) {
+                        Text(stringResource(R.string.customer_action_record_payment))
+                    }
+                    TextButton(
+                        onClick = onViewPaymentHistory,
+                        enabled = canReceive,
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(48.dp)
+                    ) {
+                        Text(stringResource(R.string.customer_detail_receipt_history))
+                    }
                 }
             }
         }
@@ -291,7 +329,6 @@ internal fun OrderRow(
     var pendingOverride by remember { mutableStateOf<OrderStatusOverride?>(null) }
     var confirmWriteOff by remember { mutableStateOf(false) }
     val today = rememberCurrentDate()
-    val notes = order.order.notes.trim().take(80)
     val dateLabel = formatShortDate(order.order.orderDate)
     val dueAmount = (order.order.totalAmount - order.paidAmount).max(BigDecimal.ZERO)
     val creditAmount = (order.paidAmount - order.order.totalAmount).max(BigDecimal.ZERO)
@@ -371,17 +408,6 @@ internal fun OrderRow(
                     text = accountStateLabel,
                     style = MaterialTheme.typography.labelLarge,
                     color = accountStateColor
-                )
-            }
-
-            if (notes.isNotBlank()) {
-                Spacer(Modifier.height(4.dp))
-                Text(
-                    text = notes,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
                 )
             }
             Spacer(Modifier.height(8.dp))

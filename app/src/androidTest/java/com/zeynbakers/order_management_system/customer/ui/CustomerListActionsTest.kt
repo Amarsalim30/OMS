@@ -1,10 +1,15 @@
 package com.zeynbakers.order_management_system.customer.ui
 
+import android.content.Context
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performClick
+import androidx.test.core.app.ApplicationProvider
+import com.zeynbakers.order_management_system.R
 import com.zeynbakers.order_management_system.accounting.data.CustomerAccountSummary
 import java.math.BigDecimal
 import org.junit.Rule
@@ -16,6 +21,7 @@ class CustomerListActionsTest {
 
     @Test
     fun primaryActionsAreVisibleWithoutLongPress() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
         composeRule.setContent {
             MaterialTheme {
                 CustomerListScreen(
@@ -38,14 +44,25 @@ class CustomerListActionsTest {
                 )
             }
         }
+        composeRule.waitForIdle()
 
-        composeRule.onNodeWithText("Pay").assert(SemanticsMatcher("exists") { true })
-        composeRule.onNodeWithText("Order").assert(SemanticsMatcher("exists") { true })
-        composeRule.onNodeWithText("Message").assert(SemanticsMatcher("exists") { true })
+        composeRule
+            .onNodeWithContentDescription(context.getString(R.string.customer_actions))
+            .performClick()
+        composeRule
+            .onNodeWithText(context.getString(R.string.customer_action_record_payment))
+            .assert(SemanticsMatcher("exists") { true })
+        composeRule
+            .onNodeWithText(context.getString(R.string.customer_action_new_order))
+            .assert(SemanticsMatcher("exists") { true })
+        composeRule
+            .onNodeWithText(context.getString(R.string.customer_action_message))
+            .assert(SemanticsMatcher("exists") { true })
     }
 
     @Test
     fun progressiveFilterControlIsVisible() {
+        val context = ApplicationProvider.getApplicationContext<Context>()
         composeRule.setContent {
             MaterialTheme {
                 CustomerListScreen(
@@ -58,8 +75,11 @@ class CustomerListActionsTest {
                 )
             }
         }
+        composeRule.waitForIdle()
 
-        composeRule.onNodeWithText("More filters").assert(SemanticsMatcher("exists") { true })
+        composeRule
+            .onNodeWithContentDescription(context.getString(R.string.action_more_filters))
+            .assert(SemanticsMatcher("exists") { true })
     }
 
     @Test
@@ -87,6 +107,7 @@ class CustomerListActionsTest {
                 )
             }
         }
+        composeRule.waitForIdle()
 
         composeRule.onNodeWithText("Settled With Orders").assert(SemanticsMatcher("exists") { true })
     }
