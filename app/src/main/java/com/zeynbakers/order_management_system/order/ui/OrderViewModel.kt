@@ -17,6 +17,9 @@ import com.zeynbakers.order_management_system.order.data.OrderDao
 import com.zeynbakers.order_management_system.order.data.OrderEntity
 import com.zeynbakers.order_management_system.order.data.OrderStatus
 import com.zeynbakers.order_management_system.order.data.OrderStatusOverride
+import com.zeynbakers.order_management_system.order.data.OrderExportItem
+import com.zeynbakers.order_management_system.product.data.ProductEntity
+import com.zeynbakers.order_management_system.order.domain.OrderRepository
 import java.math.BigDecimal
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -46,9 +49,11 @@ class OrderViewModel(private val database: AppDatabase) : ViewModel() {
     private val orderDao: OrderDao = database.orderDao()
     private val accountingDao: AccountingDao = database.accountingDao()
     private val customerDao = database.customerDao()
+    private val productDao = database.productDao()
     private val allocationDao = database.paymentAllocationDao()
     private val receiptDao = database.paymentReceiptDao()
     private val receiptProcessor = PaymentReceiptProcessor(database)
+    private val orderRepository = OrderRepository(orderDao, database.orderItemDao(), productDao)
 
     private val _calendarDays = MutableStateFlow<List<CalendarDayUi>>(emptyList())
     val calendarDays = _calendarDays.asStateFlow()
@@ -80,6 +85,9 @@ class OrderViewModel(private val database: AppDatabase) : ViewModel() {
     private val _orderCustomerNames = MutableStateFlow<Map<Long, String>>(emptyMap())
     val orderCustomerNames = _orderCustomerNames.asStateFlow()
 
+    private val _orderCustomerPhones = MutableStateFlow<Map<Long, String>>(emptyMap())
+    val orderCustomerPhones = _orderCustomerPhones.asStateFlow()
+
     private val _orderPaidAmounts = MutableStateFlow<Map<Long, BigDecimal>>(emptyMap())
     val orderPaidAmounts = _orderPaidAmounts.asStateFlow()
 
@@ -92,6 +100,9 @@ class OrderViewModel(private val database: AppDatabase) : ViewModel() {
     private val _unpaidCustomerNames = MutableStateFlow<Map<Long, String>>(emptyMap())
     val unpaidCustomerNames = _unpaidCustomerNames.asStateFlow()
 
+    private val _unpaidCustomerPhones = MutableStateFlow<Map<Long, String>>(emptyMap())
+    val unpaidCustomerPhones = _unpaidCustomerPhones.asStateFlow()
+
     private val _creditPrompt = MutableStateFlow<OrderCreditPrompt?>(null)
     val creditPrompt = _creditPrompt.asStateFlow()
 
@@ -101,8 +112,7 @@ class OrderViewModel(private val database: AppDatabase) : ViewModel() {
 
     fun saveOrder(
         date: LocalDate,
-        notes: String,
-        totalAmount: BigDecimal,
+        cartItems: List<OrderItemDraft>,
         customerName: String,
         customerPhone: String,
         pickupTime: String?,
@@ -113,8 +123,7 @@ class OrderViewModel(private val database: AppDatabase) : ViewModel() {
                 database.withTransaction {
                     saveOrderTransactional(
                         date = date,
-                        notes = notes,
-                        totalAmount = totalAmount,
+                        cartItems = cartItems,
                         customerName = customerName,
                         customerPhone = customerPhone,
                         pickupTime = pickupTime,
@@ -123,21 +132,125 @@ class OrderViewModel(private val database: AppDatabase) : ViewModel() {
                 }
             result.creditPrompt?.let { _creditPrompt.value = it }
             loadOrdersForDate(result.date)
-            refreshMonthTotals()
+            refreshMonthSnapshots(result.affectedMonths)
         }
+    }
+
+    fun importOrders(
+        actions: List<OrderImportAction>,
+        targetDate: LocalDate
+    ) {
+        viewModelScope.launch {
+            database.withTransaction {
+                actions.forEach { action ->
+                    val item = action.importItem
+                    val orderDate = targetDate
+                    val customerName = item.customerName ?: ""
+                    val customerPhone = item.customerPhone ?: ""
+                    val pickupTime = item.pickupTime
+
+                    when (action.action) {
+                        ImportAction.CREATE -> {
+                            val cartItems = item.cartItems.map {
+                                OrderItemDraft(
+                                    productId = null,
+                                    emoji = it.emoji,
+                                    name = it.name,
+                                    quantity = it.quantity,
+                                    unitPrice = BigDecimal(it.unitPrice),
+                                    categorySnapshot = null
+                                )
+                            }
+                            saveOrderTransactional(
+                                date = orderDate,
+                                cartItems = cartItems,
+                                customerName = customerName,
+                                customerPhone = customerPhone,
+                                pickupTime = pickupTime,
+                                existingOrderId = null
+                            )
+                        }
+                        ImportAction.MERGE -> {
+                            val duplicateOrderId = action.duplicateOrderId
+                            if (duplicateOrderId != null) {
+                                val existingOrder = orderDao.getOrderById(duplicateOrderId)
+                                if (existingOrder != null) {
+                                    val existingItems = database.orderItemDao().getOrderItems(duplicateOrderId)
+                                    val importItems = item.cartItems.map {
+                                        OrderItemDraft(
+                                            productId = null,
+                                            emoji = it.emoji,
+                                            name = it.name,
+                                            quantity = it.quantity,
+                                            unitPrice = BigDecimal(it.unitPrice),
+                                            categorySnapshot = null
+                                        )
+                                    }
+                                    val mergedItems = mergeOrderItems(existingItems, importItems)
+                                    saveOrderTransactional(
+                                        date = orderDate,
+                                        cartItems = mergedItems,
+                                        customerName = customerName,
+                                        customerPhone = customerPhone,
+                                        pickupTime = pickupTime,
+                                        existingOrderId = duplicateOrderId
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            loadOrdersForDate(targetDate)
+            refreshMonthSnapshots(setOf(MonthKey(targetDate.year, targetDate.monthNumber)))
+        }
+    }
+
+    private fun mergeOrderItems(
+        existingItems: List<com.zeynbakers.order_management_system.order.data.OrderItemEntity>,
+        importItems: List<OrderItemDraft>
+    ): List<OrderItemDraft> {
+        val mergedItems = existingItems.map {
+            OrderItemDraft(
+                productId = it.productId,
+                emoji = "",
+                name = it.productNameSnapshot,
+                quantity = it.quantity,
+                unitPrice = it.effectivePrice,
+                categorySnapshot = it.categorySnapshot
+            )
+        }.toMutableList()
+
+        importItems.forEach { importItem ->
+            // Match by productId first, then by name as fallback
+            val existing = mergedItems.find {
+                (it.productId != null && it.productId == importItem.productId) ||
+                (it.productId == null && importItem.productId == null && it.name == importItem.name)
+            }
+            if (existing != null) {
+                // Preserve productId from existing item if import has none
+                val finalProductId = existing.productId ?: importItem.productId
+                mergedItems[mergedItems.indexOf(existing)] = existing.copy(
+                    quantity = existing.quantity + importItem.quantity,
+                    productId = finalProductId
+                )
+            } else {
+                mergedItems.add(importItem)
+            }
+        }
+
+        return mergedItems
     }
 
     private suspend fun saveOrderTransactional(
         date: LocalDate,
-        notes: String,
-        totalAmount: BigDecimal,
+        cartItems: List<OrderItemDraft>,
         customerName: String,
         customerPhone: String,
         pickupTime: String?,
         existingOrderId: Long?
     ): SaveOrderResult {
         val now = Clock.System.now().toEpochMilliseconds()
-        val cleanNotes = notes.trim()
         val normalizedPickupTime = pickupTime?.trim()?.takeIf { it.isNotBlank() }
         val existingOrder =
             if (existingOrderId != null && existingOrderId != 0L) {
@@ -155,17 +268,18 @@ class OrderViewModel(private val database: AppDatabase) : ViewModel() {
                 resolvedCustomerId
             }
 
+        // Derive total from cartItems for single source of truth
+        val totalAmount = cartItems.sumOf { it.lineTotal }
+
         val updatedOrder =
             (existingOrder
                     ?: OrderEntity(
                         orderDate = date,
-                        notes = cleanNotes,
                         totalAmount = totalAmount,
                         customerId = customerId
                     ))
                 .copy(
                     orderDate = date,
-                    notes = cleanNotes,
                     totalAmount = totalAmount,
                     customerId = customerId,
                     pickupTime = normalizedPickupTime,
@@ -179,6 +293,27 @@ class OrderViewModel(private val database: AppDatabase) : ViewModel() {
                 orderDao.update(updatedOrder)
                 updatedOrder.id
             }
+
+        // Save order items - direct conversion from OrderItemDraft to OrderItemEntity
+        if (cartItems.isNotEmpty()) {
+            val orderItemDao = database.orderItemDao()
+            // Delete existing items for this order if editing
+            if (existingOrder != null) {
+                orderItemDao.deleteOrderItems(orderId)
+            }
+            // Insert new items
+            val orderItemEntities = cartItems.map { draft ->
+                com.zeynbakers.order_management_system.order.data.OrderItemEntity(
+                    orderId = orderId,
+                    productId = draft.productId,
+                    productNameSnapshot = draft.name,
+                    unitPriceSnapshot = draft.unitPrice,
+                    categorySnapshot = draft.categorySnapshot ?: com.zeynbakers.order_management_system.order.data.ItemCategory.OTHER,
+                    quantity = draft.quantity
+                )
+            }
+            orderItemDao.insertAll(orderItemEntities)
+        }
 
         if (existingOrder?.customerId != null && customerId != null && existingOrder.customerId != customerId) {
             accountingDao.updateCustomerIdForOrderEntries(orderId = orderId, customerId = customerId)
@@ -202,8 +337,17 @@ class OrderViewModel(private val database: AppDatabase) : ViewModel() {
                 orderId = orderId,
                 customerId = customerId
             )
+        val affectedMonths =
+            buildSet {
+                add(date.toMonthKey())
+                existingOrder?.orderDate?.let { add(it.toMonthKey()) }
+            }
 
-        return SaveOrderResult(date = date, creditPrompt = creditPrompt)
+        return SaveOrderResult(
+            date = date,
+            affectedMonths = affectedMonths,
+            creditPrompt = creditPrompt
+        )
     }
 
     private suspend fun buildCreditPromptIfEligible(
@@ -233,7 +377,7 @@ class OrderViewModel(private val database: AppDatabase) : ViewModel() {
                 orderId = orderId,
                 date = savedOrder.orderDate,
                 customerName = resolvedCustomerName,
-                notes = savedOrder.notes,
+                notes = "",
                 totalAmount = savedOrder.totalAmount
             )
         return OrderCreditPrompt(
@@ -255,7 +399,7 @@ class OrderViewModel(private val database: AppDatabase) : ViewModel() {
                 now = now
             )
             loadOrdersForDate(order.orderDate)
-            refreshMonthTotals()
+            refreshMonthSnapshots(setOf(order.orderDate.toMonthKey()))
             _creditPrompt.value = null
         }
     }
@@ -271,7 +415,7 @@ class OrderViewModel(private val database: AppDatabase) : ViewModel() {
                 orderId = order.id,
                 date = order.orderDate,
                 customerName = customerName,
-                notes = order.notes,
+                notes = "",
                 totalAmount = order.totalAmount
             )
         accountingDao.upsertDebitForOrder(
@@ -297,6 +441,12 @@ class OrderViewModel(private val database: AppDatabase) : ViewModel() {
                     emptyMap()
                 } else {
                     customerDao.getByIds(customerIds).associate { it.id to it.name }
+                }
+            _orderCustomerPhones.value =
+                if (customerIds.isEmpty()) {
+                    emptyMap()
+                } else {
+                    customerDao.getByIds(customerIds).associate { it.id to it.phone }
                 }
 
             val orderIds = activeOrders.map { it.id }.filter { it != 0L }
@@ -334,11 +484,12 @@ class OrderViewModel(private val database: AppDatabase) : ViewModel() {
 
     fun cancelOrder(orderId: Long, date: LocalDate) {
         viewModelScope.launch {
+            val existingDate = orderDao.getOrderById(orderId)?.orderDate ?: date
             database.withTransaction {
                 cancelOrderTransactional(orderId)
             }
-            loadOrdersForDate(date)
-            refreshMonthTotals()
+            loadOrdersForDate(existingDate)
+            refreshMonthSnapshots(setOf(existingDate.toMonthKey()))
             loadUnpaidOrders()
         }
     }
@@ -392,7 +543,7 @@ class OrderViewModel(private val database: AppDatabase) : ViewModel() {
                         orderId = order.id,
                         date = order.orderDate,
                         customerName = order.customerId?.let { customerNames[it] },
-                        notes = order.notes,
+                        notes = "",
                         totalAmount = order.totalAmount
                     )
                 OrderMoveOption(order.id, label)
@@ -407,6 +558,7 @@ class OrderViewModel(private val database: AppDatabase) : ViewModel() {
         target: ReceiptAllocation?,
         moveFullReceipts: Boolean
     ): Boolean {
+        val existingDate = orderDao.getOrderById(orderId)?.orderDate ?: date
         database.withTransaction {
             val validAllocationIds =
                 if (allocationIds.isEmpty()) {
@@ -423,7 +575,7 @@ class OrderViewModel(private val database: AppDatabase) : ViewModel() {
                         orderId = it.id,
                         date = it.orderDate,
                         customerName = customerName,
-                        notes = it.notes,
+                        notes = "",
                         totalAmount = it.totalAmount
                     )
                 } ?: "Order ID $orderId"
@@ -450,8 +602,8 @@ class OrderViewModel(private val database: AppDatabase) : ViewModel() {
             }
             cancelOrderTransactional(orderId)
         }
-        loadOrdersForDate(date)
-        refreshMonthTotals()
+        loadOrdersForDate(existingDate)
+        refreshMonthSnapshots(setOf(existingDate.toMonthKey()))
         loadUnpaidOrders()
         return true
     }
@@ -558,7 +710,15 @@ class OrderViewModel(private val database: AppDatabase) : ViewModel() {
                 total = monthData.monthTotal,
                 badgeCount = monthData.badgeCount
             )
-        _monthSnapshots.value = _monthSnapshots.value + (key to snapshot)
+        val updatedSnapshots = _monthSnapshots.value + (key to snapshot)
+        _monthSnapshots.value =
+            if (updatedSnapshots.size > MAX_CACHED_SNAPSHOTS) {
+                updatedSnapshots.entries
+                    .drop(updatedSnapshots.size - MAX_CACHED_SNAPSHOTS)
+                    .associate { it.key to it.value }
+            } else {
+                updatedSnapshots
+            }
 
         if (setAsCurrent) {
             _calendarDays.value = monthData.calendarDays
@@ -576,6 +736,33 @@ class OrderViewModel(private val database: AppDatabase) : ViewModel() {
         if (trimmed.isEmpty()) return emptyList()
         val pattern = "%$trimmed%"
         return customerDao.searchCustomers(pattern)
+    }
+
+    suspend fun searchProducts(query: String): List<ProductEntity> {
+        val trimmed = query.trim()
+        if (trimmed.isEmpty()) return emptyList()
+        return productDao.searchActiveProducts("%$trimmed%")
+    }
+
+    suspend fun ensureProduct(
+        name: String,
+        defaultPrice: BigDecimal,
+        emoji: String
+    ): ProductEntity {
+        val cleanName = name.trim()
+        val matches = productDao.searchActiveProducts(cleanName)
+        val existing = matches.firstOrNull { it.name.equals(cleanName, ignoreCase = true) }
+        if (existing != null) return existing
+        val id =
+            productDao.insertProduct(
+                ProductEntity(
+                    name = cleanName,
+                    defaultPrice = defaultPrice,
+                    emoji = emoji.trim().ifBlank { "📦" }
+                )
+            )
+        return productDao.getProductById(id)
+            ?: ProductEntity(name = cleanName, defaultPrice = defaultPrice, emoji = emoji)
     }
 
     private suspend fun resolveCustomerId(name: String, phone: String): Long? {
@@ -613,10 +800,26 @@ class OrderViewModel(private val database: AppDatabase) : ViewModel() {
         }
     }
 
-    private fun refreshMonthTotals() {
-        val month = lastMonth ?: return
-        val year = lastYear ?: return
-        loadMonth(month = month, year = year, forceRefresh = true)
+    private fun refreshMonthSnapshots(affectedMonths: Set<MonthKey>) {
+        if (affectedMonths.isEmpty()) return
+        viewModelScope.launch {
+            // Drop stale entries first so pager pages cannot keep rendering old prefetched data.
+            _monthSnapshots.value = _monthSnapshots.value - affectedMonths
+            val currentKey =
+                if (lastYear != null && lastMonth != null) {
+                    MonthKey(year = lastYear!!, month = lastMonth!!)
+                } else {
+                    null
+                }
+            affectedMonths.forEach { key ->
+                loadMonth(
+                    month = key.month,
+                    year = key.year,
+                    setAsCurrent = key == currentKey,
+                    forceRefresh = true
+                )
+            }
+        }
     }
 
     fun loadUnpaidOrders() {
@@ -642,6 +845,12 @@ class OrderViewModel(private val database: AppDatabase) : ViewModel() {
                 } else {
                     customerDao.getByIds(customerIds).associate { it.id to it.name }
                 }
+            _unpaidCustomerPhones.value =
+                if (customerIds.isEmpty()) {
+                    emptyMap()
+                } else {
+                    customerDao.getByIds(customerIds).associate { it.id to (it.phone ?: "") }
+                }
             _unpaidPaidAmounts.value = paidByOrder
             _unpaidOrders.value =
                 unpaid.sortedWith(
@@ -653,6 +862,7 @@ class OrderViewModel(private val database: AppDatabase) : ViewModel() {
     companion object {
         private const val MOVE_TARGET_MAX_ORDERS = 1_500
         private const val UNPAID_SCREEN_MAX_ORDERS = 2_000
+        private const val MAX_CACHED_SNAPSHOTS = 36
     }
 
     private fun isLeapYear(year: Int): Boolean {
@@ -782,6 +992,7 @@ data class OrderCreditPrompt(
 
 private data class SaveOrderResult(
     val date: LocalDate,
+    val affectedMonths: Set<MonthKey>,
     val creditPrompt: OrderCreditPrompt?
 )
 
@@ -809,3 +1020,5 @@ internal fun shouldPromptForAvailableCredit(
     if (outstandingAfterSave <= BigDecimal.ZERO) return false
     return true
 }
+
+private fun LocalDate.toMonthKey(): MonthKey = MonthKey(year = year, month = monthNumber)

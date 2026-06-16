@@ -41,6 +41,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -105,6 +106,7 @@ internal fun MainAppContent(
 ) {
             Order_management_systemTheme {
                 val context = LocalContext.current
+                val resources = LocalResources.current
                 val database = remember { DatabaseProvider.getDatabase(activity.applicationContext) }
                 val viewModelFactory = remember {
                     AppViewModelFactory(
@@ -174,6 +176,7 @@ internal fun MainAppContent(
                 val navBackStackEntry by navController.currentBackStackEntryAsState()
                 val currentRoute = navBackStackEntry?.destination?.route
                 val activeTopLevelRoute = topLevelRouteFor(currentRoute) ?: selectedTopLevelRoute
+                val calendarLoadingLabel = stringResource(R.string.calendar_loading)
                 val moneyTab = runCatching { MoneyTab.valueOf(moneyTabName) }.getOrDefault(MoneyTab.Collect)
                 val moneyRecordContext =
                     remember(
@@ -195,16 +198,8 @@ internal fun MainAppContent(
                             )
                         }
                     }
-                val updateNotes = remember {
-                    listOf(
-                        "Share M-PESA messages from Messages directly into the app.",
-                        "Oldest-order allocation is now the default when applying payments.",
-                        "Each order has its own payment history, plus move/void controls.",
-                        "Clearer order labels across screens for faster recognition.",
-                        "Improved M-PESA amount parsing for cleaner imports.",
-                        "Better voice recognition for notes and customer details.",
-                        "Faster voice calculator responses when adding totals."
-                    )
+                val updateNotes = remember(resources) {
+                    resources.getStringArray(R.array.update_notes_latest).toList()
                 }
                 val contactsPermissionLauncher = rememberLauncherForActivityResult(
                     ActivityResultContracts.RequestPermission()
@@ -232,6 +227,7 @@ internal fun MainAppContent(
                 val ordersForDate by orderViewModel.ordersForDate.collectAsState()
                 val dayTotal by orderViewModel.dayTotal.collectAsState()
                 val orderCustomerNames by orderViewModel.orderCustomerNames.collectAsState()
+                val orderCustomerPhones by orderViewModel.orderCustomerPhones.collectAsState()
                 val orderPaidAmounts by orderViewModel.orderPaidAmounts.collectAsState()
                 val monthSnapshots by orderViewModel.monthSnapshots.collectAsState()
                 val summaryOrders by orderViewModel.summaryOrders.collectAsState()
@@ -240,6 +236,7 @@ internal fun MainAppContent(
                 val unpaidOrders by orderViewModel.unpaidOrders.collectAsState()
                 val unpaidPaidAmounts by orderViewModel.unpaidPaidAmounts.collectAsState()
                 val unpaidCustomerNames by orderViewModel.unpaidCustomerNames.collectAsState()
+                val unpaidCustomerPhones by orderViewModel.unpaidCustomerPhones.collectAsState()
                 val creditPrompt by orderViewModel.creditPrompt.collectAsState()
                 val customerSummaries by customerViewModel.summaries.collectAsState()
                 val customerDetail by customerViewModel.customer.collectAsState()
@@ -432,6 +429,7 @@ internal fun MainAppContent(
                         ordersForDate = ordersForDate,
                         dayTotal = dayTotal,
                         orderCustomerNames = orderCustomerNames,
+                        orderCustomerPhones = orderCustomerPhones,
                         orderPaidAmounts = orderPaidAmounts,
                         summaryOrders = summaryOrders,
                         summaryTotal = summaryTotal,
@@ -441,7 +439,8 @@ internal fun MainAppContent(
                     val ordersState = AppOrdersState(
                         unpaidOrders = unpaidOrders,
                         unpaidPaidAmounts = unpaidPaidAmounts,
-                        unpaidCustomerNames = unpaidCustomerNames
+                        unpaidCustomerNames = unpaidCustomerNames,
+                        unpaidCustomerPhones = unpaidCustomerPhones
                     )
                     val customersState = AppCustomersState(
                         customerSummaries = customerSummaries,
@@ -516,7 +515,13 @@ internal fun MainAppContent(
                     val supportActions = AppFeatureSupportActions(
                         refreshAfterPayments = refreshAfterPayments,
                         currentDate = currentDate,
-                        monthLabel = ::monthLabel,
+                        monthLabel = { year, month ->
+                            monthLabel(
+                                year = year,
+                                month = month,
+                                loadingLabel = calendarLoadingLabel
+                            )
+                        },
                         onShowMessage = { message ->
                             scope.launch { uiEventDispatcher.showSnackbar(message) }
                         },

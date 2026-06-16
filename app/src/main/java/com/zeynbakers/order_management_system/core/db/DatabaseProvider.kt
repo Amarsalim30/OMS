@@ -5,6 +5,7 @@ import androidx.room.Room
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
+
 object DatabaseProvider {
     private var instance: AppDatabase? = null
     internal val SQL_CREATE_ORDERS_V10 =
@@ -625,6 +626,34 @@ object DatabaseProvider {
         }
     }
 
+    internal val migration14To15 = object : Migration(14, 15) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS products (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                    name TEXT NOT NULL,
+                    default_price TEXT NOT NULL,
+                    emoji TEXT NOT NULL,
+                    archived INTEGER NOT NULL DEFAULT 0
+                )
+                """.trimIndent()
+            )
+            db.execSQL("INSERT INTO products (name, default_price, emoji, archived) VALUES ('Croissant', '5000', '🥐', 0)")
+            db.execSQL("INSERT INTO products (name, default_price, emoji, archived) VALUES ('Meatpie', '5000', '🥧', 0)")
+            db.execSQL("INSERT INTO products (name, default_price, emoji, archived) VALUES ('Melon Cake', '10000', '🧁', 0)")
+            db.execSQL("INSERT INTO products (name, default_price, emoji, archived) VALUES ('Donut', '4000', '🍩', 0)")
+            db.execSQL("INSERT INTO products (name, default_price, emoji, archived) VALUES ('Birthday Cake', '150000', '🎂', 0)")
+            db.execSQL("INSERT INTO products (name, default_price, emoji, archived) VALUES ('Swiss Roll', '8000', '🍰', 0)")
+            db.execSQL("INSERT INTO products (name, default_price, emoji, archived) VALUES ('Bread', '6000', '🍞', 0)")
+            db.execSQL("INSERT INTO products (name, default_price, emoji, archived) VALUES ('Cookies', '3000', '🍪', 0)")
+            db.execSQL("INSERT INTO products (name, default_price, emoji, archived) VALUES ('Burger', '15000', '🍔', 0)")
+            db.execSQL("INSERT INTO products (name, default_price, emoji, archived) VALUES ('Hot Dog', '10000', '🌭', 0)")
+            db.execSQL("INSERT INTO products (name, default_price, emoji, archived) VALUES ('Coffee', '8000', '☕', 0)")
+            db.execSQL("INSERT INTO products (name, default_price, emoji, archived) VALUES ('Juice', '6000', '🧃', 0)")
+        }
+    }
+
     internal val ALL_MIGRATIONS = arrayOf(
         migration1To2,
         migration2To3,
@@ -638,7 +667,59 @@ object DatabaseProvider {
         migration10To11,
         migration11To12,
         migration12To13,
-        migration13To14
+        migration13To14,
+        migration14To15,
+        Migration(15, 16) { db ->
+            // Add new columns to order_items table
+            db.execSQL(
+                """
+                ALTER TABLE order_items 
+                ADD COLUMN productId INTEGER REFERENCES products(id) ON DELETE RESTRICT
+                """.trimIndent()
+            )
+            
+            db.execSQL(
+                """
+                ALTER TABLE order_items 
+                ADD COLUMN productNameSnapshot TEXT NOT NULL DEFAULT ''
+                """.trimIndent()
+            )
+            
+            db.execSQL(
+                """
+                ALTER TABLE order_items 
+                ADD COLUMN unitPriceSnapshot TEXT NOT NULL DEFAULT '0'
+                """.trimIndent()
+            )
+            
+            db.execSQL(
+                """
+                ALTER TABLE order_items 
+                ADD COLUMN categorySnapshot TEXT NOT NULL DEFAULT 'OTHER'
+                """.trimIndent()
+            )
+            
+            db.execSQL(
+                """
+                ALTER TABLE order_items 
+                ADD COLUMN priceOverride TEXT
+                """.trimIndent()
+            )
+            
+            // Create index on productId for better query performance
+            db.execSQL("CREATE INDEX IF NOT EXISTS index_order_items_productId ON order_items(productId)")
+            
+            // Backfill existing data: copy existing fields to snapshot fields
+            db.execSQL(
+                """
+                UPDATE order_items 
+                SET productNameSnapshot = name,
+                    unitPriceSnapshot = unitPrice,
+                    categorySnapshot = category
+                WHERE productNameSnapshot = ''
+                """.trimIndent()
+            )
+        }
     )
 
     fun getDatabase(context: Context): AppDatabase {

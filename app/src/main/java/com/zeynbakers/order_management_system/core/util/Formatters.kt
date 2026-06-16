@@ -11,7 +11,7 @@ import java.util.Locale
 fun formatKes(amount: BigDecimal): String {
     val rounded = amount.setScale(0, RoundingMode.HALF_UP)
     val formatter = NumberFormat.getNumberInstance()
-    return "KES ${formatter.format(rounded)}"
+    return "KSh ${formatter.format(rounded)}"
 }
 
 fun formatDateTime(epochMillis: Long): String {

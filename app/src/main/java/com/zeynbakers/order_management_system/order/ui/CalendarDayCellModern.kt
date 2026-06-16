@@ -6,6 +6,7 @@ import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -37,6 +38,8 @@ import java.math.BigDecimal
 import java.math.RoundingMode
 import kotlinx.datetime.LocalDate
 
+private const val MAX_VISIBLE_MARKERS = 3
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 internal fun DayCell(
@@ -56,6 +59,7 @@ internal fun DayCell(
         buildDayContentDescription(day, markerStates, isSelected)
     }
     val dayTag = remember(day.date) { "day-cell-${day.date}" }
+    val markerTag = remember(day.date) { "day-markers-${day.date}" }
     val compactTotal =
         remember(day.totalAmount, hasOrders) {
             if (hasOrders) formatKesCompact(day.totalAmount) else null
@@ -158,6 +162,36 @@ internal fun DayCell(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
+                if (markerStates.isNotEmpty()) {
+                    val visibleMarkers = markerStates.take(MAX_VISIBLE_MARKERS)
+                    val overflowCount = markerStates.size - visibleMarkers.size
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag(markerTag),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        visibleMarkers.forEachIndexed { index, state ->
+                            Surface(
+                                color = calendarPaymentStateColor(state),
+                                shape = CircleShape,
+                                modifier = Modifier
+                                    .size(7.dp)
+                                    .testTag("$markerTag-$index")
+                            ) {}
+                        }
+                        if (overflowCount > 0) {
+                            Text(
+                                text = "+$overflowCount",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                modifier = Modifier.testTag("$markerTag-overflow")
+                            )
+                        }
+                    }
+                }
             }
         }
     }

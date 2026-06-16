@@ -6,6 +6,7 @@ import android.content.pm.PackageManager
 import android.os.Build
 import android.os.UserManager
 import android.provider.DocumentsContract
+import android.util.Log
 import androidx.core.net.toUri
 import androidx.documentfile.provider.DocumentFile
 import androidx.room.withTransaction
@@ -67,6 +68,7 @@ import org.json.JSONObject
 typealias ProgressCallback = (Int, String) -> Unit
 
 object BackupManager {
+    private const val TAG = "BackupManager"
     private const val BACKUP_DIR_NAME = "backups"
     private const val BACKUP_FILE_EXTENSION = ".oms"
     private const val LEGACY_BACKUP_FILE_EXTENSION = ".zip"
@@ -148,6 +150,7 @@ object BackupManager {
     ): BackupResult {
         val prefs = BackupPreferences(context)
         val state = prefs.readState()
+        logOperationStart("backup", state.targetType, "force=$force")
         val encryptionPassphrase =
             if (state.encryptionEnabled) {
                 prefs.getEncryptionPassphrase()?.takeIf { it.isNotBlank() }
@@ -155,15 +158,18 @@ object BackupManager {
                 null
             }
         if (!force && !state.autoEnabled) {
+            logOperationBlocked("backup", state.targetType, "auto_disabled")
             return BackupResult(success = false, message = "Automatic backup disabled")
         }
         if (!state.encryptionEnabled && !state.insecureOverrideEnabled) {
+            logOperationBlocked("backup", state.targetType, "insecure_override_required")
             return BackupResult(
                 success = false,
                 message = "Encrypted backups are required unless insecure override is enabled"
             )
         }
         if (state.encryptionEnabled && encryptionPassphrase.isNullOrBlank()) {
+            logOperationBlocked("backup", state.targetType, "missing_passphrase")
             return BackupResult(
                 success = false,
                 message = "Backup encryption passphrase is missing"
@@ -260,6 +266,7 @@ object BackupManager {
                     message = "Backup location unavailable",
                     time = now
                 )
+                logOperationBlocked("backup", state.targetType, "location_unavailable")
                 return BackupResult(success = false, message = "Backup location unavailable")
             }
 
@@ -279,17 +286,20 @@ object BackupManager {
                     "Saved to selected file"
                 } else {
                     "Saved to selected folder"
-                }
+            }
             prefs.setLastResult(BackupStatus.Success, message, now)
+            logOperationSuccess("backup", state.targetType)
             BackupResult(success = true, message = message)
         } catch (t: CancellationException) {
             throw t
         } catch (t: Exception) {
             prefs.setLastResult(BackupStatus.Failed, t.message, now)
+            val retryable = isRetryableBackupException(t)
+            logOperationFailure("backup", state.targetType, retryable, t)
             BackupResult(
                 success = false,
                 message = t.message,
-                shouldRetry = isRetryableBackupException(t)
+                shouldRetry = retryable
             )
         }
     }
@@ -302,6 +312,11 @@ object BackupManager {
         progress?.invoke(5, "Opening backup")
         val prefs = BackupPreferences(context)
         val state = prefs.readState()
+        logOperationStart(
+            "restore",
+            state.targetType,
+            if (uriString.isNullOrBlank()) "source=latest" else "source=selected"
+        )
         val encryptionPassphrase =
             if (state.encryptionEnabled) {
                 prefs.getEncryptionPassphrase()?.takeIf { it.isNotBlank() }
@@ -309,6 +324,7 @@ object BackupManager {
                 null
             }
         if (state.encryptionEnabled && encryptionPassphrase.isNullOrBlank()) {
+            logOperationBlocked("restore", state.targetType, "missing_passphrase")
             return BackupResult(
                 success = false,
                 message = "Backup encryption passphrase is missing"
@@ -321,6 +337,7 @@ object BackupManager {
                 openSafInput(context, uriString)
             }
         if (input == null) {
+            logOperationBlocked("restore", state.targetType, "file_unavailable")
             return BackupResult(success = false, message = "Backup file unavailable")
         }
 
@@ -337,14 +354,17 @@ object BackupManager {
                 }
             }
             progress?.invoke(100, "Restore complete")
+            logOperationSuccess("restore", state.targetType)
             BackupResult(success = true, message = "Restore complete")
         } catch (t: CancellationException) {
             throw t
         } catch (t: Exception) {
+            val retryable = isRetryableBackupException(t)
+            logOperationFailure("restore", state.targetType, retryable, t)
             BackupResult(
                 success = false,
                 message = t.message,
-                shouldRetry = isRetryableBackupException(t)
+                shouldRetry = retryable
             )
         }
     }
@@ -1860,7 +1880,6 @@ object BackupManager {
                     .put("orderDate", order.orderDate.toString())
                     .put("createdAt", order.createdAt)
                     .put("updatedAt", order.updatedAt)
-                    .put("notes", order.notes)
                     .put("pickupTime", order.pickupTime ?: JSONObject.NULL)
                     .put("status", order.status.name)
                     .put("statusOverride", order.statusOverride?.name ?: JSONObject.NULL)
@@ -1878,10 +1897,12 @@ object BackupManager {
                 JSONObject()
                     .put("id", item.id)
                     .put("orderId", item.orderId)
-                    .put("name", item.name)
-                    .put("category", item.category.name)
+                    .put("productId", item.productId ?: JSONObject.NULL)
+                    .put("productNameSnapshot", item.productNameSnapshot)
+                    .put("unitPriceSnapshot", item.unitPriceSnapshot.toPlainString())
+                    .put("categorySnapshot", item.categorySnapshot.name)
                     .put("quantity", item.quantity)
-                    .put("unitPrice", item.unitPrice.toPlainString())
+                    .put("priceOverride", item.priceOverride?.toPlainString() ?: JSONObject.NULL)
             )
         }
         return array
@@ -2032,7 +2053,6 @@ object BackupManager {
                 orderDate = LocalDate.parse(obj.getString("orderDate")),
                 createdAt = obj.getLong("createdAt"),
                 updatedAt = obj.getLong("updatedAt"),
-                notes = obj.getString("notes"),
                 pickupTime = pickupTime,
                 status = status,
                 statusOverride = statusOverride,
@@ -2046,14 +2066,20 @@ object BackupManager {
         val array = parseArray(payload) ?: return emptyList()
         return (0 until array.length()).map { index ->
             val obj = array.getJSONObject(index)
-            val unitPrice = parseRequiredDecimal(obj.optString("unitPrice", ""), "order_items.unitPrice", index)
+            val productId = if (obj.has("productId") && !obj.isNull("productId")) obj.getLong("productId") else null
+            val productNameSnapshot = if (obj.has("productNameSnapshot")) obj.getString("productNameSnapshot") else obj.getString("name")
+            val unitPriceSnapshot = if (obj.has("unitPriceSnapshot")) parseRequiredDecimal(obj.optString("unitPriceSnapshot", ""), "order_items.unitPriceSnapshot", index) else parseRequiredDecimal(obj.optString("unitPrice", ""), "order_items.unitPrice", index)
+            val categorySnapshot = if (obj.has("categorySnapshot")) ItemCategory.valueOf(obj.getString("categorySnapshot")) else ItemCategory.OTHER
+            val priceOverride = if (obj.has("priceOverride") && !obj.isNull("priceOverride")) parseRequiredDecimal(obj.optString("priceOverride", ""), "order_items.priceOverride", index) else null
             OrderItemEntity(
                 id = obj.getLong("id"),
                 orderId = obj.getLong("orderId"),
-                name = obj.getString("name"),
-                category = ItemCategory.valueOf(obj.getString("category")),
+                productId = productId,
+                productNameSnapshot = productNameSnapshot,
+                unitPriceSnapshot = unitPriceSnapshot,
+                categorySnapshot = categorySnapshot,
                 quantity = obj.getInt("quantity"),
-                unitPrice = unitPrice
+                priceOverride = priceOverride
             )
         }
     }
@@ -2319,6 +2345,54 @@ object BackupManager {
             is IllegalArgumentException -> false
             is IllegalStateException -> false
             else -> false
+        }
+    }
+
+    private fun logOperationStart(
+        operation: String,
+        targetType: BackupTargetType,
+        detail: String? = null
+    ) {
+        Log.i(
+            TAG,
+            buildString {
+                append(operation)
+                append(" start target=")
+                append(targetType)
+                if (!detail.isNullOrBlank()) {
+                    append(' ')
+                    append(detail)
+                }
+            }
+        )
+    }
+
+    private fun logOperationBlocked(
+        operation: String,
+        targetType: BackupTargetType,
+        code: String
+    ) {
+        Log.w(TAG, "$operation blocked target=$targetType code=$code")
+    }
+
+    private fun logOperationSuccess(
+        operation: String,
+        targetType: BackupTargetType
+    ) {
+        Log.i(TAG, "$operation success target=$targetType")
+    }
+
+    private fun logOperationFailure(
+        operation: String,
+        targetType: BackupTargetType,
+        retryable: Boolean,
+        error: Exception
+    ) {
+        val message = "$operation ${if (retryable) "retryable_failure" else "fatal_failure"} target=$targetType"
+        if (retryable) {
+            Log.w(TAG, message, error)
+        } else {
+            Log.e(TAG, message, error)
         }
     }
 

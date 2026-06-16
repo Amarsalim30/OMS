@@ -114,7 +114,7 @@ internal data class DaySummaryStats(
 )
 
 data class OrderDraft(
-    val notes: String,
+    val cartItems: List<OrderItemDraft>,
     val totalText: String,
     val customerName: String,
     val customerPhone: String,

@@ -96,11 +96,7 @@ object WidgetUpdater {
         )
 
         val lines = todayOrders.take(3).map { order ->
-            val label =
-                order.notes
-                    .trim()
-                    .take(28)
-                    .ifBlank { appContext.getString(R.string.widget_order_fallback) }
+            val label = "Order #${order.id}"
             val due = (order.totalAmount - (paidByOrder[order.id] ?: BigDecimal.ZERO)).max(BigDecimal.ZERO)
             val amountLabel =
                 if (due > BigDecimal.ZERO) {

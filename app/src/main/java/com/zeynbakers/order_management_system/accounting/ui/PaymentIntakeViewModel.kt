@@ -353,7 +353,7 @@ class PaymentIntakeViewModel(private val database: AppDatabase) : ViewModel() {
                             com.zeynbakers.order_management_system.core.util.formatOrderLabel(
                                 date = order.orderDate,
                                 customerName = customerName,
-                                notes = order.notes,
+                                notes = "",
                                 totalAmount = order.totalAmount
                             )
                         }
@@ -524,11 +524,14 @@ class PaymentIntakeViewModel(private val database: AppDatabase) : ViewModel() {
         parseJob?.cancel()
         parseJob =
             viewModelScope.launch(Dispatchers.IO) {
-            val parsed = MpesaParser.parse(rawText)
-            val ui = buildUi(parsed)
-            if (requestId == parseRequestId) {
-                _transactions.value = ui
-            }
+                val ui =
+                    runCatching {
+                        val parsed = MpesaParser.parse(rawText)
+                        buildUi(parsed)
+                    }.getOrDefault(emptyList())
+                if (requestId == parseRequestId) {
+                    _transactions.value = ui
+                }
             }
     }
 
@@ -687,7 +690,7 @@ class PaymentIntakeViewModel(private val database: AppDatabase) : ViewModel() {
                     customerId = entry.order.customerId,
                     customerName = customer?.name,
                     orderDate = entry.order.orderDate,
-                    notes = entry.order.notes,
+                    notes = "",
                     outstanding = entry.outstanding,
                     confidence = confidence
                 )

@@ -7,6 +7,9 @@ import androidx.navigation.NavGraph.Companion.findStartDestination
 import androidx.navigation.NavHostController
 import com.zeynbakers.order_management_system.accounting.ui.PaymentHistoryFilter
 import com.zeynbakers.order_management_system.core.navigation.AppRoutes
+import java.time.Month
+import java.time.format.TextStyle
+import java.util.Locale
 
 internal fun topLevelRouteFor(route: String?): String? {
     return when {
@@ -96,23 +99,16 @@ internal fun navToImportContacts(
     }
 }
 
-internal fun monthLabel(year: Int, month: Int): String {
-    if (month == 0 || year == 0) return "Loading..."
-    val monthName = when (month) {
-        1 -> "January"
-        2 -> "February"
-        3 -> "March"
-        4 -> "April"
-        5 -> "May"
-        6 -> "June"
-        7 -> "July"
-        8 -> "August"
-        9 -> "September"
-        10 -> "October"
-        11 -> "November"
-        12 -> "December"
-        else -> "Month"
-    }
+internal fun monthLabel(
+    year: Int,
+    month: Int,
+    loadingLabel: String,
+    locale: Locale = Locale.getDefault()
+): String {
+    if (month == 0 || year == 0) return loadingLabel
+    val monthName =
+        runCatching { Month.of(month).getDisplayName(TextStyle.FULL, locale) }
+            .getOrElse { month.toString() }
     return "$monthName $year"
 }
 

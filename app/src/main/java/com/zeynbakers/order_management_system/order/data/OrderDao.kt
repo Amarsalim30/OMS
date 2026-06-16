@@ -30,6 +30,17 @@ interface OrderDao {
         """
         SELECT * FROM orders
         WHERE customerId = :customerId
+          AND status != 'CANCELLED'
+          AND (statusOverride IS NULL OR statusOverride != 'CLOSED')
+        ORDER BY orderDate ASC, createdAt ASC, id ASC
+        """
+    )
+    suspend fun getOpenOrdersByCustomer(customerId: Long): List<OrderEntity>
+
+    @Query(
+        """
+        SELECT * FROM orders
+        WHERE customerId = :customerId
         ORDER BY orderDate DESC, createdAt DESC, id DESC
         LIMIT :limit
         """

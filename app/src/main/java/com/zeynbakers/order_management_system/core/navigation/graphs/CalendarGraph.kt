@@ -1,6 +1,12 @@
 package com.zeynbakers.order_management_system.core.navigation.graphs
 
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.NavHostController
 import androidx.navigation.NavType
@@ -13,7 +19,9 @@ import com.zeynbakers.order_management_system.AppFeatureSupportActions
 import com.zeynbakers.order_management_system.MoneyRecordContext
 import com.zeynbakers.order_management_system.navigateTopLevel
 import com.zeynbakers.order_management_system.accounting.ui.PaymentHistoryFilter
+import com.zeynbakers.order_management_system.R
 import com.zeynbakers.order_management_system.core.navigation.AppRoutes
+import com.zeynbakers.order_management_system.core.onboarding.OnboardingPreferences
 import com.zeynbakers.order_management_system.core.notifications.NotificationScheduler
 import com.zeynbakers.order_management_system.core.widget.WidgetUpdater
 import com.zeynbakers.order_management_system.order.ui.CalendarScreen
@@ -47,11 +55,10 @@ internal fun NavGraphBuilder.calendarGraph(
                 calendarCallbacks.onSelectedDateChange(date)
                 navController.navigate(AppRoutes.day(date))
             },
-            onSaveOrder = { date, notes, total, name, phone, pickupTime ->
+            onSaveOrder = { date, cartItems, name, phone, pickupTime ->
                 orderViewModel.saveOrder(
                     date = date,
-                    notes = notes,
-                    totalAmount = total,
+                    cartItems = cartItems,
                     customerName = name,
                     customerPhone = phone,
                     pickupTime = pickupTime,
@@ -61,6 +68,8 @@ internal fun NavGraphBuilder.calendarGraph(
                 NotificationScheduler.enqueueNow(navController.context)
             },
             searchCustomers = { query -> orderViewModel.searchCustomers(query) },
+            searchProducts = { query -> orderViewModel.searchProducts(query) },
+            ensureProduct = { name, price, emoji -> orderViewModel.ensureProduct(name, price, emoji) },
             onSummaryClick = { navController.navigate(AppRoutes.Summary) },
             onOpenMore = navigationActions.onOpenMore,
             onMonthSettled = { year, month -> calendarCallbacks.onMonthSettled(year, month) },
@@ -86,11 +95,10 @@ internal fun NavGraphBuilder.calendarGraph(
                 calendarCallbacks.onSelectedDateChange(date)
                 navController.navigate(AppRoutes.day(date))
             },
-            onSaveOrder = { date, notes, total, name, phone, pickupTime ->
+            onSaveOrder = { date, cartItems, name, phone, pickupTime ->
                 orderViewModel.saveOrder(
                     date = date,
-                    notes = notes,
-                    totalAmount = total,
+                    cartItems = cartItems,
                     customerName = name,
                     customerPhone = phone,
                     pickupTime = pickupTime,
@@ -100,6 +108,8 @@ internal fun NavGraphBuilder.calendarGraph(
                 NotificationScheduler.enqueueNow(navController.context)
             },
             searchCustomers = { query -> orderViewModel.searchCustomers(query) },
+            searchProducts = { query -> orderViewModel.searchProducts(query) },
+            ensureProduct = { name, price, emoji -> orderViewModel.ensureProduct(name, price, emoji) },
             onSummaryClick = { navController.navigate(AppRoutes.Summary) },
             onOpenMore = navigationActions.onOpenMore,
             onMonthSettled = { year, month -> calendarCallbacks.onMonthSettled(year, month) },
@@ -134,18 +144,25 @@ internal fun NavGraphBuilder.calendarGraph(
             calendarCallbacks.onSelectedDateChange(date)
             orderViewModel.loadOrdersForDate(date)
         }
+        val context = LocalContext.current
+        val appName = stringResource(R.string.app_name)
+        var storeName by remember { mutableStateOf(appName) }
+        LaunchedEffect(Unit) {
+            val businessName = OnboardingPreferences(context).readState().businessName.trim()
+            storeName = businessName.ifBlank { appName }
+        }
         DayDetailScreen(
             date = date,
             orders = calendarState.ordersForDate,
             dayTotal = calendarState.dayTotal,
             customerNames = calendarState.orderCustomerNames,
+            customerPhones = calendarState.orderCustomerPhones,
             orderPaidAmounts = calendarState.orderPaidAmounts,
             onBack = { navController.popBackStack() },
-            onSaveOrder = { notes, total, name, phone, pickupTime, orderId ->
+            onSaveOrder = { cartItems, name, phone, pickupTime, orderId ->
                 orderViewModel.saveOrder(
                     date = date,
-                    notes = notes,
-                    totalAmount = total,
+                    cartItems = cartItems,
                     customerName = name,
                     customerPhone = phone,
                     pickupTime = pickupTime,
@@ -197,6 +214,13 @@ internal fun NavGraphBuilder.calendarGraph(
             },
             loadCustomerById = { id -> orderViewModel.getCustomerById(id) },
             searchCustomers = { query -> orderViewModel.searchCustomers(query) },
+            searchProducts = { query -> orderViewModel.searchProducts(query) },
+            ensureProduct = { name, price, emoji -> orderViewModel.ensureProduct(name, price, emoji) },
+            onImportOrders = { actions ->
+                orderViewModel.importOrders(actions, date)
+                WidgetUpdater.enqueue(navController.context)
+                NotificationScheduler.enqueueNow(navController.context)
+            },
             initialFocusOrderId = focusOrderId,
             draft = calendarState.dayDrafts[date],
             onDraftChange = { updated ->
@@ -205,7 +229,8 @@ internal fun NavGraphBuilder.calendarGraph(
                 } else {
                     calendarState.dayDrafts[date] = updated
                 }
-            }
+            },
+            storeName = storeName
         )
     }
 

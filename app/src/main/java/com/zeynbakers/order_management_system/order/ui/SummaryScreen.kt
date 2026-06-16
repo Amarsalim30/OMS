@@ -12,7 +12,9 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -28,6 +30,7 @@ import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.SelectableDates
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -49,6 +52,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -65,7 +70,6 @@ import com.zeynbakers.order_management_system.order.domain.OrderLineItem
 import com.zeynbakers.order_management_system.order.domain.aggregateLineItems
 import com.zeynbakers.order_management_system.order.domain.aggregateOrderLineItems
 import com.zeynbakers.order_management_system.order.domain.formatQuantity
-import com.zeynbakers.order_management_system.order.domain.parseOrderNotes
 import java.math.BigDecimal
 import java.time.format.DateTimeFormatter
 import java.util.Locale
@@ -141,8 +145,7 @@ fun SummaryScreen(
     val analyses =
         remember(orders) {
             orders.map { order ->
-                val parsed = parseOrderNotes(order.notes)
-                OrderNoteAnalysis(order = order, items = parsed.items, unparsedLines = parsed.unparsed)
+                OrderNoteAnalysis(order = order, items = emptyList(), unparsedLines = emptyList())
             }
         }
     val aggregatedItems = remember(analyses) { aggregateOrderLineItems(analyses.flatMap { it.items }) }
@@ -167,10 +170,15 @@ fun SummaryScreen(
 
     if (isDatePickerOpen) {
         val initialMillis =
-            remember(anchorDate) {
+            remember(anchorDate, isDatePickerOpen) {
                 anchorDate.atStartOfDayIn(TimeZone.currentSystemDefault()).toEpochMilliseconds()
             }
-        val pickerState = rememberDatePickerState(initialSelectedDateMillis = initialMillis)
+        val pickerState = rememberDatePickerState(
+            initialSelectedDateMillis = initialMillis,
+            selectableDates = object : SelectableDates {
+                override fun isSelectableDate(utcTimeMillis: Long): Boolean = true
+            }
+        )
         DatePickerDialog(
             onDismissRequest = { isDatePickerOpen = false },
             confirmButton = {
@@ -193,7 +201,13 @@ fun SummaryScreen(
                 TextButton(onClick = { isDatePickerOpen = false }) { Text(stringResource(R.string.action_cancel)) }
             }
         ) {
-            DatePicker(state = pickerState)
+            DatePicker(
+                state = pickerState,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 450.dp)
+                    .padding(horizontal = 8.dp))
+
         }
     }
 
@@ -221,14 +235,18 @@ fun SummaryScreen(
                     }
                 },
                 actions = {
+                    val copyChefListLabel = stringResource(R.string.summary_copy_chef_list)
                     IconButton(
                         onClick = {
                             clipboardManager.setText(AnnotatedString(chefMessage))
                             scope.launch { uiEvents.showSnackbar(chefListCopiedMessage) }
                         },
+                        modifier = Modifier
+                            .size(48.dp)
+                            .semantics { contentDescription = copyChefListLabel },
                         enabled = aggregatedItems.isNotEmpty() || unparsedLines.isNotEmpty()
                     ) {
-                        Icon(imageVector = Icons.Filled.ContentCopy, contentDescription = stringResource(R.string.summary_copy_chef_list))
+                        Icon(imageVector = Icons.Filled.ContentCopy, contentDescription = null)
                     }
                 },
                 scrollBehavior = scrollBehavior
@@ -278,7 +296,7 @@ fun SummaryScreen(
 
             if (unparsedLines.isNotEmpty()) {
                 item {
-                    UnparsedLinesCard(unparsedLines = unparsedLines)
+                    UnparsedLinesCard(lines = unparsedLines)
                 }
             }
 
@@ -288,7 +306,7 @@ fun SummaryScreen(
 
                 item { SectionHeader(title = stringResource(R.string.summary_daily_view)) }
                 if (datesAsc.isEmpty()) {
-                    item { SummaryEmptyState(text = stringResource(R.string.summary_no_orders_in_range)) }
+                    item { SummaryEmptyState() }
                 } else {
                     items(datesAsc, key = { it.toString() }) { date ->
                         val dayAnalyses = analysesByDate[date].orEmpty()
@@ -306,14 +324,11 @@ fun SummaryScreen(
                                 unparsedHeader = messageUnparsed
                             )
                         DailySummaryCard(
-                            date = date.toJavaLocalDate().format(uiDateFormatter),
-                            orderCount = dayAnalyses.size,
-                            total = dayTotal,
-                            onOpenDay = {
-                                mode = SummaryRangeMode.DAY
-                                anchorDate = date
-                            },
-                            onCopy = {
+                            date = date,
+                            orders = dayAnalyses.map { it.order },
+                            orderItemsMap = emptyMap(),
+                            customerNames = customerNames,
+                            onCopyNotes = {
                                 clipboardManager.setText(AnnotatedString(dayMessage))
                             }
                         )
@@ -324,18 +339,20 @@ fun SummaryScreen(
             item { SectionHeader(title = stringResource(R.string.summary_orders)) }
 
             if (orders.isEmpty()) {
-                item { SummaryEmptyState(text = stringResource(R.string.summary_no_orders_in_range)) }
+                item { SummaryEmptyState() }
             } else {
                 when (mode) {
                     SummaryRangeMode.DAY -> {
                         items(orders, key = { it.id }) { order ->
                             val customerLabel =
                                 order.customerId?.let { id -> customerNames[id] }?.takeIf { it.isNotBlank() }
+                            val pickupDisplay = com.zeynbakers.order_management_system.core.util.formatPickupTimeForDisplay(order.pickupTime)
                             OrderSummaryCard(
                                 customerLabel = customerLabel,
-                                notes = order.notes,
+                                orderItems = emptyList(),
                                 total = order.totalAmount,
-                                onCopyNotes = { clipboardManager.setText(AnnotatedString(order.notes)) }
+                                pickupTime = pickupDisplay,
+                                onCopyNotes = { clipboardManager.setText(AnnotatedString("")) }
                             )
                         }
                     }
@@ -353,11 +370,13 @@ fun SummaryScreen(
                             items(ordersByDate[date].orEmpty(), key = { it.id }) { order ->
                                 val customerLabel =
                                     order.customerId?.let { id -> customerNames[id] }?.takeIf { it.isNotBlank() }
+                                val pickupDisplay = com.zeynbakers.order_management_system.core.util.formatPickupTimeForDisplay(order.pickupTime)
                                 OrderSummaryCard(
                                     customerLabel = customerLabel,
-                                    notes = order.notes,
+                                    orderItems = emptyList(),
                                     total = order.totalAmount,
-                                    onCopyNotes = { clipboardManager.setText(AnnotatedString(order.notes)) }
+                                    pickupTime = pickupDisplay,
+                                    onCopyNotes = { clipboardManager.setText(AnnotatedString("")) }
                                 )
                             }
                         }

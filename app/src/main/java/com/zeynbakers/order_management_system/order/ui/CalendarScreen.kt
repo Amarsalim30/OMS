@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.material.icons.Icons
@@ -30,6 +31,9 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.dp
 import com.zeynbakers.order_management_system.R
 import com.zeynbakers.order_management_system.core.util.formatKes
 import com.zeynbakers.order_management_system.core.util.normalizePickupTime
@@ -43,15 +47,15 @@ import com.zeynbakers.order_management_system.core.tutorial.tutorialCoachTarget
 import com.zeynbakers.order_management_system.core.calendar.CalendarPreferences
 import com.zeynbakers.order_management_system.customer.data.CustomerEntity
 import java.math.BigDecimal
+import java.time.format.DateTimeFormatter
+import java.util.Calendar
+import java.util.Locale
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 import kotlinx.datetime.LocalDate
-import java.util.Calendar
-import java.util.Locale
-import java.time.format.DateTimeFormatter
 import kotlinx.datetime.toJavaLocalDate
 
 @OptIn(ExperimentalMaterial3Api::class, FlowPreview::class)
@@ -68,8 +72,10 @@ fun CalendarScreen(
     selectedDate: LocalDate?,
     onSelectDate: (LocalDate) -> Unit,
     onOpenDay: (LocalDate) -> Unit,
-    onSaveOrder: (LocalDate, String, BigDecimal, String, String, String?) -> Unit,
+    onSaveOrder: (LocalDate, List<OrderItemDraft>, String, String, String?) -> Unit,
     searchCustomers: suspend (String) -> List<CustomerEntity>,
+    searchProducts: suspend (String) -> List<com.zeynbakers.order_management_system.product.data.ProductEntity>,
+    ensureProduct: suspend (String, BigDecimal, String) -> com.zeynbakers.order_management_system.product.data.ProductEntity,
     onSummaryClick: () -> Unit,
     onOpenMore: () -> Unit,
     onMonthSettled: (Int, Int) -> Unit,
@@ -79,7 +85,7 @@ fun CalendarScreen(
     onInteractiveTutorialFinished: () -> Unit = {}
 ) {
     var isQuickAddOpen by remember { mutableStateOf(false) }
-    var notes by remember { mutableStateOf("") }
+    var cartItems by remember { mutableStateOf(emptyList<OrderItemDraft>()) }
     var totalText by remember { mutableStateOf("") }
     var customerName by remember { mutableStateOf("") }
     var customerPhone by remember { mutableStateOf("") }
@@ -87,6 +93,9 @@ fun CalendarScreen(
     var notesError by remember { mutableStateOf<String?>(null) }
     var totalError by remember { mutableStateOf<String?>(null) }
     var customerError by remember { mutableStateOf<String?>(null) }
+    var customerConfirmed by remember { mutableStateOf(false) }
+    var productQuery by remember { mutableStateOf("") }
+    var productMatches by remember { mutableStateOf(emptyList<com.zeynbakers.order_management_system.product.data.ProductEntity>()) }
     var suggestions by remember { mutableStateOf<List<CustomerEntity>>(emptyList()) }
     var suppressedNoMatchQuery by remember { mutableStateOf("") }
     var isMonthPickerOpen by remember { mutableStateOf(false) }
@@ -121,13 +130,17 @@ fun CalendarScreen(
     }
 
     LaunchedEffect(Unit) {
-        snapshotFlow { notes to customerPhone.trim() }
+        snapshotFlow { Triple(customerName, customerPhone.trim(), customerConfirmed) }
             .debounce(250)
             .distinctUntilChanged()
-            .collectLatest { (notesText, selectedPhone) ->
-                val query = extractCustomerQueryFromNotes(notesText)
-                val normalizedQuery = query.trim().lowercase()
+            .collectLatest { (customerNameQuery, selectedPhone, confirmed) ->
+                val query = customerNameQuery.trim()
+                val normalizedQuery = query.lowercase()
                 when {
+                    confirmed -> {
+                        suggestions = emptyList()
+                        suppressedNoMatchQuery = ""
+                    }
                     selectedPhone.isNotBlank() -> {
                         suggestions = emptyList()
                         suppressedNoMatchQuery = ""
@@ -147,6 +160,23 @@ fun CalendarScreen(
                     }
                 }
             }
+    }
+
+    LaunchedEffect(productQuery) {
+        kotlinx.coroutines.delay(250)
+        productMatches =
+            if (productQuery.isBlank()) {
+                emptyList()
+            } else {
+                searchProducts(productQuery)
+            }
+    }
+
+    LaunchedEffect(cartItems) {
+        val total = cartItems.fold(BigDecimal.ZERO) { acc, item -> acc.add(item.lineTotal) }
+        if (total > BigDecimal.ZERO) {
+            totalText = total.stripTrailingZeros().toPlainString()
+        }
     }
 
     LaunchedEffect(isQuickAddOpen) {
@@ -185,9 +215,9 @@ fun CalendarScreen(
         }
     }
 
-    LaunchedEffect(tutorialActive, tutorialStep, notes) {
+    LaunchedEffect(tutorialActive, tutorialStep, cartItems) {
         if (!tutorialActive) return@LaunchedEffect
-        if (tutorialStep == CalendarTutorialStep.Notes && notes.trim().isNotEmpty()) {
+        if (tutorialStep == CalendarTutorialStep.Notes && cartItems.isNotEmpty()) {
             tutorialStep = CalendarTutorialStep.Total
         }
     }
@@ -207,7 +237,7 @@ fun CalendarScreen(
     }
 
     val activeDate = selectedDate
-    val baseIndex = remember { 10_000 }
+    val baseIndex = remember { 2_400 }
     val pageCount = remember { baseIndex * 2 }
     val pagerState = rememberPagerState(initialPage = baseIndex, pageCount = { pageCount })
     val today = rememberCurrentDate()
@@ -340,11 +370,15 @@ fun CalendarScreen(
             )
         },
         floatingActionButton = {
+            val addOrderLabel = stringResource(R.string.calendar_add_order)
             SmallFloatingActionButton(
                 modifier =
-                    Modifier.onGloballyPositioned { coordinates ->
-                        fabBounds = coordinates.boundsInRoot()
-                    }
+                    Modifier
+                        .size(48.dp)
+                        .semantics { contentDescription = addOrderLabel }
+                        .onGloballyPositioned { coordinates ->
+                            fabBounds = coordinates.boundsInRoot()
+                        }
                         .tutorialCoachTarget(TutorialCoachTargets.CalendarAddOrderFab),
                 onClick = {
                     openQuickAddSheet()
@@ -359,7 +393,7 @@ fun CalendarScreen(
             ) {
                 Icon(
                     imageVector = Icons.Filled.Add,
-                    contentDescription = stringResource(R.string.calendar_add_order)
+                    contentDescription = null
                 )
             }
         }
@@ -403,7 +437,7 @@ fun CalendarScreen(
                 HorizontalPager(
                     modifier = Modifier.fillMaxSize(),
                     state = pagerState,
-                    beyondViewportPageCount = 1
+                    beyondViewportPageCount = 0
                 ) { page ->
                     val (pageYear, pageMonth) =
                         remember(page, anchorYear, anchorMonth) {
@@ -500,18 +534,11 @@ fun CalendarScreen(
 
     if (isQuickAddOpen && activeDate != null) {
         val amountRegistry = LocalAmountFieldRegistry.current
-        val notesRequiredMessage = stringResource(R.string.day_editor_notes_required)
+        val cartRequiredMessage = stringResource(R.string.day_editor_cart_required)
         val validTotalRequiredMessage = stringResource(R.string.day_editor_valid_total_required)
         val addOrderDateLabel = remember(activeDate) {
             DateTimeFormatter.ofPattern("d MMM", Locale.getDefault()).format(activeDate.toJavaLocalDate())
         }
-        val notesState by rememberUpdatedState(notes)
-        val setNotes by rememberUpdatedState<(String) -> Unit>({ notes = it })
-        DisposableEffect(Unit) {
-            voiceRouter.registerNotesTarget(getNotes = { notesState }, setNotes = setNotes)
-            onDispose { voiceRouter.clearNotesTarget() }
-        }
-        val trimmedNotes = notes.trim()
         val parsedTotal = totalText.trim().takeIf { it.isNotEmpty() }?.let {
             runCatching { BigDecimal(it) }.getOrNull()
         }
@@ -527,15 +554,15 @@ fun CalendarScreen(
                 ""
             }
         val canSave =
-            trimmedNotes.isNotEmpty() &&
+            cartItems.isNotEmpty() &&
                 parsedTotal != null &&
                 parsedTotal > BigDecimal.ZERO &&
                 !isPickupTimeInvalid
 
         fun submitOrder() {
             when {
-                trimmedNotes.isEmpty() -> {
-                    notesError = notesRequiredMessage
+                cartItems.isEmpty() -> {
+                    notesError = cartRequiredMessage
                     totalError = null
                     customerError = null
                 }
@@ -552,17 +579,18 @@ fun CalendarScreen(
                 else -> {
                     onSaveOrder(
                         activeDate,
-                        trimmedNotes,
-                        parsedTotal,
+                        cartItems,
                         attachedCustomerName,
                         attachedCustomerPhone,
                         normalizedPickupTime
                     )
-                    notes = ""
+                    cartItems = emptyList()
                     totalText = ""
                     suggestions = emptyList()
                     customerName = ""
                     customerPhone = ""
+                    customerConfirmed = false
+                    productQuery = ""
                     pickupTimeText = ""
                     notesError = null
                     totalError = null
@@ -649,9 +677,9 @@ fun CalendarScreen(
 
         OrderEditorSheet(
             title = stringResource(R.string.calendar_order_add_title, addOrderDateLabel),
-            notes = notes,
-            onNotesChange = {
-                notes = it
+            cartItems = cartItems,
+            onCartItemsChange = {
+                cartItems = it
                 notesError = null
             },
             notesError = notesError,
@@ -683,21 +711,34 @@ fun CalendarScreen(
             },
             suggestions = suggestions,
             onSuggestionSelected = { customer ->
-                notes = stripTrailingCustomerQueryFromNotes(notes)
                 customerName = customer.name
                 customerPhone = customer.phone
                 suggestions = emptyList()
                 suppressedNoMatchQuery = ""
+                customerConfirmed = true
             },
+            customerConfirmed = customerConfirmed,
+            onCustomerConfirmedChange = { customerConfirmed = it },
+            onCreateCustomerFromQuery = { query ->
+                customerName = query
+                customerPhone = ""
+                suggestions = emptyList()
+                customerConfirmed = true
+            },
+            productMatches = productMatches,
+            onProductQueryChange = { productQuery = it },
+            onEnsureProduct = ensureProduct,
             customerError = customerError,
             canSave = canSave,
             onSave = ::submitOrder,
-            focusNotesInitially = true,
+            focusNotesInitially = false,
             onClear = {
-                notes = ""
+                cartItems = emptyList()
                 totalText = ""
                 customerName = ""
                 customerPhone = ""
+                customerConfirmed = false
+                productQuery = ""
                 pickupTimeText = ""
                 notesError = null
                 totalError = null

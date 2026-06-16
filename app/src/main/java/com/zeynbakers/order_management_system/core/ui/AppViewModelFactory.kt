@@ -10,6 +10,7 @@ import com.zeynbakers.order_management_system.core.db.AppDatabase
 import com.zeynbakers.order_management_system.core.helper.ui.NotesHistoryViewModel
 import com.zeynbakers.order_management_system.customer.ui.CustomerAccountsViewModel
 import com.zeynbakers.order_management_system.order.ui.OrderViewModel
+import com.zeynbakers.order_management_system.product.ui.ProductViewModel
 
 class AppViewModelFactory(
     private val database: AppDatabase,
@@ -26,6 +27,7 @@ class AppViewModelFactory(
                 PaymentIntakeHistoryViewModel(database, appContext) as T
             modelClass.isAssignableFrom(LedgerViewModel::class.java) -> LedgerViewModel(database) as T
             modelClass.isAssignableFrom(NotesHistoryViewModel::class.java) -> NotesHistoryViewModel(database) as T
+            modelClass.isAssignableFrom(ProductViewModel::class.java) -> ProductViewModel(database) as T
             else -> throw IllegalArgumentException("Unknown ViewModel: ${modelClass.name}")
         }
     }

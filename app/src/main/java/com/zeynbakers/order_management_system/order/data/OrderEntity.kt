@@ -37,8 +37,6 @@ data class OrderEntity(
     val createdAt: Long = Clock.System.now().toEpochMilliseconds(),
     val updatedAt: Long = Clock.System.now().toEpochMilliseconds(),
 
-    val notes: String,
-
     val pickupTime: String? = null,
 
     val status: OrderStatus = OrderStatus.PENDING,

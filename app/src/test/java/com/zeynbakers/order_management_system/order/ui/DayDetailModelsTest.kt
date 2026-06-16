@@ -55,7 +55,6 @@ class DayDetailModelsTest {
             orderDate = LocalDate(2026, 2, 22),
             createdAt = createdAt,
             updatedAt = createdAt,
-            notes = "Test $id",
             pickupTime = pickupTime,
             totalAmount = BigDecimal("100")
         )

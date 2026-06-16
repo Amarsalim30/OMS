@@ -18,6 +18,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
 import androidx.core.content.ContextCompat
 import androidx.navigation.NavGraphBuilder
@@ -39,6 +40,7 @@ import com.zeynbakers.order_management_system.customer.ui.CustomerDetailScreen
 import com.zeynbakers.order_management_system.customer.ui.CustomerListScreen
 import com.zeynbakers.order_management_system.customer.ui.ImportContactsScreen
 import com.zeynbakers.order_management_system.customer.ui.CustomerStatementScreen
+import com.zeynbakers.order_management_system.customer.domain.ContactImportPreviewStatus
 import com.zeynbakers.order_management_system.customer.ui.ImportContact
 import com.zeynbakers.order_management_system.customer.domain.ContactsSyncResult
 import kotlinx.coroutines.launch
@@ -54,9 +56,15 @@ internal fun NavGraphBuilder.customersGraph(
 ) {
     composable(AppRoutes.Customers) {
         val context = LocalContext.current
+        val resources = LocalResources.current
         val scope = rememberCoroutineScope()
         val permissionRequiredMessage = stringResource(R.string.contacts_permission_required_for_import)
         val syncFailedMessage = stringResource(R.string.customer_sync_contacts_failed)
+        val formatSyncContactsDoneMessage = remember(resources) {
+            { added: Int, updated: Int ->
+                resources.getString(R.string.customer_sync_contacts_done, added, updated)
+            }
+        }
         var isSyncingContacts by rememberSaveable { mutableStateOf(false) }
 
         suspend fun runInlineContactsSync() {
@@ -67,11 +75,7 @@ internal fun NavGraphBuilder.customersGraph(
                 val contacts: List<ImportContact> = supportActions.loadContacts()
                 val result: ContactsSyncResult = customerViewModel.importContactsBulk(contacts)
                 supportActions.onShowMessage(
-                    context.getString(
-                        R.string.customer_sync_contacts_done,
-                        result.added,
-                        result.updated
-                    )
+                    formatSyncContactsDoneMessage(result.added, result.updated)
                 )
             } catch (_: SecurityException) {
                 supportActions.onShowMessage(permissionRequiredMessage)
@@ -216,14 +220,36 @@ internal fun NavGraphBuilder.customersGraph(
 
     composable(AppRoutes.ImportContacts) {
         val context = LocalContext.current
+        val resources = LocalResources.current
         val scope = rememberCoroutineScope()
         val onboardingPrefs = remember { OnboardingPreferences(context) }
         val selectAtLeastOneMessage = stringResource(R.string.import_contacts_select_at_least_one)
         val permissionRequiredMessage = stringResource(R.string.contacts_permission_required_for_import)
         val loadFailedMessage = stringResource(R.string.import_contacts_load_failed)
+        val importFailedMessage = stringResource(R.string.import_contacts_import_failed)
+        val formatImportDoneMessage = remember(resources) {
+            { added: Int, updated: Int, unchanged: Int ->
+                if (unchanged > 0) {
+                    resources.getString(
+                        R.string.import_contacts_done_summary_with_existing,
+                        added,
+                        updated,
+                        unchanged
+                    )
+                } else {
+                    resources.getString(
+                        R.string.import_contacts_done_summary,
+                        added,
+                        updated
+                    )
+                }
+            }
+        }
         var hasPermission by remember { mutableStateOf(hasContactsPermission(context)) }
         var permissionRequested by rememberSaveable { mutableStateOf(false) }
         var loadError by rememberSaveable { mutableStateOf<String?>(null) }
+        var previewStatuses by remember { mutableStateOf<Map<String, ContactImportPreviewStatus>>(emptyMap()) }
+        var isImporting by rememberSaveable { mutableStateOf(false) }
         val activity = context.findActivity()
         val permissionPermanentlyDenied =
             !hasPermission &&
@@ -240,12 +266,14 @@ internal fun NavGraphBuilder.customersGraph(
                 customersCallbacks.onImportContactsChange(emptyList())
                 customersCallbacks.onSelectedContactPhonesChange(emptySet())
                 customersCallbacks.onContactsLoadingChange(false)
+                previewStatuses = emptyMap()
                 loadError = permissionRequiredMessage
                 return
             }
             customersCallbacks.onContactsLoadingChange(true)
             try {
                 val loaded = supportActions.loadContacts()
+                previewStatuses = customerViewModel.previewContactImports(loaded)
                 customersCallbacks.onImportContactsChange(loaded)
                 customersCallbacks.onSelectedContactPhonesChange(emptySet())
                 loadError = null
@@ -253,10 +281,12 @@ internal fun NavGraphBuilder.customersGraph(
                 hasPermission = false
                 customersCallbacks.onImportContactsChange(emptyList())
                 customersCallbacks.onSelectedContactPhonesChange(emptySet())
+                previewStatuses = emptyMap()
                 loadError = permissionRequiredMessage
             } catch (_: Throwable) {
                 customersCallbacks.onImportContactsChange(emptyList())
                 customersCallbacks.onSelectedContactPhonesChange(emptySet())
+                previewStatuses = emptyMap()
                 loadError = loadFailedMessage
             } finally {
                 customersCallbacks.onContactsLoadingChange(false)
@@ -279,13 +309,16 @@ internal fun NavGraphBuilder.customersGraph(
                 customersCallbacks.onImportContactsChange(emptyList())
                 customersCallbacks.onSelectedContactPhonesChange(emptySet())
                 customersCallbacks.onContactsLoadingChange(false)
+                previewStatuses = emptyMap()
             }
         }
 
         ImportContactsScreen(
             contacts = customersState.importContacts,
             selectedPhones = customersState.selectedContactPhones,
+            previewStatuses = previewStatuses,
             isLoading = customersState.isContactsLoading,
+            isImporting = isImporting,
             hasPermission = hasPermission,
             isPermissionPermanentlyDenied = permissionPermanentlyDenied,
             errorMessage = loadError,
@@ -324,14 +357,36 @@ internal fun NavGraphBuilder.customersGraph(
             onImport = {
                 if (customersState.selectedContactPhones.isEmpty()) {
                     supportActions.onShowMessage(selectAtLeastOneMessage)
-                } else {
-                    val contactsByPhone = customersState.importContacts.associateBy { it.phone }
-                    customersState.selectedContactPhones.forEach { phone ->
-                        val contact = contactsByPhone[phone] ?: return@forEach
-                        customerViewModel.importCustomer(contact.name, contact.phone)
+                } else if (!isImporting) {
+                    scope.launch {
+                        isImporting = true
+                        val contactsByPhone = customersState.importContacts.associateBy { it.phone }
+                        val selectedContacts =
+                            customersState.selectedContactPhones.mapNotNull { phone -> contactsByPhone[phone] }
+                        if (selectedContacts.isEmpty()) {
+                            supportActions.onShowMessage(selectAtLeastOneMessage)
+                            isImporting = false
+                            return@launch
+                        }
+
+                        try {
+                            val result = customerViewModel.importContactsBulk(selectedContacts)
+                            customersCallbacks.onSelectedContactPhonesChange(emptySet())
+                            supportActions.onShowMessage(
+                                formatImportDoneMessage(
+                                    result.added,
+                                    result.updated,
+                                    result.unchanged
+                                )
+                            )
+                            onboardingPrefs.setContactsSetupDone(true)
+                            navController.popBackStack()
+                        } catch (_: Throwable) {
+                            supportActions.onShowMessage(importFailedMessage)
+                        } finally {
+                            isImporting = false
+                        }
                     }
-                    scope.launch { onboardingPrefs.setContactsSetupDone(true) }
-                    navController.popBackStack()
                 }
             }
         )

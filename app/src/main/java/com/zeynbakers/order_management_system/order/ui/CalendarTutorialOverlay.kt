@@ -55,102 +55,101 @@ internal fun CalendarTutorialOverlay(
         animationSpec = infiniteRepeatable(animation = tween(durationMillis = 1450), repeatMode = RepeatMode.Restart),
         label = "calendarTutorialPulseProgress"
     )
-    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-        val density = LocalDensity.current
-        val screenHeightPx = remember(maxHeight, density) { with(density) { maxHeight.toPx() } }
-        val placeCardTop = remember(targetBounds, screenHeightPx) {
-            targetBounds?.center?.y?.let { centerY ->
-                centerY > (screenHeightPx * 0.58f)
-            } ?: false
-        }
-        Box(modifier = Modifier.fillMaxSize()) {
-            Canvas(
-                modifier =
-                    Modifier
-                        .fillMaxSize()
-                        .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
-            ) {
-                drawRect(color = Color.Black.copy(alpha = 0.64f))
+    // Use simple Box instead of BoxWithConstraints to avoid memory issues
+    val density = LocalDensity.current
+    val screenHeightPx = with(density) { 800.dp.toPx() } // Use reasonable default
+    val placeCardTop = remember(targetBounds, screenHeightPx) {
+        targetBounds?.center?.y?.let { centerY ->
+            centerY > (screenHeightPx * 0.58f)
+        } ?: false
+    }
+    Box(modifier = Modifier.fillMaxSize()) {
+        Canvas(
+            modifier =
+                Modifier
+                    .fillMaxSize()
+                    .graphicsLayer { compositingStrategy = CompositingStrategy.Offscreen }
+        ) {
+            drawRect(color = Color.Black.copy(alpha = 0.64f))
 
-                targetBounds?.let { target ->
-                    val padding = 12.dp.toPx()
-                    val left = (target.left - padding).coerceAtLeast(0f)
-                    val top = (target.top - padding).coerceAtLeast(0f)
-                    val width = (target.width + (padding * 2)).coerceAtMost(size.width - left)
-                    val height = (target.height + (padding * 2)).coerceAtMost(size.height - top)
-                    val corner = 18.dp.toPx()
-                    drawRoundRect(
-                        color = Color.Transparent,
-                        topLeft = Offset(left, top),
-                        size = Size(width, height),
-                        cornerRadius = CornerRadius(corner, corner),
-                        blendMode = BlendMode.Clear
-                    )
-                    drawRoundRect(
-                        color = Color.White.copy(alpha = 0.9f),
-                        topLeft = Offset(left, top),
-                        size = Size(width, height),
-                        cornerRadius = CornerRadius(corner, corner),
-                        style = Stroke(width = 2.2.dp.toPx())
-                    )
+            targetBounds?.let { target ->
+                val padding = 12.dp.toPx()
+                val left = (target.left - padding).coerceAtLeast(0f)
+                val top = (target.top - padding).coerceAtLeast(0f)
+                val width = (target.width + (padding * 2)).coerceAtMost(size.width - left)
+                val height = (target.height + (padding * 2)).coerceAtMost(size.height - top)
+                val corner = 18.dp.toPx()
+                drawRoundRect(
+                    color = Color.Transparent,
+                    topLeft = Offset(left, top),
+                    size = Size(width, height),
+                    cornerRadius = CornerRadius(corner, corner),
+                    blendMode = BlendMode.Clear
+                )
+                drawRoundRect(
+                    color = Color.White.copy(alpha = 0.9f),
+                    topLeft = Offset(left, top),
+                    size = Size(width, height),
+                    cornerRadius = CornerRadius(corner, corner),
+                    style = Stroke(width = 2.2.dp.toPx())
+                )
 
-                    val pulseInset = 14.dp.toPx() * pulseProgress
-                    val pulseAlpha = 0.5f * (1f - pulseProgress)
-                    drawRoundRect(
-                        color = Color.White.copy(alpha = pulseAlpha),
-                        topLeft = Offset((left - pulseInset).coerceAtLeast(0f), (top - pulseInset).coerceAtLeast(0f)),
-                        size = Size(
-                            (width + (pulseInset * 2)).coerceAtMost(size.width - (left - pulseInset).coerceAtLeast(0f)),
-                            (height + (pulseInset * 2)).coerceAtMost(size.height - (top - pulseInset).coerceAtLeast(0f))
-                        ),
-                        cornerRadius = CornerRadius(corner + pulseInset, corner + pulseInset),
-                        style = Stroke(width = 1.6.dp.toPx())
-                    )
-                }
+                val pulseInset = 14.dp.toPx() * pulseProgress
+                val pulseAlpha = 0.5f * (1f - pulseProgress)
+                drawRoundRect(
+                    color = Color.White.copy(alpha = pulseAlpha),
+                    topLeft = Offset((left - pulseInset).coerceAtLeast(0f), (top - pulseInset).coerceAtLeast(0f)),
+                    size = Size(
+                        (width + (pulseInset * 2)).coerceAtMost(size.width - (left - pulseInset).coerceAtLeast(0f)),
+                        (height + (pulseInset * 2)).coerceAtMost(size.height - (top - pulseInset).coerceAtLeast(0f))
+                    ),
+                    cornerRadius = CornerRadius(corner + pulseInset, corner + pulseInset),
+                    style = Stroke(width = 1.6.dp.toPx())
+                )
             }
+        }
 
-            Surface(
-                modifier =
-                    Modifier
-                        .fillMaxWidth()
-                        .navigationBarsPadding()
-                        .padding(horizontal = 14.dp, vertical = 16.dp)
-                        .align(if (placeCardTop) Alignment.TopCenter else Alignment.BottomCenter),
-                shape = MaterialTheme.shapes.large,
-                tonalElevation = 2.dp
+        Surface(
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .navigationBarsPadding()
+                    .padding(horizontal = 14.dp, vertical = 16.dp)
+                    .align(if (placeCardTop) Alignment.TopCenter else Alignment.BottomCenter),
+            shape = MaterialTheme.shapes.large,
+            tonalElevation = 2.dp
+        ) {
+            Column(
+                modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Column(
-                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Text(
-                        text = stepText,
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                    Text(
-                        text = title,
-                        style = MaterialTheme.typography.titleMedium
-                    )
-                    Text(
-                        text = body,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    if (showContinue) {
-                        Button(
-                            onClick = onContinue,
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text(continueLabel)
-                        }
-                    }
-                    OutlinedButton(
-                        onClick = onSkip,
+                Text(
+                    text = stepText,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium
+                )
+                Text(
+                    text = body,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                if (showContinue) {
+                    Button(
+                        onClick = onContinue,
                         modifier = Modifier.fillMaxWidth()
                     ) {
-                        Text(skipLabel)
+                        Text(continueLabel)
                     }
+                }
+                OutlinedButton(
+                    onClick = onSkip,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(skipLabel)
                 }
             }
         }

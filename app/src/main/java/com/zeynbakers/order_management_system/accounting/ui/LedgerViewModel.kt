@@ -108,7 +108,7 @@ class LedgerViewModel(private val database: AppDatabase) : ViewModel() {
             orderId = order.id,
             date = order.orderDate,
             customerName = customerName,
-            notes = order.notes,
+            notes = "",
             totalAmount = order.totalAmount
         )
     }

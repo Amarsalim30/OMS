@@ -1,5 +1,6 @@
 package com.zeynbakers.order_management_system.accounting.ui
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -16,9 +17,13 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.Icon
+import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
@@ -163,40 +168,37 @@ fun ManualPaymentScreen(
         },
         bottomBar = {
             Surface(tonalElevation = 3.dp) {
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(12.dp),
-                    horizontalArrangement = Arrangement.End,
-                    verticalAlignment = Alignment.CenterVertically
+                Button(
+                    onClick = {
+                        val amount = parsedAmount
+                        if (amount == null || amount <= BigDecimal.ZERO) {
+                            amountError = enterValidAmount
+                            return@Button
+                        }
+                        if (selectedCustomerId == null && selectedOrderId == null) {
+                            return@Button
+                        }
+                        customerViewModel.recordPayment(
+                            customerId = selectedCustomerId,
+                            amount = amount,
+                            method = selectedMethod,
+                            note = noteText,
+                            orderId = selectedOrderId
+                        )
+                        onPaymentRecorded()
+                        scope.launch {
+                            uiEvents.showSnackbar(paymentSavedMessage)
+                        }
+                        amountText = ""
+                        noteText = ""
+                        amountError = null
+                    },
+                    enabled = canSave,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 12.dp)
                 ) {
-                    Button(
-                        onClick = {
-                            val amount = parsedAmount
-                            if (amount == null || amount <= BigDecimal.ZERO) {
-                                amountError = enterValidAmount
-                                return@Button
-                            }
-                            if (selectedCustomerId == null && selectedOrderId == null) {
-                                return@Button
-                            }
-                            customerViewModel.recordPayment(
-                                customerId = selectedCustomerId,
-                                amount = amount,
-                                method = selectedMethod,
-                                note = noteText,
-                                orderId = selectedOrderId
-                            )
-                            onPaymentRecorded()
-                            scope.launch {
-                                uiEvents.showSnackbar(paymentSavedMessage)
-                            }
-                            amountText = ""
-                            noteText = ""
-                            amountError = null
-                        },
-                        enabled = canSave
-                    ) {
-                        Text(stringResource(R.string.money_save_payment))
-                    }
+                    Text(stringResource(R.string.money_save_payment))
                 }
             }
         }
@@ -240,50 +242,49 @@ fun ManualPaymentScreen(
                             modifier = Modifier.fillMaxWidth()
                         )
                         if (suggestions.isNotEmpty()) {
-                            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                            Column {
                                 suggestions.take(8).forEach { summary ->
-                                    TextButton(
-                                        onClick = {
-                                            selectedCustomerId = summary.customerId
-                                            customerQuery = ""
+                                    val balanceLabel =
+                                        when {
+                                            summary.balance > BigDecimal.ZERO ->
+                                                stringResource(
+                                                    R.string.money_due_value,
+                                                    formatKes(summary.balance)
+                                                )
+                                            summary.balance < BigDecimal.ZERO ->
+                                                stringResource(
+                                                    R.string.money_credit_value,
+                                                    formatKes(summary.balance.abs())
+                                                )
+                                            else -> stringResource(R.string.money_balance_clear)
                                         }
-                                    ) {
-                                        val balanceLabel =
-                                            when {
-                                                summary.balance > BigDecimal.ZERO ->
-                                                    stringResource(
-                                                        R.string.money_due_value,
-                                                        formatKes(summary.balance)
-                                                    )
-                                                summary.balance < BigDecimal.ZERO ->
-                                                    stringResource(
-                                                        R.string.money_credit_value,
-                                                        formatKes(summary.balance.abs())
-                                                    )
-                                                else -> stringResource(R.string.money_balance_clear)
-                                            }
-                                        val primaryLabel =
-                                            if (summary.phone.isBlank()) {
-                                                summary.name
-                                            } else {
-                                                "${summary.name} - ${summary.phone}"
-                                            }
-                                        Column(
-                                            verticalArrangement = Arrangement.spacedBy(2.dp),
-                                            horizontalAlignment = Alignment.Start,
-                                            modifier = Modifier.fillMaxWidth()
-                                        ) {
-                                            Text(
-                                                text = primaryLabel,
-                                                style = MaterialTheme.typography.bodyMedium
+                                    val phoneLabel = summary.phone.takeIf { it.isNotBlank() }
+                                    ListItem(
+                                        headlineContent = {
+                                            Text(summary.name)
+                                        },
+                                        supportingContent = {
+                                            val subLine = listOfNotNull(phoneLabel, balanceLabel)
+                                                .joinToString(" · ")
+                                            if (subLine.isNotBlank()) Text(subLine)
+                                        },
+                                        leadingContent = {
+                                            Icon(
+                                                imageVector = Icons.Filled.AccountCircle,
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.primary
                                             )
-                                            Text(
-                                                text = balanceLabel,
-                                                style = MaterialTheme.typography.bodySmall,
-                                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                                            )
-                                        }
-                                    }
+                                        },
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .sizeIn(minHeight = 56.dp)
+                                            .clickable {
+                                                selectedCustomerId = summary.customerId
+                                                selectedOrderId = null
+                                                customerQuery = ""
+                                            }
+                                    )
+
                                 }
                             }
                         }
@@ -385,13 +386,15 @@ fun ManualPaymentScreen(
                                 selected = selectedOrderId == null,
                                 onClick = { selectedOrderId = null },
                                 label = { Text(stringResource(R.string.money_oldest_orders)) },
-                                enabled = true
+                                enabled = true,
+                                modifier = Modifier.sizeIn(minHeight = 48.dp)
                             )
                             FilterChip(
                                 selected = selectedOrderId != null,
                                 onClick = { showOrderSheet = true },
                                 label = { Text(stringResource(R.string.money_pick_order)) },
-                                enabled = true
+                                enabled = true,
+                                modifier = Modifier.sizeIn(minHeight = 48.dp)
                             )
                         }
                     }
@@ -402,7 +405,7 @@ fun ManualPaymentScreen(
                                     formatOrderLabel(
                                         date = order.order.orderDate,
                                         customerName = customer?.name,
-                                        notes = order.order.notes,
+                                        notes = "",
                                         totalAmount = order.order.totalAmount
                                     )
                                 }
@@ -445,7 +448,7 @@ fun ManualPaymentScreen(
                                 formatOrderLabel(
                                     date = order.order.orderDate,
                                     customerName = customer?.name,
-                                    notes = order.order.notes,
+                                    notes = "",
                                     totalAmount = order.order.totalAmount
                                 )
                             val outstanding = order.order.totalAmount - order.paidAmount

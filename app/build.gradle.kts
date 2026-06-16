@@ -3,9 +3,14 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.ksp)
+    alias(libs.plugins.paparazzi)
+    alias(libs.plugins.detekt)
     id("com.google.gms.google-services")
 }
+
+apply(plugin = "shot")
 
 android {
     namespace = "com.zeynbakers.order_management_system"
@@ -18,7 +23,7 @@ android {
         versionCode = 8
         versionName = "3.0"
 
-        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        testInstrumentationRunner = "com.zeynbakers.order_management_system.core.testing.UiTestRunner"
     }
 
     buildTypes {
@@ -43,6 +48,9 @@ android {
         compose = true
         buildConfig = true
     }
+    testOptions {
+        unitTests.isIncludeAndroidResources = true
+    }
     sourceSets {
         getByName("androidTest") {
             assets.srcDir("$projectDir/schemas")
@@ -51,6 +59,11 @@ android {
     composeOptions {
         kotlinCompilerExtensionVersion = "1.5.4"
     }
+}
+
+detekt {
+    buildUponDefaultConfig = true
+    config = files("$rootDir/config/detekt/detekt.yml")
 }
 
 ksp {
@@ -67,6 +80,8 @@ dependencies {
     implementation("com.google.firebase:firebase-analytics")
     implementation("com.google.firebase:firebase-auth")
     implementation("com.google.firebase:firebase-firestore")
+    implementation(libs.androidx.compose.foundation.layout)
+    implementation(libs.androidx.foundation)
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-play-services:1.8.1")
     implementation("androidx.credentials:credentials:1.3.0")
     implementation("androidx.credentials:credentials-play-services-auth:1.3.0")
@@ -94,12 +109,14 @@ dependencies {
     // Kotlinx DateTime
     implementation(libs.kotlinx.datetime)
 
+    // Kotlinx Serialization
+    implementation(libs.kotlinx.serialization.json)
+
     // WorkManager
     implementation(libs.androidx.work.runtime.ktx)
     implementation(libs.androidx.documentfile)
     implementation(libs.androidx.datastore.preferences)
     implementation(libs.androidx.security.crypto)
-
     // Compose
     implementation(libs.androidx.activity.compose)
     implementation(platform(libs.androidx.compose.bom))
@@ -115,14 +132,20 @@ dependencies {
     implementation(libs.androidx.compose.material.icons.extended)
     implementation(libs.androidx.compose.runtime.livedata)
 
+    implementation("com.github.DantSu:ESCPOS-ThermalPrinter-Android:3.3.0")
+
     // Testing
     testImplementation(libs.junit)
+    testImplementation(libs.paparazzi)
+    detektPlugins(libs.detekt.compose.rules)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.ui.test.junit4)
     androidTestImplementation(libs.androidx.test.core)
     androidTestImplementation(libs.androidx.room.testing)
+    androidTestImplementation(libs.accessibility.test.framework)
+    lintChecks(libs.compose.lint.checks)
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)
     coreLibraryDesugaring(libs.desugar.jdk.libs)

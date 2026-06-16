@@ -196,6 +196,7 @@ class VoiceInputRouter(
     }
 }
 
-val LocalVoiceInputRouter = staticCompositionLocalOf<VoiceInputRouter> {
-    error("VoiceInputRouter not provided")
+val LocalVoiceInputRouter = staticCompositionLocalOf {
+    // Isolated screen tests and previews should degrade gracefully without a voice provider.
+    VoiceInputRouter(onApplyTotal = {})
 }

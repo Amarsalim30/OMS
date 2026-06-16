@@ -1,7 +1,7 @@
-﻿<resources>
+<resources>
     <string name="app_name">OrderBook</string>
     <string name="nav_calendar">Calendar</string>
-    <string name="nav_orders">Orders</string>
+    <string name="nav_orders">Unpaid</string>
     <string name="nav_customers">Customers</string>
     <string name="nav_money">Money</string>
     <string name="more_backup_restore">Backup and restore data</string>
@@ -10,6 +10,7 @@
     <string name="more_tutorial">Guided app walkthrough</string>
     <string name="more_notes_history">Voice notes history</string>
     <string name="more_floating_helper">Voice helper settings</string>
+    <string name="more_products">Product catalog</string>
     <string name="more_quick_tools_subtitle">Shortcuts grouped by daily workflow</string>
     <string name="more_group_daily_work">Daily work</string>
     <string name="more_group_system_setup">System setup</string>
@@ -17,12 +18,32 @@
     <string name="more_notes_history_support">Review captured voice notes and actions.</string>
     <string name="more_import_contacts_support">Add customers quickly from your phone contacts.</string>
     <string name="more_floating_helper_support">Control the floating voice helper and permissions.</string>
+    <string name="more_products_support">Manage your products, default prices, and emojis.</string>
     <string name="more_notifications_support">Set reminder times and daily summary alerts.</string>
     <string name="more_backup_restore_support">Choose where backups are stored and restore safely.</string>
     <string name="more_tutorial_support">Replay the guided tour of core tasks.</string>
     <string name="contacts_permission_required_for_import">Contacts permission is required to import customers</string>
-    <string name="money_tab_collect">Collect</string>
-    <string name="money_tab_record">Record</string>
+    <string name="money_tab_collect">M-Pesa</string>
+    <string name="money_tab_record">Manual</string>
+    <!-- Collect tab empty state -->
+    <string name="money_empty_state_title">Paste M-Pesa messages here</string>
+    <string name="money_empty_state_step1">1. Open Messages and find an M-Pesa SMS</string>
+    <string name="money_empty_state_step2">2. Copy the text (or Share → OrderBook)</string>
+    <string name="money_empty_state_step3">3. Tap Paste below to import and match payments</string>
+    <!-- MpesaTransactionRow status labels -->
+    <string name="money_status_already_recorded_voided">Already recorded (voided)</string>
+    <string name="money_status_already_recorded_unused">Already recorded (not used)</string>
+    <string name="money_status_already_recorded_partial">Already recorded (part used)</string>
+    <string name="money_status_already_recorded_used">Already recorded (used)</string>
+    <string name="money_status_already_recorded">Already recorded</string>
+    <string name="money_status_duplicate">Duplicate</string>
+    <string name="money_status_needs_match">Needs match</string>
+    <string name="money_status_selected">Selected</string>
+    <string name="money_status_ready">Ready</string>
+    <string name="money_sender_from">From %1$s</string>
+    <string name="money_sender_unknown">Unknown sender</string>
+    <string name="money_transaction_row_cd">%1$s from %2$s, %3$s</string>
+    <string name="money_transaction_checkbox_cd">Select payment %1$s</string>
     <string name="money_collect_title">M-PESA Import</string>
     <string name="money_record_title">Record payment</string>
     <string name="money_statement_title">Customer statements</string>
@@ -81,8 +102,8 @@
     <string name="money_customer_credit">Customer credit</string>
     <string name="money_change_customer">Change customer</string>
     <string name="money_amount">Amount</string>
-    <string name="money_amount_kes">Amount (KES)</string>
-    <string name="money_kes_zero">KES 0.00</string>
+    <string name="money_amount_kes">Amount (KSh)</string>
+    <string name="money_kes_zero">KSh 0.00</string>
     <string name="money_enter_valid_amount">Enter a valid amount</string>
     <string name="money_method">Method</string>
     <string name="money_method_cash">Cash</string>
@@ -198,9 +219,9 @@
     <string name="intro_title">Welcome</string>
     <string name="intro_one_page_title">Run bookings and payments from one place</string>
     <string name="intro_one_page_body">Set up once, then use Calendar as your daily dashboard for orders, customers, and balances.</string>
-    <string name="intro_skip">Skip</string>
-    <string name="intro_get_started">Get started</string>
-    <string name="intro_slide_position">Slide %1$d of %2$d</string>
+    <string name="intro_skip">Skip intro</string>
+    <string name="intro_get_started">Continue to setup</string>
+    <string name="intro_next_step_hint">Next: quick setup. Required setup comes first; optional steps can wait.</string>
     <string name="intro_slide1_title">See your bookings at a glance</string>
     <string name="intro_slide1_body">Calendar is your home. Open any day and manage work quickly.</string>
     <string name="intro_slide2_title">Track payments per customer</string>
@@ -208,7 +229,8 @@
     <string name="intro_slide3_title">Backups you can restore anytime</string>
     <string name="intro_slide3_body">Set backup once, then keep your records safe as your business grows.</string>
     <string name="setup_title">Quick setup</string>
-    <string name="setup_subtitle">Complete required step first. Optional steps can be done now or later.</string>
+    <string name="setup_subtitle">Complete the required business step first. Optional setup can wait.</string>
+    <string name="setup_subtitle_ready">Required setup is done. Finish optional steps now or continue to the walkthrough.</string>
     <string name="setup_required">Required</string>
     <string name="setup_optional">Optional</string>
     <string name="setup_action_enable">Enable</string>
@@ -220,11 +242,12 @@
     <string name="setup_step_previous">Previous</string>
     <string name="setup_step_next">Next step</string>
     <string name="setup_step_skip_optional">Skip for now</string>
-    <string name="setup_action_start">Start using app</string>
+    <string name="setup_action_finish_later">Finish setup later</string>
+    <string name="setup_action_continue_walkthrough">Continue to walkthrough</string>
     <string name="setup_item_business_title">Business profile</string>
     <string name="setup_item_business_body">Set business name, currency, and timezone.</string>
     <string name="setup_item_backup_title">Backup location</string>
-    <string name="setup_item_backup_body">Choose a backup file and keep restore ready from day one.</string>
+    <string name="setup_item_backup_body">Use one backup file.</string>
     <string name="setup_item_contacts_title">Import contacts</string>
     <string name="setup_item_contacts_body">Optional: bring existing customer contacts into the app.</string>
     <string name="setup_item_notifications_title">Reminder notifications</string>
@@ -233,8 +256,11 @@
     <string name="setup_item_helper_body">Optional: capture quick voice notes and calculations over other apps.</string>
     <string name="setup_backup_not_selected">No backup file selected yet.</string>
     <string name="setup_backup_selected">Backup file: %1$s</string>
-    <string name="setup_backup_choose_folder_action">Save backup file</string>
-    <string name="setup_backup_auto_enable_hint">Automatic backup is enabled after selecting this file.</string>
+    <string name="setup_backup_open_existing_action">Use existing file</string>
+    <string name="setup_backup_create_action">Create file</string>
+    <string name="setup_backup_relink_needed">Reconnect file: %1$s</string>
+    <string name="setup_backup_unavailable">File unavailable: %1$s</string>
+    <string name="setup_backup_reconnect_action">Reconnect file</string>
     <string name="setup_contacts_request_hint">Allow contacts, then import the customers you want right away.</string>
     <string name="setup_contacts_permission_granted_hint">Permission granted. Complete setup by importing selected contacts.</string>
     <string name="setup_contacts_ready_hint">Contacts imported. You can add more anytime from More.</string>
@@ -409,8 +435,8 @@
     <string name="money_duplicates">Duplicates</string>
     <string name="money_selected_total">Selected %1$d - Total %2$s</string>
     <string name="money_ready_total">Ready %1$d - Total %2$s</string>
-    <string name="money_apply_selected">Apply selected</string>
-    <string name="money_apply_all_ready">Apply all ready</string>
+    <string name="money_apply_selected_count">Apply selected (%1$d)</string>
+    <string name="money_apply_ready_count">Apply ready (%1$d)</string>
     <string name="money_select_matched">Select matched</string>
     <string name="money_due_value">Due %1$s</string>
     <string name="money_credit_value">Credit %1$s</string>
@@ -593,6 +619,13 @@
     <string name="import_contacts_no_matches">No matches for \"%1$s\".</string>
     <string name="import_contacts_select_contact">Select %1$s</string>
     <string name="import_contacts_action_with_count">Import (%1$d)</string>
+    <string name="import_contacts_importing">Importing...</string>
+    <string name="import_contacts_status_new">New</string>
+    <string name="import_contacts_status_update">Update</string>
+    <string name="import_contacts_status_existing">Exists</string>
+    <string name="import_contacts_done_summary">Imported: %1$d added, %2$d updated.</string>
+    <string name="import_contacts_done_summary_with_existing">Imported: %1$d added, %2$d updated, %3$d unchanged.</string>
+    <string name="import_contacts_import_failed">Could not import contacts right now. Try again.</string>
     <plurals name="import_contacts_selected_count">
         <item quantity="one">%1$d selected</item>
         <item quantity="other">%1$d selected</item>
@@ -659,6 +692,13 @@
     <string name="summary_range_week_label">%1$s to %2$s</string>
     <string name="day_new_order">New order</string>
     <string name="day_edit_order">Edit order</string>
+    <string name="order_print_receipt">Print receipt</string>
+    <string name="order_print_select_printer">Select Bluetooth printer</string>
+    <string name="order_print_no_paired_devices">No paired Bluetooth printers found. Pair a printer in system settings first.</string>
+    <string name="order_print_success">Receipt sent to printer</string>
+    <string name="order_print_failed">Print failed: %1$s</string>
+    <string name="order_print_permission_denied">Bluetooth permission is required to print</string>
+    <string name="order_print_change_printer">Use a different printer</string>
     <string name="day_add_order">Add order</string>
     <string name="day_no_customer">No customer</string>
     <string name="day_balance_label">Balance</string>
@@ -728,9 +768,30 @@
     <string name="order_editor_quick_pickup_label">Quick pickup</string>
     <string name="order_editor_quick_amounts_label">Quick add</string>
     <string name="order_editor_quick_amount_chip">+ KSh %1$s</string>
-    <string name="order_editor_footer_total">Total: KSh %1$s</string>
+    <string name="order_editor_footer_total">Total: %1$s</string>
     <string name="order_editor_pick_time">Pick time</string>
     <string name="order_editor_customer_schedule_section">Customer and schedule</string>
+    <string name="order_editor_customer_section_label">Customer</string>
+    <string name="order_editor_customer_name_optional">Customer name (optional)</string>
+    <string name="order_editor_create_customer">Create new customer: \"%1$s\"</string>
+    <string name="order_editor_cart_section_label">Items in this order</string>
+    <string name="order_editor_product_section_label">Add product</string>
+    <string name="order_editor_add_product_trigger">Add product</string>
+    <string name="order_editor_add_product_sheet_title">Add product to order</string>
+    <string name="order_editor_product_search_label">Search product</string>
+    <string name="order_editor_product_search_placeholder">Type product name</string>
+    <string name="order_editor_create_product">Create new product: \"%1$s\"</string>
+    <string name="order_editor_quantity_label">Quantity</string>
+    <string name="order_editor_decrease_qty">Decrease quantity</string>
+    <string name="order_editor_increase_qty">Increase quantity</string>
+    <string name="order_editor_unit_price_label">Unit price</string>
+    <string name="order_editor_line_total">Item total: %1$s</string>
+    <string name="order_editor_add_item_to_order">Add item to order</string>
+    <string name="order_editor_save_order">Save order</string>
+    <string name="order_editor_discard_product_title">Discard product entry?</string>
+    <string name="order_editor_discard_product_message">You have unsaved product details. Discard them and close?</string>
+    <string name="order_editor_discard_confirm">Discard</string>
+    <string name="day_editor_cart_required">Add at least one item to the order</string>
     <string name="day_delete_order_title">Delete order?</string>
     <string name="day_delete_order_message">%1$s will be cancelled and removed from totals.</string>
     <string name="day_delete_no_payments_linked">No payments are linked to this order.</string>
@@ -951,13 +1012,15 @@
     <string name="widget_action_note">Voice note</string>
     <string name="licensing_validating">Validating access&#8230;</string>
     <string name="auth_sign_in_title">Sign in required</string>
-    <string name="auth_sign_in_subtitle">Use your approved account to continue.</string>
-    <string name="auth_sign_in_google_button">Sign in with Google</string>
-    <string name="auth_sign_in_method_or">or</string>
-    <string name="auth_email_label">Email</string>
+    <string name="auth_sign_in_subtitle">Use your approved Google account or approved email/password to continue.</string>
+    <string name="auth_sign_in_google_button">Choose Google account</string>
+    <string name="auth_sign_in_email_section_title">Or sign in with email</string>
+    <string name="auth_sign_in_email_section_hint">Use the approved email/password credentials issued for your account.</string>
+    <string name="auth_email_label">Email address</string>
     <string name="auth_password_label">Password</string>
-    <string name="auth_sign_in_email_button">Sign in with Email</string>
-    <string name="auth_create_account_button">Create account</string>
+    <string name="auth_sign_in_email_button">Sign in with email</string>
+    <string name="auth_show_password">Show password</string>
+    <string name="auth_hide_password">Hide password</string>
     <string name="auth_access_blocked_title">Access blocked</string>
     <string name="auth_retry_validation">Retry validation</string>
     <string name="auth_sign_out_button">Sign out</string>
@@ -973,8 +1036,46 @@
     <string name="auth_error_google_invalid_credential">Received an invalid Google credential. Try again.</string>
     <string name="auth_error_google_request_failed">Could not start Google sign-in. Check setup and try again.</string>
     <string name="auth_error_google_firebase_failed">Google sign-in failed in Firebase. Try again.</string>
-    <string name="auth_error_email_account_not_found">No email account found for these credentials.</string>
-    <string name="auth_error_email_invalid_credentials">Invalid email or password.</string>
-    <string name="auth_error_email_account_exists">Email already registered. Try signing in.</string>
-    <string name="auth_error_email_generic">Email sign-in failed. Check your details and try again.</string>
+    <string name="auth_error_email_required">Enter your email address.</string>
+    <string name="auth_error_password_required">Enter your password.</string>
+    <string name="auth_error_email_password_invalid">Invalid email or password.</string>
+    <string name="auth_error_email_password_failed">Email/password sign-in failed. Check your connection and Firebase Auth setup.</string>
+    <!-- Order Import/Export -->
+    <string name="day_export_orders">Export orders</string>
+    <string name="day_import_orders">Import orders</string>
+    <string name="day_export_title">Export Orders</string>
+    <string name="day_export_message">Export %1$d orders for %2$s</string>
+    <string name="day_export_format_json">JSON</string>
+    <string name="day_export_format_csv">CSV</string>
+    <string name="day_export_success">Orders exported successfully</string>
+    <string name="day_export_failed">Export failed: %1$s</string>
+    <string name="day_import_title">Import Orders</string>
+    <string name="day_import_message">Import orders from a JSON or CSV file? This will add orders to the current day.</string>
+    <string name="day_import_pick_file">Pick File</string>
+    <string name="day_import_failed">Import failed: %1$s</string>
+    <string name="day_import_file_error">Failed to read file</string>
+    <string name="day_import_parsing_error">Error reading file: %1$s</string>
+    <string name="day_import_preview_title">Import Orders</string>
+    <string name="day_import_preview_cross_day">Import Orders (Date Adjustment)</string>
+    <string name="day_import_date_adjustment_required">Date Adjustment Required</string>
+    <string name="day_import_date_adjustment_message">Import date: %1$s\nTarget date: %2$s\nOrders will be adjusted to current day.</string>
+    <string name="day_import_orders_count">%1$d orders to import</string>
+    <string name="day_import_items_label">Items:</string>
+    <string name="day_import_more_items">+ %1$d more</string>
+    <string name="day_import_pickup_label">Pickup: %1$s</string>
+    <string name="day_import_merge">Merge</string>
+    <string name="day_import_keep_separate">Keep Separate</string>
+    <string name="day_import_match_customer">Match Customer</string>
+    <string name="day_import_create_customer">Create New</string>
+    <string name="day_import_confirm">Import %1$d Orders</string>
+    <string name="day_importing_orders">Importing %1$d orders...</string>
+    <string-array name="update_notes_latest">
+        <item>Share M-PESA messages from Messages directly into the app.</item>
+        <item>Oldest-order allocation is now the default when applying payments.</item>
+        <item>Each order has its own payment history, plus move/void controls.</item>
+        <item>Clearer order labels across screens for faster recognition.</item>
+        <item>Improved M-PESA amount parsing for cleaner imports.</item>
+        <item>Better voice recognition for notes and customer details.</item>
+        <item>Faster voice calculator responses when adding totals.</item>
+    </string-array>
 </resources>

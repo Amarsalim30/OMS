@@ -4,9 +4,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assert
-import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.junit4.createComposeRule
-import androidx.compose.ui.test.onAllNodesWithTag
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
 import java.math.BigDecimal
@@ -41,6 +39,7 @@ class CalendarMonthScreenTest {
                 )
             }
         }
+        composeRule.waitForIdle()
 
         composeRule.onNodeWithTag("day-cell-2026-01-16")
             .assert(SemanticsMatcher.expectValue(SemanticsProperties.Selected, true))
@@ -70,6 +69,7 @@ class CalendarMonthScreenTest {
                 )
             }
         }
+        composeRule.waitForIdle()
 
         composeRule.onNodeWithTag("day-cell-2026-01-16")
             .assert(
@@ -81,7 +81,7 @@ class CalendarMonthScreenTest {
     }
 
     @Test
-    fun markersRenderAndOverflowShowsPlusCount() {
+    fun busyDayRendersOrderCountAndTotalLine() {
         val day =
             CalendarDayUi(
                 date = LocalDate(2026, 1, 16),
@@ -111,16 +111,13 @@ class CalendarMonthScreenTest {
                 )
             }
         }
+        composeRule.waitForIdle()
 
-        composeRule.onNodeWithTag("day-markers-2026-01-16")
-            .assert(SemanticsMatcher("exists") { true })
-        composeRule.onNodeWithTag("day-markers-2026-01-16-overflow")
-            .assert(SemanticsMatcher("exists") { true })
-        composeRule.onNodeWithText("+2").assert(SemanticsMatcher("exists") { true })
+        composeRule.onNodeWithText("5 - 250").assert(SemanticsMatcher("exists") { true })
     }
 
     @Test
-    fun markersWithoutOverflowDoNotShowPlusCount() {
+    fun paidDayRendersOrderCountAndTotalLine() {
         val day =
             CalendarDayUi(
                 date = LocalDate(2026, 1, 16),
@@ -148,9 +145,8 @@ class CalendarMonthScreenTest {
                 )
             }
         }
+        composeRule.waitForIdle()
 
-        composeRule.onNodeWithTag("day-markers-2026-01-16")
-            .assert(SemanticsMatcher("exists") { true })
-        composeRule.onAllNodesWithTag("day-markers-2026-01-16-overflow").assertCountEquals(0)
+        composeRule.onNodeWithText("3 - 150").assert(SemanticsMatcher("exists") { true })
     }
 }

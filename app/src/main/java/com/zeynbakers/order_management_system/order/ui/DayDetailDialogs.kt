@@ -20,7 +20,9 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
@@ -38,32 +40,42 @@ import com.zeynbakers.order_management_system.core.util.formatOrderLabelWithId
 import com.zeynbakers.order_management_system.core.util.normalizePickupTime
 import com.zeynbakers.order_management_system.customer.data.CustomerEntity
 import com.zeynbakers.order_management_system.order.data.OrderEntity
+import com.zeynbakers.order_management_system.product.data.ProductEntity
+import kotlinx.coroutines.launch
 import java.math.BigDecimal
 import java.math.RoundingMode
 import java.text.NumberFormat
-import kotlinx.coroutines.launch
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 import kotlinx.datetime.LocalDate
+import kotlinx.datetime.toJavaLocalDate
 
 @Composable
 internal fun DayOrderEditorDialog(
+    orderDate: LocalDate,
     isEditorOpen: Boolean,
     editingOrderId: Long?,
     orderPaidAmounts: Map<Long, BigDecimal>,
     totalText: String,
-    notes: String,
+    cartItems: List<OrderItemDraft>,
     pickupTimeText: String,
     customerName: String,
     customerPhone: String,
     suggestions: List<CustomerEntity>,
+    customerConfirmed: Boolean,
+    onSetCustomerConfirmed: (Boolean) -> Unit,
+    productMatches: List<ProductEntity>,
+    onProductQueryChange: (String) -> Unit,
+    onEnsureProduct: suspend (String, BigDecimal, String) -> ProductEntity,
     notesError: String?,
     totalError: String?,
     customerError: String?,
     formatter: NumberFormat,
     amountRegistry: AmountFieldRegistry,
     voiceRouter: VoiceInputRouter,
-    onSaveOrder: (String, BigDecimal, String, String, String?, Long?) -> Unit,
+    onSaveOrder: (List<OrderItemDraft>, String, String, String?, Long?) -> Unit,
     onDraftChange: (OrderDraft?) -> Unit,
-    onSetNotes: (String) -> Unit,
+    onSetCartItems: (List<OrderItemDraft>) -> Unit,
     onSetTotalText: (String) -> Unit,
     onSetCustomerName: (String) -> Unit,
     onSetCustomerPhone: (String) -> Unit,
@@ -77,6 +89,10 @@ internal fun DayOrderEditorDialog(
 ) {
     if (!isEditorOpen) return
 
+    val orderDateLabel =
+        remember(orderDate) {
+            DateTimeFormatter.ofPattern("d MMM", Locale.getDefault()).format(orderDate.toJavaLocalDate())
+        }
     val paidAmount = editingOrderId?.let { orderPaidAmounts[it] } ?: BigDecimal.ZERO
     val trimmedTotal = totalText.trim()
     val parsedTotal = trimmedTotal.toBigDecimalOrNull()
@@ -100,28 +116,27 @@ internal fun DayOrderEditorDialog(
         } else {
             ""
         }
-    val notesRequiredText = stringResource(R.string.day_editor_notes_required)
+    val cartRequiredText = stringResource(R.string.day_editor_cart_required)
     val validTotalRequiredText = stringResource(R.string.day_editor_valid_total_required)
     val canSave =
-        notes.trim().isNotEmpty() &&
+        cartItems.isNotEmpty() &&
             parsedTotal != null &&
             parsedTotal > BigDecimal.ZERO &&
             !isPickupTimeInvalid
 
-    val notesState by rememberUpdatedState(notes)
-    val setNotes by rememberUpdatedState<(String) -> Unit>(onSetNotes)
-    DisposableEffect(Unit) {
-        voiceRouter.registerNotesTarget(getNotes = { notesState }, setNotes = setNotes)
-        onDispose { voiceRouter.clearNotesTarget() }
+    LaunchedEffect(cartItems) {
+        val total = cartItems.fold(BigDecimal.ZERO) { acc, item -> acc.add(item.lineTotal) }
+        if (total > BigDecimal.ZERO) {
+            onSetTotalText(total.stripTrailingZeros().toPlainString())
+        }
     }
 
     fun submitOrder() {
-        val trimmedNotes = notes.trim()
         val finalTotal = trimmedTotal.toBigDecimalOrNull()?.setScale(2, RoundingMode.HALF_UP)
 
         when {
-            trimmedNotes.isEmpty() -> {
-                onSetNotesError(notesRequiredText)
+            cartItems.isEmpty() -> {
+                onSetNotesError(cartRequiredText)
                 onSetTotalError(null)
                 onSetCustomerError(null)
             }
@@ -137,14 +152,13 @@ internal fun DayOrderEditorDialog(
             }
             else -> {
                 onSaveOrder(
-                    trimmedNotes,
-                    finalTotal,
+                    cartItems,
                     attachedCustomerName,
                     attachedCustomerPhone,
                     normalizedPickupTime,
                     editingOrderId
                 )
-                onSetNotes("")
+                onSetCartItems(emptyList())
                 onSetTotalText("")
                 onSetSuggestions(emptyList())
                 onSetCustomerName("")
@@ -161,14 +175,15 @@ internal fun DayOrderEditorDialog(
     }
 
     OrderEditorSheet(
-        title = if (editingOrderId == null) {
-            stringResource(R.string.day_new_order)
-        } else {
-            stringResource(R.string.day_edit_order)
-        },
-        notes = notes,
-        onNotesChange = {
-            onSetNotes(it)
+        title =
+            if (editingOrderId == null) {
+                stringResource(R.string.calendar_order_add_title, orderDateLabel)
+            } else {
+                stringResource(R.string.day_edit_order)
+            },
+        cartItems = cartItems,
+        onCartItemsChange = {
+            onSetCartItems(it)
             onSetNotesError(null)
         },
         notesError = notesError,
@@ -206,17 +221,28 @@ internal fun DayOrderEditorDialog(
         },
         suggestions = suggestions,
         onSuggestionSelected = { customer ->
-            onSetNotes(stripTrailingCustomerQueryFromNotes(notes))
             onSetCustomerName(customer.name)
             onSetCustomerPhone(customer.phone)
             onSetSuggestions(emptyList())
+            onSetCustomerConfirmed(true)
         },
+        customerConfirmed = customerConfirmed,
+        onCustomerConfirmedChange = onSetCustomerConfirmed,
+        onCreateCustomerFromQuery = { query ->
+            onSetCustomerName(query)
+            onSetCustomerPhone("")
+            onSetSuggestions(emptyList())
+            onSetCustomerConfirmed(true)
+        },
+        productMatches = productMatches,
+        onProductQueryChange = onProductQueryChange,
+        onEnsureProduct = onEnsureProduct,
         customerError = customerError,
         canSave = canSave,
         onSave = ::submitOrder,
-        focusNotesInitially = true,
+        focusNotesInitially = false,
         onClear = {
-            onSetNotes("")
+            onSetCartItems(emptyList())
             onSetTotalText("")
             onSetCustomerName("")
             onSetCustomerPhone("")
@@ -338,7 +364,7 @@ internal fun DayDeleteOrderDialog(
                         orderId = order.id,
                         date = order.orderDate,
                         customerName = order.customerId?.let { customerNames[it] },
-                        notes = order.notes,
+                        notes = "",
                         totalAmount = order.totalAmount
                     )
                 Text(stringResource(R.string.day_delete_order_message, label))

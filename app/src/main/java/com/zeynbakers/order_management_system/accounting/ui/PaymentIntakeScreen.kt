@@ -1,15 +1,12 @@
-﻿@file:Suppress("DEPRECATION")
-
 package com.zeynbakers.order_management_system.accounting.ui
 
 import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
@@ -19,22 +16,21 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.ExpandLess
-import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.ContentPaste
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.Button
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -52,15 +48,12 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.input.VisualTransformation
-import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.zeynbakers.order_management_system.R
-import com.zeynbakers.order_management_system.core.ui.components.AppCard
 import com.zeynbakers.order_management_system.core.ui.LocalUiEventDispatcher
 import com.zeynbakers.order_management_system.core.ui.showSnackbar
 import com.zeynbakers.order_management_system.core.util.formatKes
@@ -88,10 +81,7 @@ fun MpesaImportScreen(
     val uiEvents = LocalUiEventDispatcher.current
     val rawText by viewModel.rawText.collectAsState()
     val transactions by viewModel.transactions.collectAsState()
-    var rawExpanded by rememberSaveable { mutableStateOf(true) }
-    var didAutoCollapse by rememberSaveable { mutableStateOf(false) }
     var intakeFilter by rememberSaveable { mutableStateOf(IntakeFilter.All) }
-    var filterMenuOpen by remember { mutableStateOf(false) }
     var activeKey by rememberSaveable { mutableStateOf<String?>(null) }
     val clipboardEmptyMessage = stringResource(R.string.money_clipboard_empty)
     val receiptNotFoundMessage = stringResource(R.string.money_receipt_not_found)
@@ -119,11 +109,7 @@ fun MpesaImportScreen(
     val allCount = intakeStats.totalDetected
     val needsCount = intakeStats.needsCount
     val duplicatesCount = intakeStats.duplicatesCount
-    val rawIsLarge = remember(rawText) { rawText.lineSequence().count() > 3 || rawText.length > 220 }
-    val rawPreviewLine =
-        remember(rawText) {
-            rawText.lineSequence().firstOrNull { it.isNotBlank() }?.trim() ?: rawText.trim()
-        }
+
     val filteredTransactions =
         remember(transactions, intakeFilter) {
             when (intakeFilter) {
@@ -154,31 +140,17 @@ fun MpesaImportScreen(
                 appliedPaymentsTemplate.format(summary.applied)
             )
         if (summary.existingDuplicates > 0) {
-            messageParts +=
-                existingDuplicatesTemplate.format(summary.existingDuplicates)
+            messageParts += existingDuplicatesTemplate.format(summary.existingDuplicates)
         }
         if (summary.intakeDuplicates > 0) {
-            messageParts +=
-                intakeDuplicatesTemplate.format(summary.intakeDuplicates)
+            messageParts += intakeDuplicatesTemplate.format(summary.intakeDuplicates)
         }
         if (summary.skippedNoCustomer > 0) {
-            messageParts +=
-                missingCustomerTemplate.format(summary.skippedNoCustomer)
+            messageParts += missingCustomerTemplate.format(summary.skippedNoCustomer)
         }
-        val message =
-            messageParts.joinToString(separator = ", ")
+        val message = messageParts.joinToString(separator = ", ")
         uiEvents.showSnackbar(message)
         summary
-    }
-
-    LaunchedEffect(rawText) {
-        if (rawText.isBlank()) {
-            rawExpanded = true
-            didAutoCollapse = false
-        } else if (rawIsLarge && !didAutoCollapse) {
-            rawExpanded = false
-            didAutoCollapse = true
-        }
     }
 
     LaunchedEffect(transactions, activeKey) {
@@ -212,15 +184,15 @@ fun MpesaImportScreen(
                     selectedReadyAmount = selectedReadyAmount,
                     readyCount = readyCount,
                     readyAmount = readyAmount,
-                    onApplySelected = {
+                    onApplyReady = {
                         scope.launch {
+                            viewModel.selectReadyOnly()
                             val summary = applyAndNotify()
                             onApplied(summary)
                         }
                     },
-                    onApplyAllReady = {
+                    onApplySelected = {
                         scope.launch {
-                            viewModel.selectReadyOnly()
                             val summary = applyAndNotify()
                             onApplied(summary)
                         }
@@ -232,99 +204,35 @@ fun MpesaImportScreen(
         val layoutDirection = LocalLayoutDirection.current
         val contentPadding =
             PaddingValues(
-                start = 12.dp + externalPadding.calculateStartPadding(layoutDirection),
-                end = 12.dp + externalPadding.calculateEndPadding(layoutDirection),
-                top = 15.dp + externalPadding.calculateTopPadding(),
-                bottom = 6.dp + externalPadding.calculateBottomPadding()
+                start = 16.dp + externalPadding.calculateStartPadding(layoutDirection),
+                end = 16.dp + externalPadding.calculateEndPadding(layoutDirection),
+                top = 16.dp + externalPadding.calculateTopPadding(),   // fixed: 15->16dp
+                bottom = 8.dp + externalPadding.calculateBottomPadding()
             )
 
         LazyColumn(
             modifier = Modifier.fillMaxSize().padding(padding),
             contentPadding = contentPadding,
-            verticalArrangement = Arrangement.spacedBy(4.dp)
+            verticalArrangement = Arrangement.spacedBy(8.dp)   // fixed: 4->8dp
         ) {
             item {
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    if (rawExpanded || rawText.isBlank() || !rawIsLarge) {
-                        val interactionSource = remember { MutableInteractionSource() }
-                        BasicTextField(
-                            value = rawText,
-                            onValueChange = { viewModel.setRawText(it) },
-                            modifier = Modifier.fillMaxWidth(),
-                            textStyle = MaterialTheme.typography.bodyMedium.copy(
-                                color = MaterialTheme.colorScheme.onSurface
-                            ),
-                            cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                            interactionSource = interactionSource,
-                            singleLine = false,
-                            minLines = 2,
-                            maxLines = 3,
-                            decorationBox = { innerTextField ->
-                                OutlinedTextFieldDefaults.DecorationBox(
-                                    value = rawText,
-                                    visualTransformation = VisualTransformation.None,
-                                    innerTextField = innerTextField,
-                                    placeholder = { Text(stringResource(R.string.money_paste_messages_placeholder)) },
-                                    label = { Text(stringResource(R.string.money_mpesa_messages_label)) },
-                                    trailingIcon = {
-                                        if (rawIsLarge) {
-                                            IconButton(onClick = { rawExpanded = false }) {
-                                                Icon(
-                                                    imageVector = Icons.Filled.ExpandLess,
-                                                    contentDescription = stringResource(R.string.action_collapse)
-                                                )
-                                            }
-                                        }
-                                    },
-                                    supportingText =
-                                        if (rawText.isBlank()) {
-                                            { Text(stringResource(R.string.money_separate_messages)) }
-                                        } else {
-                                            null
-                                        },
-                                    singleLine = false,
-                                    enabled = true,
-                                    isError = false,
-                                    interactionSource = interactionSource,
-                                    colors =
-                                        OutlinedTextFieldDefaults.colors(
-                                            focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-                                            unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerLow,
-                                            disabledContainerColor = MaterialTheme.colorScheme.surfaceContainerLow
-                                        ),
-                                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
-                                )
-                            }
-                        )
-                    } else {
-                        Surface(
-                            color = MaterialTheme.colorScheme.surfaceContainerLow,
-                            shape = MaterialTheme.shapes.medium,
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth().padding(horizontal = 10.dp, vertical = 6.dp),
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Text(
-                                    text = rawPreviewLine,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                    modifier = Modifier.weight(1f)
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                IconButton(onClick = { rawExpanded = true }) {
-                                    Icon(
-                                        imageVector = Icons.Filled.ExpandMore,
-                                        contentDescription = stringResource(R.string.action_expand)
-                                    )
-                                }
-                            }
-                        }
-                    }
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    // Paste text field - replaced deprecated BasicTextField
+                    OutlinedTextField(
+                        value = rawText,
+                        onValueChange = { viewModel.setRawText(it) },
+                        modifier = Modifier.fillMaxWidth(),
+                        label = { Text(stringResource(R.string.money_mpesa_messages_label)) },
+                        placeholder = { Text(stringResource(R.string.money_paste_messages_placeholder)) },
+                        supportingText = if (rawText.isBlank()) {
+                            { Text(stringResource(R.string.money_separate_messages)) }
+                        } else null,
+                        minLines = 2,
+                        maxLines = 4,
+                        singleLine = false
+                    )
 
+                    // Action buttons row
                     FlowRow(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -347,78 +255,54 @@ fun MpesaImportScreen(
                 }
             }
 
+            // Empty state when no text has been pasted
+            if (rawText.isBlank()) {
+                item {
+                    MpesaEmptyState(onPaste = pasteFromClipboard)
+                }
+            }
+
+            // Filter chip row — replaces dropdown menu
             if (transactions.isNotEmpty()) {
                 stickyHeader {
                     Surface(color = MaterialTheme.colorScheme.surface, tonalElevation = 1.dp) {
                         Row(
-                            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 8.dp, vertical = 4.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            val filterLabel =
-                                when (intakeFilter) {
-                                    IntakeFilter.All -> stringResource(R.string.money_filter_all_count, allCount)
-                                    IntakeFilter.Needs -> stringResource(R.string.money_filter_needs_count, needsCount)
-                                    IntakeFilter.Duplicates -> stringResource(R.string.money_filter_duplicates_count, duplicatesCount)
-                                    IntakeFilter.Selected -> stringResource(R.string.money_filter_selected_count, selectedCount)
-                                }
-                            Box {
-                                TextButton(onClick = { filterMenuOpen = true }) {
-                                    Text(filterLabel)
-                                }
-                                DropdownMenu(
-                                    expanded = filterMenuOpen,
-                                    onDismissRequest = { filterMenuOpen = false }
-                                ) {
-                                    DropdownMenuItem(
-                                        text = { Text(stringResource(R.string.money_filter_all_count, allCount)) },
-                                        onClick = {
-                                            intakeFilter = IntakeFilter.All
-                                            filterMenuOpen = false
-                                        }
-                                    )
-                                    DropdownMenuItem(
-                                        text = { Text(stringResource(R.string.money_filter_needs_count, needsCount)) },
-                                        onClick = {
-                                            intakeFilter = IntakeFilter.Needs
-                                            filterMenuOpen = false
-                                        }
-                                    )
-                                    DropdownMenuItem(
-                                        text = { Text(stringResource(R.string.money_filter_duplicates_count, duplicatesCount)) },
-                                        onClick = {
-                                            intakeFilter = IntakeFilter.Duplicates
-                                            filterMenuOpen = false
-                                        }
-                                    )
-                                    DropdownMenuItem(
-                                        text = { Text(stringResource(R.string.money_filter_selected_count, selectedCount)) },
-                                        onClick = {
-                                            intakeFilter = IntakeFilter.Selected
-                                            filterMenuOpen = false
-                                        }
-                                    )
-                                }
-                            }
-                            Text(
-                                text = stringResource(R.string.money_selected_count, selectedCount),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            FilterChip(
+                                selected = intakeFilter == IntakeFilter.All,
+                                onClick = { intakeFilter = IntakeFilter.All },
+                                label = { Text(stringResource(R.string.money_filter_all_count, allCount)) },
+                                modifier = Modifier.sizeIn(minHeight = 48.dp)
+                            )
+                            FilterChip(
+                                selected = intakeFilter == IntakeFilter.Needs,
+                                onClick = { intakeFilter = IntakeFilter.Needs },
+                                label = { Text(stringResource(R.string.money_filter_needs_count, needsCount)) },
+                                modifier = Modifier.sizeIn(minHeight = 48.dp)
+                            )
+                            FilterChip(
+                                selected = intakeFilter == IntakeFilter.Duplicates,
+                                onClick = { intakeFilter = IntakeFilter.Duplicates },
+                                label = { Text(stringResource(R.string.money_filter_duplicates_count, duplicatesCount)) },
+                                modifier = Modifier.sizeIn(minHeight = 48.dp)
+                            )
+                            FilterChip(
+                                selected = intakeFilter == IntakeFilter.Selected,
+                                onClick = { intakeFilter = IntakeFilter.Selected },
+                                label = { Text(stringResource(R.string.money_filter_selected_count, selectedCount)) },
+                                modifier = Modifier.sizeIn(minHeight = 48.dp)
                             )
                         }
                     }
                 }
             }
 
-            if (transactions.isEmpty()) {
-                item {
-                    Text(
-                        text = stringResource(R.string.money_no_payments_detected),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            } else if (filteredTransactions.isEmpty()) {
+            if (transactions.isNotEmpty() && filteredTransactions.isEmpty()) {
                 item {
                     Text(
                         text = stringResource(R.string.money_no_payments_for_filter),
@@ -468,6 +352,62 @@ fun MpesaImportScreen(
             },
             onDismiss = { activeKey = null }
         )
+    }
+}
+
+/**
+ * Shown when the paste field is blank. Guides new users through the M-Pesa
+ * message import flow with three numbered steps and a prominent Paste button.
+ */
+@Composable
+private fun MpesaEmptyState(onPaste: () -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 24.dp, horizontal = 8.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        Icon(
+            imageVector = Icons.Filled.Info,
+            contentDescription = null,
+            modifier = Modifier.size(48.dp),
+            tint = MaterialTheme.colorScheme.primary
+        )
+        Text(
+            text = stringResource(R.string.money_empty_state_title),
+            style = MaterialTheme.typography.titleMedium,
+            textAlign = TextAlign.Center
+        )
+        Column(
+            modifier = Modifier.fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(
+                text = stringResource(R.string.money_empty_state_step1),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Text(
+                text = stringResource(R.string.money_empty_state_step2),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Text(
+                text = stringResource(R.string.money_empty_state_step3),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        Button(onClick = onPaste) {
+            Icon(
+                imageVector = Icons.Filled.ContentPaste,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp)
+            )
+            Spacer(modifier = Modifier.size(8.dp))
+            Text(stringResource(R.string.action_paste))
+        }
     }
 }
 
@@ -530,3 +470,4 @@ private fun List<MpesaTransactionUi>.toIntakeStats(): IntakeStats {
         selectedReadyAmount = selectedReadyAmount
     )
 }
+
