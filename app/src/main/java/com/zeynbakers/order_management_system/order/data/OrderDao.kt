@@ -2,8 +2,23 @@
 
 package com.zeynbakers.order_management_system.order.data
 
-import androidx.room.*
+import androidx.room.Dao
+import androidx.room.Delete
+import androidx.room.Insert
+import androidx.room.OnConflictStrategy
+import androidx.room.Query
+import androidx.room.Update
 import java.math.BigDecimal
+
+/**
+ * Data class for customer total billed amount.
+ */
+data class CustomerTotal(
+    val customerId: Long,
+    val name: String,
+    val phone: String,
+    val total: BigDecimal
+)
 
 @Dao
 interface OrderDao {

@@ -3,11 +3,130 @@ package com.zeynbakers.order_management_system.order.data
 import kotlinx.datetime.Clock
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
-import java.math.BigDecimal
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 
+/**
+ * Models for exporting and importing order data.
+ */
+
+@Serializable
+data class OrderExportData(
+    val exportDate: String,
+    val orderDate: String,
+    val orders: List<OrderExportItem>
+)
+
+@Serializable
+data class OrderExportItem(
+    val id: Long,
+    val orderDate: String,
+    val notes: String,
+    val totalAmount: String,
+    val customerId: Long?,
+    val customerName: String?,
+    val customerPhone: String?,
+    val pickupTime: String?,
+    val status: String,
+    val cartItems: List<CartItemExport>
+)
+
+@Serializable
+data class CartItemExport(
+    val emoji: String,
+    val name: String,
+    val quantity: Int,
+    val unitPrice: String
+)
+
+/**
+ * Handles exporting orders to JSON and CSV formats.
+ */
+object OrderExporter {
+    private val json = Json { prettyPrint = true }
+
+    fun exportOrders(
+        orders: List<OrderEntity>,
+        orderItemsMap: Map<Long, List<OrderItemEntity>>,
+        customerNames: Map<Long, String>,
+        customerPhones: Map<Long, String>
+    ): String {
+        val exportDate =
+            Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date.toString()
+        val orderDate = orders.firstOrNull()?.orderDate?.toString() ?: ""
+
+        val exportItems = orders.map { order ->
+            val items = orderItemsMap[order.id] ?: emptyList()
+            val cartItems = items.map { item ->
+                CartItemExport(
+                    emoji = "",
+                    name = item.productNameSnapshot,
+                    quantity = item.quantity,
+                    unitPrice = item.effectivePrice.toString()
+                )
+            }
+            OrderExportItem(
+                id = order.id,
+                orderDate = order.orderDate.toString(),
+                notes = "",
+                totalAmount = order.totalAmount.toString(),
+                customerId = order.customerId,
+                customerName = order.customerId?.let { customerNames[it] },
+                customerPhone = order.customerId?.let { customerPhones[it] },
+                pickupTime = order.pickupTime,
+                status = order.status.name,
+                cartItems = cartItems
+            )
+        }
+
+        val exportData = OrderExportData(
+            exportDate = exportDate,
+            orderDate = orderDate,
+            orders = exportItems
+        )
+
+        return json.encodeToString(exportData)
+    }
+
+    fun exportOrdersToCsv(
+        orders: List<OrderEntity>,
+        orderItemsMap: Map<Long, List<OrderItemEntity>>,
+        customerNames: Map<Long, String>,
+        customerPhones: Map<Long, String>
+    ): String {
+        val header =
+            "ID,Date,Notes,Total Amount,Customer Name,Customer Phone,Pickup Time,Status,Cart Items\n"
+        val rows = orders.joinToString("\n") { order ->
+            val customerName = order.customerId?.let { customerNames[it] } ?: ""
+            val customerPhone = order.customerId?.let { customerPhones[it] } ?: ""
+            val pickupTime = order.pickupTime ?: ""
+            val items = orderItemsMap[order.id] ?: emptyList()
+            val cartItems = items.joinToString("; ") { "${it.productNameSnapshot} x${it.quantity}" }
+            val escapedCustomerName = customerName.replace("\"", "\"\"")
+            val escapedCartItems = cartItems.replace("\"", "\"\"")
+            "${order.id},${order.orderDate},\"\",${order.totalAmount},\"$escapedCustomerName\",\"$customerPhone\",\"$pickupTime\",${order.status.name},\"$escapedCartItems\""
+        }
+        return header + rows
+    }
+
+    fun importOrders(jsonString: String): OrderExportData {
+        return json.decodeFromString<OrderExportData>(jsonString)
+    }
+}
+
+/**
+ * Handles importing and parsing order data from JSON and CSV strings.
+ */
 sealed class ImportResult {
     data class Success(val data: OrderExportData) : ImportResult()
     data class Error(val message: String) : ImportResult()
+}
+
+enum class ImportFormat {
+    JSON,
+    CSV,
+    UNKNOWN
 }
 
 object OrderImportParser {
@@ -28,8 +147,18 @@ object OrderImportParser {
             }
 
             val header = lines[0].split(",")
-            val expectedHeaders = listOf("ID", "Date", "Notes", "Total Amount", "Customer Name", "Customer Phone", "Pickup Time", "Status", "Cart Items")
-            
+            val expectedHeaders = listOf(
+                "ID",
+                "Date",
+                "Notes",
+                "Total Amount",
+                "Customer Name",
+                "Customer Phone",
+                "Pickup Time",
+                "Status",
+                "Cart Items"
+            )
+
             if (!header.map { it.trim() }.containsAll(expectedHeaders)) {
                 return ImportResult.Error("CSV headers do not match expected format")
             }
@@ -39,7 +168,8 @@ object OrderImportParser {
             }
 
             val exportData = OrderExportData(
-                exportDate = Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date.toString(),
+                exportDate = Clock.System.now()
+                    .toLocalDateTime(TimeZone.currentSystemDefault()).date.toString(),
                 orderDate = orders.firstOrNull()?.orderDate ?: "",
                 orders = orders
             )
@@ -94,10 +224,12 @@ object OrderImportParser {
                 char == '"' -> {
                     inQuotes = !inQuotes
                 }
+
                 char == ',' && !inQuotes -> {
                     result.add(current.toString())
                     current = StringBuilder()
                 }
+
                 else -> {
                     current.append(char)
                 }
@@ -110,7 +242,7 @@ object OrderImportParser {
 
     private fun parseCartItems(cartItemsRaw: String): List<CartItemExport> {
         if (cartItemsRaw.isBlank()) return emptyList()
-        
+
         return cartItemsRaw.split(";").mapNotNull { itemRaw ->
             val trimmed = itemRaw.trim()
             val match = Regex("(.+)\\s+x(\\d+)").find(trimmed)
@@ -145,10 +277,4 @@ object OrderImportParser {
             ImportFormat.UNKNOWN -> ImportResult.Error("Unknown file format")
         }
     }
-}
-
-enum class ImportFormat {
-    JSON,
-    CSV,
-    UNKNOWN
 }

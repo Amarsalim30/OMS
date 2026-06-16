@@ -2,13 +2,15 @@
 
 package com.zeynbakers.order_management_system.order.data
 
+import androidx.room.Embedded
 import androidx.room.Entity
 import androidx.room.ForeignKey
 import androidx.room.Index
 import androidx.room.PrimaryKey
+import androidx.room.Relation
 import com.zeynbakers.order_management_system.customer.data.CustomerEntity
-import kotlinx.datetime.LocalDate
 import kotlinx.datetime.Clock
+import kotlinx.datetime.LocalDate
 import java.math.BigDecimal
 
 @Entity(
@@ -45,6 +47,20 @@ data class OrderEntity(
     val totalAmount: BigDecimal,
 
     val customerId: Long? = null
+)
+
+/**
+ * Domain model for an order with its items.
+ */
+data class OrderWithItems(
+    @Embedded
+    val order: OrderEntity,
+
+    @Relation(
+        parentColumn = "id",
+        entityColumn = "orderId"
+    )
+    val items: List<OrderItemEntity>
 )
 
 enum class OrderStatus {
