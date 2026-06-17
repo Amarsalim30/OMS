@@ -1,4 +1,4 @@
-package com.zeynbakers.order_management_system.order.ui
+package com.zeynbakers.order_management_system.order.ui.calendar
 
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.semantics.SemanticsProperties
@@ -7,10 +7,13 @@ import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithTag
 import androidx.compose.ui.test.onNodeWithText
-import java.math.BigDecimal
+import com.zeynbakers.order_management_system.order.ui.calendar.components.DayCell
+import com.zeynbakers.order_management_system.order.ui.common.CalendarDayUi
+import com.zeynbakers.order_management_system.order.ui.common.PaymentState
 import kotlinx.datetime.LocalDate
 import org.junit.Rule
 import org.junit.Test
+import java.math.BigDecimal
 
 class CalendarMonthScreenTest {
     @get:Rule

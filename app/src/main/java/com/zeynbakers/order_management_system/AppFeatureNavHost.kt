@@ -9,7 +9,6 @@ import com.zeynbakers.order_management_system.accounting.data.CustomerAccountSum
 import com.zeynbakers.order_management_system.accounting.ui.PaymentHistoryFilter
 import com.zeynbakers.order_management_system.accounting.ui.PaymentIntakeHistoryViewModel
 import com.zeynbakers.order_management_system.accounting.ui.PaymentIntakeViewModel
-import com.zeynbakers.order_management_system.core.navigation.AppRoutes
 import com.zeynbakers.order_management_system.core.navigation.graphs.accountsGraph
 import com.zeynbakers.order_management_system.core.navigation.graphs.calendarGraph
 import com.zeynbakers.order_management_system.core.navigation.graphs.customersGraph
@@ -24,13 +23,13 @@ import com.zeynbakers.order_management_system.customer.ui.CustomerOrderUi
 import com.zeynbakers.order_management_system.customer.ui.CustomerStatementRowUi
 import com.zeynbakers.order_management_system.customer.ui.ImportContact
 import com.zeynbakers.order_management_system.order.data.OrderEntity
-import com.zeynbakers.order_management_system.order.ui.CalendarDayUi
-import com.zeynbakers.order_management_system.order.ui.MonthKey
-import com.zeynbakers.order_management_system.order.ui.MonthSnapshot
-import com.zeynbakers.order_management_system.order.ui.OrderDraft
-import com.zeynbakers.order_management_system.order.ui.OrderViewModel
-import java.math.BigDecimal
+import com.zeynbakers.order_management_system.order.ui.calendar.CalendarViewModel
+import com.zeynbakers.order_management_system.order.ui.calendar.MonthKey
+import com.zeynbakers.order_management_system.order.ui.calendar.MonthSnapshot
+import com.zeynbakers.order_management_system.order.ui.common.CalendarDayUi
+import com.zeynbakers.order_management_system.order.ui.day_detail.models.OrderDraft
 import kotlinx.datetime.LocalDate
+import java.math.BigDecimal
 
 internal data class AppFeatureNavigationActions(
     val onOpenMore: () -> Unit,
@@ -132,7 +131,7 @@ internal fun AppFeatureNavHost(
     navController: NavHostController,
     startDestination: String,
     modifier: Modifier,
-    orderViewModel: OrderViewModel,
+    orderViewModel: CalendarViewModel,
     customerViewModel: CustomerAccountsViewModel,
     paymentIntakeViewModel: PaymentIntakeViewModel,
     paymentHistoryViewModel: PaymentIntakeHistoryViewModel,

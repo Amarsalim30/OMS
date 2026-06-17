@@ -17,23 +17,23 @@ import com.zeynbakers.order_management_system.AppCalendarState
 import com.zeynbakers.order_management_system.AppFeatureNavigationActions
 import com.zeynbakers.order_management_system.AppFeatureSupportActions
 import com.zeynbakers.order_management_system.MoneyRecordContext
-import com.zeynbakers.order_management_system.navigateTopLevel
-import com.zeynbakers.order_management_system.accounting.ui.PaymentHistoryFilter
 import com.zeynbakers.order_management_system.R
+import com.zeynbakers.order_management_system.accounting.ui.PaymentHistoryFilter
 import com.zeynbakers.order_management_system.core.navigation.AppRoutes
-import com.zeynbakers.order_management_system.core.onboarding.OnboardingPreferences
 import com.zeynbakers.order_management_system.core.notifications.NotificationScheduler
+import com.zeynbakers.order_management_system.core.onboarding.OnboardingPreferences
 import com.zeynbakers.order_management_system.core.widget.WidgetUpdater
-import com.zeynbakers.order_management_system.order.ui.CalendarScreen
-import com.zeynbakers.order_management_system.order.ui.DayDetailScreen
-import com.zeynbakers.order_management_system.order.ui.OrderViewModel
-import com.zeynbakers.order_management_system.order.ui.SummaryScreen
-import java.math.BigDecimal
+import com.zeynbakers.order_management_system.navigateTopLevel
+import com.zeynbakers.order_management_system.order.ui.calendar.CalendarScreen
+import com.zeynbakers.order_management_system.order.ui.calendar.CalendarViewModel
+import com.zeynbakers.order_management_system.order.ui.day_detail.DayDetailScreen
+import com.zeynbakers.order_management_system.order.ui.summary.SummaryScreen
 import kotlinx.datetime.LocalDate
+import java.math.BigDecimal
 
 internal fun NavGraphBuilder.calendarGraph(
     navController: NavHostController,
-    orderViewModel: OrderViewModel,
+    orderViewModel: CalendarViewModel,
     calendarState: AppCalendarState,
     calendarCallbacks: AppCalendarCallbacks,
     navigationActions: AppFeatureNavigationActions,

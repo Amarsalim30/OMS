@@ -7,17 +7,17 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.composable
 import com.zeynbakers.order_management_system.AppCalendarCallbacks
 import com.zeynbakers.order_management_system.AppFeatureNavigationActions
-import com.zeynbakers.order_management_system.MoneyRecordContext
 import com.zeynbakers.order_management_system.AppOrdersState
+import com.zeynbakers.order_management_system.MoneyRecordContext
 import com.zeynbakers.order_management_system.R
 import com.zeynbakers.order_management_system.core.navigation.AppRoutes
-import com.zeynbakers.order_management_system.order.ui.OrderViewModel
-import com.zeynbakers.order_management_system.order.ui.UnpaidOrdersScreen
+import com.zeynbakers.order_management_system.order.ui.calendar.CalendarViewModel
+import com.zeynbakers.order_management_system.order.ui.unpaid.UnpaidOrdersScreen
 import java.math.BigDecimal
 
 internal fun NavGraphBuilder.ordersGraph(
     navController: NavHostController,
-    orderViewModel: OrderViewModel,
+    orderViewModel: CalendarViewModel,
     ordersState: AppOrdersState,
     calendarCallbacks: AppCalendarCallbacks,
     navigationActions: AppFeatureNavigationActions

@@ -2,32 +2,15 @@ package com.zeynbakers.order_management_system
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.compose.setContent
-import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AccountBalanceWallet
-import androidx.compose.material.icons.filled.BarChart
-import androidx.compose.material.icons.filled.CalendarToday
-import androidx.compose.material.icons.filled.Notifications
-import androidx.compose.material.icons.filled.People
-import androidx.compose.material.icons.filled.PersonAdd
-import androidx.compose.material.icons.filled.ReceiptLong
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.automirrored.filled.ListAlt
-import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.windowsizeclass.ExperimentalMaterial3WindowSizeClassApi
-import androidx.compose.material3.windowsizeclass.calculateWindowSizeClass
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.State
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -37,9 +20,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalResources
 import androidx.compose.ui.res.stringResource
@@ -49,7 +29,6 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import com.zeynbakers.order_management_system.accounting.ui.PaymentIntakeHistoryViewModel
 import com.zeynbakers.order_management_system.accounting.ui.PaymentIntakeViewModel
-import com.zeynbakers.order_management_system.accounting.ui.PaymentHistoryFilter
 import com.zeynbakers.order_management_system.core.backup.BackupScheduler
 import com.zeynbakers.order_management_system.core.contacts.ContactsSyncScheduler
 import com.zeynbakers.order_management_system.core.db.DatabaseProvider
@@ -57,7 +36,6 @@ import com.zeynbakers.order_management_system.core.helper.HelperCaptureActivity
 import com.zeynbakers.order_management_system.core.helper.HelperCaptureMode
 import com.zeynbakers.order_management_system.core.helper.HelperOverlayController
 import com.zeynbakers.order_management_system.core.helper.HelperPreferences
-import com.zeynbakers.order_management_system.core.helper.HelperSettingsState
 import com.zeynbakers.order_management_system.core.navigation.AppIntents
 import com.zeynbakers.order_management_system.core.navigation.AppRoutes
 import com.zeynbakers.order_management_system.core.navigation.AppShortcuts
@@ -66,16 +44,13 @@ import com.zeynbakers.order_management_system.core.notifications.NotificationSch
 import com.zeynbakers.order_management_system.core.tutorial.LocalTutorialCoachAnchorRegistry
 import com.zeynbakers.order_management_system.core.tutorial.TutorialCoachAnchorRegistry
 import com.zeynbakers.order_management_system.core.ui.AmountFieldRegistry
-import com.zeynbakers.order_management_system.core.ui.AppScaffold
 import com.zeynbakers.order_management_system.core.ui.AppViewModelFactory
 import com.zeynbakers.order_management_system.core.ui.LocalAmountFieldRegistry
+import com.zeynbakers.order_management_system.core.ui.LocalUiEventDispatcher
 import com.zeynbakers.order_management_system.core.ui.LocalVoiceCalcAccess
 import com.zeynbakers.order_management_system.core.ui.LocalVoiceInputRouter
 import com.zeynbakers.order_management_system.core.ui.LocalVoiceOverlaySuppressed
 import com.zeynbakers.order_management_system.core.ui.MoneyTab
-import com.zeynbakers.order_management_system.core.ui.MoreAction
-import com.zeynbakers.order_management_system.core.ui.LocalUiEventDispatcher
-import com.zeynbakers.order_management_system.core.ui.TopLevelDestination
 import com.zeynbakers.order_management_system.core.ui.UiEvent
 import com.zeynbakers.order_management_system.core.ui.UiEventDispatcher
 import com.zeynbakers.order_management_system.core.ui.VoiceCalcAccess
@@ -86,9 +61,9 @@ import com.zeynbakers.order_management_system.core.updates.UpdatePreferences
 import com.zeynbakers.order_management_system.core.widget.WidgetUpdater
 import com.zeynbakers.order_management_system.customer.ui.CustomerAccountsViewModel
 import com.zeynbakers.order_management_system.customer.ui.ImportContact
-import com.zeynbakers.order_management_system.order.ui.OrderCreditPrompt
-import com.zeynbakers.order_management_system.order.ui.OrderDraft
-import com.zeynbakers.order_management_system.order.ui.OrderViewModel
+import com.zeynbakers.order_management_system.order.ui.calendar.CalendarViewModel
+import com.zeynbakers.order_management_system.order.ui.calendar.OrderCreditPrompt
+import com.zeynbakers.order_management_system.order.ui.day_detail.models.OrderDraft
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -96,7 +71,7 @@ import kotlinx.datetime.Clock
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
-import androidx.compose.runtime.State
+
 @OptIn(ExperimentalMaterial3WindowSizeClassApi::class)
 @Composable
 internal fun MainAppContent(
@@ -114,7 +89,7 @@ internal fun MainAppContent(
                         appContext = context.applicationContext
                     )
                 }
-                val orderViewModel: OrderViewModel = viewModel(factory = viewModelFactory)
+                val orderViewModel: CalendarViewModel = viewModel(factory = viewModelFactory)
                 val customerViewModel: CustomerAccountsViewModel = viewModel(factory = viewModelFactory)
                 val paymentIntakeViewModel: PaymentIntakeViewModel = viewModel(factory = viewModelFactory)
                 val paymentHistoryViewModel: PaymentIntakeHistoryViewModel = viewModel(factory = viewModelFactory)

@@ -31,19 +31,19 @@ import androidx.navigation.NavHostController
 import com.zeynbakers.order_management_system.accounting.ui.PaymentIntakeHistoryViewModel
 import com.zeynbakers.order_management_system.accounting.ui.PaymentIntakeViewModel
 import com.zeynbakers.order_management_system.core.navigation.AppRoutes
-import com.zeynbakers.order_management_system.core.ui.AppScaffold
-import com.zeynbakers.order_management_system.core.ui.MoneyTab
-import com.zeynbakers.order_management_system.core.ui.MoreAction
-import com.zeynbakers.order_management_system.core.ui.TopLevelDestination
 import com.zeynbakers.order_management_system.core.tutorial.PracticalTutorialAction
 import com.zeynbakers.order_management_system.core.tutorial.TutorialCoachAnchorRegistry
 import com.zeynbakers.order_management_system.core.tutorial.TutorialCoachOverlay
 import com.zeynbakers.order_management_system.core.tutorial.TutorialCoachTargets
 import com.zeynbakers.order_management_system.core.tutorial.practicalTutorialSteps
 import com.zeynbakers.order_management_system.core.tutorial.routeMatchesPrefix
+import com.zeynbakers.order_management_system.core.ui.AppScaffold
+import com.zeynbakers.order_management_system.core.ui.MoneyTab
+import com.zeynbakers.order_management_system.core.ui.MoreAction
+import com.zeynbakers.order_management_system.core.ui.TopLevelDestination
 import com.zeynbakers.order_management_system.customer.ui.CustomerAccountsViewModel
-import com.zeynbakers.order_management_system.order.ui.OrderCreditPrompt
-import com.zeynbakers.order_management_system.order.ui.OrderViewModel
+import com.zeynbakers.order_management_system.order.ui.calendar.CalendarViewModel
+import com.zeynbakers.order_management_system.order.ui.calendar.OrderCreditPrompt
 
 @OptIn(ExperimentalMaterial3WindowSizeClassApi::class)
 @Composable
@@ -73,7 +73,7 @@ internal fun MainAppHostScaffold(
     accountsCallbacks: AppAccountsCallbacks,
     navigationActions: AppFeatureNavigationActions,
     supportActions: AppFeatureSupportActions,
-    orderViewModel: OrderViewModel,
+    orderViewModel: CalendarViewModel,
     customerViewModel: CustomerAccountsViewModel,
     paymentIntakeViewModel: PaymentIntakeViewModel,
     paymentHistoryViewModel: PaymentIntakeHistoryViewModel,
@@ -290,7 +290,9 @@ internal fun MainAppHostScaffold(
             AppFeatureNavHost(
                 navController = navController,
                 startDestination = startDestination,
-                modifier = Modifier.fillMaxSize().padding(padding),
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding),
                 orderViewModel = orderViewModel,
                 customerViewModel = customerViewModel,
                 paymentIntakeViewModel = paymentIntakeViewModel,

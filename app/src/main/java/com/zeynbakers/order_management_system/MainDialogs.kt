@@ -8,7 +8,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.res.stringResource
 import com.zeynbakers.order_management_system.core.util.formatKes
-import com.zeynbakers.order_management_system.order.ui.OrderCreditPrompt
+import com.zeynbakers.order_management_system.order.ui.calendar.OrderCreditPrompt
 
 @Composable
 internal fun CreditPromptDialog(

@@ -40,14 +40,14 @@ import com.zeynbakers.order_management_system.customer.ui.CustomerOrderUi
 import com.zeynbakers.order_management_system.customer.ui.OrderEffectiveStatus
 import com.zeynbakers.order_management_system.customer.ui.OrderPaymentState
 import com.zeynbakers.order_management_system.order.data.OrderEntity
-import com.zeynbakers.order_management_system.order.ui.CalendarScreen
-import com.zeynbakers.order_management_system.order.ui.DayDetailScreen
-import com.zeynbakers.order_management_system.order.ui.SummaryScreen
-import java.math.BigDecimal
+import com.zeynbakers.order_management_system.order.ui.calendar.CalendarScreen
+import com.zeynbakers.order_management_system.order.ui.day_detail.DayDetailScreen
+import com.zeynbakers.order_management_system.order.ui.summary.SummaryScreen
 import kotlinx.datetime.LocalDate
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
+import java.math.BigDecimal
 
 class AccessibilitySmokeTest {
     @get:Rule
@@ -135,6 +135,7 @@ class AccessibilitySmokeTest {
                         orders = listOf(order),
                         dayTotal = BigDecimal("1000.00"),
                         customerNames = emptyMap(),
+                        customerPhones = emptyMap(),
                         orderPaidAmounts = emptyMap(),
                         onBack = {},
                         onSaveOrder = { _, _, _, _, _ -> },
@@ -154,8 +155,11 @@ class AccessibilitySmokeTest {
                                 emoji = emoji
                             )
                         },
+                        onImportOrders = {},
+                        initialFocusOrderId = null,
                         draft = null,
-                        onDraftChange = {}
+                        onDraftChange = {},
+                        storeName = "Test Store"
                     )
                 }
             }
