@@ -27,17 +27,17 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.zeynbakers.order_management_system.R
-import com.zeynbakers.order_management_system.order.data.OrderEntity
 import com.zeynbakers.order_management_system.order.ui.day_detail.models.CustomerImportAction
 import com.zeynbakers.order_management_system.order.ui.day_detail.models.ImportAction
 import com.zeynbakers.order_management_system.order.ui.day_detail.models.OrderImportAction
+import com.zeynbakers.order_management_system.order.ui.models.OrderUiModel
 import kotlinx.datetime.LocalDate
 
 @Composable
 internal fun DayImportPreviewDialog(
     isOpen: Boolean,
     importData: com.zeynbakers.order_management_system.order.data.OrderExportData?,
-    existingOrders: List<OrderEntity>,
+    existingOrders: List<OrderUiModel>,
     currentDate: LocalDate,
     onDismiss: () -> Unit,
     onConfirmImport: (List<OrderImportAction>) -> Unit
@@ -52,14 +52,15 @@ internal fun DayImportPreviewDialog(
 
     val importActions = remember(importData.orders, existingOrders) {
         importData.orders.map { importItem ->
-            val duplicate = existingOrders.find { existing ->
+            val duplicate = existingOrders.find { existingUi ->
+                val existing = existingUi.order
                 existing.totalAmount.toString() == importItem.totalAmount &&
                         (importItem.customerPhone == null ||
                                 (existing.customerId != null && importItem.customerPhone == existing.customerId.toString()))
             }
             OrderImportAction(
                 importItem = importItem,
-                duplicateOrderId = duplicate?.id,
+                duplicateOrderId = duplicate?.order?.id,
                 action = if (duplicate != null) ImportAction.MERGE else ImportAction.CREATE,
                 customerAction = if (importItem.customerPhone != null) CustomerImportAction.MATCH else CustomerImportAction.CREATE
             )

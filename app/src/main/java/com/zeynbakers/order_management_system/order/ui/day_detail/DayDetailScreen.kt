@@ -81,7 +81,6 @@ import com.zeynbakers.order_management_system.order.data.ImportResult
 import com.zeynbakers.order_management_system.order.data.OrderEntity
 import com.zeynbakers.order_management_system.order.data.OrderExporter
 import com.zeynbakers.order_management_system.order.data.OrderImportParser
-import com.zeynbakers.order_management_system.order.data.OrderItemEntity
 import com.zeynbakers.order_management_system.order.printing.BluetoothPrintPermissions
 import com.zeynbakers.order_management_system.order.printing.BluetoothPrinterManager
 import com.zeynbakers.order_management_system.order.printing.PairedBluetoothPrinter
@@ -109,6 +108,8 @@ import com.zeynbakers.order_management_system.order.ui.day_detail.models.planner
 import com.zeynbakers.order_management_system.order.ui.day_detail.models.resolvePaymentState
 import com.zeynbakers.order_management_system.order.ui.day_detail.models.sortOrdersForPlanner
 import com.zeynbakers.order_management_system.order.ui.day_detail.models.titleCase
+import com.zeynbakers.order_management_system.order.ui.models.OrderUiModel
+import com.zeynbakers.order_management_system.order.ui.models.toDisplaySummary
 import com.zeynbakers.order_management_system.order.ui.order_editor.dialogs.BluetoothPrinterPickerDialog
 import com.zeynbakers.order_management_system.product.data.ProductEntity
 import kotlinx.coroutines.delay
@@ -123,11 +124,8 @@ import java.util.Locale
 @Composable
 fun DayDetailScreen(
     date: LocalDate,
-    orders: List<OrderEntity>,
+    orders: List<OrderUiModel>,
     dayTotal: BigDecimal,
-    customerNames: Map<Long, String>,
-    customerPhones: Map<Long, String>,
-    orderPaidAmounts: Map<Long, BigDecimal>,
     onBack: () -> Unit,
     onSaveOrder: (List<OrderItemDraft>, String, String, String?, Long?) -> Unit,
     onDeleteOrder: (Long) -> Unit,
@@ -143,15 +141,15 @@ fun DayDetailScreen(
         Boolean
     ) -> Boolean,
     onOrderPaymentHistory: (Long) -> Unit,
-    onReceivePayment: (OrderEntity) -> Unit,
-    loadCustomerById: suspend (Long) -> CustomerEntity?,
+    onReceivePayment: (OrderUiModel) -> Unit,
     searchCustomers: suspend (String) -> List<CustomerEntity>,
     searchProducts: suspend (String) -> List<ProductEntity>,
     ensureProduct: suspend (String, BigDecimal, String) -> ProductEntity,
+    onDraftChange: (OrderDraft?) -> Unit,
+    modifier: Modifier = Modifier,
     onImportOrders: (List<OrderImportAction>) -> Unit = {},
     initialFocusOrderId: Long? = null,
-    draft: OrderDraft?,
-    onDraftChange: (OrderDraft?) -> Unit,
+    draft: OrderDraft? = null,
     storeName: String = ""
 ) {
     val dateKey = remember(date) { date.toString() }
@@ -208,10 +206,11 @@ fun DayDetailScreen(
     val overlaySuppressed = LocalVoiceOverlaySuppressed.current
     val voiceRouter = LocalVoiceInputRouter.current
 
-    suspend fun printOrder(order: OrderEntity, macAddress: String, printerName: String) {
-        val customerLabel = order.customerId?.let { customerNames[it] }
-        val customerPhone = order.customerId?.let { customerPhones[it] }
-        val orderItems = emptyList<OrderItemEntity>()
+    suspend fun printOrder(orderUi: OrderUiModel, macAddress: String, printerName: String) {
+        val order = orderUi.order
+        val customerLabel = orderUi.customer?.name
+        val customerPhone = orderUi.customer?.phone
+        val orderItems = orderUi.items
         val receiptText =
             ReceiptFormatter.formatOrder(storeName, order, orderItems, customerLabel, customerPhone)
         val result = printerManager.printReceipt(macAddress, receiptText)
@@ -226,13 +225,13 @@ fun DayDetailScreen(
         }
     }
 
-    suspend fun proceedToPrint(order: OrderEntity) {
-        printTargetOrderId = order.id
+    suspend fun proceedToPrint(orderUi: OrderUiModel) {
+        printTargetOrderId = orderUi.order.id
         val savedMac = if (forcePrinterPicker) null else printerPrefs.getPrinterMac()
         forcePrinterPicker = false
         if (savedMac != null) {
             printOrder(
-                order = order,
+                orderUi = orderUi,
                 macAddress = savedMac,
                 printerName = printerPrefs.getPrinterName() ?: savedMac
             )
@@ -253,9 +252,10 @@ fun DayDetailScreen(
                 scope.launch { snackbarHostState.showSnackbar(permissionDeniedMessage) }
                 return@rememberLauncherForActivityResult
             }
-            val order =
-                orders.firstOrNull { it.id == orderId } ?: return@rememberLauncherForActivityResult
-            scope.launch { proceedToPrint(order) }
+            val orderUi =
+                orders.firstOrNull { it.order.id == orderId }
+                    ?: return@rememberLauncherForActivityResult
+            scope.launch { proceedToPrint(orderUi) }
         }
 
     val filePickerLauncher = rememberLauncherForActivityResult(
@@ -287,15 +287,15 @@ fun DayDetailScreen(
         }
     }
 
-    fun requestPrintReceipt(order: OrderEntity, changePrinter: Boolean = false) {
-        printTargetOrderId = order.id
+    fun requestPrintReceipt(orderUi: OrderUiModel, changePrinter: Boolean = false) {
+        printTargetOrderId = orderUi.order.id
         forcePrinterPicker = changePrinter
         if (!BluetoothPrintPermissions.hasAll(context)) {
-            pendingPrintOrderId = order.id
+            pendingPrintOrderId = orderUi.order.id
             bluetoothPermissionLauncher.launch(BluetoothPrintPermissions.requiredPermissions())
             return
         }
-        scope.launch { proceedToPrint(order) }
+        scope.launch { proceedToPrint(orderUi) }
     }
 
     var orderFilter by rememberSaveable(dateKey) { mutableStateOf(DayOrderFilter.All) }
@@ -347,21 +347,21 @@ fun DayDetailScreen(
             pickupTimeText = ""
             return@LaunchedEffect
         }
-        val order = orders.firstOrNull { it.id == editingOrderId }
-        if (order == null) {
+        val orderUi = orders.firstOrNull { it.order.id == editingOrderId }
+        if (orderUi == null) {
             customerName = ""
             customerPhone = ""
             pickupTimeText = ""
             return@LaunchedEffect
         }
+        val order = orderUi.order
         pickupTimeText = order.pickupTime.orEmpty()
-        val customerId = order.customerId
-        if (customerId == null) {
+        val customer = orderUi.customer
+        if (customer == null) {
             customerName = ""
             customerPhone = ""
             return@LaunchedEffect
         }
-        val customer = loadCustomerById(customerId) ?: return@LaunchedEffect
         customerName = customer.name
         customerPhone = customer.phone
         customerConfirmed = true
@@ -434,18 +434,19 @@ fun DayDetailScreen(
     BackHandler(enabled = isEditorOpen) { isEditorOpen = false }
     BackHandler(enabled = !isEditorOpen, onBack = onBack)
     val dayStats =
-        remember(orders, orderPaidAmounts, dayTotal) {
-            computeDayStats(orders, orderPaidAmounts, dayTotal)
+        remember(orders, dayTotal) {
+            computeDayStats(orders, dayTotal)
         }
     val dayOfWeekLabel = remember(date) { titleCase(date.dayOfWeek.name) }
     val monthLabel = remember(date) { titleCase(date.month.name) }
     val dateLabel = remember(date, monthLabel) { "$monthLabel ${date.dayOfMonth}, ${date.year}" }
     val filteredOrders by
-    remember(orders, orderFilter, orderPaidAmounts, searchQuery, customerNames) {
+    remember(orders, orderFilter, searchQuery) {
         derivedStateOf {
             val normalizedQuery = searchQuery.trim().lowercase()
-            val filtered = orders.filter { order ->
-                val paidAmount = orderPaidAmounts[order.id] ?: BigDecimal.ZERO
+            val filtered = orders.filter { orderUi ->
+                val order = orderUi.order
+                val paidAmount = orderUi.paidAmount
                 val paymentState = resolvePaymentState(order.totalAmount, paidAmount)
                 val matchesStatus =
                     when (orderFilter) {
@@ -460,22 +461,23 @@ fun DayDetailScreen(
                     }
                 if (!matchesStatus) return@filter false
                 if (normalizedQuery.isBlank()) return@filter true
-                val customerLabel =
-                    order.customerId?.let { customerNames[it] }.orEmpty().lowercase()
+                val customerLabel = orderUi.customer?.name.orEmpty().lowercase()
                 val amountLabel = order.totalAmount.stripTrailingZeros().toPlainString().lowercase()
                 val pickupLabel = plannerPickupDisplay(order.pickupTime).orEmpty().lowercase()
                 val pickupRaw = order.pickupTime.orEmpty().lowercase()
+                val itemsSummary = orderUi.items.toDisplaySummary().lowercase()
                 customerLabel.contains(normalizedQuery) ||
                         amountLabel.contains(normalizedQuery) ||
                         pickupLabel.contains(normalizedQuery) ||
-                        pickupRaw.contains(normalizedQuery)
+                        pickupRaw.contains(normalizedQuery) ||
+                        itemsSummary.contains(normalizedQuery)
             }
             sortOrdersForPlanner(filtered)
         }
     }
     LaunchedEffect(pendingFocusOrderId, filteredOrders) {
         val targetOrderId = pendingFocusOrderId ?: return@LaunchedEffect
-        val targetIndex = filteredOrders.indexOfFirst { it.id == targetOrderId }
+        val targetIndex = filteredOrders.indexOfFirst { it.order.id == targetOrderId }
         if (targetIndex < 0) {
             return@LaunchedEffect
         }
@@ -505,6 +507,7 @@ fun DayDetailScreen(
     val emptyTitleRes = emptyStateRes.first
     val emptySubtitleRes = emptyStateRes.second
     Scaffold(
+        modifier = modifier,
         contentWindowInsets = WindowInsets(0),
         snackbarHost = { SnackbarHost(snackbarHostState) },
         topBar = {
@@ -751,11 +754,8 @@ fun DayDetailScreen(
                     )
                 }
             } else {
-                items(items = filteredOrders, key = { it.id }) { order ->
-                    val customerLabel =
-                        order.customerId?.let { customerNames[it] }?.takeIf { it.isNotBlank() }
-                    val paidAmount = orderPaidAmounts[order.id] ?: BigDecimal.ZERO
-                    val paymentState = resolvePaymentState(order.totalAmount, paidAmount)
+                items(items = filteredOrders, key = { it.order.id }) { orderUi ->
+                    val order = orderUi.order
                     val dismissState =
                         rememberSwipeToDismissBoxState(
                             confirmValueChange = {
@@ -777,10 +777,7 @@ fun DayDetailScreen(
                         backgroundContent = { DayDeleteSwipeBackground(dismissState) }
                     ) {
                         OrderListItem(
-                            order = order,
-                            customerLabel = customerLabel,
-                            paidAmount = paidAmount,
-                            paymentState = paymentState,
+                            orderUi = orderUi,
                             isFocused = highlightedOrderId == order.id,
                             onEdit = {
                                 cartItems = emptyList()
@@ -792,8 +789,8 @@ fun DayDetailScreen(
                                 isEditorOpen = true
                             },
                             onPaymentHistory = { onOrderPaymentHistory(order.id) },
-                            onReceivePayment = { onReceivePayment(order) },
-                            onPrintReceipt = { requestPrintReceipt(order) }
+                            onReceivePayment = { onReceivePayment(orderUi) },
+                            onPrintReceipt = { requestPrintReceipt(orderUi) }
                         )
                     }
                 }
@@ -805,7 +802,7 @@ fun DayDetailScreen(
         orderDate = date,
         isEditorOpen = isEditorOpen,
         editingOrderId = editingOrderId,
-        orderPaidAmounts = orderPaidAmounts,
+        orderPaidAmounts = orders.associate { it.order.id to it.paidAmount },
         totalText = totalText,
         cartItems = cartItems,
         pickupTimeText = pickupTimeText,
@@ -847,10 +844,10 @@ fun DayDetailScreen(
             },
             onPrinterSelected = { printer: PairedBluetoothPrinter ->
                 showPrinterPicker = false
-                val order = orderId?.let { id -> orders.firstOrNull { it.id == id } }
-                if (order != null) {
+                val orderUi = orderId?.let { id -> orders.firstOrNull { it.order.id == id } }
+                if (orderUi != null) {
                     scope.launch {
-                        printOrder(order, printer.macAddress, printer.name)
+                        printOrder(orderUi, printer.macAddress, printer.name)
                     }
                 }
             },
@@ -858,9 +855,10 @@ fun DayDetailScreen(
                 if (printerPrefs.getPrinterMac() != null) {
                     {
                         showPrinterPicker = false
-                        val order = orderId?.let { id -> orders.firstOrNull { it.id == id } }
-                        if (order != null) {
-                            requestPrintReceipt(order, changePrinter = true)
+                        val orderUi =
+                            orderId?.let { id -> orders.firstOrNull { it.order.id == id } }
+                        if (orderUi != null) {
+                            requestPrintReceipt(orderUi, changePrinter = true)
                         }
                     }
                 } else {
@@ -870,7 +868,9 @@ fun DayDetailScreen(
     }
     DayDeleteOrderDialog(
         pendingDeleteOrder = pendingDeleteOrder,
-        customerNames = customerNames,
+        customerNames = orders.associate {
+            (it.order.customerId ?: 0L) to (it.customer?.name ?: "")
+        },
         date = date,
         deleteAllocations = deleteAllocations,
         deleteSelection = deleteSelection,
@@ -923,10 +923,15 @@ fun DayDetailScreen(
                             val (data, mimeType, fileName) = if (exportFormat == "json") {
                                 Triple(
                                     OrderExporter.exportOrders(
-                                        orders,
+                                        orders.map { it.order },
                                         emptyMap(),
-                                        customerNames,
-                                        customerPhones
+                                        orders.associate {
+                                            (it.order.customerId ?: 0L) to (it.customer?.name ?: "")
+                                        },
+                                        orders.associate {
+                                            (it.order.customerId ?: 0L) to (it.customer?.phone
+                                                ?: "")
+                                        }
                                     ),
                                     "application/json",
                                     "orders_$date.json"
@@ -934,10 +939,15 @@ fun DayDetailScreen(
                             } else {
                                 Triple(
                                     OrderExporter.exportOrdersToCsv(
-                                        orders,
+                                        orders.map { it.order },
                                         emptyMap(),
-                                        customerNames,
-                                        customerPhones
+                                        orders.associate {
+                                            (it.order.customerId ?: 0L) to (it.customer?.name ?: "")
+                                        },
+                                        orders.associate {
+                                            (it.order.customerId ?: 0L) to (it.customer?.phone
+                                                ?: "")
+                                        }
                                     ),
                                     "text/csv",
                                     "orders_$date.csv"

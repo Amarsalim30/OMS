@@ -77,7 +77,8 @@ import com.zeynbakers.order_management_system.core.tutorial.tutorialCoachTarget
 import com.zeynbakers.order_management_system.core.ui.components.AppCard
 import com.zeynbakers.order_management_system.core.ui.rememberCurrentDate
 import com.zeynbakers.order_management_system.core.util.formatKes
-import com.zeynbakers.order_management_system.order.data.OrderEntity
+import com.zeynbakers.order_management_system.order.ui.models.OrderUiModel
+import com.zeynbakers.order_management_system.order.ui.models.toDisplaySummary
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.minus
 import kotlinx.datetime.toJavaLocalDate
@@ -95,14 +96,11 @@ private enum class OrdersFilter(val labelRes: Int) {
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun UnpaidOrdersScreen(
-    orders: List<OrderEntity>,
-    paidAmounts: Map<Long, BigDecimal>,
-    customerNames: Map<Long, String>,
-    customerPhones: Map<Long, String>,
+    orders: List<OrderUiModel>,
     onBack: () -> Unit,
     onOpenDay: (LocalDate, Long?) -> Unit,
-    onReceivePayment: (OrderEntity) -> Unit,
-    onDeleteOrder: (OrderEntity) -> Unit,
+    onReceivePayment: (OrderUiModel) -> Unit,
+    onDeleteOrder: (OrderUiModel) -> Unit,
     modifier: Modifier = Modifier,
     title: String? = null,
     showBack: Boolean = true,
@@ -119,7 +117,7 @@ fun UnpaidOrdersScreen(
     // Search State
     var isSearchActive by rememberSaveable { mutableStateOf(value = false) }
     var searchQuery by rememberSaveable { mutableStateOf("") }
-    var pendingSwipeDeleteOrder by remember { mutableStateOf<OrderEntity?>(null) }
+    var pendingSwipeDeleteOrder by remember { mutableStateOf<OrderUiModel?>(null) }
 
     BackHandler(enabled = isSearchActive) {
         isSearchActive = false
@@ -127,35 +125,32 @@ fun UnpaidOrdersScreen(
 
     // Base Sort
     val sortedOrders =
-        remember(orders, paidAmounts, selectedFilter, today) {
+        remember(orders, selectedFilter, today) {
             val base =
                 when (selectedFilter) {
                     OrdersFilter.NEWEST ->
                         orders.sortedWith(
-                            compareByDescending<OrderEntity> { it.orderDate }
-                                .thenByDescending { it.createdAt }
+                            compareByDescending<OrderUiModel> { it.order.orderDate }
+                                .thenByDescending { it.order.createdAt }
                         )
 
                     OrdersFilter.OLDEST ->
                         orders.sortedWith(
-                            compareBy<OrderEntity> { it.orderDate }.thenBy {
-                                it.createdAt
+                            compareBy<OrderUiModel> { it.order.orderDate }.thenBy {
+                                it.order.createdAt
                             }
                         )
 
                     OrdersFilter.LARGEST_DUE ->
-                        orders.sortedByDescending { order ->
-                            val paid = paidAmounts[order.id] ?: BigDecimal.ZERO
-                            order.totalAmount - paid
-                        }
+                        orders.sortedByDescending { it.balance }
 
                     OrdersFilter.OVERDUE ->
                         orders
                             .asSequence()
-                            .filter { it.orderDate < today }
+                            .filter { it.order.orderDate < today }
                             .sortedWith(
-                                compareBy<OrderEntity> { it.orderDate }.thenBy {
-                                    it.createdAt
+                                compareBy<OrderUiModel> { it.order.orderDate }.thenBy {
+                                    it.order.createdAt
                                 }
                             )
                             .toList()
@@ -165,15 +160,16 @@ fun UnpaidOrdersScreen(
 
     // Filter Logic
     val filteredOrders =
-        remember(sortedOrders, searchQuery, customerNames) {
+        remember(sortedOrders, searchQuery) {
             if (searchQuery.isBlank()) {
                 sortedOrders
             } else {
                 val query = searchQuery.trim().lowercase()
-                sortedOrders.filter { order ->
-                    val customer = customerNames[order.customerId]?.lowercase().orEmpty()
-                    val total = order.totalAmount.toString()
-                    customer.contains(query) || total.contains(query)
+                sortedOrders.filter { orderUi ->
+                    val customer = orderUi.customer?.name?.lowercase().orEmpty()
+                    val total = orderUi.order.totalAmount.toString()
+                    val items = orderUi.items.toDisplaySummary().lowercase()
+                    customer.contains(query) || total.contains(query) || items.contains(query)
                 }
             }
         }
@@ -200,14 +196,13 @@ fun UnpaidOrdersScreen(
 
                         else -> compareByDescending { it }
                     }
-                filteredOrders.groupBy { it.orderDate }.toSortedMap(comparator)
+                filteredOrders.groupBy { it.order.orderDate }.toSortedMap(comparator)
             }
         }
     val totalOutstanding =
-        remember(filteredOrders, paidAmounts) {
-            filteredOrders.fold(BigDecimal.ZERO) { acc, order ->
-                val paid = paidAmounts[order.id] ?: BigDecimal.ZERO
-                acc + (order.totalAmount - paid)
+        remember(filteredOrders) {
+            filteredOrders.fold(BigDecimal.ZERO) { acc, orderUi ->
+                acc + orderUi.balance
             }
         }
     val activeContextLabel =
@@ -395,22 +390,14 @@ fun UnpaidOrdersScreen(
                         stickyHeader(key = date.toString()) {
                             StickyDateHeader(date = date, today = today)
                         }
-                        items(dateOrders, key = { it.id }) { order ->
-                            val paid = paidAmounts[order.id] ?: BigDecimal.ZERO
-                            val balance = order.totalAmount - paid
-                            val customerLabel =
-                                order.customerId?.let { id -> customerNames[id] }?.takeIf {
-                                    it.isNotBlank()
-                                }
-                            val customerPhone =
-                                order.customerId?.let { id -> customerPhones[id] }
-
+                        items(dateOrders, key = { it.order.id }) { orderUi ->
+                            val order = orderUi.order
                             val dismissState =
                                 rememberSwipeToDismissBoxState(
                                     confirmValueChange = {
                                         when (it) {
                                             SwipeToDismissBoxValue.EndToStart -> {
-                                                pendingSwipeDeleteOrder = order
+                                                pendingSwipeDeleteOrder = orderUi
                                                 false
                                             }
 
@@ -429,16 +416,12 @@ fun UnpaidOrdersScreen(
                                 backgroundContent = { SwipeBackground(dismissState) },
                                 content = {
                                     UnpaidOrderRow(
-                                        order = order,
-                                        customerLabel = customerLabel,
-                                        customerPhone = customerPhone,
-                                        paidAmount = paid,
-                                        balance = balance,
+                                        orderUi = orderUi,
                                         onOpenDay = {
                                             onOpenDay(order.orderDate, order.id)
                                         },
                                         onReceivePayment = {
-                                            onReceivePayment(order)
+                                            onReceivePayment(orderUi)
                                         }
                                     )
                                 }
@@ -446,22 +429,14 @@ fun UnpaidOrdersScreen(
                         }
                     }
                 } else {
-                    items(filteredOrders, key = { it.id }) { order ->
-                        val paid = paidAmounts[order.id] ?: BigDecimal.ZERO
-                        val balance = order.totalAmount - paid
-                        val customerLabel =
-                            order.customerId?.let { id -> customerNames[id] }?.takeIf {
-                                it.isNotBlank()
-                            }
-                        val customerPhone =
-                            order.customerId?.let { id -> customerPhones[id] }
-
+                    items(filteredOrders, key = { it.order.id }) { orderUi ->
+                        val order = orderUi.order
                         val dismissState =
                             rememberSwipeToDismissBoxState(
                                 confirmValueChange = {
                                     when (it) {
                                         SwipeToDismissBoxValue.EndToStart -> {
-                                            pendingSwipeDeleteOrder = order
+                                            pendingSwipeDeleteOrder = orderUi
                                             false
                                         }
 
@@ -479,13 +454,9 @@ fun UnpaidOrdersScreen(
                             backgroundContent = { SwipeBackground(dismissState) },
                             content = {
                                 UnpaidOrderRow(
-                                    order = order,
-                                    customerLabel = customerLabel,
-                                    customerPhone = customerPhone,
-                                    paidAmount = paid,
-                                    balance = balance,
+                                    orderUi = orderUi,
                                     onOpenDay = { onOpenDay(order.orderDate, order.id) },
-                                    onReceivePayment = { onReceivePayment(order) }
+                                    onReceivePayment = { onReceivePayment(orderUi) }
                                 )
                             }
                         )
@@ -495,8 +466,8 @@ fun UnpaidOrdersScreen(
         }
     }
 
-    pendingSwipeDeleteOrder?.let { order ->
-        val paid = paidAmounts[order.id] ?: BigDecimal.ZERO
+    pendingSwipeDeleteOrder?.let { orderUi ->
+        val paid = orderUi.paidAmount
         AlertDialog(
             onDismissRequest = { pendingSwipeDeleteOrder = null },
             title = { Text(stringResource(R.string.unpaid_delete_title)) },
@@ -515,7 +486,7 @@ fun UnpaidOrdersScreen(
             confirmButton = {
                 TextButton(
                     onClick = {
-                        onDeleteOrder(order)
+                        onDeleteOrder(orderUi)
                         pendingSwipeDeleteOrder = null
                     }
                 ) {
@@ -668,15 +639,16 @@ internal fun StickyDateHeader(date: LocalDate, today: LocalDate) {
 
 @Composable
 internal fun UnpaidOrderRow(
-    order: OrderEntity,
-    customerLabel: String?,
-    customerPhone: String?,
-    paidAmount: BigDecimal,
-    balance: BigDecimal,
+    orderUi: OrderUiModel,
     onOpenDay: () -> Unit,
     modifier: Modifier = Modifier,
     onReceivePayment: () -> Unit
 ) {
+    val order = orderUi.order
+    val customerLabel = orderUi.customer?.name
+    val customerPhone = orderUi.customer?.phone
+    val paidAmount = orderUi.paidAmount
+    val balance = orderUi.balance
     val context = LocalContext.current
     val haptic = LocalHapticFeedback.current
     val hasCustomer = !customerLabel.isNullOrBlank()
@@ -719,23 +691,24 @@ internal fun UnpaidOrderRow(
                         verticalAlignment = Alignment.Top
                     ) {
                         Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = primaryLabel,
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis
-                            )
                             if (hasCustomer) {
                                 Text(
-                                    text = customerLabel,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    text = primaryLabel,
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurface,
                                     maxLines = 1,
                                     overflow = TextOverflow.Ellipsis
                                 )
                             }
+                            Text(
+                                text = orderUi.items.toDisplaySummary(),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+
                             pickupDisplay?.let {
                                 Text(
                                     text = stringResource(R.string.day_pickup_time_value, it),

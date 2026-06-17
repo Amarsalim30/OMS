@@ -8,9 +8,9 @@ import com.zeynbakers.order_management_system.R
 import com.zeynbakers.order_management_system.core.ui.components.AppFilterOption
 import com.zeynbakers.order_management_system.core.util.formatPickupTimeForDisplay
 import com.zeynbakers.order_management_system.core.util.parsePickupTime
-import com.zeynbakers.order_management_system.order.data.OrderEntity
 import com.zeynbakers.order_management_system.order.ui.common.OrderItemDraft
 import com.zeynbakers.order_management_system.order.ui.common.PaymentState
+import com.zeynbakers.order_management_system.order.ui.models.OrderUiModel
 import java.math.BigDecimal
 
 internal fun resolvePaymentState(total: BigDecimal, paidAmount: BigDecimal): PaymentState {
@@ -46,8 +46,7 @@ internal fun paymentStateLabel(state: PaymentState): String {
 }
 
 internal fun computeDayStats(
-    orders: List<OrderEntity>,
-    orderPaidAmounts: Map<Long, BigDecimal>,
+    orders: List<OrderUiModel>,
     dayTotal: BigDecimal
 ): DaySummaryStats {
     var paidCount = 0
@@ -56,8 +55,9 @@ internal fun computeDayStats(
     var overpaidCount = 0
     var totalPaid = BigDecimal.ZERO
 
-    orders.forEach { order ->
-        val paidAmount = orderPaidAmounts[order.id] ?: BigDecimal.ZERO
+    orders.forEach { uiModel ->
+        val order = uiModel.order
+        val paidAmount = uiModel.paidAmount
         totalPaid = totalPaid.add(paidAmount)
         when (resolvePaymentState(order.totalAmount, paidAmount)) {
             PaymentState.PAID -> paidCount += 1
@@ -80,13 +80,13 @@ internal fun computeDayStats(
     )
 }
 
-internal fun sortOrdersForPlanner(orders: List<OrderEntity>): List<OrderEntity> {
+internal fun sortOrdersForPlanner(orders: List<OrderUiModel>): List<OrderUiModel> {
     return orders.sortedWith(
-        compareBy<OrderEntity>(
-            { plannerPickupMinute(it.pickupTime) == null },
-            { plannerPickupMinute(it.pickupTime) ?: Int.MAX_VALUE }
-        ).thenByDescending { it.createdAt }
-            .thenByDescending { it.id }
+        compareBy<OrderUiModel>(
+            { plannerPickupMinute(it.order.pickupTime) == null },
+            { plannerPickupMinute(it.order.pickupTime) ?: Int.MAX_VALUE }
+        ).thenByDescending { it.order.createdAt }
+            .thenByDescending { it.order.id }
     )
 }
 
@@ -165,7 +165,7 @@ internal enum class DeleteMoveTarget {
 }
 
 internal fun dayEmptyStateRes(
-    orders: List<OrderEntity>,
+    orders: List<OrderUiModel>,
     orderFilter: DayOrderFilter,
     searchQuery: String
 ): Pair<Int, Int> {

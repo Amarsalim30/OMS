@@ -26,17 +26,14 @@ internal fun NavGraphBuilder.ordersGraph(
         LaunchedEffect(Unit) { orderViewModel.loadUnpaidOrders() }
         UnpaidOrdersScreen(
             orders = ordersState.unpaidOrders,
-            paidAmounts = ordersState.unpaidPaidAmounts,
-            customerNames = ordersState.unpaidCustomerNames,
-            customerPhones = ordersState.unpaidCustomerPhones,
             onBack = { navController.popBackStack() },
             onOpenDay = { date, orderId ->
                 calendarCallbacks.onSelectedDateChange(date)
                 navController.navigate(AppRoutes.day(date, orderId))
             },
-            onReceivePayment = { order ->
-                val paid = ordersState.unpaidPaidAmounts[order.id] ?: BigDecimal.ZERO
-                val outstanding = (order.totalAmount - paid).max(BigDecimal.ZERO)
+            onReceivePayment = { orderUi ->
+                val order = orderUi.order
+                val outstanding = orderUi.balance.max(BigDecimal.ZERO)
                 navigationActions.navigateToMoneyRecord(
                     MoneyRecordContext(
                         customerId = order.customerId,
@@ -45,7 +42,8 @@ internal fun NavGraphBuilder.ordersGraph(
                     )
                 )
             },
-            onDeleteOrder = { order ->
+            onDeleteOrder = { orderUi ->
+                val order = orderUi.order
                 orderViewModel.cancelOrder(order.id, order.orderDate)
             },
             title = stringResource(R.string.nav_orders),

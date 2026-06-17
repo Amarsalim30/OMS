@@ -201,17 +201,10 @@ internal fun MainAppContent(
                 val monthBadgeCount by orderViewModel.monthBadgeCount.collectAsState()
                 val ordersForDate by orderViewModel.ordersForDate.collectAsState()
                 val dayTotal by orderViewModel.dayTotal.collectAsState()
-                val orderCustomerNames by orderViewModel.orderCustomerNames.collectAsState()
-                val orderCustomerPhones by orderViewModel.orderCustomerPhones.collectAsState()
-                val orderPaidAmounts by orderViewModel.orderPaidAmounts.collectAsState()
                 val monthSnapshots by orderViewModel.monthSnapshots.collectAsState()
                 val summaryOrders by orderViewModel.summaryOrders.collectAsState()
                 val summaryTotal by orderViewModel.summaryTotal.collectAsState()
-                val summaryCustomerNames by orderViewModel.summaryCustomerNames.collectAsState()
                 val unpaidOrders by orderViewModel.unpaidOrders.collectAsState()
-                val unpaidPaidAmounts by orderViewModel.unpaidPaidAmounts.collectAsState()
-                val unpaidCustomerNames by orderViewModel.unpaidCustomerNames.collectAsState()
-                val unpaidCustomerPhones by orderViewModel.unpaidCustomerPhones.collectAsState()
                 val creditPrompt by orderViewModel.creditPrompt.collectAsState()
                 val customerSummaries by customerViewModel.summaries.collectAsState()
                 val customerDetail by customerViewModel.customer.collectAsState()
@@ -403,19 +396,12 @@ internal fun MainAppContent(
                         quickAddDate = quickAddDate,
                         ordersForDate = ordersForDate,
                         dayTotal = dayTotal,
-                        orderCustomerNames = orderCustomerNames,
-                        orderCustomerPhones = orderCustomerPhones,
-                        orderPaidAmounts = orderPaidAmounts,
                         summaryOrders = summaryOrders,
                         summaryTotal = summaryTotal,
-                        summaryCustomerNames = summaryCustomerNames,
                         dayDrafts = dayDrafts
                     )
                     val ordersState = AppOrdersState(
-                        unpaidOrders = unpaidOrders,
-                        unpaidPaidAmounts = unpaidPaidAmounts,
-                        unpaidCustomerNames = unpaidCustomerNames,
-                        unpaidCustomerPhones = unpaidCustomerPhones
+                        unpaidOrders = unpaidOrders
                     )
                     val customersState = AppCustomersState(
                         customerSummaries = customerSummaries,

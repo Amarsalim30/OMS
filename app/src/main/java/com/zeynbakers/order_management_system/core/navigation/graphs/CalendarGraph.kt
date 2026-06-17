@@ -155,9 +155,6 @@ internal fun NavGraphBuilder.calendarGraph(
             date = date,
             orders = calendarState.ordersForDate,
             dayTotal = calendarState.dayTotal,
-            customerNames = calendarState.orderCustomerNames,
-            customerPhones = calendarState.orderCustomerPhones,
-            orderPaidAmounts = calendarState.orderPaidAmounts,
             onBack = { navController.popBackStack() },
             onSaveOrder = { cartItems, name, phone, pickupTime, orderId ->
                 orderViewModel.saveOrder(
@@ -201,9 +198,9 @@ internal fun NavGraphBuilder.calendarGraph(
             onOrderPaymentHistory = { orderId ->
                 navigationActions.navigateToPaymentHistory(PaymentHistoryFilter.Order(orderId), null)
             },
-            onReceivePayment = { order ->
-                val paid = calendarState.orderPaidAmounts[order.id] ?: BigDecimal.ZERO
-                val outstanding = (order.totalAmount - paid).max(BigDecimal.ZERO)
+            onReceivePayment = { orderUi ->
+                val order = orderUi.order
+                val outstanding = orderUi.balance.max(BigDecimal.ZERO)
                 navigationActions.navigateToMoneyRecord(
                     MoneyRecordContext(
                         customerId = order.customerId,
@@ -212,17 +209,9 @@ internal fun NavGraphBuilder.calendarGraph(
                     )
                 )
             },
-            loadCustomerById = { id -> orderViewModel.getCustomerById(id) },
             searchCustomers = { query -> orderViewModel.searchCustomers(query) },
             searchProducts = { query -> orderViewModel.searchProducts(query) },
             ensureProduct = { name, price, emoji -> orderViewModel.ensureProduct(name, price, emoji) },
-            onImportOrders = { actions ->
-                orderViewModel.importOrders(actions, date)
-                WidgetUpdater.enqueue(navController.context)
-                NotificationScheduler.enqueueNow(navController.context)
-            },
-            initialFocusOrderId = focusOrderId,
-            draft = calendarState.dayDrafts[date],
             onDraftChange = { updated ->
                 if (updated == null) {
                     calendarState.dayDrafts.remove(date)
@@ -230,6 +219,13 @@ internal fun NavGraphBuilder.calendarGraph(
                     calendarState.dayDrafts[date] = updated
                 }
             },
+            onImportOrders = { actions ->
+                orderViewModel.importOrders(actions, date)
+                WidgetUpdater.enqueue(navController.context)
+                NotificationScheduler.enqueueNow(navController.context)
+            },
+            initialFocusOrderId = focusOrderId,
+            draft = calendarState.dayDrafts[date],
             storeName = storeName
         )
     }
@@ -242,7 +238,6 @@ internal fun NavGraphBuilder.calendarGraph(
                 calendarState.summaryDate ?: calendarState.selectedDate ?: supportActions.currentDate(),
             orders = calendarState.summaryOrders,
             rangeTotal = calendarState.summaryTotal,
-            customerNames = calendarState.summaryCustomerNames,
             onAnchorDateChange = { updated -> calendarCallbacks.onSummaryDateChange(updated) },
             onLoadRange = { start, end ->
                 orderViewModel.loadSummaryRange(startInclusive = start, endExclusive = end)

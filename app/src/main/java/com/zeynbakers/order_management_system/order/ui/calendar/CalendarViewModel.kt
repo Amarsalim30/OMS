@@ -22,6 +22,7 @@ import com.zeynbakers.order_management_system.order.ui.common.OrderItemDraft
 import com.zeynbakers.order_management_system.order.ui.common.PaymentState
 import com.zeynbakers.order_management_system.order.ui.day_detail.models.ImportAction
 import com.zeynbakers.order_management_system.order.ui.day_detail.models.OrderImportAction
+import com.zeynbakers.order_management_system.order.ui.models.OrderUiModel
 import com.zeynbakers.order_management_system.product.data.ProductEntity
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -61,20 +62,17 @@ class CalendarViewModel(private val database: AppDatabase) : ViewModel() {
     private val _calendarDays = MutableStateFlow<List<CalendarDayUi>>(emptyList())
     val calendarDays = _calendarDays.asStateFlow()
 
-    private val _ordersForDate = MutableStateFlow<List<OrderEntity>>(emptyList())
+    private val _ordersForDate = MutableStateFlow<List<OrderUiModel>>(emptyList())
     val ordersForDate = _ordersForDate.asStateFlow()
 
     private val _dayTotal = MutableStateFlow(BigDecimal.ZERO)
     val dayTotal = _dayTotal.asStateFlow()
 
-    private val _summaryOrders = MutableStateFlow<List<OrderEntity>>(emptyList())
+    private val _summaryOrders = MutableStateFlow<List<OrderUiModel>>(emptyList())
     val summaryOrders = _summaryOrders.asStateFlow()
 
     private val _summaryTotal = MutableStateFlow(BigDecimal.ZERO)
     val summaryTotal = _summaryTotal.asStateFlow()
-
-    private val _summaryCustomerNames = MutableStateFlow<Map<Long, String>>(emptyMap())
-    val summaryCustomerNames = _summaryCustomerNames.asStateFlow()
 
     private val _monthTotal = MutableStateFlow(BigDecimal.ZERO)
     val monthTotal = _monthTotal.asStateFlow()
@@ -85,26 +83,8 @@ class CalendarViewModel(private val database: AppDatabase) : ViewModel() {
     private val _monthSnapshots = MutableStateFlow<Map<MonthKey, MonthSnapshot>>(emptyMap())
     val monthSnapshots = _monthSnapshots.asStateFlow()
 
-    private val _orderCustomerNames = MutableStateFlow<Map<Long, String>>(emptyMap())
-    val orderCustomerNames = _orderCustomerNames.asStateFlow()
-
-    private val _orderCustomerPhones = MutableStateFlow<Map<Long, String>>(emptyMap())
-    val orderCustomerPhones = _orderCustomerPhones.asStateFlow()
-
-    private val _orderPaidAmounts = MutableStateFlow<Map<Long, BigDecimal>>(emptyMap())
-    val orderPaidAmounts = _orderPaidAmounts.asStateFlow()
-
-    private val _unpaidOrders = MutableStateFlow<List<OrderEntity>>(emptyList())
+    private val _unpaidOrders = MutableStateFlow<List<OrderUiModel>>(emptyList())
     val unpaidOrders = _unpaidOrders.asStateFlow()
-
-    private val _unpaidPaidAmounts = MutableStateFlow<Map<Long, BigDecimal>>(emptyMap())
-    val unpaidPaidAmounts = _unpaidPaidAmounts.asStateFlow()
-
-    private val _unpaidCustomerNames = MutableStateFlow<Map<Long, String>>(emptyMap())
-    val unpaidCustomerNames = _unpaidCustomerNames.asStateFlow()
-
-    private val _unpaidCustomerPhones = MutableStateFlow<Map<Long, String>>(emptyMap())
-    val unpaidCustomerPhones = _unpaidCustomerPhones.asStateFlow()
 
     private val _creditPrompt = MutableStateFlow<OrderCreditPrompt?>(null)
     val creditPrompt = _creditPrompt.asStateFlow()
@@ -445,33 +425,17 @@ class CalendarViewModel(private val database: AppDatabase) : ViewModel() {
         viewModelScope.launch {
             val orders = orderDao.getOrdersByDate(date.toString())
             val activeOrders = orders.filter { it.status != OrderStatus.CANCELLED }
-            _ordersForDate.value = activeOrders
+
+            val uiModels = activeOrders.map { order ->
+                val items = database.orderItemDao().getOrderItems(order.id)
+                val customer = order.customerId?.let { customerDao.getById(it) }
+                val paid = accountingDao.getPaidForOrder(order.id)
+                OrderUiModel(order, items, customer, paid)
+            }
+
+            _ordersForDate.value = uiModels
             _dayTotal.value =
                 activeOrders.fold(BigDecimal.ZERO) { acc, order -> acc + order.totalAmount }
-
-            val customerIds = orders.mapNotNull { it.customerId }.distinct()
-            _orderCustomerNames.value =
-                if (customerIds.isEmpty()) {
-                    emptyMap()
-                } else {
-                    customerDao.getByIds(customerIds).associate { it.id to it.name }
-                }
-            _orderCustomerPhones.value =
-                if (customerIds.isEmpty()) {
-                    emptyMap()
-                } else {
-                    customerDao.getByIds(customerIds).associate { it.id to it.phone }
-                }
-
-            val orderIds = activeOrders.map { it.id }.filter { it != 0L }
-            _orderPaidAmounts.value =
-                if (orderIds.isEmpty()) {
-                    emptyMap()
-                } else {
-                    accountingDao.getPaidForOrders(orderIds).associate {
-                        it.orderId to it.paid
-                    }
-                }
         }
     }
 
@@ -480,20 +444,19 @@ class CalendarViewModel(private val database: AppDatabase) : ViewModel() {
             val orders =
                 orderDao.getOrdersBetween(startInclusive.toString(), endExclusive.toString())
             val activeOrders = orders.filter { it.status != OrderStatus.CANCELLED }
-            _summaryOrders.value =
-                activeOrders.sortedWith(
-                    compareByDescending<OrderEntity> { it.orderDate }.thenByDescending { it.createdAt }
-                )
+
+            val uiModels = activeOrders.map { order ->
+                val items = database.orderItemDao().getOrderItems(order.id)
+                val customer = order.customerId?.let { customerDao.getById(it) }
+                val paid = accountingDao.getPaidForOrder(order.id)
+                OrderUiModel(order, items, customer, paid)
+            }.sortedWith(
+                compareByDescending<OrderUiModel> { it.order.orderDate }.thenByDescending { it.order.createdAt }
+            )
+
+            _summaryOrders.value = uiModels
             _summaryTotal.value =
                 activeOrders.fold(BigDecimal.ZERO) { acc, order -> acc + order.totalAmount }
-
-            val customerIds = activeOrders.mapNotNull { it.customerId }.distinct()
-            _summaryCustomerNames.value =
-                if (customerIds.isEmpty()) {
-                    emptyMap()
-                } else {
-                    customerDao.getByIds(customerIds).associate { it.id to it.name }
-                }
         }
     }
 
@@ -855,24 +818,17 @@ class CalendarViewModel(private val database: AppDatabase) : ViewModel() {
                     val paid = paidByOrder[order.id] ?: BigDecimal.ZERO
                     paid < order.totalAmount
                 }
-            val customerIds = unpaid.mapNotNull { it.customerId }.distinct()
-            _unpaidCustomerNames.value =
-                if (customerIds.isEmpty()) {
-                    emptyMap()
-                } else {
-                    customerDao.getByIds(customerIds).associate { it.id to it.name }
-                }
-            _unpaidCustomerPhones.value =
-                if (customerIds.isEmpty()) {
-                    emptyMap()
-                } else {
-                    customerDao.getByIds(customerIds).associate { it.id to (it.phone ?: "") }
-                }
-            _unpaidPaidAmounts.value = paidByOrder
-            _unpaidOrders.value =
-                unpaid.sortedWith(
-                    compareByDescending<OrderEntity> { it.orderDate }.thenByDescending { it.createdAt }
-                )
+
+            val uiModels = unpaid.map { order ->
+                val items = database.orderItemDao().getOrderItems(order.id)
+                val customer = order.customerId?.let { customerDao.getById(it) }
+                val paid = paidByOrder[order.id] ?: BigDecimal.ZERO
+                OrderUiModel(order, items, customer, paid)
+            }.sortedWith(
+                compareByDescending<OrderUiModel> { it.order.orderDate }.thenByDescending { it.order.createdAt }
+            )
+
+            _unpaidOrders.value = uiModels
         }
     }
 

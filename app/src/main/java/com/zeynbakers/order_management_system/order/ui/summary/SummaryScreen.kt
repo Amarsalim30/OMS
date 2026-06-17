@@ -48,10 +48,10 @@ import com.zeynbakers.order_management_system.R
 import com.zeynbakers.order_management_system.core.ui.LocalUiEventDispatcher
 import com.zeynbakers.order_management_system.core.ui.rememberCurrentDate
 import com.zeynbakers.order_management_system.core.ui.showSnackbar
-import com.zeynbakers.order_management_system.order.data.OrderEntity
 import com.zeynbakers.order_management_system.order.domain.OrderLineItem
-import com.zeynbakers.order_management_system.order.domain.aggregateOrderLineItems
 import com.zeynbakers.order_management_system.order.domain.formatQuantity
+import com.zeynbakers.order_management_system.order.ui.models.OrderUiModel
+import com.zeynbakers.order_management_system.order.ui.models.toDisplaySummary
 import kotlinx.coroutines.launch
 import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.Instant
@@ -73,24 +73,18 @@ internal enum class SummaryRangeMode(val labelRes: Int) {
 
 private data class DateRange(val startInclusive: LocalDate, val endExclusive: LocalDate)
 
-private data class OrderNoteAnalysis(
-    val order: OrderEntity,
-    val items: List<OrderLineItem>,
-    val unparsedLines: List<String>
-)
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SummaryScreen(
     monthLabel: String,
     monthTotal: BigDecimal,
     initialDate: LocalDate,
-    orders: List<OrderEntity>,
+    orders: List<OrderUiModel>,
     rangeTotal: BigDecimal,
-    customerNames: Map<Long, String>,
     onAnchorDateChange: (LocalDate) -> Unit,
     onLoadRange: (LocalDate, LocalDate) -> Unit,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     val clipboardManager = LocalClipboardManager.current
     val uiEvents = LocalUiEventDispatcher.current
@@ -118,37 +112,40 @@ fun SummaryScreen(
         remember { DateTimeFormatter.ofPattern("d MMM yyyy", Locale.getDefault()) }
     val messageHeaderPrefix = stringResource(R.string.summary_message_header_prefix)
     val messageNoProducts = stringResource(R.string.summary_message_no_products)
-    val messageUnparsed = stringResource(R.string.summary_message_unparsed)
     val chefListCopiedMessage = stringResource(R.string.summary_chef_list_copied)
 
     LaunchedEffect(range) {
         onLoadRange(range.startInclusive, range.endExclusive)
     }
 
-    val analyses =
+    val aggregatedItems =
         remember(orders) {
-            orders.map { order ->
-                OrderNoteAnalysis(order = order, items = emptyList(), unparsedLines = emptyList())
+            val allItems = orders.flatMap { it.items }
+            val totalsByName = mutableMapOf<String, BigDecimal>()
+            allItems.forEach { item ->
+                val name = item.productNameSnapshot
+                totalsByName[name] = (totalsByName[name] ?: BigDecimal.ZERO) + BigDecimal.valueOf(
+                    item.quantity.toLong()
+                )
+            }
+            totalsByName.entries.sortedBy { it.key }.map { (name, qty) ->
+                OrderLineItem(name, qty)
             }
         }
-    val aggregatedItems =
-        remember(analyses) { aggregateOrderLineItems(analyses.flatMap { it.items }) }
-    val unparsedLines = remember(analyses) { analyses.flatMap { it.unparsedLines }.distinct() }
+
     val chefMessage = remember(
         rangeLabel,
         aggregatedItems,
-        unparsedLines,
         messageHeaderPrefix,
-        messageNoProducts,
-        messageUnparsed
+        messageNoProducts
     ) {
         buildChefMessage(
             rangeLabel = rangeLabel,
             items = aggregatedItems,
-            unparsedLines = unparsedLines,
+            unparsedLines = emptyList(),
             headerPrefix = messageHeaderPrefix,
             noProductsFoundLabel = messageNoProducts,
-            unparsedHeader = messageUnparsed
+            unparsedHeader = ""
         )
     }
 
@@ -201,6 +198,7 @@ fun SummaryScreen(
     val scrollBehavior = TopAppBarDefaults.pinnedScrollBehavior()
 
     Scaffold(
+        modifier = modifier,
         contentWindowInsets = WindowInsets(0),
         topBar = {
             CenterAlignedTopAppBar(
@@ -238,7 +236,7 @@ fun SummaryScreen(
                         modifier = Modifier
                             .size(48.dp)
                             .semantics { contentDescription = copyChefListLabel },
-                        enabled = aggregatedItems.isNotEmpty() || unparsedLines.isNotEmpty()
+                        enabled = aggregatedItems.isNotEmpty()
                     ) {
                         Icon(imageVector = Icons.Filled.ContentCopy, contentDescription = null)
                     }
@@ -268,7 +266,7 @@ fun SummaryScreen(
                     ),
                     orderCount = orders.size,
                     rangeTotal = rangeTotal,
-                    hasChefList = aggregatedItems.isNotEmpty() || unparsedLines.isNotEmpty(),
+                    hasChefList = aggregatedItems.isNotEmpty(),
                     onPickDate = { isDatePickerOpen = true },
                     onPrev = { anchorDate = shiftAnchorDate(mode, anchorDate, -1) },
                     onNext = { anchorDate = shiftAnchorDate(mode, anchorDate, 1) },
@@ -293,40 +291,50 @@ fun SummaryScreen(
                 }
             }
 
-            if (unparsedLines.isNotEmpty()) {
-                item {
-                    UnparsedLinesCard(lines = unparsedLines)
-                }
-            }
-
             if (mode != SummaryRangeMode.DAY) {
-                val analysesByDate = analyses.groupBy { it.order.orderDate }
-                val datesAsc = analysesByDate.keys.sorted()
+                val ordersByDate = orders.groupBy { it.order.orderDate }
+                val datesAsc = ordersByDate.keys.sorted()
 
                 item { SectionHeader(title = stringResource(R.string.summary_daily_view)) }
                 if (datesAsc.isEmpty()) {
                     item { SummaryEmptyState() }
                 } else {
                     items(datesAsc, key = { it.toString() }) { date ->
-                        val dayAnalyses = analysesByDate[date].orEmpty()
+                        val dayOrders = ordersByDate[date].orEmpty()
                         val dayTotal =
-                            dayAnalyses.fold(BigDecimal.ZERO) { acc, entry -> acc + entry.order.totalAmount }
-                        val dayProducts = aggregateOrderLineItems(dayAnalyses.flatMap { it.items })
-                        val dayUnparsed = dayAnalyses.flatMap { it.unparsedLines }.distinct()
+                            dayOrders.fold(BigDecimal.ZERO) { acc, entry -> acc + entry.order.totalAmount }
+
+                        val dayAggregatedItems = run {
+                            val allItems = dayOrders.flatMap { it.items }
+                            val totalsByName = mutableMapOf<String, BigDecimal>()
+                            allItems.forEach { item ->
+                                val name = item.productNameSnapshot
+                                totalsByName[name] =
+                                    (totalsByName[name] ?: BigDecimal.ZERO) + BigDecimal.valueOf(
+                                        item.quantity.toLong()
+                                    )
+                            }
+                            totalsByName.entries.sortedBy { it.key }.map { (name, qty) ->
+                                OrderLineItem(name, qty)
+                            }
+                        }
+
                         val dayMessage =
                             buildChefMessage(
                                 rangeLabel = date.toJavaLocalDate().format(uiDateFormatter),
-                                items = dayProducts,
-                                unparsedLines = dayUnparsed,
+                                items = dayAggregatedItems,
+                                unparsedLines = emptyList(),
                                 headerPrefix = messageHeaderPrefix,
                                 noProductsFoundLabel = messageNoProducts,
-                                unparsedHeader = messageUnparsed
+                                unparsedHeader = ""
                             )
                         DailySummaryCard(
                             date = date,
-                            orders = dayAnalyses.map { it.order },
-                            orderItemsMap = emptyMap(),
-                            customerNames = customerNames,
+                            orders = dayOrders.map { it.order },
+                            orderItemsMap = dayOrders.associate { it.order.id to it.items },
+                            customerNames = dayOrders.associate {
+                                (it.order.customerId ?: 0L) to (it.customer?.name ?: "")
+                            },
                             onCopyNotes = {
                                 clipboardManager.setText(AnnotatedString(dayMessage))
                             }
@@ -342,26 +350,27 @@ fun SummaryScreen(
             } else {
                 when (mode) {
                     SummaryRangeMode.DAY -> {
-                        items(orders, key = { it.id }) { order ->
-                            val customerLabel =
-                                order.customerId?.let { id -> customerNames[id] }
-                                    ?.takeIf { it.isNotBlank() }
+                        items(orders, key = { it.order.id }) { orderUi ->
+                            val order = orderUi.order
+                            val customerLabel = orderUi.customer?.name
                             val pickupDisplay =
                                 com.zeynbakers.order_management_system.core.util.formatPickupTimeForDisplay(
                                     order.pickupTime
                                 )
                             OrderSummaryCard(
                                 customerLabel = customerLabel,
-                                orderItems = emptyList(),
+                                orderItems = orderUi.items,
                                 total = order.totalAmount,
                                 pickupTime = pickupDisplay,
-                                onCopyNotes = { clipboardManager.setText(AnnotatedString("")) }
+                                onCopyNotes = {
+                                    clipboardManager.setText(AnnotatedString(orderUi.items.toDisplaySummary()))
+                                }
                             )
                         }
                     }
 
                     SummaryRangeMode.WEEK, SummaryRangeMode.MONTH -> {
-                        val ordersByDate = orders.groupBy { it.orderDate }
+                        val ordersByDate = orders.groupBy { it.order.orderDate }
                         val datesDesc = ordersByDate.keys.sortedDescending()
                         datesDesc.forEach { date ->
                             item {
@@ -371,20 +380,21 @@ fun SummaryScreen(
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
-                            items(ordersByDate[date].orEmpty(), key = { it.id }) { order ->
-                                val customerLabel =
-                                    order.customerId?.let { id -> customerNames[id] }
-                                        ?.takeIf { it.isNotBlank() }
+                            items(ordersByDate[date].orEmpty(), key = { it.order.id }) { orderUi ->
+                                val order = orderUi.order
+                                val customerLabel = orderUi.customer?.name
                                 val pickupDisplay =
                                     com.zeynbakers.order_management_system.core.util.formatPickupTimeForDisplay(
                                         order.pickupTime
                                     )
                                 OrderSummaryCard(
                                     customerLabel = customerLabel,
-                                    orderItems = emptyList(),
+                                    orderItems = orderUi.items,
                                     total = order.totalAmount,
                                     pickupTime = pickupDisplay,
-                                    onCopyNotes = { clipboardManager.setText(AnnotatedString("")) }
+                                    onCopyNotes = {
+                                        clipboardManager.setText(AnnotatedString(orderUi.items.toDisplaySummary()))
+                                    }
                                 )
                             }
                         }

@@ -36,12 +36,13 @@ import com.zeynbakers.order_management_system.R
 import com.zeynbakers.order_management_system.core.ui.components.AppCard
 import com.zeynbakers.order_management_system.core.ui.components.AppEmptyState
 import com.zeynbakers.order_management_system.core.util.formatKes
-import com.zeynbakers.order_management_system.order.data.OrderEntity
 import com.zeynbakers.order_management_system.order.ui.common.PaymentState
 import com.zeynbakers.order_management_system.order.ui.day_detail.models.DaySummaryStats
 import com.zeynbakers.order_management_system.order.ui.day_detail.models.paymentStateColor
 import com.zeynbakers.order_management_system.order.ui.day_detail.models.paymentStateLabel
 import com.zeynbakers.order_management_system.order.ui.day_detail.models.plannerPickupDisplay
+import com.zeynbakers.order_management_system.order.ui.models.OrderUiModel
+import com.zeynbakers.order_management_system.order.ui.models.toDisplaySummary
 import java.math.BigDecimal
 
 @Composable
@@ -138,16 +139,21 @@ internal fun EmptyDayState(title: String, subtitle: String) {
 
 @Composable
 internal fun OrderListItem(
-    order: OrderEntity,
-    customerLabel: String?,
-    paidAmount: BigDecimal,
-    paymentState: PaymentState,
+    orderUi: OrderUiModel,
     isFocused: Boolean,
     onEdit: () -> Unit,
     onPaymentHistory: () -> Unit,
     onReceivePayment: () -> Unit,
     onPrintReceipt: () -> Unit
 ) {
+    val order = orderUi.order
+    val customerLabel = orderUi.customer?.name
+    val paidAmount = orderUi.paidAmount
+    val paymentState =
+        com.zeynbakers.order_management_system.order.ui.day_detail.models.resolvePaymentState(
+            order.totalAmount,
+            paidAmount
+        )
     val stateColor = paymentStateColor(paymentState)
     val statusLabel = paymentStateLabel(paymentState)
     val balance = order.totalAmount.subtract(paidAmount)
@@ -215,12 +221,6 @@ internal fun OrderListItem(
                         modifier = Modifier.weight(1f),
                         verticalArrangement = Arrangement.spacedBy(4.dp)
                     ) {
-                        Text(
-                            text = "",
-                            style = MaterialTheme.typography.titleSmall,
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis
-                        )
                         if (pickupText != null || customerLabel != null) {
                             val metaText =
                                 when {
@@ -232,12 +232,19 @@ internal fun OrderListItem(
                                 }
                             Text(
                                 text = metaText,
-                                style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                style = MaterialTheme.typography.titleMedium,
                                 maxLines = 2,
                                 overflow = TextOverflow.Ellipsis
                             )
                         }
+                        Text(
+                            text = orderUi.items.toDisplaySummary(),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis
+                        )
+
                     }
                     Spacer(Modifier.width(8.dp))
                     Column(

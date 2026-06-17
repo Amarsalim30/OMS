@@ -22,12 +22,12 @@ import com.zeynbakers.order_management_system.customer.ui.CustomerFinanceSummary
 import com.zeynbakers.order_management_system.customer.ui.CustomerOrderUi
 import com.zeynbakers.order_management_system.customer.ui.CustomerStatementRowUi
 import com.zeynbakers.order_management_system.customer.ui.ImportContact
-import com.zeynbakers.order_management_system.order.data.OrderEntity
 import com.zeynbakers.order_management_system.order.ui.calendar.CalendarViewModel
 import com.zeynbakers.order_management_system.order.ui.calendar.MonthKey
 import com.zeynbakers.order_management_system.order.ui.calendar.MonthSnapshot
 import com.zeynbakers.order_management_system.order.ui.common.CalendarDayUi
 import com.zeynbakers.order_management_system.order.ui.day_detail.models.OrderDraft
+import com.zeynbakers.order_management_system.order.ui.models.OrderUiModel
 import kotlinx.datetime.LocalDate
 import java.math.BigDecimal
 
@@ -60,22 +60,15 @@ internal data class AppCalendarState(
     val selectedDate: LocalDate?,
     val summaryDate: LocalDate?,
     val quickAddDate: LocalDate?,
-    val ordersForDate: List<OrderEntity>,
+    val ordersForDate: List<OrderUiModel>,
     val dayTotal: BigDecimal,
-    val orderCustomerNames: Map<Long, String>,
-    val orderCustomerPhones: Map<Long, String>,
-    val orderPaidAmounts: Map<Long, BigDecimal>,
-    val summaryOrders: List<OrderEntity>,
+    val summaryOrders: List<OrderUiModel>,
     val summaryTotal: BigDecimal,
-    val summaryCustomerNames: Map<Long, String>,
     val dayDrafts: MutableMap<LocalDate, OrderDraft>
 )
 
 internal data class AppOrdersState(
-    val unpaidOrders: List<OrderEntity>,
-    val unpaidPaidAmounts: Map<Long, BigDecimal>,
-    val unpaidCustomerNames: Map<Long, String>,
-    val unpaidCustomerPhones: Map<Long, String>
+    val unpaidOrders: List<OrderUiModel>
 )
 
 internal data class AppCustomersState(
