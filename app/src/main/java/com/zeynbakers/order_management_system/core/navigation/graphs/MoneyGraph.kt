@@ -38,7 +38,14 @@ internal fun NavGraphBuilder.accountsGraph(
             onManualContextConsumed = {
                 accountsCallbacks.onMoneyRecordContextChange(null)
             },
-            onManualSaved = { supportActions.refreshAfterPayments() },
+            onManualSaved = {
+                supportActions.refreshAfterPayments()
+                navigationActions.navigateToMoneyRecord(null) // Reset context
+                navController.navigate(AppRoutes.Orders) {
+                    popUpTo(AppRoutes.Money) { inclusive = true }
+                    launchSingleTop = true
+                }
+            },
             onApplied = {
                 accountsCallbacks.onPaymentIntakeTextChange(null)
                 supportActions.refreshAfterPayments()

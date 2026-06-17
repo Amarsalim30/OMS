@@ -451,9 +451,10 @@ internal fun MainAppContent(
                         onOpenMore = { showMoreSheet = true },
                         openImportContacts = openImportContacts,
                         navigateToMoneyRecord = { recordContext ->
-                            moneyRecordCustomerId = recordContext.customerId
-                            moneyRecordOrderId = recordContext.orderId
-                            moneyRecordOutstandingAmountText = recordContext.outstandingAmount?.toPlainString()
+                            moneyRecordCustomerId = recordContext?.customerId
+                            moneyRecordOrderId = recordContext?.orderId
+                            moneyRecordOutstandingAmountText =
+                                recordContext?.outstandingAmount?.toPlainString()
                             moneyTabName = MoneyTab.Record.name
                             selectedTopLevelRoute = AppRoutes.Money
                             navigateTopLevel(navController, AppRoutes.Money, resetToRoot = true)

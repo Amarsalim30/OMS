@@ -2,26 +2,36 @@ package com.zeynbakers.order_management_system.accounting.ui
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.calculateEndPadding
+import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.calculateEndPadding
-import androidx.compose.foundation.layout.calculateStartPadding
-import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Notes
 import androidx.compose.material.icons.filled.AccountCircle
+import androidx.compose.material.icons.filled.AttachMoney
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.CreditCard
+import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
@@ -46,25 +56,30 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.res.stringResource
 import com.zeynbakers.order_management_system.R
 import com.zeynbakers.order_management_system.accounting.data.PaymentMethod
 import com.zeynbakers.order_management_system.core.ui.LocalAmountFieldRegistry
 import com.zeynbakers.order_management_system.core.ui.LocalUiEventDispatcher
 import com.zeynbakers.order_management_system.core.ui.LocalVoiceInputRouter
 import com.zeynbakers.order_management_system.core.ui.VoiceTarget
-import com.zeynbakers.order_management_system.core.ui.showSnackbar
+import com.zeynbakers.order_management_system.core.ui.components.AppCard
+import com.zeynbakers.order_management_system.core.ui.components.AppScreenHeaderCard
+import com.zeynbakers.order_management_system.core.ui.components.AppSection
+import com.zeynbakers.order_management_system.core.ui.components.AppSpacing
+import com.zeynbakers.order_management_system.core.ui.components.SuccessOverlay
 import com.zeynbakers.order_management_system.core.util.formatKes
 import com.zeynbakers.order_management_system.core.util.formatOrderLabel
 import com.zeynbakers.order_management_system.customer.ui.CustomerAccountsViewModel
 import com.zeynbakers.order_management_system.customer.ui.CustomerOrderUi
 import com.zeynbakers.order_management_system.customer.ui.OrderEffectiveStatus
 import java.math.BigDecimal
-import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -87,6 +102,7 @@ fun ManualPaymentScreen(
     val orders by customerViewModel.orders.collectAsState()
     val orderLabels by customerViewModel.orderLabels.collectAsState()
     val summaries by customerViewModel.summaries.collectAsState()
+    val customerBalance by customerViewModel.balance.collectAsState()
 
     var selectedCustomerId by rememberSaveable { mutableStateOf<Long?>(null) }
     var selectedOrderId by rememberSaveable { mutableStateOf<Long?>(null) }
@@ -96,6 +112,7 @@ fun ManualPaymentScreen(
     var selectedMethod by rememberSaveable { mutableStateOf(PaymentMethod.CASH) }
     var customerQuery by rememberSaveable { mutableStateOf("") }
     var showOrderSheet by remember { mutableStateOf(false) }
+    var showSuccessOverlay by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
     LaunchedEffect(initialCustomerId, initialOrderId, initialAmount) {
@@ -167,7 +184,10 @@ fun ManualPaymentScreen(
             }
         },
         bottomBar = {
-            Surface(tonalElevation = 3.dp) {
+            Surface(
+                tonalElevation = 3.dp,
+                shadowElevation = 8.dp
+            ) {
                 Button(
                     onClick = {
                         val amount = parsedAmount
@@ -185,263 +205,443 @@ fun ManualPaymentScreen(
                             note = noteText,
                             orderId = selectedOrderId
                         )
-                        onPaymentRecorded()
-                        scope.launch {
-                            uiEvents.showSnackbar(paymentSavedMessage)
-                        }
+                        showSuccessOverlay = true
                         amountText = ""
                         noteText = ""
                         amountError = null
                     },
                     enabled = canSave,
+                    shape = MaterialTheme.shapes.medium,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 12.dp)
+                        .padding(horizontal = AppSpacing.medium, vertical = AppSpacing.small)
+                        .height(56.dp)
                 ) {
-                    Text(stringResource(R.string.money_save_payment))
+                    Text(
+                        text = stringResource(R.string.money_save_payment),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
                 }
             }
         }
     ) { padding ->
-        LazyColumn(
-            modifier = Modifier.fillMaxSize().padding(padding),
-            contentPadding = contentPadding,
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            item {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding),
+                contentPadding = contentPadding,
+                verticalArrangement = Arrangement.spacedBy(AppSpacing.medium)
+            ) {
+                item {
                     if (selectedCustomerId == null) {
-                        selectedOrderId?.let { contextOrderId ->
-                            Surface(
-                                tonalElevation = 1.dp,
-                                shape = MaterialTheme.shapes.medium,
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Column(modifier = Modifier.padding(12.dp)) {
-                                    Text(
-                                        text = stringResource(R.string.payment_history_header_order_id, contextOrderId),
-                                        style = MaterialTheme.typography.titleSmall
-                                    )
-                                    Text(
-                                        text = stringResource(R.string.money_anonymous_payment_hint),
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
+                        Column(verticalArrangement = Arrangement.spacedBy(AppSpacing.small)) {
+                            selectedOrderId?.let { contextOrderId ->
+                                AppCard {
+                                    Column(verticalArrangement = Arrangement.spacedBy(AppSpacing.xSmall)) {
+                                        Text(
+                                            text = stringResource(
+                                                R.string.payment_history_header_order_id,
+                                                contextOrderId
+                                            ),
+                                            style = MaterialTheme.typography.titleSmall,
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                        Text(
+                                            text = stringResource(R.string.money_anonymous_payment_hint),
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
                                 }
+                                Spacer(modifier = Modifier.height(AppSpacing.small))
                             }
-                        }
-                        Text(
-                            text = stringResource(R.string.money_select_customer),
-                            style = MaterialTheme.typography.titleSmall
-                        )
-                        OutlinedTextField(
-                            value = customerQuery,
-                            onValueChange = { customerQuery = it },
-                            label = { Text(stringResource(R.string.money_search_name_or_phone)) },
-                            placeholder = { Text(stringResource(R.string.money_customer_name_or_number)) },
-                            modifier = Modifier.fillMaxWidth()
-                        )
-                        if (suggestions.isNotEmpty()) {
-                            Column {
-                                suggestions.take(8).forEach { summary ->
-                                    val balanceLabel =
-                                        when {
-                                            summary.balance > BigDecimal.ZERO ->
-                                                stringResource(
-                                                    R.string.money_due_value,
-                                                    formatKes(summary.balance)
-                                                )
-                                            summary.balance < BigDecimal.ZERO ->
-                                                stringResource(
-                                                    R.string.money_credit_value,
-                                                    formatKes(summary.balance.abs())
-                                                )
-                                            else -> stringResource(R.string.money_balance_clear)
-                                        }
-                                    val phoneLabel = summary.phone.takeIf { it.isNotBlank() }
-                                    ListItem(
-                                        headlineContent = {
-                                            Text(summary.name)
-                                        },
-                                        supportingContent = {
-                                            val subLine = listOfNotNull(phoneLabel, balanceLabel)
-                                                .joinToString(" · ")
-                                            if (subLine.isNotBlank()) Text(subLine)
-                                        },
-                                        leadingContent = {
-                                            Icon(
-                                                imageVector = Icons.Filled.AccountCircle,
-                                                contentDescription = null,
-                                                tint = MaterialTheme.colorScheme.primary
+                            AppSection(
+                                title = stringResource(R.string.money_select_customer),
+                                subtitle = stringResource(R.string.money_customer_name_or_number)
+                            ) {
+                                OutlinedTextField(
+                                    value = customerQuery,
+                                    onValueChange = { customerQuery = it },
+                                    label = { Text(stringResource(R.string.action_search)) },
+                                    placeholder = { Text(stringResource(R.string.money_search_name_or_phone)) },
+                                    leadingIcon = {
+                                        Icon(
+                                            imageVector = Icons.Default.Person,
+                                            contentDescription = null
+                                        )
+                                    },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = MaterialTheme.shapes.medium
+                                )
+                                if (suggestions.isNotEmpty()) {
+                                    Spacer(modifier = Modifier.height(AppSpacing.small))
+                                    AppCard {
+                                        suggestions.take(8).forEachIndexed { index, summary ->
+                                            if (index > 0) HorizontalDivider(
+                                                modifier = Modifier.padding(vertical = AppSpacing.xSmall),
+                                                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f)
                                             )
-                                        },
-                                        modifier = Modifier
-                                            .fillMaxWidth()
-                                            .sizeIn(minHeight = 56.dp)
-                                            .clickable {
-                                                selectedCustomerId = summary.customerId
-                                                selectedOrderId = null
-                                                customerQuery = ""
-                                            }
-                                    )
+                                            val balanceLabel =
+                                                when {
+                                                    summary.balance > BigDecimal.ZERO ->
+                                                        stringResource(
+                                                            R.string.money_due_value,
+                                                            formatKes(summary.balance)
+                                                        )
 
+                                                    summary.balance < BigDecimal.ZERO ->
+                                                        stringResource(
+                                                            R.string.money_credit_value,
+                                                            formatKes(summary.balance.abs())
+                                                        )
+
+                                                    else -> stringResource(R.string.money_balance_clear)
+                                                }
+                                            val phoneLabel =
+                                                summary.phone.takeIf { it.isNotBlank() }
+                                            ListItem(
+                                                headlineContent = {
+                                                    Text(
+                                                        text = summary.name,
+                                                        fontWeight = FontWeight.Medium
+                                                    )
+                                                },
+                                                supportingContent = {
+                                                    val subLine =
+                                                        listOfNotNull(phoneLabel, balanceLabel)
+                                                            .joinToString(" · ")
+                                                    if (subLine.isNotBlank()) Text(subLine)
+                                                },
+                                                leadingContent = {
+                                                    Surface(
+                                                        shape = MaterialTheme.shapes.small,
+                                                        color = MaterialTheme.colorScheme.primaryContainer.copy(
+                                                            alpha = 0.4f
+                                                        )
+                                                    ) {
+                                                        Icon(
+                                                            imageVector = Icons.Filled.AccountCircle,
+                                                            contentDescription = null,
+                                                            tint = MaterialTheme.colorScheme.primary,
+                                                            modifier = Modifier.padding(6.dp)
+                                                        )
+                                                    }
+                                                },
+                                                trailingContent = {
+                                                    Icon(
+                                                        imageVector = Icons.Default.ChevronRight,
+                                                        contentDescription = null,
+                                                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(
+                                                            alpha = 0.5f
+                                                        )
+                                                    )
+                                                },
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .clickable {
+                                                        selectedCustomerId = summary.customerId
+                                                        selectedOrderId = null
+                                                        customerQuery = ""
+                                                    }
+                                            )
+                                        }
+                                    }
                                 }
                             }
                         }
                     } else {
-                        Surface(
-                            tonalElevation = 1.dp,
-                            shape = MaterialTheme.shapes.medium,
-                            modifier = Modifier.fillMaxWidth()
+                        val balance = customerBalance
+                        val highlightText = when {
+                            balance > BigDecimal.ZERO -> stringResource(
+                                R.string.money_due_value,
+                                formatKes(balance)
+                            )
+
+                            balance < BigDecimal.ZERO -> stringResource(
+                                R.string.money_credit_value,
+                                formatKes(balance.abs())
+                            )
+
+                            else -> null
+                        }
+
+                        AppScreenHeaderCard(
+                            title = customer?.name?.ifBlank {
+                                stringResource(R.string.money_customer)
+                            } ?: stringResource(R.string.money_customer),
+                            subtitle = customer?.phone?.takeIf { it.isNotBlank() }
+                                ?: stringResource(R.string.customer_unknown),
+                            leadingIcon = Icons.Default.AccountCircle,
+                            highlight = highlightText
+                        )
+                        TextButton(
+                            onClick = {
+                                selectedCustomerId = null
+                                selectedOrderId = null
+                                amountText = ""
+                                customerQuery = ""
+                            },
+                            modifier = Modifier.padding(top = AppSpacing.xSmall)
                         ) {
-                            Column(modifier = Modifier.padding(12.dp)) {
-                                Text(
-                                    text =
-                                        customer?.name?.ifBlank {
-                                            stringResource(R.string.money_customer)
-                                        } ?: stringResource(R.string.money_customer),
-                                    style = MaterialTheme.typography.titleSmall
-                                )
-                                customer?.phone?.takeIf { it.isNotBlank() }?.let { phone ->
+                            Text(stringResource(R.string.action_change))
+                        }
+                    }
+                }
+
+                item {
+                    AppCard {
+                        AppSection(
+                            title = stringResource(R.string.customer_accounts_payment_title),
+                        ) {
+                            OutlinedTextField(
+                                value = amountText,
+                                onValueChange = {
+                                    val filtered = it.filter { ch -> ch.isDigit() || ch == '.' }
+                                    if (filtered.count { ch -> ch == '.' } <= 1) {
+                                        amountText = filtered
+                                    }
+                                    amountError = null
+                                },
+                                label = { Text(stringResource(R.string.money_amount)) },
+                                placeholder = { Text(stringResource(R.string.money_kes_zero)) },
+                                prefix = {
                                     Text(
-                                        text = phone,
-                                        style = MaterialTheme.typography.bodySmall,
+                                        text = stringResource(R.string.order_editor_currency_prefix),
+                                        modifier = Modifier.padding(end = 4.dp),
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
-                                }
-                                Spacer(modifier = Modifier.height(6.dp))
-                                TextButton(
-                                    onClick = {
-                                        selectedCustomerId = null
-                                        selectedOrderId = null
-                                        amountText = ""
-                                        customerQuery = ""
+                                },
+                                enabled = hasAllocationTarget,
+                                isError = amountError != null,
+                                supportingText = amountError?.let { { Text(it) } },
+                                keyboardOptions = KeyboardOptions(
+                                    keyboardType = KeyboardType.Decimal,
+                                    imeAction = ImeAction.Next
+                                ),
+                                shape = MaterialTheme.shapes.medium,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .onFocusChanged { state ->
+                                        if (state.isFocused) {
+                                            amountRegistry.update { amountText = it }
+                                            voiceRouter.onFocusTarget(VoiceTarget.Total)
+                                        }
                                     }
-                                ) {
-                                    Text(stringResource(R.string.money_change_customer))
-                                }
-                            }
-                        }
-                    }
-
-                    Text(text = stringResource(R.string.money_amount), style = MaterialTheme.typography.titleSmall)
-                    OutlinedTextField(
-                        value = amountText,
-                        onValueChange = {
-                            val filtered = it.filter { ch -> ch.isDigit() || ch == '.' }
-                            if (filtered.count { ch -> ch == '.' } <= 1) {
-                                amountText = filtered
-                            }
-                            amountError = null
-                        },
-                        label = { Text(stringResource(R.string.money_amount_kes)) },
-                        placeholder = { Text(stringResource(R.string.money_kes_zero)) },
-                        enabled = hasAllocationTarget,
-                        keyboardOptions = KeyboardOptions(
-                            keyboardType = KeyboardType.Decimal,
-                            imeAction = ImeAction.Next
-                        ),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .onFocusChanged { state ->
-                                if (state.isFocused) {
-                                    amountRegistry.update { amountText = it }
-                                    voiceRouter.onFocusTarget(VoiceTarget.Total)
-                                }
-                            }
-                    )
-                    amountError?.let {
-                        Text(text = it, color = MaterialTheme.colorScheme.error)
-                    }
-
-                    Text(text = stringResource(R.string.money_method), style = MaterialTheme.typography.titleSmall)
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        MethodChip(
-                            label = stringResource(R.string.money_method_cash),
-                            selected = selectedMethod == PaymentMethod.CASH,
-                            onClick = { selectedMethod = PaymentMethod.CASH },
-                            enabled = hasAllocationTarget
-                        )
-                        MethodChip(
-                            label = stringResource(R.string.money_method_mpesa),
-                            selected = selectedMethod == PaymentMethod.MPESA,
-                            onClick = { selectedMethod = PaymentMethod.MPESA },
-                            enabled = hasAllocationTarget
-                        )
-                    }
-
-                    OutlinedTextField(
-                        value = noteText,
-                        onValueChange = { noteText = it },
-                        label = { Text(stringResource(R.string.money_note_optional)) },
-                        enabled = hasAllocationTarget,
-                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
-                        modifier = Modifier.fillMaxWidth()
-                    )
-
-                    Text(text = stringResource(R.string.money_allocation), style = MaterialTheme.typography.titleSmall)
-                    if (selectedCustomerId != null) {
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            FilterChip(
-                                selected = selectedOrderId == null,
-                                onClick = { selectedOrderId = null },
-                                label = { Text(stringResource(R.string.money_oldest_orders)) },
-                                enabled = true,
-                                modifier = Modifier.sizeIn(minHeight = 48.dp)
                             )
-                            FilterChip(
-                                selected = selectedOrderId != null,
-                                onClick = { showOrderSheet = true },
-                                label = { Text(stringResource(R.string.money_pick_order)) },
-                                enabled = true,
-                                modifier = Modifier.sizeIn(minHeight = 48.dp)
-                            )
-                        }
-                    }
-                    selectedOrderId?.let { contextOrderId ->
-                        val label =
-                            orderLabels[contextOrderId]
-                                ?: eligibleOrders.firstOrNull { it.order.id == contextOrderId }?.let { order ->
-                                    formatOrderLabel(
-                                        date = order.order.orderDate,
-                                        customerName = customer?.name,
-                                        notes = "",
-                                        totalAmount = order.order.totalAmount
-                                    )
-                                }
-                                ?: stringResource(R.string.payment_history_header_order_id, contextOrderId)
-                        if (label.isNotBlank()) {
+
+                            Spacer(modifier = Modifier.height(AppSpacing.medium))
+
                             Text(
-                                text = stringResource(R.string.money_selected_label, label),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                text = stringResource(R.string.money_method),
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            Spacer(modifier = Modifier.height(AppSpacing.xSmall))
+                            Row(horizontalArrangement = Arrangement.spacedBy(AppSpacing.small)) {
+                                MethodChip(
+                                    label = stringResource(R.string.money_method_cash),
+                                    icon = Icons.Default.AttachMoney,
+                                    selected = selectedMethod == PaymentMethod.CASH,
+                                    onClick = { selectedMethod = PaymentMethod.CASH },
+                                    enabled = hasAllocationTarget
+                                )
+                                MethodChip(
+                                    label = stringResource(R.string.money_method_mpesa),
+                                    icon = Icons.Default.CreditCard,
+                                    selected = selectedMethod == PaymentMethod.MPESA,
+                                    onClick = { selectedMethod = PaymentMethod.MPESA },
+                                    enabled = hasAllocationTarget
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.height(AppSpacing.medium))
+
+                            OutlinedTextField(
+                                value = noteText,
+                                onValueChange = { noteText = it },
+                                label = { Text(stringResource(R.string.money_note_optional)) },
+                                placeholder = { Text(stringResource(R.string.order_editor_notes_placeholder)) },
+                                leadingIcon = {
+                                    Icon(
+                                        imageVector = Icons.AutoMirrored.Filled.Notes,
+                                        contentDescription = null
+                                    )
+                                },
+                                enabled = hasAllocationTarget,
+                                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                                shape = MaterialTheme.shapes.medium,
+                                modifier = Modifier.fillMaxWidth()
                             )
                         }
                     }
                 }
+
+                if (selectedCustomerId != null) {
+                    item {
+                        AppCard {
+                            AppSection(
+                                title = stringResource(R.string.money_allocation),
+                                subtitle = stringResource(R.string.money_pick_order)
+                            ) {
+                                Row(horizontalArrangement = Arrangement.spacedBy(AppSpacing.small)) {
+                                    FilterChip(
+                                        selected = selectedOrderId == null,
+                                        onClick = { selectedOrderId = null },
+                                        label = { Text(stringResource(R.string.money_oldest_orders)) },
+                                        leadingIcon = if (selectedOrderId == null) {
+                                            {
+                                                Icon(
+                                                    Icons.Default.Check,
+                                                    null,
+                                                    Modifier.size(18.dp)
+                                                )
+                                            }
+                                        } else null,
+                                        modifier = Modifier.height(48.dp)
+                                    )
+                                    FilterChip(
+                                        selected = selectedOrderId != null,
+                                        onClick = { showOrderSheet = true },
+                                        label = { Text(stringResource(R.string.money_pick_order)) },
+                                        leadingIcon = if (selectedOrderId != null) {
+                                            {
+                                                Icon(
+                                                    Icons.Default.Check,
+                                                    null,
+                                                    Modifier.size(18.dp)
+                                                )
+                                            }
+                                        } else null,
+                                        modifier = Modifier.height(48.dp)
+                                    )
+                                }
+
+                                selectedOrderId?.let { contextOrderId ->
+                                    val order =
+                                        eligibleOrders.firstOrNull { it.order.id == contextOrderId }
+                                    val label =
+                                        orderLabels[contextOrderId]
+                                            ?: order?.let { o ->
+                                                formatOrderLabel(
+                                                    date = o.order.orderDate,
+                                                    customerName = customer?.name,
+                                                    notes = "",
+                                                    totalAmount = o.order.totalAmount
+                                                )
+                                            }
+                                            ?: stringResource(
+                                                R.string.payment_history_header_order_id,
+                                                contextOrderId
+                                            )
+
+                                    if (label.isNotBlank()) {
+                                        Spacer(modifier = Modifier.height(AppSpacing.medium))
+                                        Surface(
+                                            color = MaterialTheme.colorScheme.secondaryContainer.copy(
+                                                alpha = 0.3f
+                                            ),
+                                            shape = MaterialTheme.shapes.medium,
+                                            modifier = Modifier.fillMaxWidth()
+                                        ) {
+                                            ListItem(
+                                                headlineContent = {
+                                                    Text(
+                                                        text = label,
+                                                        style = MaterialTheme.typography.bodyMedium,
+                                                        fontWeight = FontWeight.Medium
+                                                    )
+                                                },
+                                                supportingContent = {
+                                                    order?.let { o ->
+                                                        Text(
+                                                            text = stringResource(
+                                                                R.string.day_balance_due_amount,
+                                                                formatKes(o.order.totalAmount - o.paidAmount)
+                                                            ),
+                                                            style = MaterialTheme.typography.bodySmall
+                                                        )
+                                                    }
+                                                },
+                                                leadingContent = {
+                                                    Icon(
+                                                        imageVector = Icons.Default.History,
+                                                        contentDescription = null,
+                                                        tint = MaterialTheme.colorScheme.secondary
+                                                    )
+                                                },
+                                                trailingContent = {
+                                                    TextButton(onClick = {
+                                                        showOrderSheet = true
+                                                    }) {
+                                                        Text(stringResource(R.string.action_change))
+                                                    }
+                                                }
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             }
+
+            SuccessOverlay(
+                visible = showSuccessOverlay,
+                text = paymentSavedMessage,
+                onDismiss = {
+                    showSuccessOverlay = false
+                    onPaymentRecorded()
+                }
+            )
         }
     }
 
     if (showOrderSheet) {
         ModalBottomSheet(
-            onDismissRequest = { showOrderSheet = false }
+            onDismissRequest = { showOrderSheet = false },
+            dragHandle = {
+                Surface(
+                    modifier = Modifier.padding(vertical = 12.dp),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
+                    shape = CircleShape
+                ) {
+                    Box(modifier = Modifier.size(width = 32.dp, height = 4.dp))
+                }
+            }
         ) {
             Column(
-                modifier = Modifier.fillMaxWidth().padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 32.dp)
             ) {
-                Text(text = stringResource(R.string.money_pick_order), style = MaterialTheme.typography.titleSmall)
-                if (eligibleOrders.isEmpty()) {
-                    Text(
-                        text = stringResource(R.string.money_no_open_orders),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                Text(
+                    text = stringResource(R.string.money_pick_order),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    modifier = Modifier.padding(
+                        horizontal = AppSpacing.large,
+                        vertical = AppSpacing.medium
                     )
+                )
+                if (eligibleOrders.isEmpty()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(AppSpacing.large),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = stringResource(R.string.money_no_open_orders),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 } else {
                     LazyColumn(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                        modifier = Modifier.fillMaxWidth()
                     ) {
                         items(eligibleOrders, key = { it.order.id }) { order ->
                             val label =
@@ -452,21 +652,37 @@ fun ManualPaymentScreen(
                                     totalAmount = order.order.totalAmount
                                 )
                             val outstanding = order.order.totalAmount - order.paidAmount
-                            TextButton(
-                                onClick = {
+                            ListItem(
+                                headlineContent = { Text(label) },
+                                supportingContent = {
+                                    Text(
+                                        stringResource(
+                                            R.string.day_balance_due_amount,
+                                            formatKes(outstanding)
+                                        )
+                                    )
+                                },
+                                leadingContent = {
+                                    Icon(
+                                        imageVector = Icons.Default.History,
+                                        contentDescription = null
+                                    )
+                                },
+                                trailingContent = {
+                                    if (selectedOrderId == order.order.id) {
+                                        Icon(
+                                            imageVector = Icons.Default.Check,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary
+                                        )
+                                    }
+                                },
+                                modifier = Modifier.clickable {
                                     selectedOrderId = order.order.id
                                     amountText = outstanding.max(BigDecimal.ZERO).toPlainString()
                                     showOrderSheet = false
                                 }
-                            ) {
-                                Text(
-                                    stringResource(
-                                        R.string.money_due_amount,
-                                        label,
-                                        formatKes(outstanding)
-                                    )
-                                )
-                            }
+                            )
                         }
                     }
                 }
@@ -478,6 +694,7 @@ fun ManualPaymentScreen(
 @Composable
 private fun MethodChip(
     label: String,
+    icon: ImageVector,
     selected: Boolean,
     onClick: () -> Unit,
     enabled: Boolean
@@ -486,7 +703,14 @@ private fun MethodChip(
         selected = selected,
         onClick = onClick,
         label = { Text(label) },
+        leadingIcon = {
+            Icon(
+                imageVector = icon,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp)
+            )
+        },
         enabled = enabled,
-        modifier = Modifier.sizeIn(minHeight = 48.dp)
+        modifier = Modifier.height(48.dp)
     )
 }

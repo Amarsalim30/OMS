@@ -34,7 +34,7 @@ import java.math.BigDecimal
 internal data class AppFeatureNavigationActions(
     val onOpenMore: () -> Unit,
     val openImportContacts: () -> Unit,
-    val navigateToMoneyRecord: (MoneyRecordContext) -> Unit,
+    val navigateToMoneyRecord: (MoneyRecordContext?) -> Unit,
     val navigateToCalendarQuickAdd: (LocalDate) -> Unit,
     val navigateToPaymentHistory: (PaymentHistoryFilter, Long?) -> Unit,
     val startPracticalTutorial: (Int) -> Unit
