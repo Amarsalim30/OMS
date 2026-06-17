@@ -70,6 +70,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.net.toUri
 import com.zeynbakers.order_management_system.R
 import com.zeynbakers.order_management_system.core.tutorial.TutorialCoachTargets
 import com.zeynbakers.order_management_system.core.tutorial.tutorialCoachTarget
@@ -102,8 +103,9 @@ fun UnpaidOrdersScreen(
     onOpenDay: (LocalDate, Long?) -> Unit,
     onReceivePayment: (OrderEntity) -> Unit,
     onDeleteOrder: (OrderEntity) -> Unit,
+    modifier: Modifier = Modifier,
     title: String? = null,
-    showBack: Boolean = true
+    showBack: Boolean = true,
 ) {
     val today = rememberCurrentDate()
     val screenTitle = title ?: stringResource(R.string.unpaid_title)
@@ -115,7 +117,7 @@ fun UnpaidOrdersScreen(
         }
 
     // Search State
-    var isSearchActive by rememberSaveable { mutableStateOf(false) }
+    var isSearchActive by rememberSaveable { mutableStateOf(value = false) }
     var searchQuery by rememberSaveable { mutableStateOf("") }
     var pendingSwipeDeleteOrder by remember { mutableStateOf<OrderEntity?>(null) }
 
@@ -149,12 +151,14 @@ fun UnpaidOrdersScreen(
 
                     OrdersFilter.OVERDUE ->
                         orders
+                            .asSequence()
                             .filter { it.orderDate < today }
                             .sortedWith(
                                 compareBy<OrderEntity> { it.orderDate }.thenBy {
                                     it.createdAt
                                 }
                             )
+                            .toList()
                 }
             base
         }
@@ -178,7 +182,7 @@ fun UnpaidOrdersScreen(
     val groupedByDate =
         remember(filteredOrders, selectedFilter, today) {
             if (!showDateSections) {
-                sortedMapOf<LocalDate, List<OrderEntity>>()
+                sortedMapOf()
             } else {
                 val comparator =
                     when (selectedFilter) {
@@ -192,9 +196,9 @@ fun UnpaidOrdersScreen(
                             }.thenByDescending { it }
 
                         OrdersFilter.OLDEST,
-                        OrdersFilter.OVERDUE -> compareBy<LocalDate> { it }
+                        OrdersFilter.OVERDUE -> compareBy { it }
 
-                        OrdersFilter.LARGEST_DUE -> compareByDescending<LocalDate> { it }
+                        else -> compareByDescending { it }
                     }
                 filteredOrders.groupBy { it.orderDate }.toSortedMap(comparator)
             }
@@ -208,7 +212,7 @@ fun UnpaidOrdersScreen(
         }
     val activeContextLabel =
         when {
-            searchQuery.isNotBlank() && selectedFilter == OrdersFilter.NEWEST ->
+            (searchQuery.isNotBlank() && (selectedFilter == OrdersFilter.NEWEST)) ->
                 stringResource(
                     R.string.unpaid_active_context_search_only,
                     searchQuery.trim()
@@ -231,6 +235,7 @@ fun UnpaidOrdersScreen(
         }
 
     Scaffold(
+        modifier = modifier,
         contentWindowInsets = WindowInsets(0),
         topBar = {
             if (isSearchActive) {
@@ -339,7 +344,7 @@ fun UnpaidOrdersScreen(
                             .padding(horizontal = 16.dp),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        items(OrdersFilter.values(), key = { it.name }) { filter ->
+                        items(OrdersFilter.entries, key = { it.name }) { filter ->
                             FilterChip(
                                 selected = selectedFilter == filter,
                                 onClick = { selectedFilterKey = filter.name },
@@ -410,7 +415,8 @@ fun UnpaidOrdersScreen(
                                             }
 
                                             SwipeToDismissBoxValue.StartToEnd,
-                                            SwipeToDismissBoxValue.Settled -> false
+                                            SwipeToDismissBoxValue.Settled ->
+                                                false
                                         }
                                     }
                                 )
@@ -431,7 +437,9 @@ fun UnpaidOrdersScreen(
                                         onOpenDay = {
                                             onOpenDay(order.orderDate, order.id)
                                         },
-                                        onReceivePayment = { onReceivePayment(order) }
+                                        onReceivePayment = {
+                                            onReceivePayment(order)
+                                        }
                                     )
                                 }
                             )
@@ -535,7 +543,7 @@ private fun SwipeBackground(dismissState: SwipeToDismissBoxState) {
                     .fillMaxSize()
                     .background(MaterialTheme.colorScheme.errorContainer)
                     .padding(horizontal = 20.dp),
-            contentAlignment = Alignment.CenterEnd
+            contentAlignment = Alignment.CenterEnd,
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
@@ -559,13 +567,13 @@ private fun SwipeBackground(dismissState: SwipeToDismissBoxState) {
 internal fun SummaryCard(
     count: Int,
     totalOutstanding: BigDecimal,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
 ) {
     AppCard(
         modifier =
             modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 8.dp)
+                .padding(horizontal = 16.dp, vertical = 8.dp),
     ) {
         Row(
             modifier = Modifier
@@ -660,13 +668,13 @@ internal fun StickyDateHeader(date: LocalDate, today: LocalDate) {
 
 @Composable
 internal fun UnpaidOrderRow(
-    modifier: Modifier = Modifier,
     order: OrderEntity,
     customerLabel: String?,
     customerPhone: String?,
     paidAmount: BigDecimal,
     balance: BigDecimal,
     onOpenDay: () -> Unit,
+    modifier: Modifier = Modifier,
     onReceivePayment: () -> Unit
 ) {
     val context = LocalContext.current
@@ -677,7 +685,7 @@ internal fun UnpaidOrderRow(
             ?: stringResource(R.string.unpaid_unnamed_order)
     val pickupDisplay =
         com.zeynbakers.order_management_system.core.util.formatPickupTimeForDisplay(order.pickupTime)
-    val initials = getInitialsForOrder(customerLabel, "")
+    val initials = getInitialsForOrder(customerLabel)
     AppCard(
         modifier =
             modifier
@@ -721,7 +729,7 @@ internal fun UnpaidOrderRow(
                             )
                             if (hasCustomer) {
                                 Text(
-                                    text = customerLabel.orEmpty(),
+                                    text = customerLabel,
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     maxLines = 1,
@@ -840,7 +848,7 @@ internal fun UnpaidOrderRow(
                                         Please arrange payment at your earliest convenience. Thank you! 🙏"""
                         val intent = if (!customerPhone.isNullOrBlank()) {
                             Intent(Intent.ACTION_SENDTO).apply {
-                                data = android.net.Uri.parse("smsto:$customerPhone")
+                                data = "smsto:$customerPhone".toUri()
                                 putExtra("sms_body", message)
                             }
                         } else {
@@ -864,11 +872,9 @@ internal fun UnpaidOrderRow(
     }
 }
 
-private fun getInitialsForOrder(customerName: String?, notes: String): String {
-    val source = if (!customerName.isNullOrBlank()) customerName else notes
-    val firstLetter = source
-        .filter { it.isLetter() }
-        .firstOrNull()
+private fun getInitialsForOrder(customerName: String?): String {
+    val source = if (!customerName.isNullOrBlank()) customerName else ""
+    val firstLetter = source.firstOrNull { it.isLetter() }
     return firstLetter?.uppercase() ?: "?"
 }
 
@@ -903,7 +909,7 @@ private fun formatRelativeDate(
 ): String {
     return when (date) {
         today -> todayLabel
-        today.minus(kotlinx.datetime.DatePeriod(days = 1)) -> yesterdayLabel
+        today - kotlinx.datetime.DatePeriod(days = 1) -> yesterdayLabel
         else -> {
             val javaDate = date.toJavaLocalDate()
             val formatter =
