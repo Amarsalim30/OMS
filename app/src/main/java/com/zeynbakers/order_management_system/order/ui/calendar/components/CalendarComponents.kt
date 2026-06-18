@@ -52,6 +52,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
@@ -61,6 +62,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.zeynbakers.order_management_system.R
 import com.zeynbakers.order_management_system.core.ui.components.AppCard
 import com.zeynbakers.order_management_system.core.ui.theme.DarkWeekendSaturday
@@ -108,14 +110,21 @@ internal fun CalendarTopAppBar(
             }
         },
         navigationIcon = {
-            IconButton(
+            Surface(
                 onClick = onSummaryClick,
-                modifier = Modifier.size(48.dp)
+                shape = CircleShape,
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                modifier = Modifier
+                    .padding(start = 12.dp)
+                    .size(40.dp)
             ) {
-                Icon(
-                    imageVector = Icons.Filled.BarChart,
-                    contentDescription = stringResource(R.string.calendar_summary)
-                )
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = Icons.Filled.BarChart,
+                        contentDescription = stringResource(R.string.calendar_summary),
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
             }
         },
         actions = {
@@ -270,9 +279,9 @@ internal fun MonthSummaryCard(
     AppCard(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 2.dp)
+            .padding(horizontal = 16.dp, vertical = 8.dp)
     ) {
-        Column(modifier = Modifier.padding(6.dp)) {
+        Column(modifier = Modifier.padding(8.dp)) {
             if (!ownerTitle.isNullOrBlank() || !ownerSubtitle.isNullOrBlank()) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -321,16 +330,18 @@ internal fun MonthSummaryCard(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .heightIn(min = 52.dp),
+                    .heightIn(min = 64.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            text = stringResource(R.string.calendar_month_total),
+                            text = stringResource(R.string.calendar_month_total).uppercase(),
                             style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontWeight = FontWeight.Bold,
+                            letterSpacing = 1.2.sp
                         )
                         Spacer(modifier = Modifier.width(4.dp))
                         IconButton(
@@ -350,26 +361,26 @@ internal fun MonthSummaryCard(
                             ?: stringResource(R.string.calendar_loading)
                     Text(
                         text = totalLabel,
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold
+                        style = MaterialTheme.typography.headlineMedium,
+                        fontWeight = FontWeight.ExtraBold
                     )
                 }
 
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier.heightIn(min = 40.dp)
+                    modifier = Modifier.heightIn(min = 44.dp)
                 ) {
                     if (!hasOrders) {
                         Button(
                             onClick = onAddOrder,
                             contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
-                            modifier = Modifier.height(36.dp)
+                            modifier = Modifier.height(40.dp)
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Add,
                                 contentDescription = null,
-                                modifier = Modifier.size(16.dp)
+                                modifier = Modifier.size(18.dp)
                             )
                             Spacer(modifier = Modifier.width(4.dp))
                             Text(
@@ -379,20 +390,27 @@ internal fun MonthSummaryCard(
                         }
                     } else if (dueCount > 0) {
                         Surface(
-                            shape = RoundedCornerShape(999.dp),
-                            color = MaterialTheme.colorScheme.errorContainer,
+                            shape = CircleShape,
+                            color = Color(0xFFB71C1C), // Deep Red
                             modifier = Modifier
                                 .height(36.dp)
                                 .clickable(role = Role.Button) { onDueClick() }
                         ) {
-                            Box(
-                                contentAlignment = Alignment.Center,
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
                                 modifier = Modifier.padding(horizontal = 12.dp)
                             ) {
+                                Surface(
+                                    modifier = Modifier.size(6.dp),
+                                    shape = CircleShape,
+                                    color = Color.White
+                                ) {}
                                 Text(
                                     text = stringResource(R.string.calendar_unpaid_count, dueCount),
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onErrorContainer
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = Color.White,
+                                    fontWeight = FontWeight.Bold
                                 )
                             }
                         }
@@ -517,7 +535,7 @@ internal fun WeekdayHeaderRow(weekStart: Int) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 10.dp, vertical = 2.dp),
+            .padding(horizontal = 10.dp, vertical = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(4.dp)
     ) {
         labels.forEachIndexed { index, label ->
@@ -530,11 +548,13 @@ internal fun WeekdayHeaderRow(weekStart: Int) {
                     else -> MaterialTheme.colorScheme.onSurfaceVariant
                 }
             Text(
-                text = label,
+                text = label.uppercase(),
                 style = MaterialTheme.typography.labelSmall,
                 modifier = Modifier.weight(1f),
                 color = color,
-                textAlign = TextAlign.Center
+                textAlign = TextAlign.Center,
+                fontWeight = FontWeight.Bold,
+                letterSpacing = 1.1.sp
             )
         }
     }

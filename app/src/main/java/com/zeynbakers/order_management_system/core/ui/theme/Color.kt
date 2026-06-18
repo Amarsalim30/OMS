@@ -65,8 +65,8 @@ val md_theme_dark_surfaceVariant = Color(0xFF43474E)
 val md_theme_dark_onSurfaceVariant = Color(0xFFC3C7CF)
 val md_theme_dark_outline = Color(0xFF8D9199)
 
-val DarkWeekendSaturday = Color(0xFF8AB4F8)
-val DarkWeekendSunday = Color(0xFFF28B82)
+val DarkWeekendSaturday = Color(0xFF98C1FF)
+val DarkWeekendSunday = Color(0xFFFF9B9B)
 val OutOfMonthDateColor = Color(0xFF8E918F)
 
 val UtilitySuccess = Color(0xFF1E9F63)

@@ -1,6 +1,5 @@
 package com.zeynbakers.order_management_system.order.ui.calendar.components
 
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
@@ -9,7 +8,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
@@ -32,7 +30,6 @@ import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.zeynbakers.order_management_system.core.ui.theme.DarkWeekendSaturday
 import com.zeynbakers.order_management_system.core.ui.theme.DarkWeekendSunday
@@ -41,8 +38,6 @@ import com.zeynbakers.order_management_system.order.ui.common.CalendarDayUi
 import com.zeynbakers.order_management_system.order.ui.common.PaymentState
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.toJavaLocalDate
-import java.math.BigDecimal
-import java.math.RoundingMode
 import java.util.Calendar
 
 private const val MAX_VISIBLE_MARKERS = 3
@@ -67,18 +62,6 @@ internal fun DayCell(
     }
     val dayTag = remember(day.date) { "day-cell-${day.date}" }
     val markerTag = remember(day.date) { "day-markers-${day.date}" }
-    val compactTotal =
-        remember(day.totalAmount, hasOrders) {
-            if (hasOrders) formatKesCompact(day.totalAmount) else null
-        }
-    val statusTextColor =
-        when (day.paymentState) {
-            PaymentState.UNPAID -> calendarPaymentStateColor(PaymentState.UNPAID)
-            PaymentState.PAID -> calendarPaymentStateColor(PaymentState.PAID)
-            PaymentState.PARTIAL -> calendarPaymentStateColor(PaymentState.PARTIAL)
-            PaymentState.OVERPAID -> calendarPaymentStateColor(PaymentState.OVERPAID)
-            null -> MaterialTheme.colorScheme.onSurfaceVariant
-        }
     val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
     val dayOfWeek = remember(day.date) {
         val javaDate = day.date.toJavaLocalDate()
@@ -88,15 +71,16 @@ internal fun DayCell(
     }
 
     val baseTextColor =
-        if (isSelected) {
-            MaterialTheme.colorScheme.onPrimaryContainer
-        } else {
-            MaterialTheme.colorScheme.onSurface
+        when {
+            isSelected -> MaterialTheme.colorScheme.onPrimary
+            day.isToday && isDark -> Color.Black
+            else -> MaterialTheme.colorScheme.onSurface
         }
 
     val dayTextColor =
         when {
-            isSelected -> MaterialTheme.colorScheme.onPrimaryContainer
+            isSelected -> MaterialTheme.colorScheme.onPrimary
+            day.isToday && isDark -> Color.Black
             !day.isInCurrentMonth -> OutOfMonthDateColor
             isDark && dayOfWeek == Calendar.SATURDAY -> DarkWeekendSaturday
             isDark && dayOfWeek == Calendar.SUNDAY -> DarkWeekendSunday
@@ -105,21 +89,11 @@ internal fun DayCell(
 
     val containerColor =
         when {
-            isSelected -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f)
+            isSelected -> MaterialTheme.colorScheme.primary
+            day.isToday -> if (isDark) Color.White else MaterialTheme.colorScheme.primary
             else -> Color.Transparent
         }
-    val selectionBorder =
-        if (isSelected) {
-            BorderStroke(1.dp, MaterialTheme.colorScheme.primary)
-        } else {
-            null
-        }
-    val todayRingColor =
-        if (isSelected) {
-            MaterialTheme.colorScheme.onPrimaryContainer
-        } else {
-            MaterialTheme.colorScheme.primary
-        }
+    val selectionBorder = null
     val handleClick = {
         onSelectDate(day.date)
         onOpenDay(day.date)
@@ -150,65 +124,44 @@ internal fun DayCell(
         tonalElevation = 0.dp
     ) {
         Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = 6.dp, vertical = 3.dp),
-            verticalArrangement = Arrangement.spacedBy(2.dp)
+            modifier = Modifier.fillMaxSize(),
+            verticalArrangement = Arrangement.Center,
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Box(modifier = Modifier.fillMaxWidth()) {
+            Box(
+                contentAlignment = Alignment.Center,
+                modifier = Modifier.size(32.dp)
+            ) {
                 Surface(
                     shape = CircleShape,
-                    color = Color.Transparent,
-                    border = if (day.isToday) BorderStroke(1.5.dp, todayRingColor) else null,
-                    modifier = Modifier.size(28.dp)
-                ) {
-                    Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
-                        Text(
-                            text = day.date.dayOfMonth.toString(),
-                            style = MaterialTheme.typography.labelLarge,
-                            fontWeight = FontWeight.SemiBold,
-                            color = dayTextColor,
-                            maxLines = 1
-                        )
-                    }
-                }
-            }
-            if (hasOrders) {
+                    color = containerColor,
+                    modifier = Modifier.fillMaxSize()
+                ) {}
                 Text(
-                    text = "${day.orderCount} - $compactTotal",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = statusTextColor,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    text = day.date.dayOfMonth.toString(),
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = if (day.isToday || isSelected) FontWeight.ExtraBold else FontWeight.SemiBold,
+                    color = dayTextColor,
+                    maxLines = 1
                 )
-                if (markerStates.isNotEmpty()) {
-                    val visibleMarkers = markerStates.take(MAX_VISIBLE_MARKERS)
-                    val overflowCount = markerStates.size - visibleMarkers.size
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .testTag(markerTag),
-                        horizontalArrangement = Arrangement.spacedBy(4.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        visibleMarkers.forEachIndexed { index, state ->
-                            Surface(
-                                color = calendarPaymentStateColor(state),
-                                shape = CircleShape,
-                                modifier = Modifier
-                                    .size(7.dp)
-                                    .testTag("$markerTag-$index")
-                            ) {}
-                        }
-                        if (overflowCount > 0) {
-                            Text(
-                                text = "+$overflowCount",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                maxLines = 1,
-                                modifier = Modifier.testTag("$markerTag-overflow")
-                            )
-                        }
+            }
+            if (hasOrders && markerStates.isNotEmpty()) {
+                val visibleMarkers = markerStates.take(MAX_VISIBLE_MARKERS)
+                Row(
+                    modifier = Modifier
+                        .padding(top = 2.dp)
+                        .testTag(markerTag),
+                    horizontalArrangement = Arrangement.spacedBy(3.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    visibleMarkers.forEachIndexed { index, state ->
+                        Surface(
+                            color = calendarPaymentStateColor(state),
+                            shape = CircleShape,
+                            modifier = Modifier
+                                .size(4.dp)
+                                .testTag("$markerTag-$index")
+                        ) {}
                     }
                 }
             }
@@ -225,26 +178,6 @@ internal fun calendarPaymentStateColor(state: PaymentState): Color {
     }
 }
 
-private fun formatKesCompact(amount: BigDecimal): String {
-    val rounded = amount.setScale(0, RoundingMode.HALF_UP).toLong()
-    val abs = kotlin.math.abs(rounded)
-    val sign = if (rounded < 0) "-" else ""
-    return when {
-        abs >= 1_000_000 -> sign + formatOneDecimal(abs, 1_000_000, "m")
-        abs >= 1_000 -> sign + formatOneDecimal(abs, 1_000, "k")
-        else -> "$sign$abs"
-    }
-}
-
-private fun formatOneDecimal(value: Long, divisor: Long, suffix: String): String {
-    val whole = value / divisor
-    val remainder = (value % divisor) / (divisor / 10)
-    return if (remainder == 0L) {
-        "$whole$suffix"
-    } else {
-        "$whole.$remainder$suffix"
-    }
-}
 
 private fun resolveMarkerStates(day: CalendarDayUi): List<PaymentState> {
     if (day.orderStates.isNotEmpty()) {

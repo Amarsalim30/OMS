@@ -1,11 +1,11 @@
 package com.zeynbakers.order_management_system.core.ui.components
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.BorderStroke
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
@@ -21,13 +21,13 @@ fun AppCard(
         color = MaterialTheme.colorScheme.surface,
         tonalElevation = 3.dp,
         shadowElevation = 1.dp,
-        shape = RoundedCornerShape(18.dp),
+        shape = RoundedCornerShape(28.dp),
         border = BorderStroke(
             width = 1.dp,
             color = MaterialTheme.colorScheme.outline.copy(alpha = 0.18f)
         ),
         modifier = modifier.fillMaxWidth()
     ) {
-        Column(modifier = Modifier.padding(AppSpacing.medium), content = content)
+        Column(modifier = Modifier.padding(AppSpacing.large), content = content)
     }
 }
