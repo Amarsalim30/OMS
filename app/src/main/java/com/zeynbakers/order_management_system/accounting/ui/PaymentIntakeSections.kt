@@ -2,42 +2,34 @@
 
 package com.zeynbakers.order_management_system.accounting.ui
 
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.ContentCopy
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.Warning
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.material3.Button
-import androidx.compose.material3.Icon
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.zeynbakers.order_management_system.R
-import com.zeynbakers.order_management_system.core.ui.components.AppCard
+import com.zeynbakers.order_management_system.core.ui.components.AppSpacing
 import com.zeynbakers.order_management_system.core.util.formatKes
 import java.math.BigDecimal
 
@@ -51,252 +43,79 @@ private enum class StepState {
 internal fun IntakeStepRow(
     hasSource: Boolean,
     hasAssignments: Boolean,
-    hasSelected: Boolean
+    hasSelected: Boolean,
+    modifier: Modifier = Modifier
 ) {
-    val sourceState = if (hasSource) StepState.Complete else StepState.Active
-    val assignState =
-        when {
+    val steps = listOf(
+        stringResource(R.string.money_step_source) to if (hasSource) StepState.Complete else StepState.Active,
+        stringResource(R.string.money_step_assign) to when {
             !hasSource -> StepState.Idle
             hasAssignments -> StepState.Complete
             else -> StepState.Active
-        }
-    val postState =
-        when {
+        },
+        stringResource(R.string.money_step_post) to when {
             !hasAssignments -> StepState.Idle
             hasSelected -> StepState.Complete
             else -> StepState.Active
         }
+    )
 
     Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        StepChip(
-            step = "1",
-            label = stringResource(R.string.money_step_source),
-            state = sourceState,
-            modifier = Modifier.weight(1f)
-        )
-        StepChip(
-            step = "2",
-            label = stringResource(R.string.money_step_assign),
-            state = assignState,
-            modifier = Modifier.weight(1f)
-        )
-        StepChip(
-            step = "3",
-            label = stringResource(R.string.money_step_post),
-            state = postState,
-            modifier = Modifier.weight(1f)
-        )
-    }
-}
-
-@Composable
-private fun StepChip(
-    step: String,
-    label: String,
-    state: StepState,
-    modifier: Modifier = Modifier
-) {
-    val (container, content) =
-        when (state) {
-            StepState.Complete ->
-                MaterialTheme.colorScheme.primaryContainer to MaterialTheme.colorScheme.onPrimaryContainer
-            StepState.Active ->
-                MaterialTheme.colorScheme.secondaryContainer to MaterialTheme.colorScheme.onSecondaryContainer
-            StepState.Idle ->
-                MaterialTheme.colorScheme.surfaceVariant to MaterialTheme.colorScheme.onSurfaceVariant
-        }
-    Surface(
-        color = container,
-        contentColor = content,
-        shape = MaterialTheme.shapes.large,
         modifier = modifier
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Surface(
-                color = content.copy(alpha = 0.12f),
-                contentColor = content,
-                shape = MaterialTheme.shapes.small
-            ) {
-                Text(
-                    text = step,
-                    style = MaterialTheme.typography.labelSmall,
-                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                )
-            }
-            Text(
-                text = label,
-                style = MaterialTheme.typography.labelMedium,
-                maxLines = 1
-            )
-        }
-    }
-}
-
-@Composable
-internal fun IntakeSummaryRow(
-    totalDetected: Int,
-    readyCount: Int,
-    needsMatchCount: Int,
-    duplicateCount: Int
-) {
-    val hasAny = totalDetected > 0 || readyCount > 0 || needsMatchCount > 0 || duplicateCount > 0
-    if (!hasAny) return
-    Row(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .horizontalScroll(rememberScrollState()),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+            .fillMaxWidth()
+            .padding(vertical = AppSpacing.xSmall),
+        horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        SummaryPill(
-            label = stringResource(R.string.money_detected),
-            value = totalDetected,
-            icon = Icons.Filled.Info,
-            container = MaterialTheme.colorScheme.surfaceVariant,
-            content = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        SummaryPill(
-            label = stringResource(R.string.money_ready),
-            value = readyCount,
-            icon = Icons.Filled.CheckCircle,
-            container = MaterialTheme.colorScheme.secondaryContainer,
-            content = MaterialTheme.colorScheme.onSecondaryContainer
-        )
-        SummaryPill(
-            label = stringResource(R.string.money_needs_match),
-            value = needsMatchCount,
-            icon = Icons.Filled.Warning,
-            container = MaterialTheme.colorScheme.tertiaryContainer,
-            content = MaterialTheme.colorScheme.onTertiaryContainer
-        )
-        SummaryPill(
-            label = stringResource(R.string.money_duplicates),
-            value = duplicateCount,
-            icon = Icons.Filled.ContentCopy,
-            container = MaterialTheme.colorScheme.errorContainer,
-            content = MaterialTheme.colorScheme.onErrorContainer
-        )
-    }
-}
+        steps.forEachIndexed { index, (label, state) ->
+            val isActive = state != StepState.Idle
 
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-internal fun IntakeSummaryCard(
-    totalDetected: Int,
-    readyCount: Int,
-    needsMatchCount: Int,
-    duplicateCount: Int,
-    selectedCount: Int,
-    selectedAmount: BigDecimal,
-    onSelectMatched: () -> Unit,
-    onClearSelection: () -> Unit
-) {
-    AppCard {
-        Text(text = stringResource(R.string.summary_title), style = MaterialTheme.typography.titleSmall)
-        Spacer(modifier = Modifier.height(6.dp))
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            SummaryPill(
-                label = stringResource(R.string.money_detected),
-                value = totalDetected,
-                icon = Icons.Filled.Info,
-                container = MaterialTheme.colorScheme.surfaceVariant,
-                content = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            SummaryPill(
-                label = stringResource(R.string.money_ready),
-                value = readyCount,
-                icon = Icons.Filled.CheckCircle,
-                container = MaterialTheme.colorScheme.secondaryContainer,
-                content = MaterialTheme.colorScheme.onSecondaryContainer
-            )
-            SummaryPill(
-                label = stringResource(R.string.money_needs_match),
-                value = needsMatchCount,
-                icon = Icons.Filled.Warning,
-                container = MaterialTheme.colorScheme.tertiaryContainer,
-                content = MaterialTheme.colorScheme.onTertiaryContainer
-            )
-            SummaryPill(
-                label = stringResource(R.string.money_duplicates),
-                value = duplicateCount,
-                icon = Icons.Filled.ContentCopy,
-                container = MaterialTheme.colorScheme.errorContainer,
-                content = MaterialTheme.colorScheme.onErrorContainer
-            )
-        }
-        Spacer(modifier = Modifier.height(8.dp))
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = stringResource(R.string.money_selected_total, selectedCount, formatKes(selectedAmount)),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Row {
-                TextButton(onClick = onSelectMatched) {
-                    Text(stringResource(R.string.money_select_matched))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Surface(
+                    shape = MaterialTheme.shapes.extraLarge,
+                    color = when (state) {
+                        StepState.Complete -> MaterialTheme.colorScheme.primary
+                        StepState.Active -> MaterialTheme.colorScheme.primaryContainer
+                        StepState.Idle -> MaterialTheme.colorScheme.surfaceVariant
+                    },
+                    modifier = Modifier.size(24.dp)
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Text(
+                            text = (index + 1).toString(),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = when (state) {
+                                StepState.Complete -> MaterialTheme.colorScheme.onPrimary
+                                StepState.Active -> MaterialTheme.colorScheme.onPrimaryContainer
+                                StepState.Idle -> MaterialTheme.colorScheme.onSurfaceVariant
+                            }
+                        )
+                    }
                 }
-                TextButton(onClick = onClearSelection) { Text(stringResource(R.string.action_clear)) }
+                Spacer(modifier = Modifier.width(AppSpacing.xSmall))
+                Text(
+                    text = label,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = if (isActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant.copy(
+                        alpha = 0.6f
+                    )
+                )
             }
-        }
-    }
-}
-
-@Composable
-private fun SummaryPill(
-    label: String,
-    value: Int,
-    icon: ImageVector,
-    container: Color,
-    content: Color
-) {
-    Surface(
-        color = container,
-        contentColor = content,
-        shape = MaterialTheme.shapes.small
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp)
-        ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = null,
-                modifier = Modifier.size(12.dp)
-            )
-            Text(
-                text = label,
-                style = MaterialTheme.typography.labelSmall,
-                maxLines = 1
-            )
-            Text(
-                text = value.toString(),
-                style = MaterialTheme.typography.labelSmall,
-                fontWeight = FontWeight.SemiBold
-            )
+            if (index < steps.lastIndex) {
+                HorizontalDivider(
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(horizontal = AppSpacing.small)
+                        .align(Alignment.CenterVertically),
+                    color = MaterialTheme.colorScheme.outlineVariant
+                )
+            }
         }
     }
 }
 
 /**
  * Bottom bar shown when there are ready payments to apply.
- *
- * Layout: [summary text (weight 1)] [Apply selected (secondary)] [Apply ready (primary)]
- *
- * Uses a Row to ensure the primary CTA never wraps to a new line on any screen width.
- * Buttons enforce a 48dp minimum height for touch targets.
  */
 @Composable
 internal fun ApplyReadyBar(
@@ -305,20 +124,22 @@ internal fun ApplyReadyBar(
     readyCount: Int,
     readyAmount: BigDecimal,
     onApplyReady: () -> Unit,
-    onApplySelected: () -> Unit
+    onApplySelected: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
     Surface(
         color = MaterialTheme.colorScheme.surfaceContainerHigh,
-        tonalElevation = 2.dp
+        tonalElevation = 4.dp,
+        modifier = modifier.fillMaxWidth()
     ) {
         Row(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 12.dp),
+                .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Bottom))
+                .padding(AppSpacing.medium)
+                .fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
+            horizontalArrangement = Arrangement.spacedBy(AppSpacing.small)
         ) {
-            // Summary section - stretches to fill available width
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = stringResource(
@@ -341,24 +162,25 @@ internal fun ApplyReadyBar(
                     )
                 }
             }
-            // Secondary: apply selected only when selection is a partial subset
+
             if (selectedReadyCount in 1 until readyCount) {
                 OutlinedButton(
                     onClick = onApplySelected,
-                    modifier = Modifier.sizeIn(minHeight = 48.dp)
+                    modifier = Modifier.sizeIn(minHeight = 48.dp),
+                    shape = MaterialTheme.shapes.medium
                 ) {
                     Text(stringResource(R.string.money_apply_selected_count, selectedReadyCount))
                 }
             }
-            // Primary CTA - always apply ready payments
+
             Button(
                 onClick = onApplyReady,
                 enabled = readyCount > 0,
-                modifier = Modifier.sizeIn(minHeight = 48.dp)
+                modifier = Modifier.sizeIn(minHeight = 48.dp),
+                shape = MaterialTheme.shapes.medium
             ) {
                 Text(stringResource(R.string.money_apply_ready_count, readyCount))
             }
         }
     }
 }
-

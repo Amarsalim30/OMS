@@ -1,7 +1,7 @@
 package com.zeynbakers.order_management_system.core.ui
 
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Scaffold
@@ -11,11 +11,11 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
-import com.zeynbakers.order_management_system.R
 import com.zeynbakers.order_management_system.MoneyRecordContext
-import com.zeynbakers.order_management_system.accounting.ui.PaymentApplySummary
+import com.zeynbakers.order_management_system.R
 import com.zeynbakers.order_management_system.accounting.ui.ManualPaymentScreen
 import com.zeynbakers.order_management_system.accounting.ui.MpesaImportScreen
+import com.zeynbakers.order_management_system.accounting.ui.PaymentApplySummary
 import com.zeynbakers.order_management_system.accounting.ui.PaymentIntakeViewModel
 import com.zeynbakers.order_management_system.core.tutorial.TutorialCoachTargets
 import com.zeynbakers.order_management_system.core.tutorial.tutorialCoachTarget
@@ -74,7 +74,7 @@ internal fun MoneyScreen(
                     onAppliedInPlace = onAppliedInPlace,
                     onOpenReceiptHistory = onOpenReceiptHistory,
                     showTopBar = false,
-                    externalPadding = padding
+                    modifier = Modifier.padding(padding)
                 )
             }
             MoneyTab.Record -> {

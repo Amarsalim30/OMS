@@ -1,40 +1,31 @@
 package com.zeynbakers.order_management_system.accounting.ui
 
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.calculateEndPadding
-import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.sizeIn
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.ContentPaste
-import androidx.compose.material.icons.filled.Info
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -46,25 +37,23 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
-import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.zeynbakers.order_management_system.R
 import com.zeynbakers.order_management_system.core.ui.LocalUiEventDispatcher
+import com.zeynbakers.order_management_system.core.ui.components.AppCard
+import com.zeynbakers.order_management_system.core.ui.components.AppEmptyState
+import com.zeynbakers.order_management_system.core.ui.components.AppFilterOption
+import com.zeynbakers.order_management_system.core.ui.components.AppFilterRow
+import com.zeynbakers.order_management_system.core.ui.components.AppScreenHeaderCard
+import com.zeynbakers.order_management_system.core.ui.components.AppSpacing
 import com.zeynbakers.order_management_system.core.ui.showSnackbar
-import com.zeynbakers.order_management_system.core.util.formatKes
-import java.math.BigDecimal
 import kotlinx.coroutines.launch
+import java.math.BigDecimal
 
-@OptIn(
-    ExperimentalFoundationApi::class,
-    ExperimentalLayoutApi::class,
-    ExperimentalMaterial3Api::class
-)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MpesaImportScreen(
     viewModel: PaymentIntakeViewModel,
@@ -73,16 +62,17 @@ fun MpesaImportScreen(
     onApplied: (PaymentApplySummary) -> Unit,
     onAppliedInPlace: () -> Unit,
     onOpenReceiptHistory: (Long) -> Unit,
-    showTopBar: Boolean = true,
-    externalPadding: PaddingValues = PaddingValues(0.dp)
+    modifier: Modifier = Modifier,
+    showTopBar: Boolean = true
 ) {
-    val clipboardManager = LocalClipboardManager.current
+    val clipboard = LocalClipboardManager.current
     val scope = rememberCoroutineScope()
     val uiEvents = LocalUiEventDispatcher.current
     val rawText by viewModel.rawText.collectAsState()
     val transactions by viewModel.transactions.collectAsState()
     var intakeFilter by rememberSaveable { mutableStateOf(IntakeFilter.All) }
     var activeKey by rememberSaveable { mutableStateOf<String?>(null) }
+
     val clipboardEmptyMessage = stringResource(R.string.money_clipboard_empty)
     val receiptNotFoundMessage = stringResource(R.string.money_receipt_not_found)
     val appliedPaymentsTemplate = stringResource(R.string.money_applied_payments)
@@ -98,34 +88,24 @@ fun MpesaImportScreen(
     }
 
     val intakeStats = remember(transactions) { transactions.toIntakeStats() }
-    val totalDetected = intakeStats.totalDetected
-    val duplicateCount = intakeStats.duplicatesCount
-    val needsMatchCount = intakeStats.needsCount
     val readyCount = intakeStats.readyCount
     val readyAmount = intakeStats.readyAmount
-    val selectedCount = intakeStats.selectedCount
     val selectedReadyCount = intakeStats.selectedReadyCount
     val selectedReadyAmount = intakeStats.selectedReadyAmount
-    val allCount = intakeStats.totalDetected
-    val needsCount = intakeStats.needsCount
-    val duplicatesCount = intakeStats.duplicatesCount
 
-    val filteredTransactions =
-        remember(transactions, intakeFilter) {
-            when (intakeFilter) {
-                IntakeFilter.All -> transactions
-                IntakeFilter.Needs ->
-                    transactions.filter { it.duplicateState == DuplicateState.NONE && !it.canApply() }
-                IntakeFilter.Duplicates -> transactions.filter { it.duplicateState != DuplicateState.NONE }
-                IntakeFilter.Selected -> transactions.filter { it.selected }
-            }
+    val filteredTransactions = remember(transactions, intakeFilter) {
+        when (intakeFilter) {
+            IntakeFilter.All -> transactions
+            IntakeFilter.Needs -> transactions.filter { it.duplicateState == DuplicateState.NONE && !it.canApply() }
+            IntakeFilter.Duplicates -> transactions.filter { it.duplicateState != DuplicateState.NONE }
+            IntakeFilter.Selected -> transactions.filter { it.selected }
         }
+    }
 
     val pasteFromClipboard: () -> Unit = {
-        val clip = clipboardManager.getText()?.text?.trim().orEmpty()
+        val clip = clipboard.getText()?.text?.trim().orEmpty()
         if (clip.isBlank()) {
             scope.launch { uiEvents.showSnackbar(clipboardEmptyMessage) }
-            Unit
         } else if (rawText.isBlank()) {
             viewModel.setRawText(clip)
         } else {
@@ -135,10 +115,7 @@ fun MpesaImportScreen(
 
     val applyAndNotify: suspend () -> PaymentApplySummary = {
         val summary = viewModel.applySelected()
-        val messageParts =
-            mutableListOf(
-                appliedPaymentsTemplate.format(summary.applied)
-            )
+        val messageParts = mutableListOf(appliedPaymentsTemplate.format(summary.applied))
         if (summary.existingDuplicates > 0) {
             messageParts += existingDuplicatesTemplate.format(summary.existingDuplicates)
         }
@@ -153,14 +130,8 @@ fun MpesaImportScreen(
         summary
     }
 
-    LaunchedEffect(transactions, activeKey) {
-        val currentKey = activeKey
-        if (currentKey != null && transactions.none { it.key == currentKey }) {
-            activeKey = null
-        }
-    }
-
     Scaffold(
+        modifier = modifier,
         contentWindowInsets = WindowInsets(0),
         topBar = {
             if (showTopBar) {
@@ -201,113 +172,155 @@ fun MpesaImportScreen(
             }
         }
     ) { padding ->
-        val layoutDirection = LocalLayoutDirection.current
-        val contentPadding =
-            PaddingValues(
-                start = 16.dp + externalPadding.calculateStartPadding(layoutDirection),
-                end = 16.dp + externalPadding.calculateEndPadding(layoutDirection),
-                top = 16.dp + externalPadding.calculateTopPadding(),   // fixed: 15->16dp
-                bottom = 8.dp + externalPadding.calculateBottomPadding()
-            )
-
         LazyColumn(
-            modifier = Modifier.fillMaxSize().padding(padding),
-            contentPadding = contentPadding,
-            verticalArrangement = Arrangement.spacedBy(8.dp)   // fixed: 4->8dp
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .padding(horizontal = AppSpacing.medium),
+            verticalArrangement = Arrangement.spacedBy(AppSpacing.medium)
         ) {
+            item { Spacer(modifier = Modifier.height(AppSpacing.xSmall)) }
+
+            // Header Section
             item {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    // Paste text field - replaced deprecated BasicTextField
-                    OutlinedTextField(
-                        value = rawText,
-                        onValueChange = { viewModel.setRawText(it) },
-                        modifier = Modifier.fillMaxWidth(),
-                        label = { Text(stringResource(R.string.money_mpesa_messages_label)) },
-                        placeholder = { Text(stringResource(R.string.money_paste_messages_placeholder)) },
-                        supportingText = if (rawText.isBlank()) {
-                            { Text(stringResource(R.string.money_separate_messages)) }
-                        } else null,
-                        minLines = 2,
-                        maxLines = 4,
-                        singleLine = false
-                    )
-
-                    // Action buttons row
-                    FlowRow(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                        verticalArrangement = Arrangement.spacedBy(2.dp)
-                    ) {
-                        TextButton(onClick = pasteFromClipboard) { Text(stringResource(R.string.action_paste)) }
-                        TextButton(
-                            onClick = { viewModel.setRawText("") },
-                            enabled = rawText.isNotBlank()
-                        ) { Text(stringResource(R.string.action_clear)) }
-                        TextButton(
-                            onClick = { viewModel.selectReadyOnly() },
-                            enabled = transactions.isNotEmpty()
-                        ) { Text(stringResource(R.string.money_select_ready)) }
-                        TextButton(
-                            onClick = { viewModel.setAllSelected(false) },
-                            enabled = selectedCount > 0
-                        ) { Text(stringResource(R.string.money_clear_selection)) }
-                    }
-                }
+                AppScreenHeaderCard(
+                    title = stringResource(R.string.money_collect_title),
+                    subtitle = stringResource(R.string.share_payment_trust_body),
+                    highlight = if (transactions.isNotEmpty()) stringResource(R.string.money_detected) + " " + transactions.size else null
+                )
             }
 
-            // Empty state when no text has been pasted
-            if (rawText.isBlank()) {
-                item {
-                    MpesaEmptyState(onPaste = pasteFromClipboard)
-                }
+            // Workflow Progress
+            item {
+                IntakeStepRow(
+                    hasSource = rawText.isNotBlank(),
+                    hasAssignments = transactions.isNotEmpty() && transactions.any { it.canApply() },
+                    hasSelected = transactions.any { it.selected }
+                )
             }
 
-            // Filter chip row — replaces dropdown menu
-            if (transactions.isNotEmpty()) {
-                stickyHeader {
-                    Surface(color = MaterialTheme.colorScheme.surface, tonalElevation = 1.dp) {
+            // Input Section
+            item {
+                AppCard {
+                    Column(verticalArrangement = Arrangement.spacedBy(AppSpacing.small)) {
+                        OutlinedTextField(
+                            value = rawText,
+                            onValueChange = { viewModel.setRawText(it) },
+                            modifier = Modifier.fillMaxWidth(),
+                            label = { Text(stringResource(R.string.money_mpesa_messages_label)) },
+                            placeholder = { Text(stringResource(R.string.money_paste_messages_placeholder)) },
+                            minLines = 3,
+                            maxLines = 5,
+                            shape = MaterialTheme.shapes.medium
+                        )
+
                         Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 8.dp, vertical = 4.dp),
-                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                            verticalAlignment = Alignment.CenterVertically
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(AppSpacing.small)
                         ) {
-                            FilterChip(
-                                selected = intakeFilter == IntakeFilter.All,
-                                onClick = { intakeFilter = IntakeFilter.All },
-                                label = { Text(stringResource(R.string.money_filter_all_count, allCount)) },
-                                modifier = Modifier.sizeIn(minHeight = 48.dp)
-                            )
-                            FilterChip(
-                                selected = intakeFilter == IntakeFilter.Needs,
-                                onClick = { intakeFilter = IntakeFilter.Needs },
-                                label = { Text(stringResource(R.string.money_filter_needs_count, needsCount)) },
-                                modifier = Modifier.sizeIn(minHeight = 48.dp)
-                            )
-                            FilterChip(
-                                selected = intakeFilter == IntakeFilter.Duplicates,
-                                onClick = { intakeFilter = IntakeFilter.Duplicates },
-                                label = { Text(stringResource(R.string.money_filter_duplicates_count, duplicatesCount)) },
-                                modifier = Modifier.sizeIn(minHeight = 48.dp)
-                            )
-                            FilterChip(
-                                selected = intakeFilter == IntakeFilter.Selected,
-                                onClick = { intakeFilter = IntakeFilter.Selected },
-                                label = { Text(stringResource(R.string.money_filter_selected_count, selectedCount)) },
-                                modifier = Modifier.sizeIn(minHeight = 48.dp)
-                            )
+                            OutlinedButton(
+                                onClick = { viewModel.setRawText("") },
+                                enabled = rawText.isNotBlank(),
+                                modifier = Modifier.weight(1f),
+                                shape = MaterialTheme.shapes.medium
+                            ) {
+                                Icon(
+                                    Icons.Default.Clear,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(stringResource(R.string.action_clear))
+                            }
+
+                            Button(
+                                onClick = pasteFromClipboard,
+                                modifier = Modifier.weight(1.2f),
+                                shape = MaterialTheme.shapes.medium
+                            ) {
+                                Icon(
+                                    Icons.Default.ContentPaste,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(stringResource(R.string.action_paste))
+                            }
                         }
                     }
                 }
             }
 
-            if (transactions.isNotEmpty() && filteredTransactions.isEmpty()) {
+            // Filters Section
+            if (transactions.isNotEmpty()) {
+                item {
+                    Column {
+                        Text(
+                            text = stringResource(R.string.money_search_results),
+                            style = MaterialTheme.typography.titleSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(bottom = AppSpacing.xSmall, start = 4.dp)
+                        )
+
+                        AppFilterRow(
+                            options = listOf(
+                                AppFilterOption(
+                                    IntakeFilter.All.name,
+                                    stringResource(
+                                        R.string.money_filter_all_count,
+                                        transactions.size
+                                    )
+                                ),
+                                AppFilterOption(
+                                    IntakeFilter.Needs.name,
+                                    stringResource(
+                                        R.string.money_filter_needs_count,
+                                        intakeStats.needsCount
+                                    )
+                                ),
+                                AppFilterOption(
+                                    IntakeFilter.Duplicates.name,
+                                    stringResource(
+                                        R.string.money_filter_duplicates_count,
+                                        intakeStats.duplicatesCount
+                                    )
+                                ),
+                                AppFilterOption(
+                                    IntakeFilter.Selected.name,
+                                    stringResource(
+                                        R.string.money_filter_selected_count,
+                                        intakeStats.selectedCount
+                                    )
+                                )
+                            ),
+                            selectedKey = intakeFilter.name,
+                            onSelect = { key -> intakeFilter = IntakeFilter.valueOf(key) }
+                        )
+                    }
+                }
+            }
+
+            // Empty State or Transactions List
+            if (rawText.isBlank()) {
+                item {
+                    AppEmptyState(
+                        title = stringResource(R.string.money_empty_state_title),
+                        body = listOf(
+                            stringResource(R.string.money_empty_state_step1),
+                            stringResource(R.string.money_empty_state_step2),
+                            stringResource(R.string.money_empty_state_step3)
+                        ).joinToString("\n"),
+                        actionLabel = stringResource(R.string.action_paste),
+                        onAction = pasteFromClipboard
+                    )
+                }
+            } else if (filteredTransactions.isEmpty() && transactions.isNotEmpty()) {
                 item {
                     Text(
                         text = stringResource(R.string.money_no_payments_for_filter),
                         style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = AppSpacing.medium)
                     )
                 }
             } else {
@@ -319,6 +332,8 @@ fun MpesaImportScreen(
                     )
                 }
             }
+
+            item { Spacer(modifier = Modifier.height(AppSpacing.medium)) }
         }
     }
 
@@ -355,67 +370,11 @@ fun MpesaImportScreen(
     }
 }
 
-/**
- * Shown when the paste field is blank. Guides new users through the M-Pesa
- * message import flow with three numbered steps and a prominent Paste button.
- */
-@Composable
-private fun MpesaEmptyState(onPaste: () -> Unit) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 24.dp, horizontal = 8.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        Icon(
-            imageVector = Icons.Filled.Info,
-            contentDescription = null,
-            modifier = Modifier.size(48.dp),
-            tint = MaterialTheme.colorScheme.primary
-        )
-        Text(
-            text = stringResource(R.string.money_empty_state_title),
-            style = MaterialTheme.typography.titleMedium,
-            textAlign = TextAlign.Center
-        )
-        Column(
-            modifier = Modifier.fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Text(
-                text = stringResource(R.string.money_empty_state_step1),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Text(
-                text = stringResource(R.string.money_empty_state_step2),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Text(
-                text = stringResource(R.string.money_empty_state_step3),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-        Button(onClick = onPaste) {
-            Icon(
-                imageVector = Icons.Filled.ContentPaste,
-                contentDescription = null,
-                modifier = Modifier.size(18.dp)
-            )
-            Spacer(modifier = Modifier.size(8.dp))
-            Text(stringResource(R.string.action_paste))
-        }
-    }
-}
-
-private enum class IntakeFilter(val labelRes: Int) {
-    All(R.string.money_filter_all_short),
-    Needs(R.string.money_filter_needs_short),
-    Duplicates(R.string.money_filter_duplicates_short),
-    Selected(R.string.money_filter_selected_short)
+private enum class IntakeFilter {
+    All,
+    Needs,
+    Duplicates,
+    Selected
 }
 
 private data class IntakeStats(
@@ -470,4 +429,3 @@ private fun List<MpesaTransactionUi>.toIntakeStats(): IntakeStats {
         selectedReadyAmount = selectedReadyAmount
     )
 }
-
