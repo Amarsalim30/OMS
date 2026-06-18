@@ -9,8 +9,8 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.runtime.mutableStateOf
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.lifecycleScope
-import com.zeynbakers.order_management_system.core.navigation.AppRoutes
 import com.zeynbakers.order_management_system.core.licensing.AuthGate
+import com.zeynbakers.order_management_system.core.navigation.AppRoutes
 import com.zeynbakers.order_management_system.core.onboarding.OnboardingPreferences
 import kotlinx.coroutines.launch
 
@@ -27,7 +27,7 @@ class MainActivity : ComponentActivity() {
         lifecycleScope.launch {
             val startDestination =
                 runCatching {
-                    val onboardingState = OnboardingPreferences(this@MainActivity).readState()
+                    val onboardingState = OnboardingPreferences(applicationContext).readState()
                     when {
                         onboardingState.onboardingCompleted -> AppRoutes.Calendar
                         onboardingState.introCompleted -> AppRoutes.SetupChecklist

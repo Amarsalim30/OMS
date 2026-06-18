@@ -143,10 +143,11 @@ internal fun MainAppContent(
                         ) == PackageManager.PERMISSION_GRANTED
                     )
                 }
-                val updatePrefs = remember { UpdatePreferences(context) }
-                val helperPrefs = remember { HelperPreferences(context) }
+                val updatePrefs = remember { UpdatePreferences(context.applicationContext) }
+                val helperPrefs = remember { HelperPreferences(context.applicationContext) }
                 var showUpdateDialog by remember { mutableStateOf(false) }
                 val helperState by helperPrefs.state.collectAsState(initial = null)
+                val lastSeenVersion by updatePrefs.lastVersionSeen.collectAsState(initial = null)
                 val navController = rememberNavController()
                 val navBackStackEntry by navController.currentBackStackEntryAsState()
                 val currentRoute = navBackStackEntry?.destination?.route
@@ -248,10 +249,10 @@ internal fun MainAppContent(
                         null -> Unit
                     }
                 }
-                LaunchedEffect(currentRoute, activeTopLevelRoute) {
+                LaunchedEffect(currentRoute, activeTopLevelRoute, lastSeenVersion) {
                     if (currentRoute == AppRoutes.Calendar &&
                         activeTopLevelRoute == AppRoutes.Calendar &&
-                        updatePrefs.shouldShowUpdate(BuildConfig.VERSION_NAME)
+                        (lastSeenVersion == null || lastSeenVersion != BuildConfig.VERSION_NAME)
                     ) {
                         showUpdateDialog = true
                     }
@@ -549,7 +550,9 @@ internal fun MainAppContent(
                         updateNotes = updateNotes,
                         onDismissUpdateDialog = {
                             showUpdateDialog = false
-                            updatePrefs.markVersionSeen(BuildConfig.VERSION_NAME)
+                            scope.launch {
+                                updatePrefs.markVersionSeen(BuildConfig.VERSION_NAME)
+                            }
                         }
                     )
 

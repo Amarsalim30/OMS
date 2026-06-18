@@ -9,7 +9,8 @@ import java.util.UUID
 
 internal interface LicensingCacheStore {
     fun getOrCreateInstallId(): String
-    fun updateLastValidated(uid: String, validatedAtMillis: Long)
+    fun updateLastValidated(uid: String, validatedAtMillis: Long, result: LicensingValidationResult)
+    fun getLastValidationResult(uid: String): Pair<LicensingValidationResult, Long>?
     fun isWithinGraceWindow(uid: String, nowMillis: Long, graceWindowMillis: Long): Boolean
 }
 
@@ -20,10 +21,6 @@ internal class LicensingLocalStore(context: Context) : LicensingCacheStore {
     }
     private val securePrefs: SharedPreferences? by lazy { createSecurePreferences(appContext) }
     private val prefs: SharedPreferences by lazy { securePrefs ?: legacyPrefs }
-
-    init {
-        migrateLegacyValuesIfNeeded()
-    }
 
     override
     fun getOrCreateInstallId(): String {
@@ -42,11 +39,28 @@ internal class LicensingLocalStore(context: Context) : LicensingCacheStore {
     }
 
     override
-    fun updateLastValidated(uid: String, validatedAtMillis: Long) {
+    fun updateLastValidated(
+        uid: String,
+        validatedAtMillis: Long,
+        result: LicensingValidationResult
+    ) {
         prefs.edit {
             putString(KEY_LAST_VALIDATED_UID, uid)
             putLong(KEY_LAST_VALIDATED_AT, validatedAtMillis)
+            putString(KEY_LAST_VALIDATED_RESULT, result.toSerializedString())
         }
+    }
+
+    override
+    fun getLastValidationResult(uid: String): Pair<LicensingValidationResult, Long>? {
+        val cachedUid = prefs.getString(KEY_LAST_VALIDATED_UID, null)
+        if (cachedUid != uid) return null
+
+        val lastValidatedAt = prefs.getLong(KEY_LAST_VALIDATED_AT, 0L)
+        val resultString = prefs.getString(KEY_LAST_VALIDATED_RESULT, null) ?: return null
+        val result = deserializeValidationResult(resultString) ?: return null
+
+        return result to lastValidatedAt
     }
 
     override
@@ -63,11 +77,12 @@ internal class LicensingLocalStore(context: Context) : LicensingCacheStore {
         )
     }
 
-    private fun migrateLegacyValuesIfNeeded() {
+    fun migrateLegacyValuesIfNeeded() {
         val secure = securePrefs ?: return
         val legacyInstallId = legacyPrefs.getString(KEY_INSTALL_ID, null)
         val legacyUid = legacyPrefs.getString(KEY_LAST_VALIDATED_UID, null)
         val legacyValidatedAt = legacyPrefs.getLong(KEY_LAST_VALIDATED_AT, 0L)
+        val legacyResult = legacyPrefs.getString(KEY_LAST_VALIDATED_RESULT, null)
         if (legacyInstallId.isNullOrBlank() && legacyUid.isNullOrBlank() && legacyValidatedAt <= 0L) {
             return
         }
@@ -77,10 +92,13 @@ internal class LicensingLocalStore(context: Context) : LicensingCacheStore {
             if (legacyValidatedAt > 0L) {
                 putLong(KEY_LAST_VALIDATED_AT, legacyValidatedAt)
             }
+            legacyResult?.takeIf { it.isNotBlank() }
+                ?.let { putString(KEY_LAST_VALIDATED_RESULT, it) }
         }
         legacyPrefs.edit(commit = true) {
             remove(KEY_LAST_VALIDATED_UID)
             remove(KEY_LAST_VALIDATED_AT)
+            remove(KEY_LAST_VALIDATED_RESULT)
         }
     }
 
@@ -118,7 +136,26 @@ internal class LicensingLocalStore(context: Context) : LicensingCacheStore {
         const val KEY_INSTALL_ID = "install_id"
         const val KEY_LAST_VALIDATED_UID = "last_validated_uid"
         const val KEY_LAST_VALIDATED_AT = "last_validated_at"
+        const val KEY_LAST_VALIDATED_RESULT = "last_validated_result"
     }
+}
+
+private fun LicensingValidationResult.toSerializedString(): String {
+    return when (this) {
+        LicensingValidationResult.Allowed -> "ALLOWED"
+        is LicensingValidationResult.Blocked -> "BLOCKED:${this.reason.name}"
+    }
+}
+
+private fun deserializeValidationResult(value: String): LicensingValidationResult? {
+    if (value == "ALLOWED") return LicensingValidationResult.Allowed
+    if (value.startsWith("BLOCKED:")) {
+        val reasonName = value.substringAfter("BLOCKED:")
+        val reason = runCatching { LicensingBlockReason.valueOf(reasonName) }.getOrNull()
+            ?: return LicensingValidationResult.Blocked(LicensingBlockReason.ValidationFailed)
+        return LicensingValidationResult.Blocked(reason)
+    }
+    return null
 }
 
 internal fun resolveStoredInstallId(

@@ -4,14 +4,9 @@ import android.app.Activity
 import android.content.Context
 import android.content.ContextWrapper
 import androidx.annotation.StringRes
-import androidx.credentials.CredentialManager
-import androidx.credentials.GetCredentialRequest
-import androidx.credentials.exceptions.GetCredentialCancellationException
-import androidx.credentials.exceptions.GetCredentialException
-import androidx.credentials.exceptions.NoCredentialException
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -49,6 +44,14 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
+import androidx.credentials.CredentialManager
+import androidx.credentials.GetCredentialRequest
+import androidx.credentials.exceptions.GetCredentialCancellationException
+import androidx.credentials.exceptions.GetCredentialException
+import androidx.credentials.exceptions.NoCredentialException
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import com.google.android.libraries.identity.googleid.GoogleIdTokenParsingException
@@ -60,11 +63,10 @@ import com.google.firebase.auth.GoogleAuthProvider
 import com.google.firebase.firestore.FirebaseFirestore
 import com.zeynbakers.order_management_system.R
 import com.zeynbakers.order_management_system.core.ui.theme.Order_management_systemTheme
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleEventObserver
-import androidx.lifecycle.compose.LocalLifecycleOwner
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
+
+private const val THROTTLE_WINDOW_MS = 5L * 60L * 1000L // 5 minutes
 
 @Composable
 internal fun AuthGate(
@@ -85,19 +87,33 @@ internal fun AuthGate(
     var gateState by remember { mutableStateOf<GateUiState>(GateUiState.Validating) }
     var authInFlight by remember { mutableStateOf(false) }
     var authErrorResId by remember { mutableIntStateOf(0) }
+    var lastValidationTime by remember { mutableStateOf(0L) }
 
-    suspend fun validateCurrentUser() {
+    suspend fun validateCurrentUser(forceRefresh: Boolean = false) {
         val user = auth.currentUser
         if (user == null) {
             gateState = GateUiState.SignedOut
             authInFlight = false
             return
         }
-        gateState = GateUiState.Validating
-        val validation = repository.validateSignedInUser(user.uid)
+
+        // Throttle check
+        val now = System.currentTimeMillis()
+        if (!forceRefresh && gateState == GateUiState.Authorized && (now - lastValidationTime < THROTTLE_WINDOW_MS)) {
+            authInFlight = false
+            return
+        }
+
+        if (gateState != GateUiState.Authorized) {
+            gateState = GateUiState.Validating
+        }
+        val validation = repository.validateSignedInUser(user.uid, forceRefresh = forceRefresh)
         gateState =
             when (validation) {
-                LicensingValidationResult.Allowed -> GateUiState.Authorized
+                LicensingValidationResult.Allowed -> {
+                    lastValidationTime = System.currentTimeMillis()
+                    GateUiState.Authorized
+                }
                 is LicensingValidationResult.Blocked -> GateUiState.Blocked(validation.reason)
             }
         authInFlight = false
@@ -108,12 +124,12 @@ internal fun AuthGate(
     }
 
     val revalidateOnStart = rememberUpdatedState {
-        if (gateState == GateUiState.Validating || authInFlight) {
+        if (authInFlight) {
             return@rememberUpdatedState
         }
         scope.launch {
             authInFlight = true
-            validateCurrentUser()
+            validateCurrentUser(forceRefresh = false)
         }
     }
 

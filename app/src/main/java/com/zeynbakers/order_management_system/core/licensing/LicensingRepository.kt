@@ -7,8 +7,8 @@ import com.google.firebase.firestore.FirebaseFirestore
 import com.google.firebase.firestore.FirebaseFirestoreException
 import com.google.firebase.firestore.SetOptions
 import com.google.firebase.firestore.Source
-import java.io.IOException
 import kotlinx.coroutines.tasks.await
+import java.io.IOException
 
 private const val COLLECTION_USERS = "users"
 private const val COLLECTION_DEVICES = "devices"
@@ -100,6 +100,8 @@ internal sealed interface LicensingValidationResult {
     data object Allowed : LicensingValidationResult
 
     data class Blocked(val reason: LicensingBlockReason) : LicensingValidationResult
+
+    companion object
 }
 
 internal data class LicensingEntitlement(
@@ -418,8 +420,12 @@ internal class LicensingRepository(
         nowMillisProvider = nowMillisProvider
     )
 
-    suspend fun validateSignedInUser(uid: String): LicensingValidationResult {
-        logInfo("Validation start")
+    suspend fun validateSignedInUser(
+        uid: String,
+        forceRefresh: Boolean = false
+    ): LicensingValidationResult =
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            logInfo("Validation start (uid=$uid, forceRefresh=$forceRefresh)")
 
         fun blocked(reason: LicensingBlockReason): LicensingValidationResult.Blocked {
             logWarn("Validation blocked: $reason")
@@ -432,19 +438,36 @@ internal class LicensingRepository(
         }
 
         val nowMillis = nowMillisProvider()
+
+            // 1. Fast-Path: Check local cache if not forced
+            if (!forceRefresh) {
+                val cached = localStore.getLastValidationResult(uid)
+                if (cached != null) {
+                    val (result, lastValidatedAt) = cached
+                    val elapsed = nowMillis - lastValidatedAt
+                    if (elapsed in 0..FAST_PATH_WINDOW_MS && result is LicensingValidationResult.Allowed) {
+                        return@withContext allowed("fast_path_cache")
+                    }
+                }
+            }
+
         val installId = localStore.getOrCreateInstallId()
-        return try {
+            try {
             val entitlement = remoteStore.getEntitlement(uid)
             if (entitlement == null) {
-                return blocked(LicensingBlockReason.EntitlementMissing)
+                return@withContext blocked(LicensingBlockReason.EntitlementMissing)
             }
 
             if (!entitlement.allowed) {
-                return blocked(LicensingBlockReason.AccessDenied)
+                val res = blocked(LicensingBlockReason.AccessDenied)
+                localStore.updateLastValidated(uid, nowMillis, res)
+                return@withContext res
             }
 
             if (entitlement.expiresAt > 0L && nowMillis > entitlement.expiresAt) {
-                return blocked(LicensingBlockReason.EntitlementExpired)
+                val res = blocked(LicensingBlockReason.EntitlementExpired)
+                localStore.updateLastValidated(uid, nowMillis, res)
+                return@withContext res
             }
 
             val accessPath =
@@ -454,8 +477,9 @@ internal class LicensingRepository(
                     nowMillis = nowMillis,
                     entitlement = entitlement
                 )
-            localStore.updateLastValidated(uid, nowMillis)
-            return allowed(accessPath)
+                val res = LicensingValidationResult.Allowed
+                localStore.updateLastValidated(uid, nowMillis, res)
+                return@withContext allowed(accessPath)
         } catch (error: Exception) {
             when {
                 shouldTreatAsOffline(error) -> {
@@ -602,5 +626,6 @@ internal class LicensingRepository(
 
     private companion object {
         const val TAG = "LicensingRepository"
+        const val FAST_PATH_WINDOW_MS = 30L * 60L * 1000L // 30 minutes
     }
 }
