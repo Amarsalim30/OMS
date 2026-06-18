@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -30,17 +31,17 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.IosShare
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.outlined.Delete
-import androidx.compose.material.icons.outlined.FileUpload
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
@@ -543,7 +544,7 @@ fun DayDetailScreen(
                     }
                     IconButton(onClick = { isImportDialogOpen = true }) {
                         Icon(
-                            imageVector = Icons.Outlined.FileUpload,
+                            imageVector = Icons.Filled.Download,
                             contentDescription = stringResource(R.string.day_import_orders)
                         )
                     }
@@ -562,7 +563,8 @@ fun DayDetailScreen(
                                     draftValue.customerPhone.isNotBlank())
                 }
                     ?: false
-            FloatingActionButton(
+            SmallFloatingActionButton(
+                modifier = Modifier.size(48.dp),
                 onClick = {
                     editingOrderId = null
                     if (!canRestoreDraft) {

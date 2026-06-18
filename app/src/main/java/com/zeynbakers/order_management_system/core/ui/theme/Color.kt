@@ -2,65 +2,68 @@ package com.zeynbakers.order_management_system.core.ui.theme
 
 import androidx.compose.ui.graphics.Color
 
-// Business-focused palette: calm blue, high contrast surfaces, and clear status accents.
+/**
+ * High-Fidelity UI Palette
+ * Slate blue, cool gray, and crisp white.
+ */
 
-// Light Theme
-val md_theme_light_primary = Color(0xFF0B4F6C)
+// Light Mode: Off-white background (#F8F9FA), charcoal text, vivid blue primary button.
+val md_theme_light_primary = Color(0xFF0061A4) // Vivid Blue
 val md_theme_light_onPrimary = Color(0xFFFFFFFF)
-val md_theme_light_primaryContainer = Color(0xFFD1E8F5)
-val md_theme_light_onPrimaryContainer = Color(0xFF022638)
+val md_theme_light_primaryContainer = Color(0xFFD1E4FF)
+val md_theme_light_onPrimaryContainer = Color(0xFF001D36)
 
-val md_theme_light_secondary = Color(0xFF4D5E6B)
+val md_theme_light_secondary = Color(0xFF535F70) // Cool Gray
 val md_theme_light_onSecondary = Color(0xFFFFFFFF)
-val md_theme_light_secondaryContainer = Color(0xFFDCE5EC)
-val md_theme_light_onSecondaryContainer = Color(0xFF1F2A33)
+val md_theme_light_secondaryContainer = Color(0xFFD7E3F7)
+val md_theme_light_onSecondaryContainer = Color(0xFF101C2B)
 
-val md_theme_light_tertiary = Color(0xFF0E766E)
+val md_theme_light_tertiary = Color(0xFF6B5778)
 val md_theme_light_onTertiary = Color(0xFFFFFFFF)
-val md_theme_light_tertiaryContainer = Color(0xFFC3ECE8)
-val md_theme_light_onTertiaryContainer = Color(0xFF00201D)
+val md_theme_light_tertiaryContainer = Color(0xFFF2DAFF)
+val md_theme_light_onTertiaryContainer = Color(0xFF251431)
 
 val md_theme_light_error = Color(0xFFBA1A1A)
 val md_theme_light_errorContainer = Color(0xFFFFDAD6)
 val md_theme_light_onError = Color(0xFFFFFFFF)
 val md_theme_light_onErrorContainer = Color(0xFF410002)
 
-val md_theme_light_background = Color(0xFFF3F6F8)
-val md_theme_light_onBackground = Color(0xFF111418)
-val md_theme_light_surface = Color(0xFFFFFFFF)
-val md_theme_light_onSurface = Color(0xFF111418)
-val md_theme_light_surfaceVariant = Color(0xFFE0E7EC)
-val md_theme_light_onSurfaceVariant = Color(0xFF4A5865)
-val md_theme_light_outline = Color(0xFF7E8B97)
+val md_theme_light_background = Color(0xFFF8F9FA) // Off-white
+val md_theme_light_onBackground = Color(0xFF191C1E) // Charcoal
+val md_theme_light_surface = Color(0xFFFFFFFF) // Crisp White
+val md_theme_light_onSurface = Color(0xFF191C1E)
+val md_theme_light_surfaceVariant = Color(0xFFDFE2EB)
+val md_theme_light_onSurfaceVariant = Color(0xFF43474E)
+val md_theme_light_outline = Color(0xFF73777F)
 
-// Dark Theme
-val md_theme_dark_primary = Color(0xFF84C8E8)
-val md_theme_dark_onPrimary = Color(0xFF00344A)
-val md_theme_dark_primaryContainer = Color(0xFF004B66)
-val md_theme_dark_onPrimaryContainer = Color(0xFFD1E8F5)
+// Dark Mode: Deep gunmetal background (#121212), pale gray surface cards, desaturated blue accents.
+val md_theme_dark_primary = Color(0xFF9ECAFF) // Desaturated Blue
+val md_theme_dark_onPrimary = Color(0xFF003258)
+val md_theme_dark_primaryContainer = Color(0xFF00497D)
+val md_theme_dark_onPrimaryContainer = Color(0xFFD1E4FF)
 
-val md_theme_dark_secondary = Color(0xFFB8C8D4)
-val md_theme_dark_onSecondary = Color(0xFF20303C)
-val md_theme_dark_secondaryContainer = Color(0xFF374955)
-val md_theme_dark_onSecondaryContainer = Color(0xFFDCE5EC)
+val md_theme_dark_secondary = Color(0xFFBBC7DB) // Pale Gray/Cool Gray
+val md_theme_dark_onSecondary = Color(0xFF253140)
+val md_theme_dark_secondaryContainer = Color(0xFF3B4858)
+val md_theme_dark_onSecondaryContainer = Color(0xFFD7E3F7)
 
-val md_theme_dark_tertiary = Color(0xFF7ED8D0)
-val md_theme_dark_onTertiary = Color(0xFF003935)
-val md_theme_dark_tertiaryContainer = Color(0xFF00504B)
-val md_theme_dark_onTertiaryContainer = Color(0xFFC3ECE8)
+val md_theme_dark_tertiary = Color(0xFFD6BEE4)
+val md_theme_dark_onTertiary = Color(0xFF3B2948)
+val md_theme_dark_tertiaryContainer = Color(0xFF523F5F)
+val md_theme_dark_onTertiaryContainer = Color(0xFFF2DAFF)
 
 val md_theme_dark_error = Color(0xFFFFB4AB)
 val md_theme_dark_errorContainer = Color(0xFF93000A)
 val md_theme_dark_onError = Color(0xFF690005)
 val md_theme_dark_onErrorContainer = Color(0xFFFFDAD6)
 
-val md_theme_dark_background = Color(0xFF0D141A)
-val md_theme_dark_onBackground = Color(0xFFE4E9EE)
-val md_theme_dark_surface = Color(0xFF131B22)
-val md_theme_dark_onSurface = Color(0xFFE4E9EE)
-val md_theme_dark_surfaceVariant = Color(0xFF24303A)
-val md_theme_dark_onSurfaceVariant = Color(0xFFBCC8D1)
-val md_theme_dark_outline = Color(0xFF65737F)
+val md_theme_dark_background = Color(0xFF121212) // Deep Gunmetal
+val md_theme_dark_onBackground = Color(0xFFE2E2E6)
+val md_theme_dark_surface = Color(0xFF1A1C1E) // Slightly lighter than background for cards
+val md_theme_dark_onSurface = Color(0xFFE2E2E6)
+val md_theme_dark_surfaceVariant = Color(0xFF43474E)
+val md_theme_dark_onSurfaceVariant = Color(0xFFC3C7CF)
+val md_theme_dark_outline = Color(0xFF8D9199)
 
 val UtilitySuccess = Color(0xFF1E9F63)
 val UtilityWarning = Color(0xFFD48A1C)

@@ -75,6 +75,7 @@ compose-lint-checks = { group = "com.slack.lint.compose", name = "compose-lint-c
 detekt-compose-rules = { group = "io.nlopez.compose.rules", name = "detekt", version.ref = "composeRules" }
 androidx-foundation = { group = "androidx.compose.foundation", name = "foundation", version.ref = "foundationVersion" }
 androidx-compose-foundation-layout = { group = "androidx.compose.foundation", name = "foundation-layout", version.ref = "foundationLayout" }
+androidx-fonts-google = { group = "androidx.compose.ui", name = "ui-text-google-fonts", version = "1.7.8" }
 repo = { module = "com.github.User:Repo", version.ref = "repo" }
 
 [plugins]
