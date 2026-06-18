@@ -21,6 +21,7 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.CalendarToday
@@ -28,6 +29,7 @@ import androidx.compose.material.icons.filled.ChevronLeft
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material3.Button
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
@@ -48,7 +50,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
@@ -59,6 +63,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.zeynbakers.order_management_system.R
 import com.zeynbakers.order_management_system.core.ui.components.AppCard
+import com.zeynbakers.order_management_system.core.ui.theme.DarkWeekendSaturday
+import com.zeynbakers.order_management_system.core.ui.theme.DarkWeekendSunday
 import com.zeynbakers.order_management_system.core.util.formatKes
 import com.zeynbakers.order_management_system.order.ui.common.CalendarDayUi
 import com.zeynbakers.order_management_system.order.ui.common.PaymentState
@@ -78,7 +84,8 @@ internal fun CalendarTopAppBar(
     onToday: () -> Unit,
     onSummaryClick: () -> Unit,
     onMoreClick: () -> Unit,
-    moreButtonModifier: Modifier = Modifier
+    moreButtonModifier: Modifier = Modifier,
+    showTodaySubtle: Boolean = false
 ) {
     CenterAlignedTopAppBar(
         title = {
@@ -115,8 +122,10 @@ internal fun CalendarTopAppBar(
             val todayLabel = stringResource(R.string.calendar_today)
             IconButton(
                 onClick = onToday,
+                enabled = !showTodaySubtle,
                 modifier = Modifier
                     .size(48.dp)
+                    .alpha(if (showTodaySubtle) 0.38f else 1f)
                     .semantics { contentDescription = todayLabel }
             ) {
                 Box(modifier = Modifier.size(24.dp)) {
@@ -261,111 +270,133 @@ internal fun MonthSummaryCard(
     AppCard(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 4.dp)
+            .padding(horizontal = 12.dp, vertical = 2.dp)
     ) {
-        if (!ownerTitle.isNullOrBlank() || !ownerSubtitle.isNullOrBlank()) {
+        Column(modifier = Modifier.padding(6.dp)) {
+            if (!ownerTitle.isNullOrBlank() || !ownerSubtitle.isNullOrBlank()) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.Top
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        ownerTitle?.let {
+                            Text(
+                                text = it,
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = FontWeight.SemiBold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                        ownerSubtitle?.let {
+                            Text(
+                                text = it,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                        }
+                    }
+                    if (!ownerHighlight.isNullOrBlank()) {
+                        Surface(
+                            shape = RoundedCornerShape(999.dp),
+                            color = MaterialTheme.colorScheme.primaryContainer
+                        ) {
+                            Text(
+                                text = ownerHighlight,
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            )
+                        }
+                    }
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.12f))
+                Spacer(modifier = Modifier.height(8.dp))
+            }
+
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(min = 52.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.Top
+                verticalAlignment = Alignment.CenterVertically
             ) {
                 Column(modifier = Modifier.weight(1f)) {
-                    ownerTitle?.let {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(
-                            text = it,
-                            style = MaterialTheme.typography.labelLarge,
-                            fontWeight = FontWeight.SemiBold,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
+                            text = stringResource(R.string.calendar_month_total),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        IconButton(
+                            onClick = onLegendClick,
+                            modifier = Modifier.size(16.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Filled.Info,
+                                contentDescription = stringResource(R.string.calendar_payment_status_info),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+                                modifier = Modifier.size(12.dp)
+                            )
+                        }
                     }
-                    ownerSubtitle?.let {
-                        Text(
-                            text = it,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                }
-                if (!ownerHighlight.isNullOrBlank()) {
-                    Surface(
-                        shape = RoundedCornerShape(999.dp),
-                        color = MaterialTheme.colorScheme.primaryContainer
-                    ) {
-                        Text(
-                            text = ownerHighlight,
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer,
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
-                        )
-                    }
-                }
-            }
-            Spacer(modifier = Modifier.height(8.dp))
-            HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.18f))
-            Spacer(modifier = Modifier.height(8.dp))
-        }
-
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column {
-                Text(
-                    text = stringResource(R.string.calendar_month_total),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                val totalLabel =
-                    monthTotal?.let { formatKes(it) } ?: stringResource(R.string.calendar_loading)
-                Text(
-                    text = totalLabel,
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.SemiBold
-                )
-            }
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                if (!hasOrders) {
-                    Surface(
-                        shape = RoundedCornerShape(999.dp),
-                        color = MaterialTheme.colorScheme.surfaceVariant
-                    ) {
-                        Text(
-                            text = stringResource(R.string.calendar_no_orders),
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
-                        )
-                    }
-                    TextButton(onClick = onAddOrder) {
-                        Text(stringResource(R.string.calendar_add_order))
-                    }
-                } else if (dueCount > 0) {
-                    Surface(
-                        shape = RoundedCornerShape(999.dp),
-                        color = MaterialTheme.colorScheme.errorContainer,
-                        modifier = Modifier.clickable(role = Role.Button) { onDueClick() }
-                    ) {
-                        Text(
-                            text = stringResource(R.string.calendar_unpaid_count, dueCount),
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onErrorContainer,
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
-                        )
-                    }
-                }
-                IconButton(onClick = onLegendClick) {
-                    Icon(
-                        imageVector = Icons.Filled.Info,
-                        contentDescription = stringResource(R.string.calendar_payment_status_info),
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    val totalLabel =
+                        monthTotal?.let { formatKes(it) }
+                            ?: stringResource(R.string.calendar_loading)
+                    Text(
+                        text = totalLabel,
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold
                     )
+                }
+
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.heightIn(min = 40.dp)
+                ) {
+                    if (!hasOrders) {
+                        Button(
+                            onClick = onAddOrder,
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 0.dp),
+                            modifier = Modifier.height(36.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Add,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = stringResource(R.string.calendar_add_order),
+                                style = MaterialTheme.typography.labelLarge
+                            )
+                        }
+                    } else if (dueCount > 0) {
+                        Surface(
+                            shape = RoundedCornerShape(999.dp),
+                            color = MaterialTheme.colorScheme.errorContainer,
+                            modifier = Modifier
+                                .height(36.dp)
+                                .clickable(role = Role.Button) { onDueClick() }
+                        ) {
+                            Box(
+                                contentAlignment = Alignment.Center,
+                                modifier = Modifier.padding(horizontal = 12.dp)
+                            ) {
+                                Text(
+                                    text = stringResource(R.string.calendar_unpaid_count, dueCount),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onErrorContainer
+                                )
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -491,10 +522,11 @@ internal fun WeekdayHeaderRow(weekStart: Int) {
     ) {
         labels.forEachIndexed { index, label ->
             val dayIndex = ((weekStart - 1 + index) % 7) + 1
+            val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
             val color =
                 when (dayIndex) {
-                    Calendar.SATURDAY -> MaterialTheme.colorScheme.primary
-                    Calendar.SUNDAY -> MaterialTheme.colorScheme.error
+                    Calendar.SATURDAY -> if (isDark) DarkWeekendSaturday else MaterialTheme.colorScheme.primary
+                    Calendar.SUNDAY -> if (isDark) DarkWeekendSunday else MaterialTheme.colorScheme.error
                     else -> MaterialTheme.colorScheme.onSurfaceVariant
                 }
             Text(

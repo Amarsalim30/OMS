@@ -7,12 +7,12 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -20,9 +20,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.testTag
@@ -34,11 +34,16 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.zeynbakers.order_management_system.core.ui.theme.DarkWeekendSaturday
+import com.zeynbakers.order_management_system.core.ui.theme.DarkWeekendSunday
+import com.zeynbakers.order_management_system.core.ui.theme.OutOfMonthDateColor
 import com.zeynbakers.order_management_system.order.ui.common.CalendarDayUi
 import com.zeynbakers.order_management_system.order.ui.common.PaymentState
 import kotlinx.datetime.LocalDate
+import kotlinx.datetime.toJavaLocalDate
 import java.math.BigDecimal
 import java.math.RoundingMode
+import java.util.Calendar
 
 private const val MAX_VISIBLE_MARKERS = 3
 
@@ -74,28 +79,40 @@ internal fun DayCell(
             PaymentState.OVERPAID -> calendarPaymentStateColor(PaymentState.OVERPAID)
             null -> MaterialTheme.colorScheme.onSurfaceVariant
         }
-    val containerColor =
-        when {
-            isSelected -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f)
-            else -> MaterialTheme.colorScheme.background
-        }
-    val selectionBorder =
-        if (isSelected) {
-            BorderStroke(1.dp, MaterialTheme.colorScheme.primary)
-        } else {
-            null
-        }
+    val isDark = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+    val dayOfWeek = remember(day.date) {
+        val javaDate = day.date.toJavaLocalDate()
+        val cal = Calendar.getInstance()
+        cal.set(javaDate.year, javaDate.monthValue - 1, javaDate.dayOfMonth)
+        cal.get(Calendar.DAY_OF_WEEK)
+    }
+
     val baseTextColor =
         if (isSelected) {
             MaterialTheme.colorScheme.onPrimaryContainer
         } else {
             MaterialTheme.colorScheme.onSurface
         }
+
     val dayTextColor =
-        if (day.isInCurrentMonth) {
-            baseTextColor
+        when {
+            isSelected -> MaterialTheme.colorScheme.onPrimaryContainer
+            !day.isInCurrentMonth -> OutOfMonthDateColor
+            isDark && dayOfWeek == Calendar.SATURDAY -> DarkWeekendSaturday
+            isDark && dayOfWeek == Calendar.SUNDAY -> DarkWeekendSunday
+            else -> baseTextColor
+        }
+
+    val containerColor =
+        when {
+            isSelected -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f)
+            else -> Color.Transparent
+        }
+    val selectionBorder =
+        if (isSelected) {
+            BorderStroke(1.dp, MaterialTheme.colorScheme.primary)
         } else {
-            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+            null
         }
     val todayRingColor =
         if (isSelected) {
@@ -111,6 +128,7 @@ internal fun DayCell(
     Surface(
         modifier = modifier
             .testTag(dayTag)
+            .aspectRatio(1f)
             .onGloballyPositioned { coordinates ->
                 onBoundsChanged?.invoke(coordinates.boundsInRoot())
             }
@@ -119,7 +137,6 @@ internal fun DayCell(
                 role = Role.Button
                 selected = isSelected
             }
-            .alpha(if (day.isInCurrentMonth) 1f else 0.8f)
             .combinedClickable(
                 enabled = day.isInCurrentMonth,
                 onClickLabel = "Open day",
@@ -129,7 +146,7 @@ internal fun DayCell(
             ),
         color = containerColor,
         border = selectionBorder,
-        shape = RoundedCornerShape(16.dp),
+        shape = CircleShape,
         tonalElevation = 0.dp
     ) {
         Column(

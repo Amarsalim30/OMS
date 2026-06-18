@@ -359,6 +359,12 @@ fun CalendarScreen(
             }
         }
     }
+    val showTodaySubtle by remember(visibleMonth, today) {
+        derivedStateOf {
+            visibleMonth.first == today.year && visibleMonth.second == today.monthNumber
+        }
+    }
+
     Scaffold(
         contentWindowInsets = WindowInsets(0),
         topBar = {
@@ -390,7 +396,8 @@ fun CalendarScreen(
                         onOpenMore()
                     }
                 },
-                moreButtonModifier = Modifier.tutorialCoachTarget(TutorialCoachTargets.CalendarMoreButton)
+                moreButtonModifier = Modifier.tutorialCoachTarget(TutorialCoachTargets.CalendarMoreButton),
+                showTodaySubtle = showTodaySubtle
             )
         },
         floatingActionButton = {

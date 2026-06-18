@@ -57,13 +57,17 @@ val md_theme_dark_errorContainer = Color(0xFF93000A)
 val md_theme_dark_onError = Color(0xFF690005)
 val md_theme_dark_onErrorContainer = Color(0xFFFFDAD6)
 
-val md_theme_dark_background = Color(0xFF121212) // Deep Gunmetal
+val md_theme_dark_background = Color(0xFF000000) // Pure Black for OLED
 val md_theme_dark_onBackground = Color(0xFFE2E2E6)
-val md_theme_dark_surface = Color(0xFF1A1C1E) // Slightly lighter than background for cards
+val md_theme_dark_surface = Color(0xFF121212) // Slightly lighter than background for cards
 val md_theme_dark_onSurface = Color(0xFFE2E2E6)
 val md_theme_dark_surfaceVariant = Color(0xFF43474E)
 val md_theme_dark_onSurfaceVariant = Color(0xFFC3C7CF)
 val md_theme_dark_outline = Color(0xFF8D9199)
+
+val DarkWeekendSaturday = Color(0xFF8AB4F8)
+val DarkWeekendSunday = Color(0xFFF28B82)
+val OutOfMonthDateColor = Color(0xFF8E918F)
 
 val UtilitySuccess = Color(0xFF1E9F63)
 val UtilityWarning = Color(0xFFD48A1C)
