@@ -1,5 +1,6 @@
 package com.zeynbakers.order_management_system.core.ui
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -9,11 +10,13 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.ElevatedButton
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -35,11 +38,13 @@ import androidx.compose.material3.windowsizeclass.WindowWidthSizeClass
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.zeynbakers.order_management_system.R
 import com.zeynbakers.order_management_system.core.tutorial.tutorialCoachTarget
 
@@ -78,11 +83,11 @@ fun AppScaffold(
 
     val navItemColors =
         NavigationBarItemDefaults.colors(
-            selectedIconColor = if (isDark) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSecondaryContainer,
+            selectedIconColor = MaterialTheme.colorScheme.onPrimary,
             selectedTextColor = MaterialTheme.colorScheme.onSurface,
-            unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
-            unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant,
-            indicatorColor = if (isDark) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.secondaryContainer
+            unselectedIconColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+            unselectedTextColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+            indicatorColor = MaterialTheme.colorScheme.primary
         )
     val railItemColors =
         NavigationRailItemDefaults.colors(
@@ -138,32 +143,61 @@ fun AppScaffold(
         Scaffold(
             contentWindowInsets = WindowInsets(0),
             bottomBar = {
-                Surface(
-                    shape = RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp),
-                    tonalElevation = 3.dp,
-                    shadowElevation = 6.dp
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .navigationBarsPadding()
+                        .padding(horizontal = 24.dp, vertical = 20.dp)
                 ) {
-                    NavigationBar(
-                        containerColor = MaterialTheme.colorScheme.surface,
-                        tonalElevation = 0.dp,
-                        windowInsets = WindowInsets(0),
-                        modifier = Modifier.navigationBarsPadding()
+                    Surface(
+                        shape = CircleShape,
+                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.98f),
+                        tonalElevation = 6.dp,
+                        shadowElevation = 12.dp,
+                        border = BorderStroke(
+                            width = 1.dp,
+                            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.15f)
+                        ),
+                        modifier = Modifier.align(Alignment.BottomCenter)
                     ) {
-                        destinations.forEach { destination ->
-                            NavigationBarItem(
-                                modifier =
-                                    if (destination.tutorialTargetId != null) {
-                                        Modifier.tutorialCoachTarget(destination.tutorialTargetId)
-                                    } else {
-                                        Modifier
+                        NavigationBar(
+                            containerColor = Color.Transparent,
+                            tonalElevation = 0.dp,
+                            windowInsets = WindowInsets(0),
+                            modifier = Modifier
+                                .padding(horizontal = 8.dp)
+                                .height(80.dp)
+                        ) {
+                            destinations.forEach { destination ->
+                                val isSelected = selectedRoute == destination.route
+                                NavigationBarItem(
+                                    modifier =
+                                        if (destination.tutorialTargetId != null) {
+                                            Modifier.tutorialCoachTarget(destination.tutorialTargetId)
+                                        } else {
+                                            Modifier
+                                        },
+                                    selected = isSelected,
+                                    onClick = { onDestinationSelected(destination.route) },
+                                    icon = {
+                                        Icon(
+                                            imageVector = destination.icon,
+                                            contentDescription = destination.label,
+                                            modifier = Modifier.size(if (isSelected) 26.dp else 24.dp)
+                                        )
                                     },
-                                selected = selectedRoute == destination.route,
-                                onClick = { onDestinationSelected(destination.route) },
-                                icon = { Icon(destination.icon, contentDescription = destination.label) },
-                                label = { Text(destination.label) },
-                                alwaysShowLabel = true,
-                                colors = navItemColors
-                            )
+                                    label = {
+                                        Text(
+                                            text = destination.label,
+                                            style = MaterialTheme.typography.labelSmall,
+                                            fontWeight = if (isSelected) FontWeight.ExtraBold else FontWeight.Medium,
+                                            letterSpacing = if (isSelected) 0.5.sp else 0.sp
+                                        )
+                                    },
+                                    alwaysShowLabel = true,
+                                    colors = navItemColors
+                                )
+                            }
                         }
                     }
                 }
