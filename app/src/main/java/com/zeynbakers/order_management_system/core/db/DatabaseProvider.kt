@@ -719,6 +719,52 @@ object DatabaseProvider {
                 WHERE productNameSnapshot = ''
                 """.trimIndent()
             )
+        },
+        // Migration 16 -> 17: change productId FK from ON DELETE RESTRICT to ON DELETE SET NULL.
+        // SQLite does not support modifying FK constraints in-place, so we use the
+        // recommended table-recreate pattern: rename → recreate → copy → drop → reindex.
+        Migration(16, 17) { db ->
+            // 1. Rename the existing table.
+            db.execSQL("ALTER TABLE order_items RENAME TO order_items_old")
+
+            // 2. Create the new table with the corrected FK constraint.
+            db.execSQL(
+                """
+                CREATE TABLE IF NOT EXISTS `order_items` (
+                    `id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                    `orderId` INTEGER NOT NULL,
+                    `productId` INTEGER,
+                    `productNameSnapshot` TEXT NOT NULL,
+                    `unitPriceSnapshot` TEXT NOT NULL,
+                    `categorySnapshot` TEXT NOT NULL,
+                    `quantity` INTEGER NOT NULL,
+                    `priceOverride` TEXT,
+                    FOREIGN KEY(`orderId`) REFERENCES `orders`(`id`) ON UPDATE NO ACTION ON DELETE CASCADE,
+                    FOREIGN KEY(`productId`) REFERENCES `products`(`id`) ON UPDATE NO ACTION ON DELETE SET NULL
+                )
+                """.trimIndent()
+            )
+
+            // 3. Copy all existing rows.
+            db.execSQL(
+                """
+                INSERT INTO order_items (
+                    id, orderId, productId, productNameSnapshot,
+                    unitPriceSnapshot, categorySnapshot, quantity, priceOverride
+                )
+                SELECT
+                    id, orderId, productId, productNameSnapshot,
+                    unitPriceSnapshot, categorySnapshot, quantity, priceOverride
+                FROM order_items_old
+                """.trimIndent()
+            )
+
+            // 4. Drop the old table.
+            db.execSQL("DROP TABLE order_items_old")
+
+            // 5. Recreate the indexes.
+            db.execSQL("CREATE INDEX IF NOT EXISTS `index_order_items_orderId` ON `order_items` (`orderId`)")
+            db.execSQL("CREATE INDEX IF NOT EXISTS `index_order_items_productId` ON `order_items` (`productId`)")
         }
     )
 

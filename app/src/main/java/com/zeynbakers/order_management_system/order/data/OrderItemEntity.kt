@@ -22,7 +22,7 @@ import java.math.BigDecimal
             entity = ProductEntity::class,
             parentColumns = ["id"],
             childColumns = ["productId"],
-            onDelete = ForeignKey.RESTRICT
+            onDelete = ForeignKey.SET_NULL
         )
     ],
     indices = [Index("orderId"), Index("productId")]

@@ -147,7 +147,7 @@ fun AppScaffold(
                     modifier = Modifier
                         .fillMaxWidth()
                         .navigationBarsPadding()
-                        .padding(horizontal = 24.dp, vertical = 20.dp)
+                        .padding(horizontal = 8.dp, vertical = 10.dp)
                 ) {
                     Surface(
                         shape = CircleShape,
@@ -166,7 +166,7 @@ fun AppScaffold(
                             windowInsets = WindowInsets(0),
                             modifier = Modifier
                                 .padding(horizontal = 8.dp)
-                                .height(80.dp)
+                                .height(60.dp)
                         ) {
                             destinations.forEach { destination ->
                                 val isSelected = selectedRoute == destination.route

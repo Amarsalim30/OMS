@@ -215,7 +215,7 @@
     <string name="calendar_tutorial_save_title">Save to finish</string>
     <string name="calendar_tutorial_save_body">Tap Save to create your first booking and finish this tutorial.</string>
     <string name="splash_tagline">Orders, payments, and customers in one place</string>
-    <string name="splash_loading_state">Loading your workspace&#8230;</string>
+    <string name="splash_loading_state">Loading your workspace...</string>
     <string name="intro_title">Welcome</string>
     <string name="intro_one_page_title">Run bookings and payments from one place</string>
     <string name="intro_one_page_body">Set up once, then use Calendar as your daily dashboard for orders, customers, and balances.</string>
@@ -554,7 +554,7 @@
     <string name="backup_restore_choose_file">Choose backup file</string>
     <string name="backup_restore_warning">Restoring replaces all current app data.</string>
     <string name="backup_restore_using_latest_hint">No file selected. Restore will use your latest backup.</string>
-    <string name="backup_restore_preparing">Preparing restore preview&#8230;</string>
+    <string name="backup_restore_preparing">Preparing restore preview...</string>
     <string name="backup_restore_preview_failed">Unable to read backup preview</string>
     <string name="backup_restore_confirm_title">Restore from backup?</string>
     <string name="backup_restore_confirm_message">Review this backup before restoring.</string>
@@ -663,7 +663,7 @@
     <string name="calendar_previous_year">Previous year</string>
     <string name="calendar_next_year">Next year</string>
     <string name="calendar_month_total">Month total</string>
-    <string name="calendar_loading">Loadingâ€¦</string>
+    <string name="calendar_loading">Loading...</string>
     <string name="calendar_no_orders">No orders</string>
     <string name="calendar_unpaid_count">Unpaid %1$d</string>
     <string name="calendar_payment_status_info">Payment status info</string>
@@ -938,7 +938,7 @@
     <string name="helper_settings_grant_mic">Grant microphone</string>
     <string name="helper_settings_open_overlay">Open overlay access</string>
     <string name="helper_capture_mic_required">Microphone permission is required for voice capture.</string>
-    <string name="helper_capture_listening">Listening&#8230;</string>
+    <string name="helper_capture_listening">Listening...</string>
     <string name="helper_capture_speak_hint">Speak now</string>
     <string name="helper_capture_error_speech_unavailable">Speech recognition is unavailable on this device.</string>
     <string name="helper_capture_error_start_failed">Voice capture could not start. Try again.</string>
@@ -1010,7 +1010,7 @@
     <string name="widget_action_unpaid">Unpaid</string>
     <string name="widget_action_add">New</string>
     <string name="widget_action_note">Voice note</string>
-    <string name="licensing_validating">Validating access&#8230;</string>
+    <string name="licensing_validating">Validating access...</string>
     <string name="auth_sign_in_title">Sign in required</string>
     <string name="auth_sign_in_subtitle">Use your approved Google account or approved email/password to continue.</string>
     <string name="auth_sign_in_google_button">Choose Google account</string>

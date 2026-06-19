@@ -154,7 +154,7 @@ fun DayDetailScreen(
     storeName: String = ""
 ) {
     val dateKey = remember(date) { date.toString() }
-    var cartItems by rememberSaveable(dateKey) { mutableStateOf(emptyList<OrderItemDraft>()) }
+    var cartItems by rememberSaveable(dateKey) { mutableStateOf(draft?.cartItems ?: emptyList()) }
     var totalText by rememberSaveable(dateKey) { mutableStateOf(draft?.totalText ?: "") }
     var customerName by rememberSaveable(dateKey) { mutableStateOf(draft?.customerName ?: "") }
     var customerPhone by rememberSaveable(dateKey) { mutableStateOf(draft?.customerPhone ?: "") }
@@ -357,6 +357,21 @@ fun DayDetailScreen(
         }
         val order = orderUi.order
         pickupTimeText = order.pickupTime.orEmpty()
+        // Restore cart items from the existing order when entering edit mode.
+        // Only overwrite when the cart is still empty to avoid stomping a draft the
+        // user was already building (e.g. after a config-change with cartItems saved).
+        if (cartItems.isEmpty()) {
+            cartItems = orderUi.items.map { item ->
+                OrderItemDraft(
+                    productId = item.productId,
+                    emoji = "",
+                    name = item.productNameSnapshot,
+                    quantity = item.quantity,
+                    unitPrice = item.effectivePrice,
+                    categorySnapshot = item.categorySnapshot
+                )
+            }
+        }
         val customer = orderUi.customer
         if (customer == null) {
             customerName = ""
@@ -556,11 +571,13 @@ fun DayDetailScreen(
             val existingDraft = draft
             val canRestoreDraft =
                 existingDraft?.let { draftValue ->
-                    draftValue.editingOrderId == null &&
-                            (draftValue.cartItems.isNotEmpty() ||
-                                    draftValue.totalText.isNotBlank() ||
-                                    draftValue.customerName.isNotBlank() ||
-                                    draftValue.customerPhone.isNotBlank())
+                    // Allow restoring both new-order drafts and edit drafts so the FAB
+                    // does not discard in-progress edits when the user navigates away.
+                    draftValue.cartItems.isNotEmpty() ||
+                            draftValue.totalText.isNotBlank() ||
+                            draftValue.customerName.isNotBlank() ||
+                            draftValue.customerPhone.isNotBlank() ||
+                            draftValue.editingOrderId != null
                 }
                     ?: false
             SmallFloatingActionButton(
@@ -782,7 +799,18 @@ fun DayDetailScreen(
                             orderUi = orderUi,
                             isFocused = highlightedOrderId == order.id,
                             onEdit = {
-                                cartItems = emptyList()
+                                // Map the existing order's items to draft form so the editor
+                                // opens pre-populated with the correct cart.
+                                cartItems = orderUi.items.map { item ->
+                                    OrderItemDraft(
+                                        productId = item.productId,
+                                        emoji = "",
+                                        name = item.productNameSnapshot,
+                                        quantity = item.quantity,
+                                        unitPrice = item.effectivePrice,
+                                        categorySnapshot = item.categorySnapshot
+                                    )
+                                }
                                 totalText = order.totalAmount.toPlainString()
                                 editingOrderId = order.id
                                 notesError = null
@@ -922,11 +950,12 @@ fun DayDetailScreen(
                     onClick = {
                         isExportDialogOpen = false
                         scope.launch {
+                            val orderItemsMap = orders.associate { it.order.id to it.items }
                             val (data, mimeType, fileName) = if (exportFormat == "json") {
                                 Triple(
                                     OrderExporter.exportOrders(
                                         orders.map { it.order },
-                                        emptyMap(),
+                                        orderItemsMap,
                                         orders.associate {
                                             (it.order.customerId ?: 0L) to (it.customer?.name ?: "")
                                         },
@@ -942,7 +971,7 @@ fun DayDetailScreen(
                                 Triple(
                                     OrderExporter.exportOrdersToCsv(
                                         orders.map { it.order },
-                                        emptyMap(),
+                                        orderItemsMap,
                                         orders.associate {
                                             (it.order.customerId ?: 0L) to (it.customer?.name ?: "")
                                         },
