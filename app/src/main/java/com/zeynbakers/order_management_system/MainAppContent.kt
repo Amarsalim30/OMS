@@ -5,6 +5,7 @@ import android.content.pm.PackageManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.windowsizeclass.ExperimentalMaterial3WindowSizeClassApi
 import androidx.compose.runtime.Composable
@@ -13,8 +14,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -39,7 +38,6 @@ import com.zeynbakers.order_management_system.core.helper.HelperPreferences
 import com.zeynbakers.order_management_system.core.navigation.AppIntents
 import com.zeynbakers.order_management_system.core.navigation.AppRoutes
 import com.zeynbakers.order_management_system.core.navigation.AppShortcuts
-import com.zeynbakers.order_management_system.core.navigation.extractSharedText
 import com.zeynbakers.order_management_system.core.notifications.NotificationScheduler
 import com.zeynbakers.order_management_system.core.tutorial.LocalTutorialCoachAnchorRegistry
 import com.zeynbakers.order_management_system.core.tutorial.TutorialCoachAnchorRegistry
@@ -63,7 +61,6 @@ import com.zeynbakers.order_management_system.customer.ui.CustomerAccountsViewMo
 import com.zeynbakers.order_management_system.customer.ui.ImportContact
 import com.zeynbakers.order_management_system.order.ui.calendar.CalendarViewModel
 import com.zeynbakers.order_management_system.order.ui.calendar.OrderCreditPrompt
-import com.zeynbakers.order_management_system.order.ui.day_detail.models.OrderDraft
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -72,10 +69,11 @@ import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 
-@OptIn(ExperimentalMaterial3WindowSizeClassApi::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalMaterial3WindowSizeClassApi::class)
 @Composable
 internal fun MainAppContent(
     activity: ComponentActivity,
+    mainViewModel: MainViewModel,
     launchIntentState: State<Intent?>,
     startDestination: String
 ) {
@@ -100,8 +98,11 @@ internal fun MainAppContent(
                 val tutorialAnchorRegistry = remember { TutorialCoachAnchorRegistry() }
                 val contactsPermissionMessage =
                     stringResource(R.string.contacts_permission_required_for_import)
-                val uiEventDispatcher = remember(appSnackbarHostState) {
-                    UiEventDispatcher { event ->
+
+                val scope = rememberCoroutineScope()
+
+                LaunchedEffect(Unit) {
+                    mainViewModel.uiEvents.collect { event ->
                         when (event) {
                             is UiEvent.Snackbar -> appSnackbarHostState.showSnackbar(
                                 message = event.message,
@@ -112,7 +113,18 @@ internal fun MainAppContent(
                         }
                     }
                 }
-                val scope = rememberCoroutineScope()
+
+                val uiEventDispatcher = remember(mainViewModel) {
+                    UiEventDispatcher { event ->
+                        when (event) {
+                            is UiEvent.Snackbar -> {
+                                mainViewModel.showSnackbar(event.message)
+                                null
+                            }
+                        }
+                    }
+                }
+
                 var currentMonth by rememberSaveable { mutableStateOf(0) }
                 var currentYear by rememberSaveable { mutableStateOf(0) }
                 var baseMonth by rememberSaveable { mutableStateOf(0) }
@@ -122,19 +134,21 @@ internal fun MainAppContent(
                 var quickAddDate by remember { mutableStateOf<LocalDate?>(null) }
                 var customerQuery by rememberSaveable { mutableStateOf("") }
                 var paymentIntakeText by rememberSaveable { mutableStateOf<String?>(null) }
-                var pendingSharedPaymentText by rememberSaveable { mutableStateOf<String?>(null) }
+                val pendingSharedPaymentText by mainViewModel.pendingSharedPaymentText.collectAsState()
                 var moneyTabName by rememberSaveable { mutableStateOf(MoneyTab.Collect.name) }
                 var moneyRecordCustomerId by rememberSaveable { mutableStateOf<Long?>(null) }
                 var moneyRecordOrderId by rememberSaveable { mutableStateOf<Long?>(null) }
                 var moneyRecordOutstandingAmountText by rememberSaveable { mutableStateOf<String?>(null) }
-                var showMoreSheet by rememberSaveable { mutableStateOf(false) }
-                var selectedTopLevelRoute by rememberSaveable { mutableStateOf(AppRoutes.Calendar) }
-                var tutorialActive by rememberSaveable { mutableStateOf(false) }
-                var tutorialStepIndex by rememberSaveable { mutableIntStateOf(0) }
+
+                val showMoreSheet by mainViewModel.showMoreSheet.collectAsState()
+                val selectedTopLevelRoute by mainViewModel.selectedTopLevelRoute.collectAsState()
+                val tutorialActive by mainViewModel.tutorialActive.collectAsState()
+                val tutorialStepIndex by mainViewModel.tutorialStepIndex.collectAsState()
+
                 var importContacts by remember { mutableStateOf<List<ImportContact>>(emptyList()) }
                 var selectedContactPhones by remember { mutableStateOf<Set<String>>(emptySet()) }
                 var isContactsLoading by remember { mutableStateOf(false) }
-                val dayDrafts = remember { mutableStateMapOf<LocalDate, OrderDraft>() }
+                val dayDrafts by orderViewModel.dayDrafts.collectAsState()
                 var hasRecordPermission by remember {
                     mutableStateOf(
                         ContextCompat.checkSelfPermission(
@@ -307,7 +321,7 @@ internal fun MainAppContent(
                         AppIntents.ACTION_SHOW_TODAY -> {
                             val targetDate = currentDate()
                             selectedDate = targetDate
-                            selectedTopLevelRoute = AppRoutes.Calendar
+                            mainViewModel.onSelectedTopLevelRouteChange(AppRoutes.Calendar)
                             navigateCalendarExternal(navController, AppRoutes.day(targetDate))
                         }
                         AppIntents.ACTION_SHOW_DAY -> {
@@ -316,11 +330,11 @@ internal fun MainAppContent(
                                     runCatching { LocalDate.parse(it) }.getOrNull()
                                 } ?: currentDate()
                             selectedDate = targetDate
-                            selectedTopLevelRoute = AppRoutes.Calendar
+                            mainViewModel.onSelectedTopLevelRouteChange(AppRoutes.Calendar)
                             navigateCalendarExternal(navController, AppRoutes.day(targetDate))
                         }
                         AppIntents.ACTION_SHOW_UNPAID -> {
-                            selectedTopLevelRoute = AppRoutes.Orders
+                            mainViewModel.onSelectedTopLevelRouteChange(AppRoutes.Orders)
                             navigateTopLevel(navController, AppRoutes.Orders, resetToRoot = true)
                         }
                         AppIntents.ACTION_SHOW_SUMMARY -> {
@@ -328,14 +342,14 @@ internal fun MainAppContent(
                                 intent?.getStringExtra(AppIntents.EXTRA_TARGET_DATE)?.let {
                                     runCatching { LocalDate.parse(it) }.getOrNull()
                                 } ?: currentDate()
-                            selectedTopLevelRoute = AppRoutes.Calendar
+                            mainViewModel.onSelectedTopLevelRouteChange(AppRoutes.Calendar)
                             navigateCalendarExternal(navController, AppRoutes.Summary)
                         }
                         AppIntents.ACTION_NEW_ORDER -> {
                             val targetDate = currentDate()
                             selectedDate = targetDate
                             quickAddDate = targetDate
-                            selectedTopLevelRoute = AppRoutes.Calendar
+                            mainViewModel.onSelectedTopLevelRouteChange(AppRoutes.Calendar)
                             navigateTopLevel(navController, AppRoutes.Calendar, resetToRoot = true)
                         }
                         AppIntents.ACTION_SHOW_BACKUP -> {
@@ -369,8 +383,7 @@ internal fun MainAppContent(
                         }
                         Intent.ACTION_SEND,
                         Intent.ACTION_SEND_MULTIPLE -> {
-                            val sharedText = extractSharedText(intent) ?: return@LaunchedEffect
-                            pendingSharedPaymentText = sharedText
+                            mainViewModel.onIntentReceived(intent)
                         }
                     }
 
@@ -431,6 +444,9 @@ internal fun MainAppContent(
                         onMonthSettled = { year, month ->
                             currentYear = year
                             currentMonth = month
+                        },
+                        onDraftChange = { date, draft ->
+                            orderViewModel.updateDraft(date, draft)
                         }
                     )
                     val customersCallbacks = AppCustomersCallbacks(
@@ -449,7 +465,7 @@ internal fun MainAppContent(
                         }
                     )
                     val navigationActions = AppFeatureNavigationActions(
-                        onOpenMore = { showMoreSheet = true },
+                        onOpenMore = { mainViewModel.onShowMoreSheetChange(true) },
                         openImportContacts = openImportContacts,
                         navigateToMoneyRecord = { recordContext ->
                             moneyRecordCustomerId = recordContext?.customerId
@@ -457,22 +473,20 @@ internal fun MainAppContent(
                             moneyRecordOutstandingAmountText =
                                 recordContext?.outstandingAmount?.toPlainString()
                             moneyTabName = MoneyTab.Record.name
-                            selectedTopLevelRoute = AppRoutes.Money
+                            mainViewModel.onSelectedTopLevelRouteChange(AppRoutes.Money)
                             navigateTopLevel(navController, AppRoutes.Money, resetToRoot = true)
                         },
                         navigateToCalendarQuickAdd = { targetDate ->
                             selectedDate = targetDate
                             quickAddDate = targetDate
-                            selectedTopLevelRoute = AppRoutes.Calendar
+                            mainViewModel.onSelectedTopLevelRouteChange(AppRoutes.Calendar)
                             navigateTopLevel(navController, AppRoutes.Calendar, resetToRoot = true)
                         },
                         navigateToPaymentHistory = { filter, focusReceiptId ->
                             navigateToPaymentHistory(navController, filter, focusReceiptId)
                         },
                         startPracticalTutorial = { startStep ->
-                            tutorialStepIndex = startStep.coerceAtLeast(0)
-                            tutorialActive = true
-                            showMoreSheet = false
+                            mainViewModel.onStartTutorial(startStep)
                         }
                     )
                     val supportActions = AppFeatureSupportActions(
@@ -501,24 +515,20 @@ internal fun MainAppContent(
                         currentRoute = currentRoute,
                         activeTopLevelRoute = activeTopLevelRoute,
                         selectedTopLevelRoute = selectedTopLevelRoute,
-                        onSelectedTopLevelRouteChange = { selectedTopLevelRoute = it },
+                        onSelectedTopLevelRouteChange = {
+                            mainViewModel.onSelectedTopLevelRouteChange(
+                                it
+                            )
+                        },
                         showMoreSheet = showMoreSheet,
-                        onShowMoreSheetChange = { showMoreSheet = it },
+                        onShowMoreSheetChange = { mainViewModel.onShowMoreSheetChange(it) },
                         openImportContacts = openImportContacts,
                         tutorialAnchorRegistry = tutorialAnchorRegistry,
                         tutorialActive = tutorialActive,
                         tutorialStepIndex = tutorialStepIndex,
-                        onStartTutorial = { startStep ->
-                            tutorialStepIndex = startStep.coerceAtLeast(0)
-                            tutorialActive = true
-                            showMoreSheet = false
-                        },
-                        onTutorialStepChange = { tutorialStepIndex = it.coerceAtLeast(0) },
-                        onDismissTutorial = {
-                            tutorialActive = false
-                            tutorialStepIndex = 0
-                            showMoreSheet = false
-                        },
+                        onStartTutorial = { mainViewModel.onStartTutorial(it) },
+                        onTutorialStepChange = { mainViewModel.onTutorialStepChange(it) },
+                        onDismissTutorial = { mainViewModel.onDismissTutorial() },
                         calendarState = calendarState,
                         ordersState = ordersState,
                         customersState = customersState,
@@ -559,7 +569,7 @@ internal fun MainAppContent(
                     pendingSharedPaymentText?.let { sharedText ->
                         SharedPaymentTrustDialog(
                             previewText = sharedPaymentTextPreview(sharedText),
-                            onDismiss = { pendingSharedPaymentText = null },
+                            onDismiss = { mainViewModel.consumePendingSharedText() },
                             onConfirm = {
                                 if (shouldAppendSharedPaymentText(
                                         currentRoute = currentRoute,
@@ -570,10 +580,10 @@ internal fun MainAppContent(
                                 } else {
                                     paymentIntakeText = sharedText
                                     moneyTabName = MoneyTab.Collect.name
-                                    selectedTopLevelRoute = AppRoutes.Money
+                                    mainViewModel.onSelectedTopLevelRouteChange(AppRoutes.Money)
                                     navigateTopLevel(navController, AppRoutes.Money, resetToRoot = true)
                                 }
-                                pendingSharedPaymentText = null
+                                mainViewModel.consumePendingSharedText()
                             }
                         )
                     }

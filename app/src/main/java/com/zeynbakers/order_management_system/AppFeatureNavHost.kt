@@ -64,7 +64,7 @@ internal data class AppCalendarState(
     val dayTotal: BigDecimal,
     val summaryOrders: List<OrderUiModel>,
     val summaryTotal: BigDecimal,
-    val dayDrafts: MutableMap<LocalDate, OrderDraft>
+    val dayDrafts: Map<LocalDate, OrderDraft>
 )
 
 internal data class AppOrdersState(
@@ -103,7 +103,8 @@ internal data class AppCalendarCallbacks(
     val onSelectedDateChange: (LocalDate?) -> Unit,
     val onSummaryDateChange: (LocalDate?) -> Unit,
     val onQuickAddDateChange: (LocalDate?) -> Unit,
-    val onMonthSettled: (Int, Int) -> Unit
+    val onMonthSettled: (Int, Int) -> Unit,
+    val onDraftChange: (LocalDate, OrderDraft?) -> Unit
 )
 
 internal data class AppCustomersCallbacks(

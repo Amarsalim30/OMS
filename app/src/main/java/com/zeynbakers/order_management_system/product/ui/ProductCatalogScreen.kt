@@ -43,7 +43,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -57,6 +56,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.pluralStringResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
@@ -64,6 +65,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.zeynbakers.order_management_system.R
 import com.zeynbakers.order_management_system.product.data.ProductEntity
 import java.math.BigDecimal
 
@@ -85,12 +87,16 @@ fun ProductCatalogScreen(
                 title = {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Text(
-                            text = "Product Catalog",
+                            text = stringResource(R.string.product_catalog_title),
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.SemiBold
                         )
                         Text(
-                            text = "${products.size} item${if (products.size != 1) "s" else ""}",
+                            text = pluralStringResource(
+                                R.plurals.product_count,
+                                products.size,
+                                products.size
+                            ),
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -100,7 +106,7 @@ fun ProductCatalogScreen(
                     IconButton(onClick = onBack) {
                         Icon(
                             imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back"
+                            contentDescription = stringResource(R.string.action_back)
                         )
                     }
                 }
@@ -108,7 +114,7 @@ fun ProductCatalogScreen(
         },
         floatingActionButton = {
             ExtendedFloatingActionButton(
-                text = { Text("Add New Product") },
+                text = { Text(stringResource(R.string.product_add_new)) },
                 icon = { Icon(Icons.Filled.Add, contentDescription = null) },
                 onClick = { showAddSheet = true },
                 elevation = FloatingActionButtonDefaults.elevation(4.dp)
@@ -173,11 +179,14 @@ fun ProductCatalogScreen(
     pendingArchiveProduct?.let { product ->
         AlertDialog(
             onDismissRequest = { pendingArchiveProduct = null },
-            title = { Text("Remove product?") },
+            title = { Text(stringResource(R.string.product_remove_title)) },
             text = {
                 Text(
-                    "\"${product.emoji} ${product.name}\" will be hidden from your product list. " +
-                        "Existing orders that used this product are not affected."
+                    stringResource(
+                        R.string.product_remove_message,
+                        product.emoji,
+                        product.name
+                    )
                 )
             },
             confirmButton = {
@@ -187,12 +196,15 @@ fun ProductCatalogScreen(
                         pendingArchiveProduct = null
                     }
                 ) {
-                    Text("Remove", color = MaterialTheme.colorScheme.error)
+                    Text(
+                        stringResource(R.string.action_delete),
+                        color = MaterialTheme.colorScheme.error
+                    )
                 }
             },
             dismissButton = {
                 TextButton(onClick = { pendingArchiveProduct = null }) {
-                    Text("Cancel")
+                    Text(stringResource(R.string.action_cancel))
                 }
             }
         )
@@ -245,7 +257,10 @@ private fun ProductCard(
                     fontWeight = FontWeight.Medium
                 )
                 Text(
-                    text = "Default: KSh ${product.defaultPrice.toPlainString()}",
+                    text = stringResource(
+                        R.string.product_default_price_format,
+                        product.defaultPrice.toPlainString()
+                    ),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -254,7 +269,7 @@ private fun ProductCard(
             IconButton(onClick = onEdit) {
                 Icon(
                     imageVector = Icons.Filled.Edit,
-                    contentDescription = "Edit ${product.name}",
+                    contentDescription = stringResource(R.string.notes_history_action_edit),
                     tint = MaterialTheme.colorScheme.primary
                 )
             }
@@ -262,7 +277,7 @@ private fun ProductCard(
             IconButton(onClick = onDelete) {
                 Icon(
                     imageVector = Icons.Filled.Delete,
-                    contentDescription = "Remove ${product.name}",
+                    contentDescription = stringResource(R.string.notes_history_action_delete),
                     tint = MaterialTheme.colorScheme.error
                 )
             }
@@ -288,13 +303,13 @@ private fun ProductEmptyState(
         )
         Spacer(Modifier.height(16.dp))
         Text(
-            text = "No products yet",
+            text = stringResource(R.string.product_empty_title),
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.SemiBold
         )
         Spacer(Modifier.height(8.dp))
         Text(
-            text = "Add your products here so you can\npick them quickly when creating orders.",
+            text = stringResource(R.string.product_empty_body),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center
@@ -303,7 +318,7 @@ private fun ProductEmptyState(
         Button(onClick = onAddProduct) {
             Icon(Icons.Filled.Add, contentDescription = null)
             Spacer(Modifier.width(8.dp))
-            Text("Add First Product")
+            Text(stringResource(R.string.product_add_first))
         }
     }
 }
@@ -350,7 +365,9 @@ private fun ProductFormSheet(
                 .padding(bottom = 32.dp)
         ) {
             Text(
-                text = if (isEditing) "Edit Product" else "Add New Product",
+                text = if (isEditing) stringResource(R.string.product_edit_title) else stringResource(
+                    R.string.product_add_title
+                ),
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold
             )
@@ -359,7 +376,7 @@ private fun ProductFormSheet(
 
             // Emoji picker row
             Text(
-                text = "Pick an emoji",
+                text = stringResource(R.string.product_pick_emoji),
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -420,7 +437,7 @@ private fun ProductFormSheet(
             OutlinedTextField(
                 value = emoji,
                 onValueChange = { if (it.length <= 4) emoji = it },
-                label = { Text("Custom emoji (optional)") },
+                label = { Text(stringResource(R.string.product_custom_emoji_label)) },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
                 placeholder = { Text("📦") }
@@ -435,12 +452,12 @@ private fun ProductFormSheet(
                     name = it
                     nameError = false
                 },
-                label = { Text("Product name *") },
-                placeholder = { Text("e.g. Meatpie, Croissant…") },
+                label = { Text(stringResource(R.string.product_name_label)) },
+                placeholder = { Text(stringResource(R.string.product_name_placeholder)) },
                 singleLine = true,
                 isError = nameError,
                 supportingText = if (nameError) {
-                    { Text("Please enter a product name") }
+                    { Text(stringResource(R.string.product_name_required)) }
                 } else null,
                 keyboardOptions = KeyboardOptions(
                     capitalization = KeyboardCapitalization.Words,
@@ -458,20 +475,20 @@ private fun ProductFormSheet(
                     priceText = it
                     priceError = false
                 },
-                label = { Text("Default price (KSh)") },
-                placeholder = { Text("e.g. 50") },
+                label = { Text(stringResource(R.string.product_price_label)) },
+                placeholder = { Text(stringResource(R.string.product_price_placeholder)) },
                 singleLine = true,
                 isError = priceError,
                 supportingText = if (priceError) {
-                    { Text("Please enter a valid price") }
+                    { Text(stringResource(R.string.product_price_invalid)) }
                 } else {
-                    { Text("You can change the price per order") }
+                    { Text(stringResource(R.string.product_price_hint)) }
                 },
                 keyboardOptions = KeyboardOptions(
                     keyboardType = KeyboardType.Decimal,
                     imeAction = ImeAction.Done
                 ),
-                prefix = { Text("KSh ") },
+                prefix = { Text(stringResource(R.string.order_editor_currency_prefix) + " ") },
                 modifier = Modifier.fillMaxWidth()
             )
 
@@ -485,7 +502,7 @@ private fun ProductFormSheet(
                     onClick = onDismiss,
                     modifier = Modifier.weight(1f)
                 ) {
-                    Text("Cancel")
+                    Text(stringResource(R.string.action_cancel))
                 }
 
                 Button(
@@ -504,7 +521,7 @@ private fun ProductFormSheet(
                     },
                     modifier = Modifier.weight(1f)
                 ) {
-                    Text(if (isEditing) "Save Changes" else "Add Product")
+                    Text(if (isEditing) stringResource(R.string.action_save) else stringResource(R.string.action_save))
                 }
             }
 

@@ -1,9 +1,11 @@
 package com.zeynbakers.order_management_system.accounting.ui
 
+import android.content.Context
 import android.database.sqlite.SQLiteConstraintException
-import androidx.room.withTransaction
+import androidx.annotation.StringRes
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.room.withTransaction
 import com.zeynbakers.order_management_system.accounting.data.PaymentAllocationStatus
 import com.zeynbakers.order_management_system.accounting.data.PaymentMethod
 import com.zeynbakers.order_management_system.accounting.data.PaymentReceiptStatus
@@ -15,11 +17,6 @@ import com.zeynbakers.order_management_system.accounting.mpesa.computeMpesaHash
 import com.zeynbakers.order_management_system.core.db.AppDatabase
 import com.zeynbakers.order_management_system.core.util.expandPhoneCandidates
 import com.zeynbakers.order_management_system.order.data.OrderEntity
-import com.zeynbakers.order_management_system.order.data.OrderStatus
-import com.zeynbakers.order_management_system.order.data.OrderStatusOverride
-import java.math.BigDecimal
-import kotlin.math.max
-import kotlin.math.min
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -32,6 +29,9 @@ import kotlinx.datetime.Instant
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.daysUntil
 import kotlinx.datetime.toLocalDateTime
+import java.math.BigDecimal
+import kotlin.math.max
+import kotlin.math.min
 
 data class MpesaOrderSuggestion(
     val orderId: Long,
@@ -104,7 +104,7 @@ data class ExistingReceiptDetails(
 
 data class ReceiptActionResult(
     val success: Boolean,
-    val message: String
+    val messageRes: Int
 )
 
 data class CustomerSuggestionUi(
@@ -113,7 +113,10 @@ data class CustomerSuggestionUi(
     val phone: String
 )
 
-class PaymentIntakeViewModel(private val database: AppDatabase) : ViewModel() {
+class PaymentIntakeViewModel(
+    private val database: AppDatabase,
+    private val appContext: Context
+) : ViewModel() {
     private val accountingDao = database.accountingDao()
     private val receiptDao = database.paymentReceiptDao()
     private val allocationDao = database.paymentAllocationDao()
@@ -310,10 +313,19 @@ class PaymentIntakeViewModel(private val database: AppDatabase) : ViewModel() {
 
     suspend fun reallocateExistingReceipt(key: String): ReceiptActionResult {
         val item = _transactions.value.firstOrNull { it.key == key }
-            ?: return ReceiptActionResult(false, "Receipt not found")
+            ?: return ReceiptActionResult(
+                false,
+                com.zeynbakers.order_management_system.R.string.money_receipt_not_found
+            )
         val receiptId = item.existingReceiptId
-            ?: return ReceiptActionResult(false, "Receipt not found")
-        val allocation = buildAllocation(item) ?: return ReceiptActionResult(false, "Select a customer or order")
+            ?: return ReceiptActionResult(
+                false,
+                com.zeynbakers.order_management_system.R.string.money_receipt_not_found
+            )
+        val allocation = buildAllocation(item) ?: return ReceiptActionResult(
+            false,
+            com.zeynbakers.order_management_system.R.string.money_select_customer_or_order
+        )
         return withContext(Dispatchers.IO) {
             val success =
                 receiptProcessor.reallocateReceipt(
@@ -323,9 +335,15 @@ class PaymentIntakeViewModel(private val database: AppDatabase) : ViewModel() {
                 )
             if (success) {
                 parse(_rawText.value)
-                ReceiptActionResult(true, "Receipt updated")
+                ReceiptActionResult(
+                    true,
+                    com.zeynbakers.order_management_system.R.string.money_receipt_updated
+                )
             } else {
-                ReceiptActionResult(false, "Unable to update receipt")
+                ReceiptActionResult(
+                    false,
+                    com.zeynbakers.order_management_system.R.string.money_receipt_update_failed
+                )
             }
         }
     }
@@ -468,11 +486,20 @@ class PaymentIntakeViewModel(private val database: AppDatabase) : ViewModel() {
 
     suspend fun applySingle(key: String): ReceiptActionResult {
         val item = _transactions.value.firstOrNull { it.key == key }
-            ?: return ReceiptActionResult(false, "Receipt not found")
+            ?: return ReceiptActionResult(
+                false,
+                com.zeynbakers.order_management_system.R.string.money_receipt_not_found
+            )
         if (item.duplicateState != DuplicateState.NONE) {
-            return ReceiptActionResult(false, "Already recorded")
+            return ReceiptActionResult(
+                false,
+                com.zeynbakers.order_management_system.R.string.money_already_recorded
+            )
         }
-        val allocation = buildAllocation(item) ?: return ReceiptActionResult(false, "Select a customer or order")
+        val allocation = buildAllocation(item) ?: return ReceiptActionResult(
+            false,
+            com.zeynbakers.order_management_system.R.string.money_select_customer_or_order
+        )
         val now = Clock.System.now().toEpochMilliseconds()
         val receivedAt = item.receivedAt ?: now
         val hash =
@@ -512,9 +539,15 @@ class PaymentIntakeViewModel(private val database: AppDatabase) : ViewModel() {
                     allocation = allocation
                 )
                 parse(_rawText.value)
-                ReceiptActionResult(true, "Payment applied")
+                ReceiptActionResult(
+                    true,
+                    com.zeynbakers.order_management_system.R.string.money_payment_applied
+                )
             } catch (_: SQLiteConstraintException) {
-                ReceiptActionResult(false, "Already recorded")
+                ReceiptActionResult(
+                    false,
+                    com.zeynbakers.order_management_system.R.string.money_already_recorded
+                )
                 }
         }
     }
@@ -756,10 +789,19 @@ class PaymentIntakeViewModel(private val database: AppDatabase) : ViewModel() {
             val sender =
                 item.senderName?.takeIf { it.isNotBlank() } ?: item.senderPhone?.takeIf { it.isNotBlank() }
             if (sender != null) {
-                append(" from ")
-                append(sender)
+                append(" ")
+                append(
+                    text(
+                        com.zeynbakers.order_management_system.R.string.money_receipt_description_from,
+                        sender
+                    )
+                )
             }
         }
+    }
+
+    private fun text(@StringRes resId: Int, vararg args: Any): String {
+        return appContext.getString(resId, *args)
     }
 
     private fun buildAllocation(item: MpesaTransactionUi): ReceiptAllocation? {

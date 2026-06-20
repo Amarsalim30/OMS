@@ -1,0 +1,238 @@
+.
+├── accounting
+│   ├── data
+│   │   ├── AccountEntryEntity.kt
+│   │   ├── AccountingDao.kt
+│   │   ├── AccountingModels.kt
+│   │   ├── PaymentAllocationDao.kt
+│   │   ├── PaymentAllocationEntity.kt
+│   │   ├── PaymentEntity.kt
+│   │   ├── PaymentReceiptDao.kt
+│   │   └── PaymentReceiptEntity.kt
+│   ├── domain
+│   │   ├── LedgerSummary.kt
+│   │   ├── PaymentProcessor.kt
+│   │   └── PaymentReceiptProcessor.kt
+│   ├── mpesa
+│   │   ├── MpesaHash.kt
+│   │   └── MpesaParser.kt
+│   └── ui
+│       ├── CustomerStatementsScreen.kt
+│       ├── CustomerStatementsSections.kt
+│       ├── LedgerScreen.kt
+│       ├── LedgerViewModel.kt
+│       ├── ManualPaymentScreen.kt
+│       ├── MoneyCopy.kt
+│       ├── MpesaAllocationSheet.kt
+│       ├── MpesaSuggestionLabels.kt
+│       ├── MpesaTransactionRow.kt
+│       ├── MpesaTransactionUiExtensions.kt
+│       ├── PaymentIntakeHistoryScreen.kt
+│       ├── PaymentIntakeHistoryViewModel.kt
+│       ├── PaymentIntakeScreen.kt
+│       ├── PaymentIntakeSections.kt
+│       └── PaymentIntakeViewModel.kt
+├── AppFeatureNavHost.kt
+├── AppNavigationHelpers.kt
+├── ContactsLoader.kt
+├── core
+│   ├── backup
+│   │   ├── BackupAttentionNotifier.kt
+│   │   ├── BackupManager.kt
+│   │   ├── BackupModels.kt
+│   │   ├── BackupPreferences.kt
+│   │   ├── BackupScheduler.kt
+│   │   ├── BackupSettingsScreen.kt
+│   │   ├── BackupUriPermissions.kt
+│   │   ├── DailyBackupWorker.kt
+│   │   ├── ManualBackupWorker.kt
+│   │   └── RestoreWorker.kt
+│   ├── calendar
+│   │   └── CalendarPreferences.kt
+│   ├── contacts
+│   │   ├── ContactsSyncScheduler.kt
+│   │   └── ContactsSyncWorker.kt
+│   ├── db
+│   │   ├── AppDatabase.kt
+│   │   ├── Converters.kt
+│   │   └── DatabaseProvider.kt
+│   ├── helper
+│   │   ├── data
+│   │   │   ├── HelperNoteClassifier.kt
+│   │   │   ├── HelperNoteDao.kt
+│   │   │   ├── HelperNoteEntity.kt
+│   │   │   ├── HelperNoteType.kt
+│   │   │   └── HelperNoteWithCustomer.kt
+│   │   ├── HelperCaptureActivity.kt
+│   │   ├── HelperCaptureMode.kt
+│   │   ├── HelperOverlayController.kt
+│   │   ├── HelperOverlayService.kt
+│   │   ├── HelperOverlayTheme.kt
+│   │   ├── HelperPermissions.kt
+│   │   ├── HelperPreferences.kt
+│   │   └── ui
+│   │       ├── HelperSettingsScreen.kt
+│   │       ├── NotesHistoryModels.kt
+│   │       ├── NotesHistoryScreen.kt
+│   │       └── NotesHistoryViewModel.kt
+│   ├── licensing
+│   │   ├── AuthGate.kt
+│   │   ├── LicensingLocalStore.kt
+│   │   └── LicensingRepository.kt
+│   ├── navigation
+│   │   ├── AppIntents.kt
+│   │   ├── AppRoutes.kt
+│   │   ├── AppShortcuts.kt
+│   │   ├── graphs
+│   │   │   ├── CalendarGraph.kt
+│   │   │   ├── CustomersGraph.kt
+│   │   │   ├── MoneyGraph.kt
+│   │   │   ├── OnboardingGraph.kt
+│   │   │   ├── OrdersGraph.kt
+│   │   │   └── SettingsGraph.kt
+│   │   ├── PendingIntentFactory.kt
+│   │   └── ShareIntentParser.kt
+│   ├── notifications
+│   │   ├── NotificationChannels.kt
+│   │   ├── NotificationPreferences.kt
+│   │   ├── NotificationScheduler.kt
+│   │   ├── NotificationSettingsScreen.kt
+│   │   └── ReminderWorker.kt
+│   ├── onboarding
+│   │   ├── OnboardingPreferences.kt
+│   │   └── OnboardingScreens.kt
+│   ├── tutorial
+│   │   ├── BeginnerTutorialScreen.kt
+│   │   ├── PracticalTutorialCoach.kt
+│   │   ├── TutorialCoachAnchors.kt
+│   │   ├── TutorialCoachOverlay.kt
+│   │   └── TutorialPreferences.kt
+│   ├── ui
+│   │   ├── AmountFieldRegistry.kt
+│   │   ├── AppScaffold.kt
+│   │   ├── AppViewModelFactory.kt
+│   │   ├── components
+│   │   │   ├── AppCard.kt
+│   │   │   ├── AppEmptyState.kt
+│   │   │   ├── AppFilterRow.kt
+│   │   │   ├── AppScreenHeaderCard.kt
+│   │   │   ├── AppSection.kt
+│   │   │   ├── AppSpacing.kt
+│   │   │   └── SuccessOverlay.kt
+│   │   ├── CurrentDateState.kt
+│   │   ├── MoneyScreen.kt
+│   │   ├── text
+│   │   │   └── UiText.kt
+│   │   ├── theme
+│   │   │   ├── Color.kt
+│   │   │   ├── DesignSystemPreview.kt
+│   │   │   ├── Shape.kt
+│   │   │   ├── Theme.kt
+│   │   │   └── Type.kt
+│   │   ├── UiEvent.kt
+│   │   ├── VoiceCalcAccess.kt
+│   │   └── VoiceInputRouter.kt
+│   ├── updates
+│   │   └── UpdatePreferences.kt
+│   ├── util
+│   │   ├── Formatters.kt
+│   │   ├── OrderLabels.kt
+│   │   ├── PhoneNumbers.kt
+│   │   ├── TimeInput.kt
+│   │   ├── VoiceMathParser.kt
+│   │   └── VoiceNotesParser.kt
+│   └── widget
+│       ├── TodayUnpaidWidgetProvider.kt
+│       ├── WidgetUpdater.kt
+│       └── WidgetUpdateWorker.kt
+├── customer
+│   ├── data
+│   │   ├── CustomerDao.kt
+│   │   └── CustomerEntity.kt
+│   ├── domain
+│   │   └── ContactsSyncEngine.kt
+│   └── ui
+│       ├── CustomerAccountsViewModel.kt
+│       ├── CustomerDetailScreen.kt
+│       ├── CustomerDetailSections.kt
+│       ├── CustomerLedgerViewModel.kt
+│       ├── CustomerListScreen.kt
+│       ├── CustomerListSections.kt
+│       ├── CustomerMessaging.kt
+│       ├── CustomerOrderUi.kt
+│       ├── CustomerStatementModels.kt
+│       ├── CustomerStatementScreen.kt
+│       ├── CustomerViewModel.kt
+│       ├── ImportContact.kt
+│       └── ImportContactsScreen.kt
+├── Directory.txt
+├── MainActivity.kt
+├── MainAppContent.kt
+├── MainAppHostScaffold.kt
+├── MainDialogs.kt
+├── order
+│   ├── data
+│   │   ├── OrderDao.kt
+│   │   ├── OrderDataTransfer.kt
+│   │   ├── OrderEntity.kt
+│   │   ├── OrderItemDao.kt
+│   │   └── OrderItemEntity.kt
+│   ├── domain
+│   │   ├── OrderNotesParser.kt
+│   │   ├── OrderProcessor.kt
+│   │   └── OrderRepository.kt
+│   ├── printing
+│   │   ├── BluetoothPrinterManager.kt
+│   │   ├── BluetoothPrintPermissions.kt
+│   │   ├── PrinterPreferences.kt
+│   │   └── ReceiptFormatter.kt
+│   └── ui
+│       ├── calendar
+│       │   ├── CalendarScreen.kt
+│       │   ├── CalendarViewModel.kt
+│       │   ├── components
+│       │   │   ├── CalendarComponents.kt
+│       │   │   ├── CalendarTutorialOverlay.kt
+│       │   │   └── DayCell.kt
+│       │   └── util
+│       │       └── CalendarDateUtils.kt
+│       ├── common
+│       │   ├── CalendarDayUi.kt
+│       │   ├── OrderItemDraft.kt
+│       │   └── OrderUiState.kt
+│       ├── day_detail
+│       │   ├── components
+│       │   │   ├── DayDetailComponents.kt
+│       │   │   ├── DayDetailDialogs.kt
+│       │   │   └── DayDetailImportDialogs.kt
+│       │   ├── DayDetailScreen.kt
+│       │   └── models
+│       │       ├── DayDetailModels.kt
+│       │       └── OrderImportModels.kt
+│       ├── models
+│       │   └── OrderUiModel.kt
+│       ├── order_editor
+│       │   ├── components
+│       │   │   ├── AddProductBottomSheet.kt
+│       │   │   ├── OrderCartSummary.kt
+│       │   │   ├── OrderEditorCustomerSection.kt
+│       │   │   ├── OrderEditorFields.kt
+│       │   │   └── OrderEditorInput.kt
+│       │   ├── dialogs
+│       │   │   └── OrderPrintDialogs.kt
+│       │   ├── OrderEditorModels.kt
+│       │   └── OrderEditorSheet.kt
+│       ├── summary
+│       │   ├── SummaryComponents.kt
+│       │   └── SummaryScreen.kt
+│       └── unpaid
+│           └── UnpaidOrdersScreen.kt
+└── product
+    ├── data
+    │   ├── ProductDao.kt
+    │   └── ProductEntity.kt
+    └── ui
+        ├── ProductCatalogScreen.kt
+        └── ProductViewModel.kt
+
+52 directories, 184 files

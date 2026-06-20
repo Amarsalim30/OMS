@@ -39,6 +39,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.zeynbakers.order_management_system.R
@@ -65,6 +66,7 @@ fun MpesaImportScreen(
     modifier: Modifier = Modifier,
     showTopBar: Boolean = true
 ) {
+    val context = LocalContext.current
     val clipboard = LocalClipboardManager.current
     val scope = rememberCoroutineScope()
     val uiEvents = LocalUiEventDispatcher.current
@@ -362,7 +364,7 @@ fun MpesaImportScreen(
             onMoveExisting = {
                 scope.launch {
                     val result = viewModel.reallocateExistingReceipt(activeItem.key)
-                    uiEvents.showSnackbar(result.message)
+                    uiEvents.showSnackbar(context.getString(result.messageRes))
                 }
             },
             onDismiss = { activeKey = null }

@@ -1,10 +1,10 @@
 package com.zeynbakers.order_management_system.core.licensing
 
-import java.io.IOException
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.io.IOException
 
 class LicensingRepositoryTest {
 
@@ -51,7 +51,7 @@ class LicensingRepositoryTest {
     }
 
     @Test
-    fun `allows when current device is revoked but entitlement is allowed`() = runBlocking {
+    fun `blocks when current device is revoked`() = runBlocking {
         val remote =
             FakeLicensingRemoteStore(
                 entitlement = allowedEntitlement(),
@@ -62,10 +62,7 @@ class LicensingRepositoryTest {
 
         val result = repository.validateSignedInUser(USER_ID)
 
-        assertEquals(LicensingValidationResult.Allowed, result)
-        assertTrue(remote.touchCalls.isEmpty())
-        assertTrue(remote.registerCalls.isEmpty())
-        assertEquals(listOf(ValidationUpdate(USER_ID, NOW_MILLIS)), cache.validationUpdates)
+        assertBlocked(result, LicensingBlockReason.DeviceRevoked)
     }
 
     @Test
@@ -82,7 +79,15 @@ class LicensingRepositoryTest {
 
         assertEquals(LicensingValidationResult.Allowed, result)
         assertEquals(listOf(DeviceWrite(USER_ID, INSTALL_ID, NOW_MILLIS)), remote.touchCalls)
-        assertEquals(listOf(ValidationUpdate(USER_ID, NOW_MILLIS)), cache.validationUpdates)
+        assertEquals(
+            listOf(
+                ValidationUpdate(
+                    USER_ID,
+                    NOW_MILLIS,
+                    LicensingValidationResult.Allowed
+                )
+            ), cache.validationUpdates
+        )
     }
 
     @Test
@@ -100,7 +105,15 @@ class LicensingRepositoryTest {
 
         assertEquals(LicensingValidationResult.Allowed, result)
         assertEquals(listOf(DeviceWrite(USER_ID, INSTALL_ID, NOW_MILLIS)), remote.touchCalls)
-        assertEquals(listOf(ValidationUpdate(USER_ID, NOW_MILLIS)), cache.validationUpdates)
+        assertEquals(
+            listOf(
+                ValidationUpdate(
+                    USER_ID,
+                    NOW_MILLIS,
+                    LicensingValidationResult.Allowed
+                )
+            ), cache.validationUpdates
+        )
     }
 
     @Test
@@ -118,102 +131,19 @@ class LicensingRepositoryTest {
 
         assertEquals(LicensingValidationResult.Allowed, result)
         assertEquals(listOf(DeviceWrite(USER_ID, INSTALL_ID, NOW_MILLIS)), remote.registerCalls)
-        assertEquals(listOf(ValidationUpdate(USER_ID, NOW_MILLIS)), cache.validationUpdates)
+        assertEquals(
+            listOf(
+                ValidationUpdate(
+                    USER_ID,
+                    NOW_MILLIS,
+                    LicensingValidationResult.Allowed
+                )
+            ), cache.validationUpdates
+        )
     }
 
     @Test
-    fun `falls back to batched claim registration when transaction path is permission denied`() = runBlocking {
-        val remote =
-            FakeLicensingRemoteStore(
-                entitlement = allowedEntitlement(maxDevices = 2),
-                device = null,
-                registerFailure = LegacyDeviceRegistrationFallbackException(IllegalStateException("permission denied")),
-                batchRegisterResult = LicensingDeviceRegistrationResult.Registered
-            )
-        val cache = FakeLicensingCacheStore()
-        val repository = LicensingRepository(remote, cache) { NOW_MILLIS }
-
-        val result = repository.validateSignedInUser(USER_ID)
-
-        assertEquals(LicensingValidationResult.Allowed, result)
-        assertEquals(listOf(DeviceWrite(USER_ID, INSTALL_ID, NOW_MILLIS)), remote.registerCalls)
-        assertEquals(listOf(DeviceWrite(USER_ID, INSTALL_ID, NOW_MILLIS)), remote.batchRegisterCalls)
-        assertTrue(remote.legacyRegisterCalls.isEmpty())
-        assertEquals(listOf(ValidationUpdate(USER_ID, NOW_MILLIS)), cache.validationUpdates)
-    }
-
-    @Test
-    fun `falls back to batched claim registration when compatibility wrapper is nested`() = runBlocking {
-        val remote =
-            FakeLicensingRemoteStore(
-                entitlement = allowedEntitlement(maxDevices = 2),
-                device = null,
-                registerFailure =
-                    IllegalStateException(
-                        "transaction failed",
-                        LegacyDeviceRegistrationFallbackException(
-                            IllegalStateException("permission denied")
-                        )
-                    ),
-                batchRegisterResult = LicensingDeviceRegistrationResult.Registered
-            )
-        val cache = FakeLicensingCacheStore()
-        val repository = LicensingRepository(remote, cache) { NOW_MILLIS }
-
-        val result = repository.validateSignedInUser(USER_ID)
-
-        assertEquals(LicensingValidationResult.Allowed, result)
-        assertEquals(listOf(DeviceWrite(USER_ID, INSTALL_ID, NOW_MILLIS)), remote.registerCalls)
-        assertEquals(listOf(DeviceWrite(USER_ID, INSTALL_ID, NOW_MILLIS)), remote.batchRegisterCalls)
-        assertTrue(remote.legacyRegisterCalls.isEmpty())
-        assertEquals(listOf(ValidationUpdate(USER_ID, NOW_MILLIS)), cache.validationUpdates)
-    }
-
-    @Test
-    fun `falls back to legacy registration when batched claim path is also denied`() = runBlocking {
-        val remote =
-            FakeLicensingRemoteStore(
-                entitlement = allowedEntitlement(maxDevices = 2),
-                device = null,
-                registerFailure = LegacyDeviceRegistrationFallbackException(IllegalStateException("permission denied")),
-                batchRegisterFailure = LegacyDeviceRegistrationFallbackException(IllegalStateException("permission denied")),
-                legacyRegisterResult = LicensingDeviceRegistrationResult.Registered
-            )
-        val cache = FakeLicensingCacheStore()
-        val repository = LicensingRepository(remote, cache) { NOW_MILLIS }
-
-        val result = repository.validateSignedInUser(USER_ID)
-
-        assertEquals(LicensingValidationResult.Allowed, result)
-        assertEquals(listOf(DeviceWrite(USER_ID, INSTALL_ID, NOW_MILLIS)), remote.registerCalls)
-        assertEquals(listOf(DeviceWrite(USER_ID, INSTALL_ID, NOW_MILLIS)), remote.batchRegisterCalls)
-        assertEquals(listOf(DeviceWrite(USER_ID, INSTALL_ID, NOW_MILLIS)), remote.legacyRegisterCalls)
-        assertEquals(listOf(ValidationUpdate(USER_ID, NOW_MILLIS)), cache.validationUpdates)
-    }
-
-    @Test
-    fun `allows when batched claim registration has no capacity but entitlement is allowed`() = runBlocking {
-        val remote =
-            FakeLicensingRemoteStore(
-                entitlement = allowedEntitlement(maxDevices = 1),
-                device = null,
-                registerFailure = LegacyDeviceRegistrationFallbackException(IllegalStateException("permission denied")),
-                batchRegisterResult = LicensingDeviceRegistrationResult.DeviceLimitReached
-            )
-        val cache = FakeLicensingCacheStore()
-        val repository = LicensingRepository(remote, cache) { NOW_MILLIS }
-
-        val result = repository.validateSignedInUser(USER_ID)
-
-        assertEquals(LicensingValidationResult.Allowed, result)
-        assertEquals(listOf(DeviceWrite(USER_ID, INSTALL_ID, NOW_MILLIS)), remote.registerCalls)
-        assertEquals(listOf(DeviceWrite(USER_ID, INSTALL_ID, NOW_MILLIS)), remote.batchRegisterCalls)
-        assertTrue(remote.legacyRegisterCalls.isEmpty())
-        assertEquals(listOf(ValidationUpdate(USER_ID, NOW_MILLIS)), cache.validationUpdates)
-    }
-
-    @Test
-    fun `allows when max devices has been reached but entitlement is allowed`() = runBlocking {
+    fun `blocks when max devices has been reached`() = runBlocking {
         val remote =
             FakeLicensingRemoteStore(
                 entitlement = allowedEntitlement(maxDevices = 1),
@@ -225,50 +155,7 @@ class LicensingRepositoryTest {
 
         val result = repository.validateSignedInUser(USER_ID)
 
-        assertEquals(LicensingValidationResult.Allowed, result)
-        assertEquals(listOf(DeviceWrite(USER_ID, INSTALL_ID, NOW_MILLIS)), remote.registerCalls)
-        assertEquals(listOf(ValidationUpdate(USER_ID, NOW_MILLIS)), cache.validationUpdates)
-    }
-
-    @Test
-    fun `allows when registration fails for non compatibility reason after entitlement validation`() = runBlocking {
-        val remote =
-            FakeLicensingRemoteStore(
-                entitlement = allowedEntitlement(maxDevices = 2),
-                device = null,
-                registerFailure = IllegalStateException("unexpected")
-            )
-        val cache = FakeLicensingCacheStore()
-        val repository = LicensingRepository(remote, cache) { NOW_MILLIS }
-
-        val result = repository.validateSignedInUser(USER_ID)
-
-        assertEquals(LicensingValidationResult.Allowed, result)
-        assertEquals(listOf(DeviceWrite(USER_ID, INSTALL_ID, NOW_MILLIS)), remote.registerCalls)
-        assertTrue(remote.batchRegisterCalls.isEmpty())
-        assertTrue(remote.legacyRegisterCalls.isEmpty())
-        assertEquals(listOf(ValidationUpdate(USER_ID, NOW_MILLIS)), cache.validationUpdates)
-    }
-
-    @Test
-    fun `allows when batched claim fallback fails for non compatibility reason after entitlement validation`() = runBlocking {
-        val remote =
-            FakeLicensingRemoteStore(
-                entitlement = allowedEntitlement(maxDevices = 2),
-                device = null,
-                registerFailure = LegacyDeviceRegistrationFallbackException(IllegalStateException("permission denied")),
-                batchRegisterFailure = IllegalStateException("unexpected batch failure")
-            )
-        val cache = FakeLicensingCacheStore()
-        val repository = LicensingRepository(remote, cache) { NOW_MILLIS }
-
-        val result = repository.validateSignedInUser(USER_ID)
-
-        assertEquals(LicensingValidationResult.Allowed, result)
-        assertEquals(listOf(DeviceWrite(USER_ID, INSTALL_ID, NOW_MILLIS)), remote.registerCalls)
-        assertEquals(listOf(DeviceWrite(USER_ID, INSTALL_ID, NOW_MILLIS)), remote.batchRegisterCalls)
-        assertTrue(remote.legacyRegisterCalls.isEmpty())
-        assertEquals(listOf(ValidationUpdate(USER_ID, NOW_MILLIS)), cache.validationUpdates)
+        assertBlocked(result, LicensingBlockReason.DeviceLimitReached)
     }
 
     @Test
@@ -417,9 +304,16 @@ class LicensingRepositoryTest {
 
         override fun getOrCreateInstallId(): String = INSTALL_ID
 
-        override fun updateLastValidated(uid: String, validatedAtMillis: Long) {
-            validationUpdates += ValidationUpdate(uid, validatedAtMillis)
+        override fun updateLastValidated(
+            uid: String,
+            validatedAtMillis: Long,
+            result: LicensingValidationResult
+        ) {
+            validationUpdates += ValidationUpdate(uid, validatedAtMillis, result)
         }
+
+        override fun getLastValidationResult(uid: String): Pair<LicensingValidationResult, Long>? =
+            null
 
         override fun isWithinGraceWindow(uid: String, nowMillis: Long, graceWindowMillis: Long): Boolean {
             return withinGraceWindow
@@ -434,7 +328,8 @@ class LicensingRepositoryTest {
 
     private data class ValidationUpdate(
         val uid: String,
-        val validatedAtMillis: Long
+        val validatedAtMillis: Long,
+        val result: LicensingValidationResult
     )
 
     private companion object {

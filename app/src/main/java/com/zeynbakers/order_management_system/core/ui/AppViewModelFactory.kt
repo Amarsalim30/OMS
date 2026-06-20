@@ -22,7 +22,8 @@ class AppViewModelFactory(
             modelClass.isAssignableFrom(CalendarViewModel::class.java) -> CalendarViewModel(database) as T
             modelClass.isAssignableFrom(CustomerAccountsViewModel::class.java) ->
                 CustomerAccountsViewModel(database, appContext) as T
-            modelClass.isAssignableFrom(PaymentIntakeViewModel::class.java) -> PaymentIntakeViewModel(database) as T
+            modelClass.isAssignableFrom(PaymentIntakeViewModel::class.java) ->
+                PaymentIntakeViewModel(database, appContext) as T
             modelClass.isAssignableFrom(PaymentIntakeHistoryViewModel::class.java) ->
                 PaymentIntakeHistoryViewModel(database, appContext) as T
             modelClass.isAssignableFrom(LedgerViewModel::class.java) -> LedgerViewModel(database) as T

@@ -55,14 +55,14 @@ import com.zeynbakers.order_management_system.R
 import com.zeynbakers.order_management_system.core.ui.LocalUiEventDispatcher
 import com.zeynbakers.order_management_system.core.ui.showSnackbar
 import com.zeynbakers.order_management_system.core.util.formatHourMinuteAmPm
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 import java.util.concurrent.TimeUnit
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -477,7 +477,11 @@ fun BackupSettingsScreen(onBack: () -> Unit) {
                             progress = { backupProgress.coerceIn(0, 100) / 100f }
                         )
                         Text(
-                            text = "$backupStage (${backupProgress.coerceIn(0, 100)}%)",
+                            text = stringResource(
+                                R.string.backup_progress_format,
+                                backupStage,
+                                backupProgress.coerceIn(0, 100)
+                            ),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )

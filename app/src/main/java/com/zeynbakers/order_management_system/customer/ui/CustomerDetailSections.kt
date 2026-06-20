@@ -1,12 +1,18 @@
 package com.zeynbakers.order_management_system.customer.ui
 
-import android.content.Intent
 import android.content.ClipData
 import android.content.ClipboardManager
+import android.content.Intent
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Message
@@ -14,13 +20,29 @@ import androidx.compose.material.icons.filled.Call
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Phone
 import androidx.compose.material.icons.outlined.AccountBalanceWallet
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
@@ -34,14 +56,15 @@ import com.zeynbakers.order_management_system.core.util.formatDateTime
 import com.zeynbakers.order_management_system.core.util.formatKes
 import com.zeynbakers.order_management_system.customer.data.CustomerEntity
 import com.zeynbakers.order_management_system.order.data.OrderStatusOverride
-import java.math.BigDecimal
-import java.text.DateFormatSymbols
-import java.text.SimpleDateFormat
-import java.util.Calendar
-import java.util.Locale
 import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.plus
+import java.math.BigDecimal
+import java.text.DateFormatSymbols
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.util.Locale
+import java.time.Instant as JavaInstant
 
 @Composable
 internal fun BalanceCard(
@@ -137,7 +160,12 @@ internal fun BalanceCard(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clickable {
-                                clipboardManager.setPrimaryClip(ClipData.newPlainText("customer_phone", phone))
+                                clipboardManager.setPrimaryClip(
+                                    ClipData.newPlainText(
+                                        "customer_phone",
+                                        phone
+                                    )
+                                )
                             }
                             .padding(horizontal = 8.dp, vertical = 6.dp),
                         verticalAlignment = Alignment.CenterVertically
@@ -618,7 +646,9 @@ internal fun LedgerRow(entry: AccountEntryEntity, orderLabels: Map<Long, String>
         }
     val orderLabel =
         entry.orderId?.let { id -> orderLabels[id] ?: stringResource(R.string.customer_detail_order_id, id) }
-    Column(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
+    Column(modifier = Modifier
+        .fillMaxWidth()
+        .padding(vertical = 8.dp)) {
         Text(text = formatDateTime(entry.date), style = MaterialTheme.typography.labelMedium)
         if (orderLabel != null) {
             Text(
@@ -635,7 +665,11 @@ internal fun LedgerRow(entry: AccountEntryEntity, orderLabels: Map<Long, String>
             }
         Text(text = typeLabel, style = MaterialTheme.typography.labelSmall, color = amountColor)
         Text(
-            text = "$sign ${formatKes(entry.amount)}",
+            text = stringResource(
+                R.string.customer_detail_ledger_signed_amount,
+                sign,
+                formatKes(entry.amount)
+            ),
             style = MaterialTheme.typography.bodyMedium,
             color = amountColor
         )
@@ -697,17 +731,16 @@ internal fun buildLedgerSections(entries: List<AccountEntryEntity>): List<Ledger
 }
 
 internal fun yearMonthKey(epochMillis: Long): Pair<String, String> {
-    val calendar = Calendar.getInstance().apply { timeInMillis = epochMillis }
-    val year = calendar.get(Calendar.YEAR)
-    val month = calendar.get(Calendar.MONTH)
-    val key = String.format(Locale.US, "%04d-%02d", year, month + 1)
-    val formatter = SimpleDateFormat("MMMM yyyy", Locale.getDefault())
-    return key to formatter.format(calendar.time)
+    val instant = JavaInstant.ofEpochMilli(epochMillis)
+    val dateTime = instant.atZone(ZoneId.systemDefault())
+    val key = DateTimeFormatter.ofPattern("yyyy-MM", Locale.US).format(dateTime)
+    val label = DateTimeFormatter.ofPattern("MMMM yyyy", Locale.getDefault()).format(dateTime)
+    return key to label
 }
 
 internal fun currentMonthKey(): String {
-    val now = Calendar.getInstance()
-    return String.format(Locale.US, "%04d-%02d", now.get(Calendar.YEAR), now.get(Calendar.MONTH) + 1)
+    val dateTime = JavaInstant.now().atZone(ZoneId.systemDefault())
+    return DateTimeFormatter.ofPattern("yyyy-MM", Locale.US).format(dateTime)
 }
 
 @Composable

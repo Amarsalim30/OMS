@@ -470,16 +470,22 @@ internal class LicensingRepository(
                 return@withContext res
             }
 
-            val accessPath =
-                validateDeviceAccessBestEffort(
+                val validationResult =
+                    validateDeviceAccessStrict(
                     uid = uid,
                     deviceId = installId,
                     nowMillis = nowMillis,
                     entitlement = entitlement
                 )
+
+                if (validationResult is LicensingValidationResult.Blocked) {
+                    localStore.updateLastValidated(uid, nowMillis, validationResult)
+                    return@withContext validationResult
+                }
+
                 val res = LicensingValidationResult.Allowed
                 localStore.updateLastValidated(uid, nowMillis, res)
-                return@withContext allowed(accessPath)
+                return@withContext allowed("strict_device_validated")
         } catch (error: Exception) {
             when {
                 shouldTreatAsOffline(error) -> {
@@ -499,25 +505,27 @@ internal class LicensingRepository(
         }
     }
 
-    private suspend fun validateDeviceAccessBestEffort(
+    private suspend fun validateDeviceAccessStrict(
         uid: String,
         deviceId: String,
         nowMillis: Long,
         entitlement: LicensingEntitlement
-    ): String {
+    ): LicensingValidationResult {
         return try {
             val device = remoteStore.getDevice(uid, deviceId)
             if (device != null) {
                 if (device.revoked) {
-                    logWarn("Current device is revoked, but entitlement is allowed; bypassing device block")
-                    return "allowed_revoked_device_ignored"
+                    return LicensingValidationResult.Blocked(LicensingBlockReason.DeviceRevoked)
                 }
                 try {
                     remoteStore.touchDevice(uid, deviceId, nowMillis)
                 } catch (error: Exception) {
-                    logWarn("Heartbeat refresh failed for validated device; allowing access", error)
+                    logWarn(
+                        "Heartbeat refresh failed for validated device; allowing access best-effort",
+                        error
+                    )
                 }
-                return "existing_device"
+                return LicensingValidationResult.Allowed
             }
 
             when (
@@ -529,30 +537,30 @@ internal class LicensingRepository(
                         entitlement = entitlement
                     )
             ) {
-                LicensingDeviceRegistrationResult.Registered -> "registered_device"
-                LicensingDeviceRegistrationResult.AlreadyRegistered -> "registered_device_retry"
-                LicensingDeviceRegistrationResult.DeviceLimitReached -> {
-                    logWarn("Device limit reached, but entitlement is allowed; bypassing device block")
-                    "allowed_device_limit_ignored"
-                }
+                LicensingDeviceRegistrationResult.Registered,
+                LicensingDeviceRegistrationResult.AlreadyRegistered -> LicensingValidationResult.Allowed
 
-                LicensingDeviceRegistrationResult.DeviceRevoked -> {
-                    logWarn("Device registration reported revoked, but entitlement is allowed; bypassing device block")
-                    "allowed_device_revoked_ignored"
-                }
+                LicensingDeviceRegistrationResult.DeviceLimitReached ->
+                    LicensingValidationResult.Blocked(LicensingBlockReason.DeviceLimitReached)
 
-                LicensingDeviceRegistrationResult.EntitlementMissing,
-                LicensingDeviceRegistrationResult.AccessDenied,
-                LicensingDeviceRegistrationResult.EntitlementExpired -> {
-                    logWarn(
-                        "Device registration returned $registrationResult after entitlement validation; allowing access"
-                    )
-                    "allowed_device_registration_ignored"
-                }
+                LicensingDeviceRegistrationResult.DeviceRevoked ->
+                    LicensingValidationResult.Blocked(LicensingBlockReason.DeviceRevoked)
+
+                LicensingDeviceRegistrationResult.EntitlementMissing ->
+                    LicensingValidationResult.Blocked(LicensingBlockReason.EntitlementMissing)
+
+                LicensingDeviceRegistrationResult.AccessDenied ->
+                    LicensingValidationResult.Blocked(LicensingBlockReason.AccessDenied)
+
+                LicensingDeviceRegistrationResult.EntitlementExpired ->
+                    LicensingValidationResult.Blocked(LicensingBlockReason.EntitlementExpired)
             }
         } catch (error: Exception) {
-            logWarn("Device validation failed after entitlement was confirmed; allowing access", error)
-            "allowed_device_validation_ignored"
+            if (shouldTreatAsOffline(error)) {
+                throw error
+            }
+            logWarn("Device validation failed with unexpected error; blocking", error)
+            LicensingValidationResult.Blocked(LicensingBlockReason.ValidationFailed)
         }
     }
 

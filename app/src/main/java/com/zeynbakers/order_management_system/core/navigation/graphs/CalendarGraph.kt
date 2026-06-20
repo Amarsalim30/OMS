@@ -213,11 +213,7 @@ internal fun NavGraphBuilder.calendarGraph(
             searchProducts = { query -> orderViewModel.searchProducts(query) },
             ensureProduct = { name, price, emoji -> orderViewModel.ensureProduct(name, price, emoji) },
             onDraftChange = { updated ->
-                if (updated == null) {
-                    calendarState.dayDrafts.remove(date)
-                } else {
-                    calendarState.dayDrafts[date] = updated
-                }
+                calendarCallbacks.onDraftChange(date, updated)
             },
             onImportOrders = { actions ->
                 orderViewModel.importOrders(actions, date)

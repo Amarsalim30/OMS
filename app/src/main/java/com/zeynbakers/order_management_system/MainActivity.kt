@@ -6,6 +6,7 @@ import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.viewModels
 import androidx.compose.runtime.mutableStateOf
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.lifecycleScope
@@ -16,6 +17,7 @@ import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     private val launchIntent = mutableStateOf<Intent?>(null)
+    private val mainViewModel: MainViewModel by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         var shouldKeepSplash = true
@@ -24,6 +26,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         launchIntent.value = intent
+        mainViewModel.onIntentReceived(intent)
         lifecycleScope.launch {
             val startDestination =
                 runCatching {
@@ -43,6 +46,7 @@ class MainActivity : ComponentActivity() {
                 AuthGate {
                     MainAppContent(
                         activity = this@MainActivity,
+                        mainViewModel = mainViewModel,
                         launchIntentState = launchIntent,
                         startDestination = startDestination
                     )
@@ -54,6 +58,7 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         launchIntent.value = intent
+        mainViewModel.onIntentReceived(intent)
     }
 
     private companion object {

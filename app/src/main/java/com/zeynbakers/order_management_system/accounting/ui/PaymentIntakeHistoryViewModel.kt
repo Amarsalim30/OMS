@@ -5,9 +5,9 @@ import androidx.annotation.StringRes
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.zeynbakers.order_management_system.R
+import com.zeynbakers.order_management_system.accounting.data.EntryType
 import com.zeynbakers.order_management_system.accounting.data.PaymentAllocationStatus
 import com.zeynbakers.order_management_system.accounting.data.PaymentAllocationType
-import com.zeynbakers.order_management_system.accounting.data.EntryType
 import com.zeynbakers.order_management_system.accounting.data.PaymentMethod
 import com.zeynbakers.order_management_system.accounting.data.PaymentReceiptEntity
 import com.zeynbakers.order_management_system.accounting.data.PaymentReceiptStatus
@@ -15,8 +15,6 @@ import com.zeynbakers.order_management_system.accounting.domain.PaymentReceiptPr
 import com.zeynbakers.order_management_system.accounting.domain.ReceiptAllocation
 import com.zeynbakers.order_management_system.core.db.AppDatabase
 import com.zeynbakers.order_management_system.core.util.formatOrderLabelWithId
-import com.zeynbakers.order_management_system.order.data.OrderEntity
-import java.math.BigDecimal
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -24,6 +22,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.datetime.LocalDate
+import java.math.BigDecimal
 
 sealed class PaymentHistoryFilter {
     data object All : PaymentHistoryFilter()
@@ -372,21 +371,19 @@ class PaymentIntakeHistoryViewModel(
             val sender = receipt.senderName?.takeIf { it.isNotBlank() }
                 ?: receipt.senderPhone?.takeIf { it.isNotBlank() }
             if (sender != null) {
-                append(" from ")
-                append(sender)
+                append(" ")
+                append(text(R.string.money_receipt_description_from, sender))
             }
         }
     }
 
     private fun buildManualDescription(receipt: PaymentReceiptEntity): String {
-        return buildString {
-            append("Payment (")
-            append(receipt.method.name)
-            append(")")
-            if (!receipt.note.isNullOrBlank()) {
-                append(": ")
-                append(receipt.note.trim())
-            }
+        val method = receipt.method.name
+        val note = receipt.note?.trim()
+        return if (note.isNullOrBlank()) {
+            text(R.string.money_receipt_description_manual, method)
+        } else {
+            text(R.string.money_receipt_description_manual_with_note, method, note)
         }
     }
 

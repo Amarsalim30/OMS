@@ -308,6 +308,7 @@
     <string name="action_retry">Retry</string>
     <string name="action_move">Move</string>
     <string name="action_void">Void</string>
+    <string name="action_delete">Delete</string>
     <string name="action_more">More</string>
     <string name="action_search">Search</string>
     <string name="action_clear">Clear</string>
@@ -426,6 +427,11 @@
     <string name="money_no_payments_detected">No payments detected yet.</string>
     <string name="money_no_payments_for_filter">No payments for this filter.</string>
     <string name="money_receipt_not_found">Receipt not found</string>
+    <string name="money_select_customer_or_order">Select a customer or order</string>
+    <string name="money_receipt_updated">Receipt updated</string>
+    <string name="money_receipt_update_failed">Unable to update receipt</string>
+    <string name="money_already_recorded">Already recorded</string>
+    <string name="money_payment_applied">Payment applied</string>
     <string name="money_step_source">Source</string>
     <string name="money_step_assign">Assign</string>
     <string name="money_step_post">Post</string>
@@ -494,6 +500,7 @@
     <string name="backup_stage_restoring">Restoring</string>
     <string name="backup_complete">Backup complete</string>
     <string name="backup_failed">Backup failed</string>
+    <string name="backup_progress_format">%1$s (%2$d%%)</string>
     <string name="restore_complete_restart">Restore complete. Restart app.</string>
     <string name="restore_failed">Restore failed</string>
     <string name="backup_started">Backup started</string>
@@ -680,6 +687,9 @@
     <string name="money_move_mode_order">Order</string>
     <string name="money_move_mode_customer_credit">Customer credit</string>
     <string name="money_history_swipe_hint">Swipe right to move, left to void</string>
+    <string name="money_receipt_description_from">from %1$s</string>
+    <string name="money_receipt_description_manual">Payment (%1$s)</string>
+    <string name="money_receipt_description_manual_with_note">Payment (%1$s): %2$s</string>
     <string name="money_applied_payments">Applied: %1$d</string>
     <string name="money_applied_existing_duplicates">Already recorded: %1$d</string>
     <string name="money_applied_intake_duplicates">Import duplicates: %1$d</string>
@@ -843,6 +853,7 @@
     <string name="customer_detail_show">Show</string>
     <string name="customer_detail_order_id">Order ID %1$d</string>
     <string name="customer_detail_order_primary_line">%1$s - %2$s - %3$s</string>
+    <string name="customer_detail_ledger_signed_amount">%1$s %2$s</string>
     <string name="customer_detail_status_closed_override">CLOSED (override)</string>
     <string name="customer_detail_status_open_override">OPEN (override)</string>
     <string name="customer_detail_status_unpaid">UNPAID</string>
@@ -1069,6 +1080,29 @@
     <string name="day_import_create_customer">Create New</string>
     <string name="day_import_confirm">Import %1$d Orders</string>
     <string name="day_importing_orders">Importing %1$d orders...</string>
+    <string name="product_catalog_title">Product Catalog</string>
+    <plurals name="product_count">
+        <item quantity="one">%1$d item</item>
+        <item quantity="other">%1$d items</item>
+    </plurals>
+    <string name="product_add_new">Add New Product</string>
+    <string name="product_default_price_format">Default: KSh %1$s</string>
+    <string name="product_empty_title">No products yet</string>
+    <string name="product_empty_body">Add your products here so you can\npick them quickly when creating orders.</string>
+    <string name="product_add_first">Add First Product</string>
+    <string name="product_remove_title">Remove product?</string>
+    <string name="product_remove_message">\"%1$s %2$s\" will be hidden from your product list. Existing orders that used this product are not affected.</string>
+    <string name="product_edit_title">Edit Product</string>
+    <string name="product_add_title">Add New Product</string>
+    <string name="product_pick_emoji">Pick an emoji</string>
+    <string name="product_custom_emoji_label">Custom emoji (optional)</string>
+    <string name="product_name_label">Product name *</string>
+    <string name="product_name_placeholder">e.g. Meatpie, Croissantâ€¦</string>
+    <string name="product_name_required">Please enter a product name</string>
+    <string name="product_price_label">Default price (KSh)</string>
+    <string name="product_price_placeholder">e.g. 50</string>
+    <string name="product_price_invalid">Please enter a valid price</string>
+    <string name="product_price_hint">You can change the price per order</string>
     <string-array name="update_notes_latest">
         <item>Share M-PESA messages from Messages directly into the app.</item>
         <item>Oldest-order allocation is now the default when applying payments.</item>

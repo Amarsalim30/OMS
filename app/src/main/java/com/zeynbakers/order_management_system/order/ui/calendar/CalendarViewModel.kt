@@ -21,6 +21,7 @@ import com.zeynbakers.order_management_system.order.ui.common.CalendarDayUi
 import com.zeynbakers.order_management_system.order.ui.common.OrderItemDraft
 import com.zeynbakers.order_management_system.order.ui.common.PaymentState
 import com.zeynbakers.order_management_system.order.ui.day_detail.models.ImportAction
+import com.zeynbakers.order_management_system.order.ui.day_detail.models.OrderDraft
 import com.zeynbakers.order_management_system.order.ui.day_detail.models.OrderImportAction
 import com.zeynbakers.order_management_system.order.ui.models.OrderUiModel
 import com.zeynbakers.order_management_system.product.data.ProductEntity
@@ -28,6 +29,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.datetime.Clock
@@ -88,6 +90,19 @@ class CalendarViewModel(private val database: AppDatabase) : ViewModel() {
 
     private val _creditPrompt = MutableStateFlow<OrderCreditPrompt?>(null)
     val creditPrompt = _creditPrompt.asStateFlow()
+
+    private val _dayDrafts = MutableStateFlow<Map<LocalDate, OrderDraft>>(emptyMap())
+    val dayDrafts = _dayDrafts.asStateFlow()
+
+    fun updateDraft(date: LocalDate, draft: OrderDraft?) {
+        _dayDrafts.update { current ->
+            if (draft == null) {
+                current - date
+            } else {
+                current + (date to draft)
+            }
+        }
+    }
 
     private var lastMonth: Int? = null
     private var lastYear: Int? = null
