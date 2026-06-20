@@ -2,16 +2,16 @@
 
 package com.zeynbakers.order_management_system.order.domain
 
+import com.zeynbakers.order_management_system.accounting.data.AccountingDao
 import com.zeynbakers.order_management_system.order.data.OrderDao
 import com.zeynbakers.order_management_system.order.data.OrderEntity
 import com.zeynbakers.order_management_system.order.data.OrderItemDao
 import com.zeynbakers.order_management_system.order.data.OrderItemEntity
-import com.zeynbakers.order_management_system.order.data.OrderWithItems
 import com.zeynbakers.order_management_system.order.data.OrderItemWithProduct
-import com.zeynbakers.order_management_system.order.data.ItemCategory
-import com.zeynbakers.order_management_system.product.data.ProductEntity
+import com.zeynbakers.order_management_system.order.data.OrderWithItems
 import com.zeynbakers.order_management_system.product.data.ProductDao
 import kotlinx.coroutines.flow.Flow
+import kotlinx.datetime.Clock
 import java.math.BigDecimal
 
 /**
@@ -21,7 +21,8 @@ import java.math.BigDecimal
 class OrderRepository(
     private val orderDao: OrderDao,
     private val orderItemDao: OrderItemDao,
-    private val productDao: ProductDao
+    private val productDao: ProductDao,
+    private val accountingDao: AccountingDao
 ) {
 
     // Order operations
@@ -66,6 +67,17 @@ class OrderRepository(
 
     suspend fun updateOrderItemPrice(itemId: Long, priceOverride: BigDecimal?) =
         orderItemDao.updateOrderItemPrice(itemId, priceOverride)
+
+    suspend fun upsertAccountingEntry(order: OrderEntity) {
+        val now = Clock.System.now().toEpochMilliseconds()
+        accountingDao.upsertDebitForOrder(
+            orderId = order.id,
+            customerId = order.customerId,
+            amount = order.totalAmount,
+            date = now,
+            description = "Charge: Order #${order.id}"
+        )
+    }
 
     // Product analytics
     suspend fun getProductUsageStats(productId: Long): ProductUsageStats {

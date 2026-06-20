@@ -26,8 +26,10 @@ import com.zeynbakers.order_management_system.order.ui.calendar.CalendarViewMode
 import com.zeynbakers.order_management_system.order.ui.calendar.MonthKey
 import com.zeynbakers.order_management_system.order.ui.calendar.MonthSnapshot
 import com.zeynbakers.order_management_system.order.ui.common.CalendarDayUi
+import com.zeynbakers.order_management_system.order.ui.day_detail.DayDetailViewModel
 import com.zeynbakers.order_management_system.order.ui.day_detail.models.OrderDraft
 import com.zeynbakers.order_management_system.order.ui.models.OrderUiModel
+import com.zeynbakers.order_management_system.order.ui.summary.SummaryViewModel
 import kotlinx.datetime.LocalDate
 import java.math.BigDecimal
 
@@ -126,6 +128,8 @@ internal fun AppFeatureNavHost(
     startDestination: String,
     modifier: Modifier,
     orderViewModel: CalendarViewModel,
+    dayDetailViewModel: DayDetailViewModel,
+    summaryViewModel: SummaryViewModel,
     customerViewModel: CustomerAccountsViewModel,
     paymentIntakeViewModel: PaymentIntakeViewModel,
     paymentHistoryViewModel: PaymentIntakeHistoryViewModel,
@@ -149,6 +153,8 @@ internal fun AppFeatureNavHost(
         calendarGraph(
             navController = navController,
             orderViewModel = orderViewModel,
+            dayDetailViewModel = dayDetailViewModel,
+            summaryViewModel = summaryViewModel,
             calendarState = calendarState,
             calendarCallbacks = calendarCallbacks,
             navigationActions = navigationActions,

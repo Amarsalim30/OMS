@@ -36,7 +36,6 @@ import kotlinx.datetime.Clock
 import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
-import kotlinx.datetime.atStartOfDayIn
 import kotlinx.datetime.plus
 import kotlinx.datetime.toLocalDateTime
 import java.math.BigDecimal
@@ -59,22 +58,11 @@ class CalendarViewModel(private val database: AppDatabase) : ViewModel() {
     private val allocationDao = database.paymentAllocationDao()
     private val receiptDao = database.paymentReceiptDao()
     private val receiptProcessor = PaymentReceiptProcessor(database)
-    private val orderRepository = OrderRepository(orderDao, database.orderItemDao(), productDao)
+    private val orderRepository =
+        OrderRepository(orderDao, database.orderItemDao(), productDao, accountingDao)
 
     private val _calendarDays = MutableStateFlow<List<CalendarDayUi>>(emptyList())
     val calendarDays = _calendarDays.asStateFlow()
-
-    private val _ordersForDate = MutableStateFlow<List<OrderUiModel>>(emptyList())
-    val ordersForDate = _ordersForDate.asStateFlow()
-
-    private val _dayTotal = MutableStateFlow(BigDecimal.ZERO)
-    val dayTotal = _dayTotal.asStateFlow()
-
-    private val _summaryOrders = MutableStateFlow<List<OrderUiModel>>(emptyList())
-    val summaryOrders = _summaryOrders.asStateFlow()
-
-    private val _summaryTotal = MutableStateFlow(BigDecimal.ZERO)
-    val summaryTotal = _summaryTotal.asStateFlow()
 
     private val _monthTotal = MutableStateFlow(BigDecimal.ZERO)
     val monthTotal = _monthTotal.asStateFlow()
@@ -129,7 +117,6 @@ class CalendarViewModel(private val database: AppDatabase) : ViewModel() {
                     )
                 }
             result.creditPrompt?.let { _creditPrompt.value = it }
-            loadOrdersForDate(result.date)
             refreshMonthSnapshots(result.affectedMonths)
         }
     }
@@ -201,7 +188,6 @@ class CalendarViewModel(private val database: AppDatabase) : ViewModel() {
                     }
                 }
             }
-            loadOrdersForDate(targetDate)
             refreshMonthSnapshots(setOf(MonthKey(targetDate.year, targetDate.monthNumber)))
         }
     }
@@ -406,7 +392,6 @@ class CalendarViewModel(private val database: AppDatabase) : ViewModel() {
                 orderTotal = order.totalAmount,
                 now = now
             )
-            loadOrdersForDate(order.orderDate)
             refreshMonthSnapshots(setOf(order.orderDate.toMonthKey()))
             _creditPrompt.value = null
         }
@@ -417,62 +402,7 @@ class CalendarViewModel(private val database: AppDatabase) : ViewModel() {
     }
 
     private suspend fun upsertAccountingEntry(order: OrderEntity) {
-        val customerName = order.customerId?.let { customerDao.getById(it)?.name }
-        val orderLabel =
-            formatOrderLabelWithId(
-                orderId = order.id,
-                date = order.orderDate,
-                customerName = customerName,
-                notes = "",
-                totalAmount = order.totalAmount
-            )
-        accountingDao.upsertDebitForOrder(
-            orderId = order.id,
-            customerId = order.customerId,
-            amount = order.totalAmount,
-            date = order.orderDate.atStartOfDayIn(TimeZone.currentSystemDefault())
-                .toEpochMilliseconds(),
-            description = "Charge: $orderLabel"
-        )
-    }
-
-    fun loadOrdersForDate(date: LocalDate) {
-        viewModelScope.launch {
-            val orders = orderDao.getOrdersByDate(date.toString())
-            val activeOrders = orders.filter { it.status != OrderStatus.CANCELLED }
-
-            val uiModels = activeOrders.map { order ->
-                val items = database.orderItemDao().getOrderItems(order.id)
-                val customer = order.customerId?.let { customerDao.getById(it) }
-                val paid = accountingDao.getPaidForOrder(order.id)
-                OrderUiModel(order, items, customer, paid)
-            }
-
-            _ordersForDate.value = uiModels
-            _dayTotal.value =
-                activeOrders.fold(BigDecimal.ZERO) { acc, order -> acc + order.totalAmount }
-        }
-    }
-
-    fun loadSummaryRange(startInclusive: LocalDate, endExclusive: LocalDate) {
-        viewModelScope.launch {
-            val orders =
-                orderDao.getOrdersBetween(startInclusive.toString(), endExclusive.toString())
-            val activeOrders = orders.filter { it.status != OrderStatus.CANCELLED }
-
-            val uiModels = activeOrders.map { order ->
-                val items = database.orderItemDao().getOrderItems(order.id)
-                val customer = order.customerId?.let { customerDao.getById(it) }
-                val paid = accountingDao.getPaidForOrder(order.id)
-                OrderUiModel(order, items, customer, paid)
-            }.sortedWith(
-                compareByDescending<OrderUiModel> { it.order.orderDate }.thenByDescending { it.order.createdAt }
-            )
-
-            _summaryOrders.value = uiModels
-            _summaryTotal.value =
-                activeOrders.fold(BigDecimal.ZERO) { acc, order -> acc + order.totalAmount }
-        }
+        orderRepository.upsertAccountingEntry(order)
     }
 
     fun cancelOrder(orderId: Long, date: LocalDate) {
@@ -481,7 +411,6 @@ class CalendarViewModel(private val database: AppDatabase) : ViewModel() {
             database.withTransaction {
                 cancelOrderTransactional(orderId)
             }
-            loadOrdersForDate(existingDate)
             refreshMonthSnapshots(setOf(existingDate.toMonthKey()))
             loadUnpaidOrders()
         }
@@ -597,7 +526,6 @@ class CalendarViewModel(private val database: AppDatabase) : ViewModel() {
             }
             cancelOrderTransactional(orderId)
         }
-        loadOrdersForDate(existingDate)
         refreshMonthSnapshots(setOf(existingDate.toMonthKey()))
         loadUnpaidOrders()
         return true

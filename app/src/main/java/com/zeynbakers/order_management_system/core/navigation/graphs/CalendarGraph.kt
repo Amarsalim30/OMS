@@ -1,6 +1,7 @@
 package com.zeynbakers.order_management_system.core.navigation.graphs
 
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -27,13 +28,17 @@ import com.zeynbakers.order_management_system.navigateTopLevel
 import com.zeynbakers.order_management_system.order.ui.calendar.CalendarScreen
 import com.zeynbakers.order_management_system.order.ui.calendar.CalendarViewModel
 import com.zeynbakers.order_management_system.order.ui.day_detail.DayDetailScreen
+import com.zeynbakers.order_management_system.order.ui.day_detail.DayDetailViewModel
 import com.zeynbakers.order_management_system.order.ui.summary.SummaryScreen
+import com.zeynbakers.order_management_system.order.ui.summary.SummaryViewModel
 import kotlinx.datetime.LocalDate
 import java.math.BigDecimal
 
 internal fun NavGraphBuilder.calendarGraph(
     navController: NavHostController,
     orderViewModel: CalendarViewModel,
+    dayDetailViewModel: DayDetailViewModel,
+    summaryViewModel: SummaryViewModel,
     calendarState: AppCalendarState,
     calendarCallbacks: AppCalendarCallbacks,
     navigationActions: AppFeatureNavigationActions,
@@ -140,9 +145,13 @@ internal fun NavGraphBuilder.calendarGraph(
                 ?: supportActions.currentDate()
         val focusOrderId =
             entry.arguments?.getString(AppRoutes.ARG_ORDER_ID)?.toLongOrNull()
+
+        val orders by dayDetailViewModel.orders.collectAsState()
+        val dayTotal by dayDetailViewModel.dayTotal.collectAsState()
+
         LaunchedEffect(date) {
             calendarCallbacks.onSelectedDateChange(date)
-            orderViewModel.loadOrdersForDate(date)
+            dayDetailViewModel.loadOrders(date)
         }
         val context = LocalContext.current
         val appName = stringResource(R.string.app_name)
@@ -153,8 +162,8 @@ internal fun NavGraphBuilder.calendarGraph(
         }
         DayDetailScreen(
             date = date,
-            orders = calendarState.ordersForDate,
-            dayTotal = calendarState.dayTotal,
+            orders = orders,
+            dayTotal = dayTotal,
             onBack = { navController.popBackStack() },
             onSaveOrder = { cartItems, name, phone, pickupTime, orderId ->
                 orderViewModel.saveOrder(
@@ -165,11 +174,13 @@ internal fun NavGraphBuilder.calendarGraph(
                     pickupTime = pickupTime,
                     existingOrderId = orderId
                 )
+                dayDetailViewModel.loadOrders(date)
                 WidgetUpdater.enqueue(navController.context)
                 NotificationScheduler.enqueueNow(navController.context)
             },
             onDeleteOrder = { orderId ->
                 orderViewModel.cancelOrder(orderId, date)
+                dayDetailViewModel.loadOrders(date)
                 WidgetUpdater.enqueue(navController.context)
                 NotificationScheduler.enqueueNow(navController.context)
             },
@@ -190,6 +201,7 @@ internal fun NavGraphBuilder.calendarGraph(
                         moveFullReceipts = moveFull
                     )
                 if (result) {
+                    dayDetailViewModel.loadOrders(date)
                     WidgetUpdater.enqueue(navController.context)
                     NotificationScheduler.enqueueNow(navController.context)
                 }
@@ -217,6 +229,7 @@ internal fun NavGraphBuilder.calendarGraph(
             },
             onImportOrders = { actions ->
                 orderViewModel.importOrders(actions, date)
+                dayDetailViewModel.loadOrders(date)
                 WidgetUpdater.enqueue(navController.context)
                 NotificationScheduler.enqueueNow(navController.context)
             },
@@ -227,16 +240,19 @@ internal fun NavGraphBuilder.calendarGraph(
     }
 
     composable(AppRoutes.Summary) {
+        val summaryOrders by summaryViewModel.summaryOrders.collectAsState()
+        val summaryTotal by summaryViewModel.summaryTotal.collectAsState()
+
         SummaryScreen(
             monthLabel = supportActions.monthLabel(calendarState.currentYear, calendarState.currentMonth),
             monthTotal = calendarState.monthTotal,
             initialDate =
                 calendarState.summaryDate ?: calendarState.selectedDate ?: supportActions.currentDate(),
-            orders = calendarState.summaryOrders,
-            rangeTotal = calendarState.summaryTotal,
+            orders = summaryOrders,
+            rangeTotal = summaryTotal,
             onAnchorDateChange = { updated -> calendarCallbacks.onSummaryDateChange(updated) },
             onLoadRange = { start, end ->
-                orderViewModel.loadSummaryRange(startInclusive = start, endExclusive = end)
+                summaryViewModel.loadRange(startInclusive = start, endExclusive = end)
             },
             onBack = { navController.popBackStack() }
         )

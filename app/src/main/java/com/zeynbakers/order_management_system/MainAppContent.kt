@@ -61,6 +61,8 @@ import com.zeynbakers.order_management_system.customer.ui.CustomerAccountsViewMo
 import com.zeynbakers.order_management_system.customer.ui.ImportContact
 import com.zeynbakers.order_management_system.order.ui.calendar.CalendarViewModel
 import com.zeynbakers.order_management_system.order.ui.calendar.OrderCreditPrompt
+import com.zeynbakers.order_management_system.order.ui.day_detail.DayDetailViewModel
+import com.zeynbakers.order_management_system.order.ui.summary.SummaryViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -88,6 +90,8 @@ internal fun MainAppContent(
                     )
                 }
                 val orderViewModel: CalendarViewModel = viewModel(factory = viewModelFactory)
+                val dayDetailViewModel: DayDetailViewModel = viewModel(factory = viewModelFactory)
+                val summaryViewModel: SummaryViewModel = viewModel(factory = viewModelFactory)
                 val customerViewModel: CustomerAccountsViewModel = viewModel(factory = viewModelFactory)
                 val paymentIntakeViewModel: PaymentIntakeViewModel = viewModel(factory = viewModelFactory)
                 val paymentHistoryViewModel: PaymentIntakeHistoryViewModel = viewModel(factory = viewModelFactory)
@@ -214,11 +218,11 @@ internal fun MainAppContent(
                 val calendarDays by orderViewModel.calendarDays.collectAsState()
                 val monthTotal by orderViewModel.monthTotal.collectAsState()
                 val monthBadgeCount by orderViewModel.monthBadgeCount.collectAsState()
-                val ordersForDate by orderViewModel.ordersForDate.collectAsState()
-                val dayTotal by orderViewModel.dayTotal.collectAsState()
+                val ordersForDate by dayDetailViewModel.orders.collectAsState()
+                val dayTotal by dayDetailViewModel.dayTotal.collectAsState()
                 val monthSnapshots by orderViewModel.monthSnapshots.collectAsState()
-                val summaryOrders by orderViewModel.summaryOrders.collectAsState()
-                val summaryTotal by orderViewModel.summaryTotal.collectAsState()
+                val summaryOrders by summaryViewModel.summaryOrders.collectAsState()
+                val summaryTotal by summaryViewModel.summaryTotal.collectAsState()
                 val unpaidOrders by orderViewModel.unpaidOrders.collectAsState()
                 val creditPrompt by orderViewModel.creditPrompt.collectAsState()
                 val customerSummaries by customerViewModel.summaries.collectAsState()
@@ -293,7 +297,7 @@ internal fun MainAppContent(
                         orderViewModel.loadMonth(month = currentMonth, year = currentYear)
                     }
                     orderViewModel.loadUnpaidOrders()
-                    selectedDate?.let { orderViewModel.loadOrdersForDate(it) }
+                    selectedDate?.let { dayDetailViewModel.loadOrders(it) }
                     customerViewModel.searchCustomers(customerQuery)
                     customerDetail?.id?.let { activeCustomerId ->
                         customerViewModel.loadCustomer(activeCustomerId)
@@ -539,6 +543,8 @@ internal fun MainAppContent(
                         navigationActions = navigationActions,
                         supportActions = supportActions,
                         orderViewModel = orderViewModel,
+                        dayDetailViewModel = dayDetailViewModel,
+                        summaryViewModel = summaryViewModel,
                         customerViewModel = customerViewModel,
                         paymentIntakeViewModel = paymentIntakeViewModel,
                         paymentHistoryViewModel = paymentHistoryViewModel,

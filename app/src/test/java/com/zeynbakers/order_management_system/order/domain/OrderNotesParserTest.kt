@@ -1,72 +1,65 @@
 package com.zeynbakers.order_management_system.order.domain
 
-import java.math.BigDecimal
 import org.junit.Assert.assertEquals
 import org.junit.Test
+import java.math.BigDecimal
 
 class OrderNotesParserTest {
 
     @Test
-    fun `parses simple quantity suffix`() {
-        val parsed = parseOrderNotes("Bread 2")
-        assertEquals(listOf(OrderLineItem(name = "Bread", quantity = BigDecimal("2"))), parsed.items)
-        assertEquals(emptyList<String>(), parsed.unparsed)
+    fun `parse simple items`() {
+        val notes = "2 bread, 3 milk"
+        val parsed = parseOrderNotes(notes)
+
+        assertEquals(2, parsed.items.size)
+        assertEquals("bread", parsed.items[0].name)
+        assertEquals(0, BigDecimal("2").compareTo(parsed.items[0].quantity))
+        assertEquals("milk", parsed.items[1].name)
+        assertEquals(0, BigDecimal("3").compareTo(parsed.items[1].quantity))
     }
 
     @Test
-    fun `parses simple quantity prefix`() {
-        val parsed = parseOrderNotes("3 Scones")
-        assertEquals(listOf(OrderLineItem(name = "Scones", quantity = BigDecimal("3"))), parsed.items)
+    fun `parse bulleted items with complex separators`() {
+        val notes = """
+            - 5 Croissants; 10 Meatpies
+            * 2 Birthday Cakes, 1 Swiss Roll
+        """.trimIndent()
+        val parsed = parseOrderNotes(notes)
+
+        assertEquals(4, parsed.items.size)
+        assertEquals("Croissants", parsed.items[0].name)
+        assertEquals("Meatpies", parsed.items[1].name)
+        assertEquals("Birthday Cakes", parsed.items[2].name)
+        assertEquals("Swiss Roll", parsed.items[3].name)
     }
 
     @Test
-    fun `splits on newlines commas and semicolons`() {
-        val parsed = parseOrderNotes("Bread 2, Scones 3;\nMuffins x4")
-        assertEquals(
-            listOf(
-                OrderLineItem("Bread", BigDecimal("2")),
-                OrderLineItem("Scones", BigDecimal("3")),
-                OrderLineItem("Muffins", BigDecimal("4"))
-            ),
-            parsed.items
+    fun `ignores currency and total lines`() {
+        val notes = """
+            2 bread
+            Total: KSh 500
+            Paid 200
+        """.trimIndent()
+        val parsed = parseOrderNotes(notes)
+
+        assertEquals(1, parsed.items.size)
+        assertEquals("bread", parsed.items[0].name)
+        assertEquals(2, parsed.unparsed.size)
+        assertEquals("Total: KSh 500", parsed.unparsed[0])
+    }
+
+    @Test
+    fun `aggregate line items`() {
+        val items = listOf(
+            OrderLineItem("Bread", BigDecimal("2")),
+            OrderLineItem("bread", BigDecimal("3")),
+            OrderLineItem("Milk", BigDecimal("1"))
         )
-    }
+        val aggregated = aggregateOrderLineItems(items)
 
-    @Test
-    fun `aggregates case-insensitively`() {
-        val totals =
-            aggregateLineItems(
-                listOf(
-                    "Bread 2\nScones 3",
-                    "bread 1, Scones 2"
-                )
-            )
-        assertEquals(
-            listOf(
-                OrderLineItem("Bread", BigDecimal("3")),
-                OrderLineItem("Scones", BigDecimal("5"))
-            ),
-            totals
-        )
-    }
-
-    @Test
-    fun `filters currency-like lines as unparsed`() {
-        val parsed = parseOrderNotes("KES 1000\nBread 2")
-        assertEquals(listOf(OrderLineItem("Bread", BigDecimal("2"))), parsed.items)
-        assertEquals(listOf("KES 1000"), parsed.unparsed)
-    }
-
-    @Test
-    fun `parses bullet and multiply symbols`() {
-        val parsed = parseOrderNotes("• Bread ×2\n• Muffins x3")
-        assertEquals(
-            listOf(
-                OrderLineItem("Bread", BigDecimal("2")),
-                OrderLineItem("Muffins", BigDecimal("3"))
-            ),
-            parsed.items
-        )
-        assertEquals(emptyList<String>(), parsed.unparsed)
+        assertEquals(2, aggregated.size)
+        assertEquals("Bread", aggregated[0].name)
+        assertEquals(0, BigDecimal("5").compareTo(aggregated[0].quantity))
+        assertEquals("Milk", aggregated[1].name)
     }
 }

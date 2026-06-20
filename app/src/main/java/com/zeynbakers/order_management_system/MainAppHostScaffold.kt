@@ -44,6 +44,8 @@ import com.zeynbakers.order_management_system.core.ui.TopLevelDestination
 import com.zeynbakers.order_management_system.customer.ui.CustomerAccountsViewModel
 import com.zeynbakers.order_management_system.order.ui.calendar.CalendarViewModel
 import com.zeynbakers.order_management_system.order.ui.calendar.OrderCreditPrompt
+import com.zeynbakers.order_management_system.order.ui.day_detail.DayDetailViewModel
+import com.zeynbakers.order_management_system.order.ui.summary.SummaryViewModel
 
 @OptIn(ExperimentalMaterial3WindowSizeClassApi::class)
 @Composable
@@ -74,6 +76,8 @@ internal fun MainAppHostScaffold(
     navigationActions: AppFeatureNavigationActions,
     supportActions: AppFeatureSupportActions,
     orderViewModel: CalendarViewModel,
+    dayDetailViewModel: DayDetailViewModel,
+    summaryViewModel: SummaryViewModel,
     customerViewModel: CustomerAccountsViewModel,
     paymentIntakeViewModel: PaymentIntakeViewModel,
     paymentHistoryViewModel: PaymentIntakeHistoryViewModel,
@@ -294,6 +298,8 @@ internal fun MainAppHostScaffold(
                     .fillMaxSize()
                     .padding(padding),
                 orderViewModel = orderViewModel,
+                dayDetailViewModel = dayDetailViewModel,
+                summaryViewModel = summaryViewModel,
                 customerViewModel = customerViewModel,
                 paymentIntakeViewModel = paymentIntakeViewModel,
                 paymentHistoryViewModel = paymentHistoryViewModel,

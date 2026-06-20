@@ -14,8 +14,8 @@ import com.zeynbakers.order_management_system.customer.data.CustomerEntity
 import com.zeynbakers.order_management_system.customer.ui.CustomerAccountsViewModel
 import com.zeynbakers.order_management_system.order.data.OrderEntity
 import com.zeynbakers.order_management_system.order.domain.OrderProcessor
-import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.runBlocking
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.atStartOfDayIn
@@ -64,7 +64,6 @@ class AccountingLogicTest {
         val orderId = orderDao.insert(
             OrderEntity(
                 orderDate = LocalDate(2026, 1, 2),
-                notes = "Test",
                 totalAmount = BigDecimal("100.00"),
                 customerId = customerId
             )
@@ -104,7 +103,6 @@ class AccountingLogicTest {
         val orderId = orderDao.insert(
             OrderEntity(
                 orderDate = LocalDate(2026, 2, 3),
-                notes = "Test",
                 totalAmount = BigDecimal("80.00"),
                 customerId = customerId
             )
@@ -174,7 +172,6 @@ class AccountingLogicTest {
         orderDao.insert(
             OrderEntity(
                 orderDate = LocalDate(2026, 2, 1),
-                notes = "No ledger yet",
                 totalAmount = BigDecimal("100.00"),
                 customerId = customerId
             )
@@ -199,7 +196,6 @@ class AccountingLogicTest {
         val orderId = orderDao.insert(
             OrderEntity(
                 orderDate = LocalDate(2026, 3, 4),
-                notes = "Test",
                 totalAmount = BigDecimal("100.00"),
                 customerId = customerId
             )
@@ -242,7 +238,6 @@ class AccountingLogicTest {
         val firstOrderId = orderDao.insert(
             OrderEntity(
                 orderDate = LocalDate(2026, 4, 1),
-                notes = "Older",
                 totalAmount = BigDecimal("100.00"),
                 customerId = customerId
             )
@@ -250,7 +245,6 @@ class AccountingLogicTest {
         val secondOrderId = orderDao.insert(
             OrderEntity(
                 orderDate = LocalDate(2026, 4, 2),
-                notes = "Newer",
                 totalAmount = BigDecimal("200.00"),
                 customerId = customerId
             )
@@ -287,7 +281,6 @@ class AccountingLogicTest {
         val firstOrderId = orderDao.insert(
             OrderEntity(
                 orderDate = firstOrderDate,
-                notes = "First",
                 totalAmount = BigDecimal("2000.00"),
                 customerId = customerId
             )
@@ -295,7 +288,6 @@ class AccountingLogicTest {
         val secondOrderId = orderDao.insert(
             OrderEntity(
                 orderDate = secondOrderDate,
-                notes = "Second",
                 totalAmount = BigDecimal("1500.00"),
                 customerId = customerId
             )
@@ -373,7 +365,6 @@ class AccountingLogicTest {
             orderDao.insert(
                 OrderEntity(
                     orderDate = LocalDate(2026, 6, 1),
-                    notes = "Source",
                     totalAmount = BigDecimal("500.00"),
                     customerId = customerId
                 )
@@ -382,7 +373,6 @@ class AccountingLogicTest {
             orderDao.insert(
                 OrderEntity(
                     orderDate = LocalDate(2026, 6, 2),
-                    notes = "Target",
                     totalAmount = BigDecimal("500.00"),
                     customerId = customerId
                 )
@@ -474,7 +464,6 @@ class AccountingLogicTest {
             orderDao.insert(
                 OrderEntity(
                     orderDate = LocalDate(2026, 7, 1),
-                    notes = "Void source",
                     totalAmount = BigDecimal("300.00"),
                     customerId = customerId
                 )

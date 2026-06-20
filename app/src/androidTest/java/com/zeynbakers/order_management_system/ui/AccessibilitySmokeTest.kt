@@ -42,6 +42,7 @@ import com.zeynbakers.order_management_system.customer.ui.OrderPaymentState
 import com.zeynbakers.order_management_system.order.data.OrderEntity
 import com.zeynbakers.order_management_system.order.ui.calendar.CalendarScreen
 import com.zeynbakers.order_management_system.order.ui.day_detail.DayDetailScreen
+import com.zeynbakers.order_management_system.order.ui.models.OrderUiModel
 import com.zeynbakers.order_management_system.order.ui.summary.SummaryScreen
 import kotlinx.datetime.LocalDate
 import org.junit.Assert.assertTrue
@@ -123,20 +124,22 @@ class AccessibilitySmokeTest {
             OrderEntity(
                 id = 1L,
                 orderDate = date,
-                notes = "Bread order",
                 totalAmount = BigDecimal("1000.00")
             )
+        val orderUi = OrderUiModel(
+            order = order,
+            items = emptyList(),
+            customer = null,
+            paidAmount = BigDecimal.ZERO
+        )
 
         setTestContent {
             CompositionLocalProvider(LocalDensity provides Density(density = 1f, fontScale = 1.6f)) {
                 MaterialTheme {
                     DayDetailScreen(
                         date = date,
-                        orders = listOf(order),
+                        orders = listOf(orderUi),
                         dayTotal = BigDecimal("1000.00"),
-                        customerNames = emptyMap(),
-                        customerPhones = emptyMap(),
-                        orderPaidAmounts = emptyMap(),
                         onBack = {},
                         onSaveOrder = { _, _, _, _, _ -> },
                         onDeleteOrder = {},
@@ -144,8 +147,7 @@ class AccessibilitySmokeTest {
                         loadMoveOrderOptions = { _, _ -> emptyList() },
                         onDeleteOrderWithPayments = { _, _, _, _, _, _ -> true },
                         onOrderPaymentHistory = {},
-                        onReceivePayment = {},
-                        loadCustomerById = { null },
+                        onReceivePayment = { _ -> },
                         searchCustomers = { emptyList() },
                         searchProducts = { emptyList() },
                         ensureProduct = { name, price, emoji ->
@@ -155,10 +157,10 @@ class AccessibilitySmokeTest {
                                 emoji = emoji
                             )
                         },
+                        onDraftChange = {},
                         onImportOrders = {},
                         initialFocusOrderId = null,
                         draft = null,
-                        onDraftChange = {},
                         storeName = "Test Store"
                     )
                 }
@@ -238,9 +240,14 @@ class AccessibilitySmokeTest {
             OrderEntity(
                 id = 10L,
                 orderDate = date,
-                notes = "Bread 2",
                 totalAmount = BigDecimal("1000.00")
             )
+        val orderUi = OrderUiModel(
+            order = order,
+            items = emptyList(),
+            customer = null,
+            paidAmount = BigDecimal.ZERO
+        )
 
         setTestContent {
             MaterialTheme {
@@ -248,9 +255,8 @@ class AccessibilitySmokeTest {
                     monthLabel = "February 2026",
                     monthTotal = BigDecimal("1000.00"),
                     initialDate = date,
-                    orders = listOf(order),
+                    orders = listOf(orderUi),
                     rangeTotal = BigDecimal("1000.00"),
-                    customerNames = emptyMap(),
                     onAnchorDateChange = {},
                     onLoadRange = { _, _ -> },
                     onBack = {}
@@ -370,7 +376,7 @@ class AccessibilitySmokeTest {
         val context = ApplicationProvider.getApplicationContext<Context>()
         val date = LocalDate(2026, 2, 7)
         val customer = CustomerEntity(id = 1L, name = "Jane Doe", phone = "0712345678")
-        val order = OrderEntity(id = 5L, orderDate = date, notes = "Bread", totalAmount = BigDecimal("1000.00"))
+        val order = OrderEntity(id = 5L, orderDate = date, totalAmount = BigDecimal("1000.00"))
         val orderUi =
             CustomerOrderUi(
                 order = order,
