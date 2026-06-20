@@ -1,6 +1,10 @@
 package com.zeynbakers.order_management_system.product.data
 
-import androidx.room.*
+import androidx.room.Dao
+import androidx.room.Insert
+import androidx.room.OnConflictStrategy
+import androidx.room.Query
+import androidx.room.Update
 import kotlinx.coroutines.flow.Flow
 
 @Dao
@@ -28,4 +32,16 @@ interface ProductDao {
 
     @Query("UPDATE products SET archived = 1 WHERE id = :productId")
     suspend fun archiveProduct(productId: Long)
+
+    @Query(
+        """
+        SELECT p.* FROM products p
+        LEFT JOIN order_items oi ON p.id = oi.productId
+        WHERE p.archived = 0
+        GROUP BY p.id
+        ORDER BY COUNT(oi.id) DESC, p.name ASC
+        LIMIT 6
+    """
+    )
+    fun getPopularProductsFlow(): Flow<List<ProductEntity>>
 }

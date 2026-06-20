@@ -91,7 +91,8 @@ internal fun DayOrderEditorDialog(
     onSetNotesError: (String?) -> Unit,
     onSetTotalError: (String?) -> Unit,
     onSetCustomerError: (String?) -> Unit,
-    onSetEditorOpen: (Boolean) -> Unit
+    onSetEditorOpen: (Boolean) -> Unit,
+    quickFillProducts: List<ProductEntity> = emptyList()
 ) {
     if (!isEditorOpen) return
 
@@ -273,7 +274,8 @@ internal fun DayOrderEditorDialog(
         onTotalFocused = { setter ->
             amountRegistry.update(setter)
             voiceRouter.onFocusTarget(VoiceTarget.Total)
-        }
+        },
+        quickFillProducts = quickFillProducts
     )
 }
 

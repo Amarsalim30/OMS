@@ -133,7 +133,8 @@ internal fun OrderEditorSheet(
     notesFieldModifier: Modifier = Modifier,
     totalFieldModifier: Modifier = Modifier,
     saveButtonModifier: Modifier = Modifier,
-    tutorialHint: OrderEditorTutorialHint? = null
+    tutorialHint: OrderEditorTutorialHint? = null,
+    quickFillProducts: List<ProductEntity> = emptyList()
 ) {
     val focusManager = LocalFocusManager.current
     val keyboardController = LocalSoftwareKeyboardController.current
@@ -414,7 +415,8 @@ internal fun OrderEditorSheet(
                 productMatches = productMatches,
                 onProductQueryChange = onProductQueryChange,
                 onEnsureProduct = onEnsureProduct,
-                onDismiss = { showAddProductSheet = false }
+                onDismiss = { showAddProductSheet = false },
+                quickFillProducts = quickFillProducts
             )
 
             if (showTimePicker) {

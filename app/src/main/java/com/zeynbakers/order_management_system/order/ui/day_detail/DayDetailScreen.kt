@@ -151,7 +151,8 @@ fun DayDetailScreen(
     onImportOrders: (List<OrderImportAction>) -> Unit = {},
     initialFocusOrderId: Long? = null,
     draft: OrderDraft? = null,
-    storeName: String = ""
+    storeName: String = "",
+    quickFillProducts: List<ProductEntity> = emptyList()
 ) {
     val dateKey = remember(date) { date.toString() }
     var cartItems by rememberSaveable(dateKey) { mutableStateOf(draft?.cartItems ?: emptyList()) }
@@ -877,7 +878,8 @@ fun DayDetailScreen(
         onSetCustomerConfirmed = { customerConfirmed = it },
         productMatches = productMatches,
         onProductQueryChange = { productQuery = it },
-        onEnsureProduct = ensureProduct
+        onEnsureProduct = ensureProduct,
+        quickFillProducts = quickFillProducts
     )
     if (showPrinterPicker) {
         val orderId = printTargetOrderId

@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.zeynbakers.order_management_system.core.db.AppDatabase
 import com.zeynbakers.order_management_system.order.ui.models.OrderUiModel
+import com.zeynbakers.order_management_system.product.data.ProductEntity
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -22,6 +23,7 @@ class DayDetailViewModel(
     private val orderDao = database.orderDao()
     private val accountingDao = database.accountingDao()
     private val customerDao = database.customerDao()
+    private val productDao = database.productDao()
 
     private val _currentDate = MutableStateFlow(initialDate)
 
@@ -58,6 +60,9 @@ class DayDetailViewModel(
     val dayTotal: StateFlow<BigDecimal> = orders
         .map { it.sumOf { model -> model.order.totalAmount } }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), BigDecimal.ZERO)
+
+    val quickFillProducts: StateFlow<List<ProductEntity>> = productDao.getPopularProductsFlow()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     fun loadOrders(date: LocalDate) {
         _currentDate.value = date
