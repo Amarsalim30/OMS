@@ -20,8 +20,11 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -127,8 +130,12 @@ internal fun DayOrderEditorDialog(
         }
     val cartRequiredText = stringResource(R.string.day_editor_cart_required)
     val validTotalRequiredText = stringResource(R.string.day_editor_valid_total_required)
+
+    var isSaving by remember(isEditorOpen) { mutableStateOf(false) }
+
     val canSave =
-        cartItems.isNotEmpty() &&
+        !isSaving &&
+                cartItems.isNotEmpty() &&
                 parsedTotal != null &&
                 parsedTotal > BigDecimal.ZERO &&
                 !isPickupTimeInvalid
@@ -141,6 +148,7 @@ internal fun DayOrderEditorDialog(
     }
 
     fun submitOrder() {
+        if (isSaving) return
         val finalTotal = trimmedTotal.toBigDecimalOrNull()?.setScale(2, RoundingMode.HALF_UP)
 
         when {
@@ -163,6 +171,7 @@ internal fun DayOrderEditorDialog(
             }
 
             else -> {
+                isSaving = true
                 onSaveOrder(
                     cartItems,
                     attachedCustomerName,

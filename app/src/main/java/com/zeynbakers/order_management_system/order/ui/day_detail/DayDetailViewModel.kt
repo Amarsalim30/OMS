@@ -30,28 +30,27 @@ class DayDetailViewModel(
     @OptIn(ExperimentalCoroutinesApi::class)
     val orders: StateFlow<List<OrderUiModel>> = _currentDate
         .flatMapLatest { date ->
-            orderDao.getActiveOrdersByDateFlow(date.toString())
+            orderDao.getActiveOrdersWithItemsByDateFlow(date.toString())
         }
-        .map { entities ->
-            val orderIds = entities.map { it.id }
+        .map { withItemsList ->
+            val orderIds = withItemsList.map { it.order.id }
 
             val paidByOrder = if (orderIds.isEmpty()) emptyMap() else {
-                accountingDao.getPaidForOrders(orderIds).associate { it.orderId to it.paid }
+                accountingDao.getPaidForOrders(orderIds).associateBy { it.orderId }
             }
 
-            val customerIds = entities.mapNotNull { it.customerId }.distinct()
+            val customerIds = withItemsList.mapNotNull { it.order.customerId }.distinct()
             val customersById = if (customerIds.isEmpty()) emptyMap() else {
                 customerDao.getByIds(customerIds).associateBy { it.id }
             }
 
-            val itemDao = database.orderItemDao()
-
-            entities.map { entity ->
+            withItemsList.map { withItems ->
+                val entity = withItems.order
                 OrderUiModel(
                     order = entity,
-                    items = itemDao.getOrderItems(entity.id),
+                    items = withItems.items,
                     customer = entity.customerId?.let { customersById[it] },
-                    paidAmount = paidByOrder[entity.id] ?: BigDecimal.ZERO
+                    paidAmount = paidByOrder[entity.id]?.paid ?: BigDecimal.ZERO
                 )
             }
         }

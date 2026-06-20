@@ -7,6 +7,7 @@ import androidx.room.Delete
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Transaction
 import androidx.room.Update
 import kotlinx.coroutines.flow.Flow
 import java.math.BigDecimal
@@ -41,6 +42,17 @@ interface OrderDao {
 
     @Query("SELECT * FROM orders WHERE orderDate = :date AND status != 'CANCELLED' ORDER BY createdAt DESC")
     fun getActiveOrdersByDateFlow(date: String): Flow<List<OrderEntity>>
+
+    @Transaction
+    @Query(
+        """
+        SELECT DISTINCT o.* FROM orders o
+        LEFT JOIN account_entries a ON a.orderId = o.id
+        WHERE o.orderDate = :date AND o.status != 'CANCELLED'
+        ORDER BY o.createdAt DESC
+    """
+    )
+    fun getActiveOrdersWithItemsByDateFlow(date: String): Flow<List<OrderWithItems>>
 
     @Query("SELECT * FROM orders WHERE orderDate = :date AND status != 'CANCELLED' ORDER BY createdAt DESC")
     suspend fun getActiveOrdersByDate(date: String): List<OrderEntity>
