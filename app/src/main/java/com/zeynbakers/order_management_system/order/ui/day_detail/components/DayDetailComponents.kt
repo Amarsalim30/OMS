@@ -10,17 +10,18 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.Payments
 import androidx.compose.material.icons.outlined.Print
-import androidx.compose.material3.AssistChip
+import androidx.compose.material3.Button
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -32,6 +33,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.zeynbakers.order_management_system.R
 import com.zeynbakers.order_management_system.core.ui.components.AppCard
 import com.zeynbakers.order_management_system.core.ui.components.AppEmptyState
@@ -147,7 +149,7 @@ internal fun OrderListItem(
     onPrintReceipt: () -> Unit
 ) {
     val order = orderUi.order
-    val customerLabel = orderUi.customer?.name
+    val customerLabel = orderUi.customer?.name ?: stringResource(R.string.customer_unknown)
     val paidAmount = orderUi.paidAmount
     val paymentState =
         com.zeynbakers.order_management_system.order.ui.day_detail.models.resolvePaymentState(
@@ -158,194 +160,196 @@ internal fun OrderListItem(
     val statusLabel = paymentStateLabel(paymentState)
     val balance = order.totalAmount.subtract(paidAmount)
     val showReceive = paymentState == PaymentState.UNPAID || paymentState == PaymentState.PARTIAL
-    val detailLabel =
-        when (paymentState) {
-            PaymentState.UNPAID ->
-                stringResource(
-                    R.string.day_balance_due_amount,
-                    formatKes(order.totalAmount)
-                )
 
-            PaymentState.PARTIAL ->
-                stringResource(R.string.day_balance_due_amount, formatKes(balance))
-
-            PaymentState.OVERPAID ->
-                stringResource(
-                    R.string.day_overpaid_by_amount,
-                    formatKes(paidAmount.subtract(order.totalAmount))
-                )
-
-            PaymentState.PAID -> stringResource(R.string.day_paid_in_full)
-        }
     val pickupLabel = plannerPickupDisplay(order.pickupTime)
-    val pickupText =
-        if (pickupLabel != null) {
-            stringResource(R.string.day_pickup_time_value, pickupLabel)
-        } else {
-            null
-        }
 
     AppCard(
-        modifier =
-            Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 3.dp)
-                .border(
-                    width = if (isFocused) 1.5.dp else 0.dp,
-                    color =
-                        if (isFocused) {
-                            MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)
-                        } else {
-                            Color.Transparent
-                        },
-                    shape = RoundedCornerShape(18.dp)
-                )
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 4.dp)
+            .border(
+                width = if (isFocused) 2.dp else 0.dp,
+                color = if (isFocused) MaterialTheme.colorScheme.primary else Color.Transparent,
+                shape = RoundedCornerShape(18.dp)
+            )
     ) {
-        Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
-            Surface(
-                color = stateColor,
-                shape = RoundedCornerShape(3.dp),
-                modifier = Modifier
-                    .width(4.dp)
-                    .heightIn(min = 52.dp)
-            ) {}
-            Spacer(Modifier.width(10.dp))
-            Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .heightIn(min = 94.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
+        Column(
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            // Header: Customer and Price
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Top
             ) {
-                Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
-                    Column(
-                        modifier = Modifier.weight(1f),
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        if (pickupText != null || customerLabel != null) {
-                            val metaText =
-                                when {
-                                    pickupText != null && customerLabel != null ->
-                                        "$pickupText - $customerLabel"
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = customerLabel,
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
 
-                                    pickupText != null -> pickupText
-                                    else -> customerLabel.orEmpty()
-                                }
-                            Text(
-                                text = metaText,
-                                style = MaterialTheme.typography.titleMedium,
-                                maxLines = 2,
-                                overflow = TextOverflow.Ellipsis
-                            )
-                        }
-                        Text(
-                            text = orderUi.items.toDisplaySummary(),
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis
-                        )
-
-                    }
-                    Spacer(Modifier.width(8.dp))
-                    Column(
-                        horizontalAlignment = Alignment.End,
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
-                        Text(
-                            text = formatKes(order.totalAmount),
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.SemiBold,
-                            maxLines = 1,
-                            softWrap = false,
-                            textAlign = TextAlign.End,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.widthIn(min = 72.dp)
-                        )
+                    if (pickupLabel != null) {
                         Row(
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                            modifier = Modifier.padding(top = 2.dp)
                         ) {
-                            IconButton(
-                                onClick = onEdit,
-                                modifier = Modifier.size(48.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Filled.Edit,
-                                    contentDescription = stringResource(R.string.day_edit_order),
-                                    modifier = Modifier.size(18.dp)
-                                )
-                            }
-                            IconButton(
-                                onClick = onPaymentHistory,
-                                modifier = Modifier.size(48.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Outlined.History,
-                                    contentDescription = stringResource(R.string.day_history),
-                                    modifier = Modifier.size(18.dp)
-                                )
-                            }
-                        }
-                    }
-                }
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    Surface(
-                        color = stateColor.copy(alpha = 0.14f),
-                        shape = RoundedCornerShape(999.dp)
-                    ) {
-                        Text(
-                            text = statusLabel,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = stateColor,
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                        )
-                    }
-                    Text(
-                        text = detailLabel,
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f)
-                    )
-                }
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)
-                ) {
-                    if (showReceive) {
-                        AssistChip(
-                            onClick = onReceivePayment,
-                            label = {
-                                Text(stringResource(R.string.customer_action_record_payment))
-                            },
-                            leadingIcon = {
-                                Icon(
-                                    imageVector = Icons.Outlined.Payments,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                            }
-                        )
-                    }
-                    AssistChip(
-                        onClick = onPrintReceipt,
-                        label = { Text(stringResource(R.string.order_print_receipt)) },
-                        leadingIcon = {
                             Icon(
-                                imageVector = Icons.Outlined.Print,
+                                imageVector = Icons.Default.Schedule,
                                 contentDescription = null,
-                                modifier = Modifier.size(16.dp)
+                                modifier = Modifier.size(14.dp),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Spacer(Modifier.width(4.dp))
+                            Text(
+                                text = stringResource(R.string.day_pickup_time_value, pickupLabel),
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                         }
+                    }
+                }
+
+                Text(
+                    text = formatKes(order.totalAmount),
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = MaterialTheme.colorScheme.primary,
+                    textAlign = TextAlign.End,
+                    modifier = Modifier.padding(start = 8.dp)
+                )
+            }
+
+            // Order Content
+            Text(
+                text = orderUi.items.toDisplaySummary(),
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 3,
+                overflow = TextOverflow.Ellipsis
+            )
+
+            // Status and Secondary Actions
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                StatusBadge(label = statusLabel, color = stateColor)
+
+                val detailLabel = when (paymentState) {
+                    PaymentState.UNPAID -> stringResource(
+                        R.string.day_balance_due_amount,
+                        formatKes(order.totalAmount)
+                    )
+
+                    PaymentState.PARTIAL -> stringResource(
+                        R.string.day_balance_due_amount,
+                        formatKes(balance)
+                    )
+
+                    PaymentState.OVERPAID -> stringResource(
+                        R.string.day_overpaid_by_amount,
+                        formatKes(paidAmount.subtract(order.totalAmount))
+                    )
+
+                    PaymentState.PAID -> stringResource(R.string.day_paid_in_full)
+                }
+
+                Text(
+                    text = " • $detailLabel",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = if (paymentState == PaymentState.PAID) MaterialTheme.colorScheme.onSurfaceVariant else stateColor,
+                    fontWeight = if (paymentState != PaymentState.PAID) FontWeight.SemiBold else FontWeight.Normal,
+                    modifier = Modifier
+                        .padding(start = 4.dp)
+                        .weight(1f),
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+
+                IconButton(onClick = onEdit, modifier = Modifier.size(48.dp)) {
+                    Icon(
+                        Icons.Default.Edit,
+                        contentDescription = stringResource(R.string.day_edit_order),
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+                IconButton(onClick = onPaymentHistory, modifier = Modifier.size(48.dp)) {
+                    Icon(
+                        Icons.Outlined.History,
+                        contentDescription = stringResource(R.string.day_history),
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
+
+            // Main Actions
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                if (showReceive) {
+                    Button(
+                        onClick = onReceivePayment,
+                        modifier = Modifier
+                            .weight(1f)
+                            .heightIn(min = 44.dp),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Icon(
+                            Icons.Outlined.Payments,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            text = stringResource(R.string.customer_action_record_payment),
+                            style = MaterialTheme.typography.labelLarge,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                }
+
+                OutlinedButton(
+                    onClick = onPrintReceipt,
+                    modifier = (if (showReceive) Modifier.weight(1f) else Modifier.fillMaxWidth())
+                        .heightIn(min = 44.dp),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Icon(
+                        Icons.Outlined.Print,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text = stringResource(R.string.order_print_receipt),
+                        style = MaterialTheme.typography.labelLarge,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun StatusBadge(label: String, color: Color) {
+    Surface(
+        color = color.copy(alpha = 0.12f),
+        shape = RoundedCornerShape(8.dp)
+    ) {
+        Text(
+            text = label.uppercase(),
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.Bold,
+            color = color,
+            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+            letterSpacing = 0.5.sp
+        )
     }
 }

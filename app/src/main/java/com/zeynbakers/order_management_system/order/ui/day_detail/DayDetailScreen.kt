@@ -447,7 +447,20 @@ fun DayDetailScreen(
         deleteSelectedOrderId = deleteMoveOrderOptions.firstOrNull()?.orderId
         deleteMoveFullReceipts = true
     }
-    BackHandler(enabled = isEditorOpen) { isEditorOpen = false }
+    BackHandler(enabled = isEditorOpen) {
+        if (editingOrderId != null) {
+            // Clear edit state when discarding an edit via back button
+            cartItems = emptyList()
+            totalText = ""
+            customerName = ""
+            customerPhone = ""
+            pickupTimeText = ""
+            customerConfirmed = false
+            editingOrderId = null
+            onDraftChange(null)
+        }
+        isEditorOpen = false
+    }
     BackHandler(enabled = !isEditorOpen, onBack = onBack)
     val dayStats =
         remember(orders, dayTotal) {
@@ -568,16 +581,16 @@ fun DayDetailScreen(
             )
         },
         floatingActionButton = {
-            val existingDraft = draft
             val canRestoreDraft =
-                existingDraft?.let { draftValue ->
-                    // Allow restoring both new-order drafts and edit drafts so the FAB
-                    // does not discard in-progress edits when the user navigates away.
-                    draftValue.cartItems.isNotEmpty() ||
-                            draftValue.totalText.isNotBlank() ||
-                            draftValue.customerName.isNotBlank() ||
-                            draftValue.customerPhone.isNotBlank() ||
-                            draftValue.editingOrderId != null
+                draft?.let { draftValue ->
+                    // Only restore if it's a NEW order draft.
+                    // Edit drafts should not be restored into the 'Add Order' flow.
+                    draftValue.editingOrderId == null && (
+                            draftValue.cartItems.isNotEmpty() ||
+                                    draftValue.totalText.isNotBlank() ||
+                                    draftValue.customerName.isNotBlank() ||
+                                    draftValue.customerPhone.isNotBlank()
+                            )
                 }
                     ?: false
             SmallFloatingActionButton(
@@ -589,6 +602,8 @@ fun DayDetailScreen(
                         totalText = ""
                         customerName = ""
                         customerPhone = ""
+                        pickupTimeText = ""
+                        customerConfirmed = false
                     }
                     notesError = null
                     totalError = null

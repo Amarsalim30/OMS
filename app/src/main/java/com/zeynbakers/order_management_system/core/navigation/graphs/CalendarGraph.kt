@@ -174,13 +174,11 @@ internal fun NavGraphBuilder.calendarGraph(
                     pickupTime = pickupTime,
                     existingOrderId = orderId
                 )
-                dayDetailViewModel.loadOrders(date)
                 WidgetUpdater.enqueue(navController.context)
                 NotificationScheduler.enqueueNow(navController.context)
             },
             onDeleteOrder = { orderId ->
                 orderViewModel.cancelOrder(orderId, date)
-                dayDetailViewModel.loadOrders(date)
                 WidgetUpdater.enqueue(navController.context)
                 NotificationScheduler.enqueueNow(navController.context)
             },
@@ -201,7 +199,6 @@ internal fun NavGraphBuilder.calendarGraph(
                         moveFullReceipts = moveFull
                     )
                 if (result) {
-                    dayDetailViewModel.loadOrders(date)
                     WidgetUpdater.enqueue(navController.context)
                     NotificationScheduler.enqueueNow(navController.context)
                 }
@@ -229,7 +226,6 @@ internal fun NavGraphBuilder.calendarGraph(
             },
             onImportOrders = { actions ->
                 orderViewModel.importOrders(actions, date)
-                dayDetailViewModel.loadOrders(date)
                 WidgetUpdater.enqueue(navController.context)
                 NotificationScheduler.enqueueNow(navController.context)
             },

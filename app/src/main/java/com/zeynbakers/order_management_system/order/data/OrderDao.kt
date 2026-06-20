@@ -8,6 +8,7 @@ import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Update
+import kotlinx.coroutines.flow.Flow
 import java.math.BigDecimal
 
 /**
@@ -37,6 +38,12 @@ interface OrderDao {
 
     @Query("SELECT * FROM orders WHERE orderDate = :date ORDER BY createdAt DESC")
     suspend fun getOrdersByDate(date: String): List<OrderEntity>
+
+    @Query("SELECT * FROM orders WHERE orderDate = :date AND status != 'CANCELLED' ORDER BY createdAt DESC")
+    fun getActiveOrdersByDateFlow(date: String): Flow<List<OrderEntity>>
+
+    @Query("SELECT * FROM orders WHERE orderDate = :date AND status != 'CANCELLED' ORDER BY createdAt DESC")
+    suspend fun getActiveOrdersByDate(date: String): List<OrderEntity>
 
     @Query("SELECT * FROM orders WHERE customerId = :customerId")
     suspend fun getOrdersByCustomer(customerId: Long): List<OrderEntity>
