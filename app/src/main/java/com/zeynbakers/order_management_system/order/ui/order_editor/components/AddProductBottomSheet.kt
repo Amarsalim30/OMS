@@ -5,6 +5,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -14,6 +15,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.sizeIn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.rememberScrollState
@@ -32,6 +35,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SheetValue
+import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -46,6 +50,8 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
@@ -74,7 +80,8 @@ internal fun AddProductBottomSheet(
     productMatches: List<ProductEntity>,
     onProductQueryChange: (String) -> Unit,
     onEnsureProduct: suspend (String, BigDecimal, String) -> ProductEntity,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    quickFillProducts: List<ProductEntity> = emptyList()
 ) {
     if (!visible) return
     var productQuery by remember { mutableStateOf("") }
@@ -283,6 +290,47 @@ internal fun AddProductBottomSheet(
                             }
                 )
 
+                if (quickFillProducts.isNotEmpty() && !isProductDropdownExpanded && selectedProduct == null) {
+                    Column {
+                        Text(
+                            text = stringResource(R.string.order_editor_quick_fill_label),
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(bottom = 4.dp)
+                        )
+                        LazyRow(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            contentPadding = PaddingValues(start = 4.dp, end = 4.dp, bottom = 8.dp)
+                        ) {
+                            items(quickFillProducts, key = { it.id }) { product ->
+                                SuggestionChip(
+                                    onClick = {
+                                        selectedProduct =
+                                            SelectedProductDraft(
+                                                emoji = product.emoji,
+                                                name = product.name,
+                                                unitPrice = product.defaultPrice,
+                                                isNewProduct = false,
+                                                catalogProductId = product.id
+                                            )
+                                        productQuery = product.name
+                                        unitPriceText =
+                                            product.defaultPrice
+                                                .setScale(0, RoundingMode.HALF_UP)
+                                                .stripTrailingZeros()
+                                                .toPlainString()
+                                        quantity = "1"
+                                        isProductDropdownExpanded = false
+                                        // Auto-focus on quantity is handled by visibility change
+                                    },
+                                    label = { Text("${product.emoji} ${product.name}") }
+                                )
+                            }
+                        }
+                    }
+                }
+
                 if (showSuggestions) {
                     ProductSuggestionDropdown(
                         query = productQuery,
@@ -333,6 +381,12 @@ internal fun AddProductBottomSheet(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                             Spacer(Modifier.height(6.dp))
+                            val quantityFocusRequester = remember { FocusRequester() }
+                            LaunchedEffect(selectedProduct) {
+                                if (selectedProduct != null) {
+                                    quantityFocusRequester.requestFocus()
+                                }
+                            }
                             OutlinedTextField(
                                 value = quantity,
                                 onValueChange = { newValue ->
@@ -341,7 +395,9 @@ internal fun AddProductBottomSheet(
                                         quantity = newValue
                                     }
                                 },
-                                modifier = Modifier.fillMaxWidth(),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .focusRequester(quantityFocusRequester),
                                 keyboardOptions = KeyboardOptions(
                                     keyboardType = KeyboardType.Number,
                                     imeAction = ImeAction.Next

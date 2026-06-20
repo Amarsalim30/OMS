@@ -801,6 +801,7 @@
     <string name="order_editor_discard_product_title">Discard product entry?</string>
     <string name="order_editor_discard_product_message">You have unsaved product details. Discard them and close?</string>
     <string name="order_editor_discard_confirm">Discard</string>
+    <string name="order_editor_quick_fill_label">Quick fill</string>
     <string name="day_editor_cart_required">Add at least one item to the order</string>
     <string name="day_delete_order_title">Delete order?</string>
     <string name="day_delete_order_message">%1$s will be cancelled and removed from totals.</string>

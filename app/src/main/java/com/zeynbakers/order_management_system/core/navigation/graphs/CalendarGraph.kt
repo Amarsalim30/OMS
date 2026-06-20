@@ -231,7 +231,8 @@ internal fun NavGraphBuilder.calendarGraph(
             },
             initialFocusOrderId = focusOrderId,
             draft = calendarState.dayDrafts[date],
-            storeName = storeName
+            storeName = storeName,
+            quickFillProducts = calendarState.quickFillProducts
         )
     }
 

@@ -30,6 +30,7 @@ import com.zeynbakers.order_management_system.order.ui.day_detail.DayDetailViewM
 import com.zeynbakers.order_management_system.order.ui.day_detail.models.OrderDraft
 import com.zeynbakers.order_management_system.order.ui.models.OrderUiModel
 import com.zeynbakers.order_management_system.order.ui.summary.SummaryViewModel
+import com.zeynbakers.order_management_system.product.data.ProductEntity
 import kotlinx.datetime.LocalDate
 import java.math.BigDecimal
 
@@ -66,7 +67,8 @@ internal data class AppCalendarState(
     val dayTotal: BigDecimal,
     val summaryOrders: List<OrderUiModel>,
     val summaryTotal: BigDecimal,
-    val dayDrafts: Map<LocalDate, OrderDraft>
+    val dayDrafts: Map<LocalDate, OrderDraft>,
+    val quickFillProducts: List<ProductEntity>
 )
 
 internal data class AppOrdersState(

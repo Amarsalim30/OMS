@@ -416,7 +416,8 @@ internal fun MainAppContent(
                         dayTotal = dayTotal,
                         summaryOrders = summaryOrders,
                         summaryTotal = summaryTotal,
-                        dayDrafts = dayDrafts
+                        dayDrafts = dayDrafts,
+                        quickFillProducts = dayDetailViewModel.quickFillProducts.collectAsState().value
                     )
                     val ordersState = AppOrdersState(
                         unpaidOrders = unpaidOrders
