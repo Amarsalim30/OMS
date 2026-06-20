@@ -11,6 +11,7 @@ import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.People
 import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.School
@@ -22,7 +23,10 @@ import androidx.compose.material3.windowsizeclass.ExperimentalMaterial3WindowSiz
 import androidx.compose.material3.windowsizeclass.calculateWindowSizeClass
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -41,6 +45,8 @@ import com.zeynbakers.order_management_system.core.ui.AppScaffold
 import com.zeynbakers.order_management_system.core.ui.MoneyTab
 import com.zeynbakers.order_management_system.core.ui.MoreAction
 import com.zeynbakers.order_management_system.core.ui.TopLevelDestination
+import com.zeynbakers.order_management_system.core.ui.theme.ThemeDialog
+import com.zeynbakers.order_management_system.core.ui.theme.ThemeMode
 import com.zeynbakers.order_management_system.customer.ui.CustomerAccountsViewModel
 import com.zeynbakers.order_management_system.order.ui.calendar.CalendarViewModel
 import com.zeynbakers.order_management_system.order.ui.calendar.OrderCreditPrompt
@@ -81,6 +87,8 @@ internal fun MainAppHostScaffold(
     customerViewModel: CustomerAccountsViewModel,
     paymentIntakeViewModel: PaymentIntakeViewModel,
     paymentHistoryViewModel: PaymentIntakeHistoryViewModel,
+    themeMode: ThemeMode,
+    onThemeModeChange: (ThemeMode) -> Unit,
     appSnackbarHostState: SnackbarHostState,
     pendingCreditPrompt: OrderCreditPrompt?,
     onDismissCreditPrompt: () -> Unit,
@@ -89,6 +97,8 @@ internal fun MainAppHostScaffold(
     updateNotes: List<String>,
     onDismissUpdateDialog: () -> Unit
 ) {
+    var showThemeDialog by remember { mutableStateOf(false) }
+
     Box(modifier = Modifier.fillMaxSize()) {
         val showNavigation =
             currentRoute != AppRoutes.Splash &&
@@ -191,6 +201,15 @@ internal fun MainAppHostScaffold(
             ) {
                 onShowMoreSheetChange(false)
                 navController.navigate(AppRoutes.Products)
+            },
+            MoreAction(
+                label = stringResource(R.string.more_theme),
+                groupLabel = moreSystemGroup,
+                icon = Icons.Filled.Palette,
+                supportingText = stringResource(R.string.more_theme_support)
+            ) {
+                onShowMoreSheetChange(false)
+                showThemeDialog = true
             },
             MoreAction(
                 label = stringResource(R.string.more_tutorial),
@@ -334,6 +353,14 @@ internal fun MainAppHostScaffold(
             WhatsNewDialog(
                 notes = updateNotes,
                 onDismiss = onDismissUpdateDialog
+            )
+        }
+
+        if (showThemeDialog) {
+            ThemeDialog(
+                currentMode = themeMode,
+                onModeSelected = onThemeModeChange,
+                onDismiss = { showThemeDialog = false }
             )
         }
 

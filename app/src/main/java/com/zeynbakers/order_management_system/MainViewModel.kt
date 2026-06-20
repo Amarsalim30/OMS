@@ -1,20 +1,30 @@
 package com.zeynbakers.order_management_system
 
+import android.app.Application
 import android.content.Intent
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.SavedStateHandle
-import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.zeynbakers.order_management_system.core.navigation.AppRoutes
 import com.zeynbakers.order_management_system.core.navigation.extractSharedText
 import com.zeynbakers.order_management_system.core.ui.UiEvent
+import com.zeynbakers.order_management_system.core.ui.theme.ThemeMode
+import com.zeynbakers.order_management_system.core.ui.theme.ThemePreferences
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
-class MainViewModel(private val savedStateHandle: SavedStateHandle) : ViewModel() {
+class MainViewModel(application: Application, private val savedStateHandle: SavedStateHandle) :
+    AndroidViewModel(application) {
+
+    private val themePreferences = ThemePreferences(application)
+    val themeMode: StateFlow<ThemeMode> = themePreferences.themeMode
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), ThemeMode.SYSTEM)
 
     private val _selectedTopLevelRoute = MutableStateFlow(AppRoutes.Calendar)
     val selectedTopLevelRoute = _selectedTopLevelRoute.asStateFlow()
@@ -37,6 +47,12 @@ class MainViewModel(private val savedStateHandle: SavedStateHandle) : ViewModel(
 
     fun onSelectedTopLevelRouteChange(route: String) {
         _selectedTopLevelRoute.value = route
+    }
+
+    fun onThemeModeChange(mode: ThemeMode) {
+        viewModelScope.launch {
+            themePreferences.setThemeMode(mode)
+        }
     }
 
     fun onShowMoreSheetChange(show: Boolean) {

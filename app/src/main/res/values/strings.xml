@@ -22,6 +22,12 @@
     <string name="more_notifications_support">Set reminder times and daily summary alerts.</string>
     <string name="more_backup_restore_support">Choose where backups are stored and restore safely.</string>
     <string name="more_tutorial_support">Replay the guided tour of core tasks.</string>
+    <string name="more_theme">Appearance</string>
+    <string name="more_theme_support">Switch between light and dark mode.</string>
+    <string name="theme_mode_system">System default</string>
+    <string name="theme_mode_light">Light mode</string>
+    <string name="theme_mode_dark">Dark mode</string>
+    <string name="theme_mode_title">Choose appearance</string>
     <string name="contacts_permission_required_for_import">Contacts permission is required to import customers</string>
     <string name="money_tab_collect">M-Pesa</string>
     <string name="money_tab_record">Manual</string>

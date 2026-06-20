@@ -470,22 +470,23 @@ internal class LicensingRepository(
                 return@withContext res
             }
 
-                val validationResult =
-                    validateDeviceAccessStrict(
+                // 4. Best-effort Device Validation
+                // As per requirements: "entitlement-first: if allowed=true, device registration/heartbeat
+                // failures must not block app access or surface a fatal validation error."
+                try {
+                    validateDeviceAccessBestEffort(
                     uid = uid,
                     deviceId = installId,
                     nowMillis = nowMillis,
                     entitlement = entitlement
                 )
-
-                if (validationResult is LicensingValidationResult.Blocked) {
-                    localStore.updateLastValidated(uid, nowMillis, validationResult)
-                    return@withContext validationResult
+                } catch (error: Exception) {
+                    logWarn("Device validation failed; continuing with allowed entitlement", error)
                 }
 
                 val res = LicensingValidationResult.Allowed
                 localStore.updateLastValidated(uid, nowMillis, res)
-                return@withContext allowed("strict_device_validated")
+                return@withContext allowed("entitlement_validated")
         } catch (error: Exception) {
             when {
                 shouldTreatAsOffline(error) -> {
@@ -505,63 +506,26 @@ internal class LicensingRepository(
         }
     }
 
-    private suspend fun validateDeviceAccessStrict(
+    private suspend fun validateDeviceAccessBestEffort(
         uid: String,
         deviceId: String,
         nowMillis: Long,
         entitlement: LicensingEntitlement
-    ): LicensingValidationResult {
-        return try {
-            val device = remoteStore.getDevice(uid, deviceId)
-            if (device != null) {
-                if (device.revoked) {
-                    return LicensingValidationResult.Blocked(LicensingBlockReason.DeviceRevoked)
-                }
-                try {
-                    remoteStore.touchDevice(uid, deviceId, nowMillis)
-                } catch (error: Exception) {
-                    logWarn(
-                        "Heartbeat refresh failed for validated device; allowing access best-effort",
-                        error
-                    )
-                }
-                return LicensingValidationResult.Allowed
-            }
-
-            when (
-                val registrationResult =
-                    registerDeviceWithCompatibilityFallback(
-                        uid = uid,
-                        deviceId = deviceId,
-                        nowMillis = nowMillis,
-                        entitlement = entitlement
-                    )
-            ) {
-                LicensingDeviceRegistrationResult.Registered,
-                LicensingDeviceRegistrationResult.AlreadyRegistered -> LicensingValidationResult.Allowed
-
-                LicensingDeviceRegistrationResult.DeviceLimitReached ->
-                    LicensingValidationResult.Blocked(LicensingBlockReason.DeviceLimitReached)
-
-                LicensingDeviceRegistrationResult.DeviceRevoked ->
-                    LicensingValidationResult.Blocked(LicensingBlockReason.DeviceRevoked)
-
-                LicensingDeviceRegistrationResult.EntitlementMissing ->
-                    LicensingValidationResult.Blocked(LicensingBlockReason.EntitlementMissing)
-
-                LicensingDeviceRegistrationResult.AccessDenied ->
-                    LicensingValidationResult.Blocked(LicensingBlockReason.AccessDenied)
-
-                LicensingDeviceRegistrationResult.EntitlementExpired ->
-                    LicensingValidationResult.Blocked(LicensingBlockReason.EntitlementExpired)
-            }
-        } catch (error: Exception) {
-            if (shouldTreatAsOffline(error)) {
-                throw error
-            }
-            logWarn("Device validation failed with unexpected error; blocking", error)
-            LicensingValidationResult.Blocked(LicensingBlockReason.ValidationFailed)
+    ) {
+        val device = remoteStore.getDevice(uid, deviceId)
+        if (device != null) {
+            // Heartbeat
+            remoteStore.touchDevice(uid, deviceId, nowMillis)
+            return
         }
+
+        // Registration
+        registerDeviceWithCompatibilityFallback(
+            uid = uid,
+            deviceId = deviceId,
+            nowMillis = nowMillis,
+            entitlement = entitlement
+        )
     }
 
     private suspend fun registerDeviceWithCompatibilityFallback(

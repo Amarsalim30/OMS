@@ -5,6 +5,7 @@ import android.content.pm.PackageManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.windowsizeclass.ExperimentalMaterial3WindowSizeClassApi
@@ -55,6 +56,7 @@ import com.zeynbakers.order_management_system.core.ui.VoiceCalcAccess
 import com.zeynbakers.order_management_system.core.ui.VoiceInputRouter
 import com.zeynbakers.order_management_system.core.ui.showSnackbar
 import com.zeynbakers.order_management_system.core.ui.theme.Order_management_systemTheme
+import com.zeynbakers.order_management_system.core.ui.theme.ThemeMode
 import com.zeynbakers.order_management_system.core.updates.UpdatePreferences
 import com.zeynbakers.order_management_system.core.widget.WidgetUpdater
 import com.zeynbakers.order_management_system.customer.ui.CustomerAccountsViewModel
@@ -79,8 +81,15 @@ internal fun MainAppContent(
     launchIntentState: State<Intent?>,
     startDestination: String
 ) {
-            Order_management_systemTheme {
-                val context = LocalContext.current
+    val themeMode by mainViewModel.themeMode.collectAsState()
+    val darkTheme =
+        when (themeMode) {
+            ThemeMode.SYSTEM -> isSystemInDarkTheme()
+            ThemeMode.LIGHT -> false
+            ThemeMode.DARK -> true
+        }
+    Order_management_systemTheme(darkTheme = darkTheme) {
+        val context = LocalContext.current
                 val resources = LocalResources.current
                 val database = remember { DatabaseProvider.getDatabase(activity.applicationContext) }
                 val viewModelFactory = remember {
@@ -549,6 +558,8 @@ internal fun MainAppContent(
                         customerViewModel = customerViewModel,
                         paymentIntakeViewModel = paymentIntakeViewModel,
                         paymentHistoryViewModel = paymentHistoryViewModel,
+                        themeMode = themeMode,
+                        onThemeModeChange = { mainViewModel.onThemeModeChange(it) },
                         appSnackbarHostState = appSnackbarHostState,
                         pendingCreditPrompt = pendingCreditPrompt,
                         onDismissCreditPrompt = {

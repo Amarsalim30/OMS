@@ -1,32 +1,47 @@
-# Walkthrough - Order Creation Architectural Refinement & Payment Fix
+# Walkthrough - Architectural Refinements, Theme Toggle & Licensing Fix
 
-I have implemented architectural improvements to the Order Creation workflow and fixed the reported regression where payments were not reflecting immediately in the Day Details listing.
+I have implemented architectural improvements to the Order Creation workflow, added a theme toggle, and fixed the "Access Blocked" issue for Firebase users.
 
-## Fixes
+## Licensing & Access
 
-### [Reactivity & State Sync]
+### [Fix: "Access Blocked" for Valid Users]
+
+#### [LicensingRepository.kt](file:///home/amar-salim/StudioProjects/OMS/app/src/main/java/com/zeynbakers/order_management_system/core/licensing/LicensingRepository.kt)
+- **Policy Alignment**: Refactored the validation logic to follow the **"Entitlement First"** policy defined in the requirements.
+- **Best-Effort Device Sync**: Device registration and heartbeat updates are now handled as secondary, non-blocking operations. If a user is marked as `allowed=true` in Firestore, they will no longer be blocked by device-specific errors (like "Device Limit Reached") or transient registration failures.
+- **Improved Resilience**: This ensures that valid users can always access the app as long as their primary account entitlement is active, even if the device tracking layer encounters issues.
+
+---
+
+## Theme & Personalization
+
+### [Appearance Settings]
+
+#### [NEW] [ThemePreferences.kt](file:///home/amar-salim/StudioProjects/OMS/app/src/main/java/com/zeynbakers/order_management_system/core/ui/theme/ThemePreferences.kt)
+- **Persistent Storage**: Created a new DataStore-based preference class to persist the user's theme choice (Light, Dark, or System Default).
+
+#### [NEW] [ThemeDialog.kt](file:///home/amar-salim/StudioProjects/OMS/app/src/main/java/com/zeynbakers/order_management_system/core/ui/theme/ThemeDialog.kt)
+- **User Interface**: Added a selection dialog that allows users to choose between Light, Dark, or System Default appearance.
+
+#### [MainAppHostScaffold.kt](file:///home/amar-salim/StudioProjects/OMS/app/src/main/java/com/zeynbakers/order_management_system/MainAppHostScaffold.kt)
+- **Entry Point**: Added an "Appearance" action to the "More" menu (under System Setup) that triggers the theme selection dialog.
+
+---
+
+## Technical Improvements
+
+### [Reactivity & Performance]
 
 #### [OrderDao.kt](file:///home/amar-salim/StudioProjects/OMS/app/src/main/java/com/zeynbakers/order_management_system/order/data/OrderDao.kt)
-- **Unified Table Observation**: Updated the `getActiveOrdersWithItemsByDateFlow` query to include a `LEFT JOIN` on the `account_entries` table. This ensures that the Room Flow emits whenever a payment is added, voided, or modified, making the UI reactive to all financial changes.
-
-#### [DayDetailViewModel.kt](file:///home/amar-salim/StudioProjects/OMS/app/src/main/java/com/zeynbakers/order_management_system/order/ui/day_detail/DayDetailViewModel.kt)
-- **Robust Mapping**: Refined the `paidByOrder` mapping logic to use `associateBy` correctly with the `orderId` key. This ensures that the `paidAmount` for each order is accurately retrieved and displayed in the listing.
-
-## Improvements
-
-### [Database & Data Layer]
-
-#### [OrderDao.kt](file:///home/amar-salim/StudioProjects/OMS/app/src/main/java/com/zeynbakers/order_management_system/order/data/OrderDao.kt)
-- **Batch Item Fetching**: Utilized Room's `@Relation` via the `OrderWithItems` POJO to fetch an entire day's orders and their associated line items in a single database transaction, eliminating the N+1 query problem.
-
-### [UI Layer]
+- **Unified Table Observation**: Updated the `getActiveOrdersWithItemsByDateFlow` query to include a `LEFT JOIN` on the `account_entries` table. This ensures the UI is reactive to financial changes (payments/voids).
+- **Batch Item Fetching**: Utilized Room's `@Relation` to fetch orders and items in a single transaction, eliminating N+1 query overhead.
 
 #### [DayDetailDialogs.kt](file:///home/amar-salim/StudioProjects/OMS/app/src/main/java/com/zeynbakers/order_management_system/order/ui/day_detail/components/DayDetailDialogs.kt)
-- **Save Debouncing**: Added a local `isSaving` state to the `DayOrderEditorDialog` to prevent race conditions and duplicate order creation on rapid clicks. The state correctly resets whenever the editor is opened.
+- **Save Debouncing**: Added an `isSaving` state to prevent duplicate order creation on rapid clicks.
 
 ## Verification Summary
 
 ### Automated Analysis
-- **Reactivity Check**: Confirmed that joining `account_entries` in the DAO query forces a Flow emission on payment updates.
-- **Mapping Check**: Verified that `paidByOrder` lookup uses the correct `Long` ID from the `OrderEntity`.
-- **`analyze_file`**: Verified all modified files. No syntax or logical errors remain.
+- **Licensing Check**: Confirmed that the core validation loop now returns `Allowed` if `entitlement.allowed` is true, regardless of device operation results.
+- **Theme Check**: Verified that choosing a theme updates the DataStore and re-renders the app immediately.
+- **`analyze_file`**: Verified all modified files for syntax and logical errors.
