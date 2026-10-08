@@ -184,6 +184,18 @@ suspend fun totalBilled(customerId: Long): BigDecimal
     SELECT * FROM orders
     WHERE orderDate >= :start
     AND orderDate < :end
+    AND status != 'CANCELLED'
+    ORDER BY orderDate DESC, createdAt DESC
+""")
+fun getOrdersWithItemsBetweenFlow(
+    start: String,
+    end: String
+): Flow<List<OrderWithItems>>
+
+@Query("""
+    SELECT * FROM orders
+    WHERE orderDate >= :start
+    AND orderDate < :end
 """)
 suspend fun getOrdersBetween(
     start: String,

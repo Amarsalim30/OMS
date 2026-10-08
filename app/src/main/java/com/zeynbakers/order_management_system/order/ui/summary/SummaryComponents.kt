@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
@@ -16,6 +17,7 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material3.ElevatedCard
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -29,8 +31,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.zeynbakers.order_management_system.R
 import com.zeynbakers.order_management_system.core.ui.components.AppCard
 import com.zeynbakers.order_management_system.core.ui.components.AppEmptyState
@@ -47,56 +51,61 @@ internal fun OrderSummaryCard(
     orderItems: List<OrderItemEntity>,
     total: BigDecimal,
     pickupTime: String?,
-    onCopyNotes: () -> Unit
+    onCopyNotes: () -> Unit,
+    modifier: Modifier = Modifier
 ) {
-    AppCard {
-        Column {
-            // Display structured cart items with clear formatting
-            orderItems.forEach { item ->
-                val priceText = if (item.effectivePrice > BigDecimal.ZERO) {
-                    " (@ ${formatKes(item.effectivePrice)})"
-                } else {
-                    ""
-                }
-
-                Text(
-                    text = buildString {
-                        append(item.productNameSnapshot)
-                        append(" × ")
-                        append(item.quantity)
-                        append(priceText)
-                    },
-                    style = MaterialTheme.typography.bodyMedium
-                )
-            }
-
-            if (orderItems.isEmpty()) {
-                Text(text = "No items", style = MaterialTheme.typography.bodyLarge)
-            }
-        }
-        
-        Spacer(Modifier.height(6.dp))
+    AppCard(modifier = modifier) {
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.Top
         ) {
             Column(modifier = Modifier.weight(1f)) {
-                customerLabel?.let {
-                    Text(text = it, style = MaterialTheme.typography.bodyMedium)
-                }
-                pickupTime?.let {
+                if (customerLabel != null) {
                     Text(
-                        text = stringResource(R.string.day_pickup_time_value, it),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        text = customerLabel,
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
                 }
-                Text(text = formatKes(total), style = MaterialTheme.typography.bodyMedium)
+
+                orderItems.forEach { item ->
+                    Text(
+                        text = "${item.productNameSnapshot} × ${item.quantity}",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+
+                if (pickupTime != null) {
+                    Text(
+                        text = stringResource(R.string.day_pickup_time_value, pickupTime),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.secondary
+                    )
+                }
             }
-            TextButton(onClick = onCopyNotes) {
-                Icon(imageVector = Icons.Filled.ContentCopy, contentDescription = null)
-                Spacer(Modifier.width(8.dp))
-                Text(stringResource(R.string.action_copy))
+
+            Column(horizontalAlignment = Alignment.End) {
+                Text(
+                    text = formatKes(total),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = MaterialTheme.colorScheme.primary
+                )
+                IconButton(
+                    onClick = onCopyNotes,
+                    modifier = Modifier.size(32.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Filled.ContentCopy,
+                        contentDescription = stringResource(R.string.action_copy),
+                        modifier = Modifier.size(18.dp),
+                        tint = MaterialTheme.colorScheme.secondary
+                    )
+                }
             }
         }
     }
@@ -105,31 +114,34 @@ internal fun OrderSummaryCard(
 @Composable
 internal fun MonthTotalCard(monthTotal: BigDecimal, label: String) {
     Surface(
-        tonalElevation = 2.dp,
-        shape = MaterialTheme.shapes.large,
-        color = MaterialTheme.colorScheme.surfaceContainerHighest
+        tonalElevation = 4.dp,
+        shape = MaterialTheme.shapes.extraLarge,
+        color = MaterialTheme.colorScheme.primaryContainer,
+        contentColor = MaterialTheme.colorScheme.onPrimaryContainer
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(12.dp),
-            horizontalArrangement = Arrangement.SpaceBetween
+                .padding(20.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
         ) {
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = stringResource(R.string.summary_current_month_total),
-                    style = MaterialTheme.typography.titleSmall
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold
                 )
-                Spacer(Modifier.height(2.dp))
                 Text(
                     text = label,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Light
                 )
             }
             Text(
                 text = formatKes(monthTotal),
-                style = MaterialTheme.typography.titleLarge
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.Black
             )
         }
     }
@@ -142,63 +154,91 @@ internal fun ChefPrepCard(
     anchorLabel: String,
     orderCount: Int,
     rangeTotal: BigDecimal,
-    hasChefList: Boolean,
     onPickDate: () -> Unit,
     onPrev: () -> Unit,
     onNext: () -> Unit,
     onToday: () -> Unit,
     onModeChange: (SummaryRangeMode) -> Unit
 ) {
-    ElevatedCard(modifier = Modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.padding(12.dp)) {
+    ElevatedCard(
+        modifier = Modifier.fillMaxWidth(),
+        shape = MaterialTheme.shapes.large
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = stringResource(R.string.summary_chef_prep),
-                        style = MaterialTheme.typography.titleMedium
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold
                     )
-                    Text(
-                        text =
-                            if (hasChefList) {
-                                stringResource(R.string.summary_ready_to_copy)
-                            } else {
-                                stringResource(R.string.summary_no_products_found)
-                            },
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Surface(
+                            color = MaterialTheme.colorScheme.secondaryContainer,
+                            shape = MaterialTheme.shapes.small,
+                            modifier = Modifier.padding(vertical = 4.dp)
+                        ) {
+                            Text(
+                                text = "$orderCount Orders",
+                                style = MaterialTheme.typography.labelSmall,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                color = MaterialTheme.colorScheme.onSecondaryContainer
+                            )
+                        }
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            text = formatKes(rangeTotal),
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
                 }
-                IconButton(onClick = onPickDate) {
+                IconButton(
+                    onClick = onPickDate,
+                    modifier = Modifier.size(48.dp)
+                ) {
                     Icon(
                         imageVector = Icons.Filled.CalendarToday,
-                        contentDescription = stringResource(R.string.summary_pick_date)
+                        contentDescription = stringResource(R.string.summary_pick_date),
+                        tint = MaterialTheme.colorScheme.primary
                     )
                 }
             }
 
-            Spacer(Modifier.height(8.dp))
-            TabRow(selectedTabIndex = SummaryRangeMode.entries.indexOf(mode)) {
+            Spacer(Modifier.height(12.dp))
+            TabRow(
+                selectedTabIndex = SummaryRangeMode.entries.indexOf(mode),
+                containerColor = MaterialTheme.colorScheme.surface,
+                divider = {}
+            ) {
                 SummaryRangeMode.entries.forEach { entry ->
                     Tab(
                         selected = mode == entry,
                         onClick = { onModeChange(entry) },
-                        text = { Text(stringResource(entry.labelRes)) }
+                        text = {
+                            Text(
+                                text = stringResource(entry.labelRes),
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
                     )
                 }
             }
 
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(16.dp))
             Surface(
-                color = MaterialTheme.colorScheme.surfaceContainerHigh,
+                color = MaterialTheme.colorScheme.surfaceVariant,
                 shape = MaterialTheme.shapes.medium
             ) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 8.dp, vertical = 6.dp),
+                        .padding(horizontal = 4.dp, vertical = 4.dp),
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
@@ -210,10 +250,12 @@ internal fun ChefPrepCard(
                     }
                     Text(
                         text = rangeLabel,
-                        style = MaterialTheme.typography.bodyLarge,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.SemiBold,
                         modifier = Modifier
                             .weight(1f)
                             .padding(horizontal = 8.dp),
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
@@ -226,7 +268,7 @@ internal fun ChefPrepCard(
                 }
             }
 
-            Spacer(Modifier.height(6.dp))
+            Spacer(Modifier.height(8.dp))
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
@@ -239,7 +281,15 @@ internal fun ChefPrepCard(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
-                TextButton(onClick = onToday) { Text(stringResource(R.string.action_today)) }
+                TextButton(
+                    onClick = onToday,
+                    contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 8.dp)
+                ) {
+                    Text(
+                        stringResource(R.string.action_today),
+                        style = MaterialTheme.typography.labelLarge
+                    )
+                }
             }
         }
     }
@@ -247,33 +297,108 @@ internal fun ChefPrepCard(
 
 @Composable
 internal fun SectionHeader(title: String) {
-    Text(
-        text = title,
-        style = MaterialTheme.typography.titleSmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = Modifier.padding(vertical = 8.dp)
-    )
+    Column(modifier = Modifier.padding(top = 16.dp, bottom = 8.dp)) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.Black,
+            color = MaterialTheme.colorScheme.primary,
+            letterSpacing = 1.2.sp
+        )
+        HorizontalDivider(
+            modifier = Modifier.width(32.dp),
+            thickness = 3.dp,
+            color = MaterialTheme.colorScheme.primary
+        )
+    }
 }
 
 @Composable
 internal fun ProductRow(name: String, quantity: String) {
-    Text(
-        text = "$name × $quantity",
-        style = MaterialTheme.typography.bodyMedium
-    )
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = MaterialTheme.colorScheme.surface,
+        shape = MaterialTheme.shapes.small
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 4.dp),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Text(
+                text = name,
+                style = MaterialTheme.typography.bodyLarge,
+                modifier = Modifier.weight(1f)
+            )
+            Text(
+                text = quantity,
+                style = MaterialTheme.typography.bodyLarge,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary
+            )
+        }
+    }
 }
 
 @Composable
-internal fun UnparsedLinesCard(lines: List<String>) {
-    AppCard {
-        Column {
+internal fun DailySummaryCard(
+    date: kotlinx.datetime.LocalDate,
+    orders: List<OrderEntity>,
+    orderItemsMap: Map<Long, List<OrderItemEntity>>,
+    customerNames: Map<Long, String>
+) {
+    val dateLabel = remember(date) {
+        date.toJavaLocalDate().format(java.time.format.DateTimeFormatter.ofPattern("EEEE, d MMMM", Locale.getDefault()))
+    }
+
+    AppCard(modifier = Modifier.fillMaxWidth()) {
+        Column(modifier = Modifier.padding(4.dp)) {
             Text(
-                text = stringResource(R.string.summary_message_unparsed),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                text = dateLabel,
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(bottom = 8.dp)
             )
-            lines.forEach { line ->
-                Text(text = "- $line", style = MaterialTheme.typography.bodySmall)
+            
+            orders.forEachIndexed { index, order ->
+                val customerLabel = order.customerId?.let { id -> customerNames[id] }?.takeIf { it.isNotBlank() }
+                val items = orderItemsMap[order.id] ?: emptyList()
+                
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = customerLabel ?: "Quick Order",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Text(
+                            text = items.joinToString { it.productNameSnapshot },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+                    Text(
+                        text = formatKes(order.totalAmount),
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+                
+                if (index < orders.lastIndex) {
+                    HorizontalDivider(
+                        modifier = Modifier.padding(vertical = 8.dp),
+                        thickness = 0.5.dp,
+                        color = MaterialTheme.colorScheme.outlineVariant
+                    )
+                }
             }
         }
     }
@@ -282,42 +407,7 @@ internal fun UnparsedLinesCard(lines: List<String>) {
 @Composable
 internal fun SummaryEmptyState() {
     AppEmptyState(
-        title = "No Orders",
+        title = stringResource(R.string.summary_no_products_found),
         body = "There are no orders in the selected range"
     )
-}
-
-@Composable
-internal fun DailySummaryCard(
-    date: kotlinx.datetime.LocalDate,
-    orders: List<OrderEntity>,
-    orderItemsMap: Map<Long, List<OrderItemEntity>>,
-    customerNames: Map<Long, String>,
-    onCopyNotes: (String) -> Unit
-) {
-    val dateLabel = remember(date) {
-        date.toJavaLocalDate().format(java.time.format.DateTimeFormatter.ofPattern("d MMM", Locale.getDefault()))
-    }
-
-    AppCard {
-        Column {
-            Text(
-                text = dateLabel,
-                style = MaterialTheme.typography.titleSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            orders.forEach { order ->
-                val customerLabel = order.customerId?.let { id -> customerNames[id] }?.takeIf { it.isNotBlank() }
-                val pickupDisplay = com.zeynbakers.order_management_system.core.util.formatPickupTimeForDisplay(order.pickupTime)
-                val items = orderItemsMap[order.id] ?: emptyList()
-                OrderSummaryCard(
-                    customerLabel = customerLabel,
-                    orderItems = items,
-                    total = order.totalAmount,
-                    pickupTime = pickupDisplay,
-                    onCopyNotes = { onCopyNotes("") }
-                )
-            }
-        }
-    }
 }

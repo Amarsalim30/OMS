@@ -1,6 +1,8 @@
 package com.zeynbakers.order_management_system.order.ui.calendar.components
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -15,6 +17,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -30,13 +33,19 @@ import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.foundation.layout.width
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.ui.tooling.preview.Preview
+import java.math.BigDecimal
 import androidx.compose.ui.unit.dp
 import com.zeynbakers.order_management_system.core.ui.theme.DarkWeekendSaturday
 import com.zeynbakers.order_management_system.core.ui.theme.DarkWeekendSunday
+import com.zeynbakers.order_management_system.core.ui.theme.Order_management_systemTheme
 import com.zeynbakers.order_management_system.core.ui.theme.OutOfMonthDateColor
 import com.zeynbakers.order_management_system.order.ui.common.CalendarDayUi
 import com.zeynbakers.order_management_system.order.ui.common.PaymentState
 import kotlinx.datetime.LocalDate
+import kotlinx.datetime.plus
 import kotlinx.datetime.toJavaLocalDate
 import java.util.Calendar
 
@@ -72,16 +81,20 @@ internal fun DayCell(
 
     val baseTextColor =
         when {
-            isSelected -> MaterialTheme.colorScheme.onPrimary
+            isSelected && day.isToday -> MaterialTheme.colorScheme.onPrimary
+            isSelected -> MaterialTheme.colorScheme.onSurface
             day.isToday && isDark -> Color.Black
+            day.isToday -> MaterialTheme.colorScheme.onPrimary
             else -> MaterialTheme.colorScheme.onSurface
         }
 
     val dayTextColor =
         when {
-            isSelected -> MaterialTheme.colorScheme.onPrimary
-            day.isToday && isDark -> Color.Black
             !day.isInCurrentMonth -> OutOfMonthDateColor
+            isSelected && day.isToday -> MaterialTheme.colorScheme.onPrimary
+            isSelected -> MaterialTheme.colorScheme.onSurface
+            day.isToday && isDark -> Color.Black
+            day.isToday -> MaterialTheme.colorScheme.onPrimary
             isDark && dayOfWeek == Calendar.SATURDAY -> DarkWeekendSaturday
             isDark && dayOfWeek == Calendar.SUNDAY -> DarkWeekendSunday
             else -> baseTextColor
@@ -89,11 +102,10 @@ internal fun DayCell(
 
     val containerColor =
         when {
-            isSelected -> MaterialTheme.colorScheme.primary
             day.isToday -> if (isDark) Color.White else MaterialTheme.colorScheme.primary
             else -> Color.Transparent
         }
-    val selectionBorder = null
+
     val handleClick = {
         onSelectDate(day.date)
         onOpenDay(day.date)
@@ -118,8 +130,7 @@ internal fun DayCell(
                 onClick = { handleClick() },
                 onLongClick = { onQuickAdd(day.date) }
             ),
-        color = containerColor,
-        border = selectionBorder,
+        color = Color.Transparent,
         shape = CircleShape,
         tonalElevation = 0.dp
     ) {
@@ -130,13 +141,28 @@ internal fun DayCell(
         ) {
             Box(
                 contentAlignment = Alignment.Center,
-                modifier = Modifier.size(32.dp)
+                modifier = Modifier
+                    .size(36.dp)
+                    .then(
+                        if (isSelected && day.isToday) {
+                            Modifier
+                                .padding(2.dp) // Gap for the outer ring
+                                .border(BorderStroke(2.dp, MaterialTheme.colorScheme.primary), CircleShape)
+                                .padding(2.dp) // More padding to separate the fill from the ring
+                        } else if (isSelected) {
+                            Modifier.border(BorderStroke(2.dp, MaterialTheme.colorScheme.primary), CircleShape)
+                        } else {
+                            Modifier
+                        }
+                    )
             ) {
-                Surface(
-                    shape = CircleShape,
-                    color = containerColor,
-                    modifier = Modifier.fillMaxSize()
-                ) {}
+                if (day.isToday) {
+                    Surface(
+                        shape = CircleShape,
+                        color = containerColor,
+                        modifier = Modifier.size(if (isSelected) 24.dp else 32.dp)
+                    ) {}
+                }
                 Text(
                     text = day.date.dayOfMonth.toString(),
                     style = MaterialTheme.typography.labelLarge,
@@ -217,4 +243,82 @@ private fun buildDayContentDescription(
         builder.append(", selected")
     }
     return builder.toString()
+}
+
+@Preview(showBackground = true, name = "Light Mode")
+@Composable
+private fun DayCellPreviewLight() {
+    Order_management_systemTheme(darkTheme = false) {
+        DayCellPreviewContent()
+    }
+}
+
+@Preview(showBackground = true, name = "Dark Mode")
+@Composable
+private fun DayCellPreviewDark() {
+    Order_management_systemTheme(darkTheme = true) {
+        DayCellPreviewContent()
+    }
+}
+
+@Composable
+private fun DayCellPreviewContent() {
+    val today = LocalDate(2026, 6, 20)
+    val day = CalendarDayUi(
+        date = today,
+        orderCount = 2,
+        totalAmount = BigDecimal("1500"),
+        isToday = true,
+        isInCurrentMonth = true,
+        paymentState = PaymentState.PARTIAL,
+        orderStates = listOf(PaymentState.PAID, PaymentState.UNPAID)
+    )
+
+    Surface(color = MaterialTheme.colorScheme.background) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                // Today (Not Selected)
+                DayCell(
+                    day = day,
+                    isSelected = false,
+                    onSelectDate = {},
+                    onOpenDay = {},
+                    onQuickAdd = {},
+                    modifier = Modifier.size(64.dp)
+                )
+                // Today (Selected)
+                DayCell(
+                    day = day,
+                    isSelected = true,
+                    onSelectDate = {},
+                    onOpenDay = {},
+                    onQuickAdd = {},
+                    modifier = Modifier.size(64.dp)
+                )
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                // Not Today (Not Selected)
+                DayCell(
+                    day = day.copy(isToday = false, date = today.plus(1, kotlinx.datetime.DateTimeUnit.DAY)),
+                    isSelected = false,
+                    onSelectDate = {},
+                    onOpenDay = {},
+                    onQuickAdd = {},
+                    modifier = Modifier.size(64.dp)
+                )
+                // Not Today (Selected)
+                DayCell(
+                    day = day.copy(isToday = false, date = today.plus(1, kotlinx.datetime.DateTimeUnit.DAY)),
+                    isSelected = true,
+                    onSelectDate = {},
+                    onOpenDay = {},
+                    onQuickAdd = {},
+                    modifier = Modifier.size(64.dp)
+                )
+            }
+        }
+    }
 }

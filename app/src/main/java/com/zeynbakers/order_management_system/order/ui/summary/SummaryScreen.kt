@@ -250,7 +250,7 @@ fun SummaryScreen(
                 .fillMaxSize()
                 .padding(padding),
             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             item {
                 MonthTotalCard(monthTotal = monthTotal, label = monthLabel)
@@ -266,7 +266,6 @@ fun SummaryScreen(
                     ),
                     orderCount = orders.size,
                     rangeTotal = rangeTotal,
-                    hasChefList = aggregatedItems.isNotEmpty(),
                     onPickDate = { isDatePickerOpen = true },
                     onPrev = { anchorDate = shiftAnchorDate(mode, anchorDate, -1) },
                     onNext = { anchorDate = shiftAnchorDate(mode, anchorDate, 1) },
@@ -295,110 +294,45 @@ fun SummaryScreen(
                 val ordersByDate = orders.groupBy { it.order.orderDate }
                 val datesAsc = ordersByDate.keys.sorted()
 
-                item { SectionHeader(title = stringResource(R.string.summary_daily_view)) }
-                if (datesAsc.isEmpty()) {
-                    item { SummaryEmptyState() }
-                } else {
+                if (datesAsc.isNotEmpty()) {
+                    item { SectionHeader(title = stringResource(R.string.summary_daily_view)) }
                     items(datesAsc, key = { it.toString() }) { date ->
                         val dayOrders = ordersByDate[date].orEmpty()
-                        val dayTotal =
-                            dayOrders.fold(BigDecimal.ZERO) { acc, entry -> acc + entry.order.totalAmount }
-
-                        val dayAggregatedItems = run {
-                            val allItems = dayOrders.flatMap { it.items }
-                            val totalsByName = mutableMapOf<String, BigDecimal>()
-                            allItems.forEach { item ->
-                                val name = item.productNameSnapshot
-                                totalsByName[name] =
-                                    (totalsByName[name] ?: BigDecimal.ZERO) + BigDecimal.valueOf(
-                                        item.quantity.toLong()
-                                    )
-                            }
-                            totalsByName.entries.sortedBy { it.key }.map { (name, qty) ->
-                                OrderLineItem(name, qty)
-                            }
-                        }
-
-                        val dayMessage =
-                            buildChefMessage(
-                                rangeLabel = date.toJavaLocalDate().format(uiDateFormatter),
-                                items = dayAggregatedItems,
-                                unparsedLines = emptyList(),
-                                headerPrefix = messageHeaderPrefix,
-                                noProductsFoundLabel = messageNoProducts,
-                                unparsedHeader = ""
-                            )
+                        
                         DailySummaryCard(
                             date = date,
                             orders = dayOrders.map { it.order },
                             orderItemsMap = dayOrders.associate { it.order.id to it.items },
                             customerNames = dayOrders.associate {
                                 (it.order.customerId ?: 0L) to (it.customer?.name ?: "")
-                            },
-                            onCopyNotes = {
-                                clipboardManager.setText(AnnotatedString(dayMessage))
                             }
                         )
                     }
                 }
-            }
-
-            item { SectionHeader(title = stringResource(R.string.summary_orders)) }
-
-            if (orders.isEmpty()) {
-                item { SummaryEmptyState() }
             } else {
-                when (mode) {
-                    SummaryRangeMode.DAY -> {
-                        items(orders, key = { it.order.id }) { orderUi ->
-                            val order = orderUi.order
-                            val customerLabel = orderUi.customer?.name
-                            val pickupDisplay =
-                                com.zeynbakers.order_management_system.core.util.formatPickupTimeForDisplay(
-                                    order.pickupTime
-                                )
-                            OrderSummaryCard(
-                                customerLabel = customerLabel,
-                                orderItems = orderUi.items,
-                                total = order.totalAmount,
-                                pickupTime = pickupDisplay,
-                                onCopyNotes = {
-                                    clipboardManager.setText(AnnotatedString(orderUi.items.toDisplaySummary()))
-                                }
+                // DAY Mode - Show detailed order cards directly
+                if (orders.isNotEmpty()) {
+                    item { SectionHeader(title = stringResource(R.string.summary_orders)) }
+                    items(orders, key = { it.order.id }) { orderUi ->
+                        val order = orderUi.order
+                        val customerLabel = orderUi.customer?.name
+                        val pickupDisplay =
+                            com.zeynbakers.order_management_system.core.util.formatPickupTimeForDisplay(
+                                order.pickupTime
                             )
-                        }
-                    }
-
-                    SummaryRangeMode.WEEK, SummaryRangeMode.MONTH -> {
-                        val ordersByDate = orders.groupBy { it.order.orderDate }
-                        val datesDesc = ordersByDate.keys.sortedDescending()
-                        datesDesc.forEach { date ->
-                            item {
-                                Text(
-                                    text = date.toJavaLocalDate().format(uiDateFormatter),
-                                    style = MaterialTheme.typography.titleSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
+                        OrderSummaryCard(
+                            customerLabel = customerLabel,
+                            orderItems = orderUi.items,
+                            total = order.totalAmount,
+                            pickupTime = pickupDisplay,
+                            onCopyNotes = {
+                                clipboardManager.setText(AnnotatedString(orderUi.items.toDisplaySummary()))
+                                scope.launch { uiEvents.showSnackbar(chefListCopiedMessage) }
                             }
-                            items(ordersByDate[date].orEmpty(), key = { it.order.id }) { orderUi ->
-                                val order = orderUi.order
-                                val customerLabel = orderUi.customer?.name
-                                val pickupDisplay =
-                                    com.zeynbakers.order_management_system.core.util.formatPickupTimeForDisplay(
-                                        order.pickupTime
-                                    )
-                                OrderSummaryCard(
-                                    customerLabel = customerLabel,
-                                    orderItems = orderUi.items,
-                                    total = order.totalAmount,
-                                    pickupTime = pickupDisplay,
-                                    onCopyNotes = {
-                                        clipboardManager.setText(AnnotatedString(orderUi.items.toDisplaySummary()))
-                                    }
-                                )
-                            }
-                        }
+                        )
                     }
+                } else {
+                    item { SummaryEmptyState() }
                 }
             }
         }
@@ -475,4 +409,3 @@ private fun formatRangeLabel(
         SummaryRangeMode.MONTH -> anchorDate.toJavaLocalDate().format(monthFormatter)
     }
 }
-
